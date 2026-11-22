@@ -82,6 +82,7 @@ interface JoinedRow {
   takeoverTransferredAt: Date | null;
   takeoverCompletedAt: Date | null;
   takeoverFailureReason: string | null;
+  hostedDeletionStartedAt: Date | null;
   hostingTarget: HostingTarget | null;
   hostingUseCase: HostingUseCase | null;
   hostingSize: HostingSize | null;
@@ -159,6 +160,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     takeoverTransferredAt: r.takeoverTransferredAt,
     takeoverCompletedAt: r.takeoverCompletedAt,
     takeoverFailureReason: r.takeoverFailureReason,
+    hostedDeletionStartedAt: r.hostedDeletionStartedAt,
     hostingTarget: r.hostingTarget,
     hostingUseCase: r.hostingUseCase,
     hostingSize: r.hostingSize,
@@ -362,6 +364,7 @@ export const projectRepoRepository = {
         pr."takeover_transferred_at" AS "takeoverTransferredAt",
         pr."takeover_completed_at" AS "takeoverCompletedAt",
         pr."takeover_failure_reason" AS "takeoverFailureReason",
+        pr."hosted_deletion_started_at" AS "hostedDeletionStartedAt",
         pr."hosting_target"    AS "hostingTarget",
         pr."hosting_use_case"  AS "hostingUseCase",
         pr."hosting_size"      AS "hostingSize",
@@ -772,6 +775,52 @@ export const projectRepoRepository = {
   async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.projectRepo.deleteMany({ where: { id } });
     return result.count;
+  },
+
+  // ── Deleting a Motir-hosted repository (MOTIR-11981) ──────────────────────
+
+  /** Stamp the row as being deleted, once: a retry keeps the first stamp, so the
+   *  room's "Deletion didn't finish" reads from when the delete first started. */
+  async markHostedDeletionStarted(
+    id: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.projectRepo.updateMany({
+      where: { id, hostedDeletionStartedAt: null },
+      data: { hostedDeletionStartedAt: at },
+    });
+  },
+
+  /** How many environment values the row holds, across its environments — what
+   *  the hosted delete's confirm says it deletes with the row. */
+  async countEnvironmentValues(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.environmentConfigEntry.count({ where: { projectRepositoryId: id } });
+  },
+
+  /**
+   * How many OPEN work items target the row — not archived, and in a status
+   * outside the done category (a status the workflow no longer defines reads as
+   * open, since nothing says it is finished). Their `work_item_repository` link
+   * goes with the row; this is the count the hosted delete's confirm warns about.
+   */
+  async countOpenWorkItemsTargeting(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(DISTINCT w."id") AS "count"
+        FROM "work_item_repository" r
+        JOIN "work_item" w ON w."id" = r."work_item_id"
+        LEFT JOIN "workflow_status" ws
+               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE r."project_repo_id" = ${id}
+         AND r."workspace_id" = ${workspaceId}
+         AND w."archivedAt" IS NULL
+         AND (ws."category" IS NULL OR ws."category" <> 'done')
+    `;
+    return Number(rows[0]?.count ?? 0);
   },
 
   // ── A workspace's Motir repository (MOTIR-11285, §8 Amendment 5) ──────────

@@ -507,7 +507,7 @@ function assertTransferable(rowId: string, row: ProjectRepoWithRealized): void {
  * is shared and has no `workspace_id`: the tenant context the claim runs in cannot
  * see it. The mapping is immutable, so reading it after the claim's lock is safe.
  */
-async function hostInstallationIdOf(installationRowId: string): Promise<string> {
+export async function hostInstallationIdOf(installationRowId: string): Promise<string> {
   const ids = await withSystemContext((tx) =>
     githubInstallationRepository.findHostInstallationIdsByIds([installationRowId], tx),
   );

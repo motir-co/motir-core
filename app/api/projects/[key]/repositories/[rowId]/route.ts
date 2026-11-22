@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { hostedRepositoryRemovalService } from '@/lib/services/hostedRepositoryRemovalService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
 import { isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 import type { PatchProjectRepoInput } from '@/lib/dto/projectRepos';
@@ -11,9 +12,13 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 //            source). This is what makes the set EDITABLE BEFORE EXECUTION real:
 //            the edit is persisted, so it survives a page refresh mid-flow rather
 //            than living in component state.
-//   DELETE → 204 — drop a row the derivation invented. Never touches a repository
-//            (ADR §4.2): removing an established row un-claims its mirror, which
-//            stays connected to the workspace.
+//   DELETE → 204 — remove the row from the project. An ORGANISATION link is
+//            dropped and nothing else (ADR §4.2): its mirror is un-claimed and
+//            stays connected to the workspace. A MOTIR-HOSTED row Motir still
+//            holds is DELETED with everything that runs from it — previews,
+//            production, the GitHub repository — and the row last (MOTIR-11981;
+//            design/repository-set §19). A hosted delete that stops part way is
+//            a 502 with the row left marked, and a retry finishes it.
 //
 // The row id is workspace-scoped and self-sufficient — `projectRepoSetService`
 // resolves it to its project and gates on THAT — so `[key]` is not re-resolved
@@ -75,7 +80,7 @@ export async function DELETE(
   try {
     // Idempotent by design in the service: removing an already-gone row is a
     // no-op, so a double-submit is 204 rather than a 404 the user cannot act on.
-    await projectRepoSetService.removeRow(rowId, ctx);
+    await hostedRepositoryRemovalService.remove(rowId, ctx);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     const mapped = mapProjectRepoError(err);

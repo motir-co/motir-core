@@ -292,6 +292,37 @@ export interface RealizedProjectRepoDto {
  * settled state with `realizedRepo: null` — a disconnected repo is not a lost
  * plan, and `established` is what a consumer should branch on.
  */
+/**
+ * WHAT DELETING A MOTIR-HOSTED ROW WOULD REMOVE — the read its confirm makes
+ * before it says anything (MOTIR-11981; design repository-set §19.4,
+ * `GET /api/projects/[key]/repositories/[rowId]/removal`). The confirm never
+ * guesses: it draws one consequence per true fact here, and `destructive`
+ * chooses between the danger confirm and the quiet one.
+ */
+export interface HostedRepositoryRemovalDto {
+  /**
+   * The repository on GitHub, from the delete's point of view:
+   *   - `motir` — Motir holds it and it still exists: the delete deletes it;
+   *   - `gone` — Motir held it but it is no longer on GitHub (404, or its
+   *     mirror is gone): nothing there is deleted;
+   *   - `never` — Motir never created it (proposed, skipped, failed creating);
+   *   - `yours` — it was taken over (or connected): it stays where it is.
+   */
+  repository: 'motir' | 'gone' | 'never' | 'yours';
+  /** Production, when the repository's application runs or holds a database:
+   *  its address and how many custom domains are bound to it. Null otherwise. */
+  production: { address: string; domains: number } | null;
+  /** Open preview apps. */
+  previews: number;
+  /** Environment values, across every environment, deleted with the row. */
+  environmentValues: number;
+  /** Open work items that target the row and lose it. */
+  openWorkItems: number;
+  /** Anything to destroy — the repository, production or previews — which
+   *  selects the danger confirm. False selects the quiet remove. */
+  destructive: boolean;
+}
+
 export interface ProjectRepoDto {
   id: string;
   projectId: string;
@@ -344,6 +375,11 @@ export interface ProjectRepoDto {
   hostingTarget: HostingTarget | null;
   hostingUseCase: HostingUseCase | null;
   hostingSize: HostingSize | null;
+  /** When a delete of this Motir-hosted row STARTED (MOTIR-11981), or null when
+   *  none has. A row that still exists with this set is a delete that stopped
+   *  part way — the room's "Deletion didn't finish" — since a delete that
+   *  completes takes the row with it. */
+  hostedDeletionStartedAt: string | null;
   /** Fractional order key. The FIRST row of the ordered set is the project's
    *  PRIMARY repo (ADR §1.3); order carries no dispatch meaning. */
   position: string;

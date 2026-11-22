@@ -163,6 +163,8 @@ export default defineConfig({
       'tests/rls/hostedApplicationRls.test.ts',
       'tests/github/repoActionsConfig.test.ts',
       'tests/github/repoDeployments.test.ts',
+      // MOTIR-11981 — the hosted-repository delete's teardown read and delete.
+      'tests/hosting/hostedApplicationTeardown.test.ts',
     ],
     coverage: {
       provider: 'v8',
