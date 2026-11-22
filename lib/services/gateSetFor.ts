@@ -384,7 +384,7 @@ export async function reconcileGatesFor(
   // gate set's OWN answer, read under the lock the caller holds, not a check-set event one
   // withdrawer owns. So it is withdrawn here, where the set is in hand.
   if (set.primariesHeldByReview) {
-    await withdrawPrimariesHeldByReview(item, tx);
+    await withdrawPrimariesHeldByReview(item, tx, set);
   }
   if (set.awaited.length === 0) return [];
 
@@ -480,13 +480,21 @@ export async function withdrawMergeQuestionOffReview(
  *
  * ⚠️ IT TRUSTS THE SET'S HOLD, and asks nothing of its own: the caller passes only when
  * {@link GateSet.primariesHeldByReview} is true, so the rule stays in `resolveGateSet` alone.
+ *
+ * ⚠️ AND IT WITHDRAWS ONLY WHAT THE SET HOLDS — never a kind the same set still AWAITS. A
+ * design the system approves is not held (`designApprovedBySystem`), so its awaiting gate is
+ * still owed; withdrawing it would make the raise below create a fresh copy on every
+ * reconcile, and a person pressing the one they opened would meet a superseded gate.
  */
 export async function withdrawPrimariesHeldByReview(
   item: WorkItem,
   tx: Prisma.TransactionClient,
+  set: Pick<GateSet, 'awaited'>,
 ): Promise<number> {
   let withdrawn = 0;
+  const stillOwed = new Set(set.awaited.map((gate) => gate.kind));
   for (const kind of PRIMARY_GATE_KINDS) {
+    if (stillOwed.has(kind)) continue;
     withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
       item.id,
       kind,
