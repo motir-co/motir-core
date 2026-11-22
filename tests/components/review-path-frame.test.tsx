@@ -308,7 +308,7 @@ describe('ReviewToRunRow', () => {
     expect(code.className).toContain('truncate');
     expect(code.className).toContain('min-w-0');
     expect(code.className).toContain('text-[11px]');
-    expect(code.className).toContain('px-(--spacing-chip-x-4)');
+    expect(code.className).toContain('px-(--spacing-chip-x-2)');
     const button = screen.getByTestId('review-command-copy-ACME-9');
     expect(button.className).toContain('shrink-0');
     expect(button.className).toContain('h-6 w-6');

@@ -32,8 +32,9 @@ export interface CommandChipProps {
   testId?: string;
   /**
    * `compact` is for a chip in a fixed, narrow track (To approve's DETAILS, 220px; the full
-   * view's 200px): 11px code, the chip's tightest padding step, a 24px button (WCAG 2.5.8's
-   * minimum target) and the *Copied* status read aloud only, out of the flow — so
+   * view's 200px): 11px code, the chip's tightest padding step, no gap (the 24px button's own
+   * box keeps the glyph clear of the code), a 24px button (WCAG 2.5.8's minimum target) and
+   * the *Copied* status read aloud only, out of the flow — so
    * `motir review MOTIR-NNNNN` fits whole (Bug MOTIR-11982). The `Check` glyph and the toast
    * still confirm the press on screen.
    */
@@ -96,10 +97,10 @@ export function CommandChip({
     // shrinks and truncates (the whole command on its `title`), and the button never does,
     // so the button always stays inside the chip's box. Copy still copies the full command.
     // The truncate is only the last guard: `density="compact"` is what makes a real key fit.
-    <span className="flex max-w-full min-w-0 items-center gap-1">
+    <span className={`flex max-w-full min-w-0 items-center ${compact ? 'gap-0' : 'gap-1'}`}>
       <code
         title={command}
-        className={`min-w-0 truncate rounded-(--radius-control) bg-(--el-code-bg) ${compact ? 'px-(--spacing-chip-x-4) text-[11px]' : 'px-(--spacing-tooltip-x)'} py-(--spacing-tooltip-y) font-mono whitespace-nowrap text-(--el-code-text)`}
+        className={`min-w-0 truncate rounded-(--radius-control) bg-(--el-code-bg) ${compact ? 'px-(--spacing-chip-x-2) text-[11px]' : 'px-(--spacing-tooltip-x)'} py-(--spacing-tooltip-y) font-mono whitespace-nowrap text-(--el-code-text)`}
       >
         {command}
       </code>
