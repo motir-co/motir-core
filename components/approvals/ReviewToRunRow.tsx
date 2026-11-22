@@ -17,6 +17,7 @@ import { useSurfaceTitleText } from '@/components/workItems/titleTranslation/Sur
 import { useRelativeLabel } from './useRelativeLabel';
 import { useOpenApproval } from './useOpenApproval';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
 import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 
 // A REVIEW TO RUN on Waiting on you (Story MOTIR-10327 · MOTIR-10342; source-free words since
@@ -39,6 +40,13 @@ import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
 // meaning (the item, in a new tab), which is why the href stays real. Line 2's right group
 // sits ABOVE the stretched link (`relative z-10`), so pressing a door or the chip never opens
 // the overlay.
+//
+// THE TITLE IS A DOOR (Task MOTIR-12064), as an approval row's is (`ApprovalRow.tsx`
+// `SentenceTitle`; `design/workbench/design-notes.md` § 28, DECISION 3): the work item's QUICK
+// VIEW over the Workbench, with `usePeekRowClick`'s contract — a modified, middle or secondary
+// click keeps the real `href` (the item in a new tab). It sits above the stretched link on
+// `z-10`, so the rest of the row still opens the overlay, and only the door under the pointer
+// underlines.
 
 export function ReviewToRunRow({
   row,
@@ -58,6 +66,7 @@ export function ReviewToRunRow({
   const shownTitle = useSurfaceTitleText(row.workItemId, row.title);
   const sentenceText = t.markup('sentence', { name: shownTitle, title: (chunks) => chunks });
   const openApproval = useOpenApproval();
+  const peekRowClick = usePeekRowClick();
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
     // `ApprovalRow`'s exact condition: keyboard Enter on the anchor dispatches a primary
     // click, so it takes this same path.
@@ -95,8 +104,15 @@ export function ReviewToRunRow({
           <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
             {row.identifier}
           </span>
-          <span className="min-w-0 flex-1 truncate text-sm text-(--el-text) group-hover:underline">
-            {shownTitle}
+          <span className="flex min-w-0 flex-1">
+            <Link
+              href={routes.item(row.identifier)}
+              data-testid={`review-to-run-title-${row.identifier}`}
+              onClick={(e) => peekRowClick(e, row.identifier)}
+              className="relative z-10 min-w-0 truncate text-sm text-(--el-text) hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              {shownTitle}
+            </Link>
           </span>
         </div>
         <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
