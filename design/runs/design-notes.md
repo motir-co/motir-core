@@ -2424,3 +2424,194 @@ model — each on a leaf and on a parent whose unfinished leaves are all design 
 override still reads as today. The copy table is in
 [`../org-admin/design-notes.md`](../org-admin/design-notes.md) § _Settings › Organisation › AI
 models_, sub-section _The Run hosted picker — the preselect reason line_.
+
+## Run discrepancy — the record gets its own section on the work item page (MOTIR-11995, 2026-11-22)
+
+**Asset:** [`run-section--discrepancy-record.mock.html`](./run-section--discrepancy-record.mock.html),
+panels 0–9, every state drawn light and dark. Task MOTIR-11995 (design); built by **MOTIR-11996**.
+It amends § _Placement: the run section joins the late stack, BEFORE Development_ (a new region in
+that stack) and § _A DISCREPANCY the run recorded_ (decision 5, the finding's door). No existing
+mock is edited and no image export ships (`docs/decisions/design-result.md` AMENDMENT 4).
+
+**Design system.** Read `package.json` (depends on `@motir/design-system`, `workspace:*`) and
+`app/globals.css` (imports `@motir/design-system/theme.css`): **on Motir Design**, version 0.24.1
+(`packages/design-system/package.json`), drawn with its `renderMock` at the axes the app applies by
+default (`warm-editorial` · `motir` · `motir`). The neighbours are the real shipped components:
+`ContentSectionCard`, `RunSection` (with two finished runs) and `RunFindings`. Development and the
+lower stack are drawn as section headers only, because they do not change.
+
+**What it is.** [MOTIR-11361](motir:cmwhu55fl015d01adon5mkfdh) stores a run's discrepancy record as
+data: `run_discrepancy_record` (source, `point_count`, `decision_count`, `dispatch_run_id`,
+`recorded_by_id`, `recorded_at`) and `run_discrepancy_entry` (`kind`, `position`, `plan_text`,
+`outcome_text`, `why`, `alternatives`). Until now the work item showed it only as the comment
+`record_run_discrepancy` wrote, mixed into Activity. This section shows the record itself, and
+MOTIR-11996 then stops writing the comment. The record is read-only: the section has no edit,
+delete or reply control.
+
+### Decisions
+
+1. **Placement: directly below Run, above Development** (panel 0). The record is what the run
+   produced, and a reviewer reads it before the pull requests it explains. It joins the late
+   stack's upper half (`LateUpperSections`), reads with the same `lateReads` promise, and so settles
+   in the same tick as Run and Development, with no pending face of its own. On a manual card, where
+   the Guide me through door takes Run's slot, the section still renders in the same place when a
+   record exists.
+2. **No record, no section** (panel 0, right). No empty state, no reserved box: nearly every card
+   has no record, and an empty card would be noise on the busiest page.
+3. **The section is landable.** It carries `id="run-discrepancy"` through `ContentSectionCard`'s
+   `id` prop, so it takes focus and draws the focus ring when a link lands on it, as Development
+   does for the To fix banner.
+4. **The access path from a run** (panel 0, bottom). The run modal's findings strip keeps its
+   _Built differently · KEY — N points_ row and its _Open →_ door unchanged; the door's target
+   becomes `/items/<KEY>#run-discrepancy` instead of `/items/<KEY>`. This replaces § _A DISCREPANCY
+   the run recorded_ decision 5, which could only land on the top of the work item because a comment
+   had no address.
+5. **A point and a decision are told apart four ways at once** (panel 3): their own group with its
+   own heading and gloss, a different icon (lucide `Route` for a point, `Scale` for a decision), a
+   different chip tint (`--el-tint-sky` _Point n_, `--el-tint-lavender` _Decision n_), and different
+   field labels. Points come first, as the card asks and as the comment ordered them.
+6. **Every stored field is shown, labelled** — a point: _Plan asked_ (`plan_text`), _Built_
+   (`outcome_text`), _Why_; a decision: _Plan said_, _Chose_, _Why_, _Alternatives_. _Alternatives_
+   is omitted (no empty row) when `alternatives` is null (panel 2, decision 2). Entries keep their
+   stored `position` order within their kind. The text is rendered with the shipped `MarkdownView`,
+   because runs wrote it as Markdown for the comment (code spans, bold); it renders no work-item or
+   page chips beyond what `MarkdownView` already resolves.
+7. **Provenance on one line above the entries:** _Recorded {time} by {name}_ · _Run of {time}_. The
+   run link goes to `runsHref({ run: dispatch_run_id })` (`/runs?run=<id>`, the run modal), and its
+   time is the run's `startedAt`. A record with no run (the no-open-leg arm, panel 5) shows _Not part
+   of a run_ as plain text in the link's place. A recorder whose account is gone
+   (`recorded_by_id` null) reads _by a former member_ (panel 6). Times are formatted on the server
+   with `formatRunInstant`, as the Run section's are.
+8. **Several records: newest first, newest open, older folded** (panel 4). One record per run leg,
+   so a re-run or a continue adds one. When there is more than one, the header carries a neutral
+   `Pill` count (_3 records_). Each older record folds to one button row — chevron, who and when,
+   and its counts — with `aria-expanded`, opening in place to show its own provenance line (with its
+   run link) and entries.
+9. **Long text wraps, many entries fold** (panel 8). Field text wraps at any character
+   (`overflow-wrap: anywhere`) so a long path, signature or URL never widens the column; at phone
+   width each label sits above its text (panel 3). Each group shows its first **3** entries; the rest
+   fold behind _Show N more points_ / _Show N more decisions_ (a ghost `Button`, `aria-expanded`),
+   and _Show fewer_ folds them again. With older records folded too, the section is never taller
+   than one open record with six entries.
+10. **Backfilled** (`source: backfilled`, panel 6): drawn like a recorded record, plus one quiet line
+    under the provenance with a lucide `History` glyph: _Recovered from a comment the run wrote
+    before records were kept._
+11. **Unreadable backfill** (`source: backfill_unreadable`, panel 7): no groups. A dashed callout
+    with a `TriangleAlert` glyph in `--el-warning`: _This record couldn't be recovered_, and the
+    loss counted from `point_count` / `decision_count`. A zero reads _no points_ / _no decisions_,
+    never _0_. The words stay on `--el-text` and `--el-text-secondary`; only the glyph carries the
+    hue (graphics need 3:1).
+
+### Every state
+
+| panel | state                                     | what is drawn                                                                                                           |
+| ----- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 0     | placement, no record, the doors that land | the column with the section between Run and Development; the column without it; the findings row and the landed section |
+| 1     | one record, points only                   | provenance line, the points group, two point blocks                                                                     |
+| 2     | one record, decisions only                | the decisions group; _Alternatives_ shown on one decision and absent on the other                                       |
+| 3     | one record, both                          | points group, then decisions group; also at 390px                                                                       |
+| 4     | several records                           | the count pill, newest open, two older folded; then the oldest opened                                                   |
+| 5     | a record with no run                      | _Not part of a run_ in place of the link                                                                                |
+| 6     | backfilled, recorder gone                 | the recovered line, _by a former member_                                                                                |
+| 7     | unreadable backfill                       | the dashed callout with both counts; with no run and no decisions                                                       |
+| 8     | long text, many entries                   | wrapping text, three shown and _Show 5 more points_; then the points opened                                             |
+| 9     | Chinese copy                              | panel 4 and panel 7 in `zh`                                                                                             |
+
+### Fields read
+
+| rendered element   | field(s) read                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| whether it shows   | the card has at least one `run_discrepancy_record`                                                     |
+| order              | `recorded_at` descending                                                                               |
+| count pill         | the number of records, shown when more than one                                                        |
+| recorder           | `recorded_by_id` → the user's name; null → _a former member_                                           |
+| recorded time      | `recorded_at`                                                                                          |
+| run link           | `dispatch_run_id` → `/runs?run=<id>`, labelled with that run's `startedAt`; null → _Not part of a run_ |
+| recovered line     | `source = backfilled`                                                                                  |
+| unreadable callout | `source = backfill_unreadable`, with `point_count` and `decision_count`                                |
+| groups and entries | `run_discrepancy_entry` by `kind`, ordered by `position`                                               |
+| point fields       | `plan_text`, `outcome_text`, `why`                                                                     |
+| decision fields    | `plan_text`, `outcome_text`, `why`, `alternatives` (row omitted when null)                             |
+| folded row counts  | `point_count`, `decision_count`                                                                        |
+
+`comment_id` and `dispatch_run_card_id` are not displayed.
+
+### Primitives and tokens
+
+| element                    | primitive / token                                                                                                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| section                    | `ContentSectionCard` (title, `— gloss`, `headerExtra`, `id`) over `Card`, `--shadow-card`                                                                                        |
+| record count               | `Pill tone="neutral"`                                                                                                                                                            |
+| provenance line            | `--el-text-secondary`, text-sm; the run link `--el-link` / hover `--el-link-pressed`, underlined                                                                                 |
+| group heading              | `--el-text`, semibold; count and gloss `--el-text-secondary`; icon `--el-text-secondary`                                                                                         |
+| entry block                | `--el-border-soft` border, `--radius-card`, padding `--spacing-card-padding-12`                                                                                                  |
+| point chip / decision chip | `--el-tint-sky` / `--el-tint-lavender` with `--el-text-strong`, `--radius-badge`, `--spacing-chip-x-6`, `--spacing-chip-y`                                                       |
+| field label / field text   | `--el-text-secondary`, medium / `MarkdownView` in `--el-text`                                                                                                                    |
+| Show more / Show fewer     | `Button variant="ghost" size="sm"` with a chevron                                                                                                                                |
+| folded record row          | a `button`, `--radius-control`, `--spacing-control-x-4` / `--spacing-control-y-4`, hover `--el-surface-soft`, focus ring `--focus-ring-color`                                    |
+| recovered line             | `--el-text-secondary`, text-xs, `History` glyph                                                                                                                                  |
+| unreadable callout         | dashed `--el-border-strong`, `--el-surface-soft` fill, `--radius-card`, padding `--spacing-card-padding-12`; glyph `--el-warning`; title `--el-text`, body `--el-text-secondary` |
+
+`--el-text-muted` and `--el-text-faint` are not used: several of these lines sit on `--el-surface-soft`,
+where only `--el-text-secondary` clears AA. The new section is a **product-local component**
+(`RunDiscrepancySection`, beside the item page's other sections in `app/(authed)/items/[key]/_components/`): it composes existing package
+parts, and nothing in it is general enough to propose for `@motir/design-system`.
+
+### Copy — `en` + `zh`
+
+Under **`issueViews.runDiscrepancy.*`** (the namespace `ContentSectionCard`'s page already reads).
+
+| key                 | en                                                                                                                                                                                                                        | zh                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`             | Run discrepancy                                                                                                                                                                                                           | 运行差异记录                                                                                                                                                    |
+| `gloss`             | what a run built or decided that the plan didn't say                                                                                                                                                                      | 运行中构建或决定的、计划没有写明的内容                                                                                                                          |
+| `recordCount`       | {count, plural, one {# record} other {# records}}                                                                                                                                                                         | {count} 条记录                                                                                                                                                  |
+| `recordedBy`        | Recorded {time} by {name}                                                                                                                                                                                                 | {name} 于 {time} 记录                                                                                                                                           |
+| `recordedByFormer`  | Recorded {time} by a former member                                                                                                                                                                                        | 一位已离开的成员于 {time} 记录                                                                                                                                  |
+| `inRun`             | Run of {time}                                                                                                                                                                                                             | {time} 的运行                                                                                                                                                   |
+| `inRunAria`         | Open the run of {time}                                                                                                                                                                                                    | 打开 {time} 的运行                                                                                                                                              |
+| `noRun`             | Not part of a run                                                                                                                                                                                                         | 不属于任何运行                                                                                                                                                  |
+| `pointsHeading`     | Built differently from the plan                                                                                                                                                                                           | 与计划不同的构建方式                                                                                                                                            |
+| `pointsCount`       | {count, plural, one {# point} other {# points}}                                                                                                                                                                           | {count} 项差异                                                                                                                                                  |
+| `pointsGloss`       | The outcome was kept. The route to it changed.                                                                                                                                                                            | 结果保持不变，实现路径有所改变。                                                                                                                                |
+| `decisionsHeading`  | Decided where the plan was silent                                                                                                                                                                                         | 计划没有写明时由运行做出的决定                                                                                                                                  |
+| `decisionsCount`    | {count, plural, one {# decision} other {# decisions}}                                                                                                                                                                     | {count} 项决定                                                                                                                                                  |
+| `decisionsGloss`    | By the repository's conventions first, then industry best practice.                                                                                                                                                       | 先依据仓库自身的约定，再依据业界最佳实践。                                                                                                                      |
+| `pointLabel`        | Point {n}                                                                                                                                                                                                                 | 差异 {n}                                                                                                                                                        |
+| `decisionLabel`     | Decision {n}                                                                                                                                                                                                              | 决定 {n}                                                                                                                                                        |
+| `planAsked`         | Plan asked                                                                                                                                                                                                                | 计划要求                                                                                                                                                        |
+| `built`             | Built                                                                                                                                                                                                                     | 实际构建                                                                                                                                                        |
+| `why`               | Why                                                                                                                                                                                                                       | 原因                                                                                                                                                            |
+| `planSaid`          | Plan said                                                                                                                                                                                                                 | 计划所写                                                                                                                                                        |
+| `chose`             | Chose                                                                                                                                                                                                                     | 选择                                                                                                                                                            |
+| `alternatives`      | Alternatives                                                                                                                                                                                                              | 考虑过的其他方案                                                                                                                                                |
+| `showMorePoints`    | {count, plural, one {Show # more point} other {Show # more points}}                                                                                                                                                       | 再显示 {count} 项差异                                                                                                                                           |
+| `showMoreDecisions` | {count, plural, one {Show # more decision} other {Show # more decisions}}                                                                                                                                                 | 再显示 {count} 项决定                                                                                                                                           |
+| `showFewer`         | Show fewer                                                                                                                                                                                                                | 收起                                                                                                                                                            |
+| `showRecord`        | Show this record                                                                                                                                                                                                          | 展开此记录                                                                                                                                                      |
+| `hideRecord`        | Hide this record                                                                                                                                                                                                          | 收起此记录                                                                                                                                                      |
+| `backfilled`        | Recovered from a comment the run wrote before records were kept.                                                                                                                                                          | 从运行在记录功能上线前写下的评论中恢复。                                                                                                                        |
+| `unreadableTitle`   | This record couldn't be recovered                                                                                                                                                                                         | 无法恢复此记录                                                                                                                                                  |
+| `unreadableBody`    | Its comment was deleted or edited before records were kept, so {points, plural, =0 {no points} one {# point} other {# points}} and {decisions, plural, =0 {no decisions} one {# decision} other {# decisions}} were lost. | 它的评论在记录功能上线前已被删除或编辑，因此丢失了{points, plural, =0 {（无差异）} other { # 项差异}}和{decisions, plural, =0 {（无决定）} other { # 项决定}}。 |
+
+None of the strings says _card_ (§ _THE NOUN IS `work item`_).
+
+### Not drawn
+
+- The run modal's findings strip itself (`RunFindings`): only its door's target changes (decision 4).
+  Its count still reads `pointCount` alone; that is the strip's own scope.
+- Any editing of a record: records are read-only.
+- The comments runs already wrote: they stay in Activity as ordinary comments.
+- The public (Visitor) page: the section follows whatever the work item page shows a reader who can
+  view the card, which is MOTIR-11996's read.
+
+### GIVES / TAKES
+
+| key         | GIVES / TAKES                                                                                                                                                                                                                                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-11996 | **GIVES** every panel, the placement, the anchor id, the copy and the tokens — it builds `RunDiscrepancySection` and points the findings door at `#run-discrepancy`. **TAKES** a server read returning, per record, the fields in _Fields read_ (the recorder's name and the run's `startedAt` joined), newest first |
+| MOTIR-11361 | **GIVES** nothing drawn. **TAKES** that the two tables are read as shipped; no column is added                                                                                                                                                                                                                       |
+| MOTIR-8656  | **GIVES** nothing new. **TAKES** that its decision 5 (the door lands on the work item) is replaced by decision 4 above                                                                                                                                                                                               |
+
+Fixture keys and names in the mock (ACME-42, ACME-31, ACME-37, Mira Okafor) are **fixtures**, not
+work items or people this design depends on.
