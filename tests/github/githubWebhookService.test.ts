@@ -995,6 +995,8 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
       repoOwner: 'moooon',
       repoName: 'acme',
       defaultBranch: 'main',
+      // MOTIR-11884: a push says it is one, so the run can hand motir-ai a `push`.
+      refreshCause: 'push',
     });
   });
 

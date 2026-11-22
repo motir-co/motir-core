@@ -8,11 +8,15 @@ import {
   clearMintFault,
   codeGraphMockEnabled,
   codeGraphMockJournal,
+  E2E_INDEX_PUBLISH_DELAY_MS,
+  e2eHeadSha,
   e2eTarballUrl,
   installCodeGraphBoundaryMock,
   resetCodeGraphMockJournal,
 } from '@/lib/test-code-graph-mock';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
+import { handOffCodeGraphIndex, readCodeGraphIndexStatus } from '@/lib/ai/motirAiClient';
+import { githubProvider } from '@/lib/git/providers/github';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { stubAppCredentials } from '../helpers/indexFleet';
@@ -206,5 +210,62 @@ describe('the MALFORMED mint arm actually fails', () => {
     expect(codeGraphMockJournal().map((e) => e.path)).not.toContain(
       '/app/installations/:id/access_tokens',
     );
+  });
+});
+
+describe('the HANDOFF path crosses its three boundaries (MOTIR-11883)', () => {
+  it('answers the live head, accepts the handoff, reads running and then published', async () => {
+    armHarness();
+    install();
+
+    const head = await githubProvider.resolveRef('990001', OWNER, NAME, REF);
+    expect(head).toMatchObject({ outcome: 'resolved', sha: e2eHeadSha(OWNER, NAME) });
+    expect(e2eHeadSha(OWNER, NAME)).toMatch(/^[0-9a-f]{40}$/);
+
+    const answer = await handOffCodeGraphIndex({
+      coreOrganizationId: 'org_1',
+      coreWorkspaceId: 'ws_1',
+      coreProjectId: 'p_1',
+      repoRef: `${OWNER}/${NAME}`,
+      kind: 'refresh',
+      commitSha: e2eHeadSha(OWNER, NAME),
+      ref: REF,
+      sourceUrl: e2eTarballUrl(OWNER, NAME, e2eHeadSha(OWNER, NAME)),
+    });
+    expect(answer).toMatchObject({ outcome: 'accepted', jobId: expect.any(String) });
+
+    const query = { coreOrganizationId: 'org_1', repoRef: `${OWNER}/${NAME}` };
+    const running = await readCodeGraphIndexStatus(query);
+    expect(running.inProgressJob).toMatchObject({
+      commit: e2eHeadSha(OWNER, NAME),
+      kind: 'refresh',
+    });
+    expect(running.indexedCommit).toBeNull();
+
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + E2E_INDEX_PUBLISH_DELAY_MS });
+    try {
+      const published = await readCodeGraphIndexStatus(query);
+      expect(published.indexedCommit?.commit).toBe(e2eHeadSha(OWNER, NAME));
+      expect(published.inProgressJob).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The journal names the routes, and never the source URL the body carried.
+    expect(codeGraphMockJournal().map((e) => e.path)).toEqual(
+      expect.arrayContaining([
+        '/repos/:owner/:name/commits/:ref',
+        '/v1/code-graph/index-handoff',
+        '/v1/code-graph/index-status',
+      ]),
+    );
+    expect(JSON.stringify(codeGraphMockJournal())).not.toContain('E2E_PRESIGNED');
+  });
+
+  it('a repository nothing was handed for reads published at its head', async () => {
+    armHarness();
+    install();
+    const status = await readCodeGraphIndexStatus({ coreOrganizationId: 'org_1', repoRef: 'a/b' });
+    expect(status.indexedCommit?.commit).toBe(e2eHeadSha('a', 'b'));
   });
 });

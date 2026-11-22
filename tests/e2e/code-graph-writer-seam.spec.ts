@@ -1,26 +1,21 @@
 // E2E: the index WRITER path actually executes in this lane
-// (Story MOTIR-3417 · Subtask MOTIR-3564).
+// (Story MOTIR-3417 · Subtask MOTIR-3564; re-pointed at the handoff by MOTIR-11884).
 //
-// ⚠️ THIS IS THE SEAM'S OWN PROOF, NOT THE STORY'S E2E. MOTIR-3487 owns the
-// story-level assertions — coalescing a push burst, two repos staying
-// independent, the dashboard, and a mid-index worker restart. This spec asserts
-// exactly one thing: that a `system.code-graph-refresh` run claimed by the lane's
-// worker can now REACH `settleIndexContainer` and leave the ledger row the whole
-// index path exists to produce. Everything MOTIR-3487 wants is built on that, and
-// until this passes none of it is writable.
+// ⚠️ THIS IS THE SEAM'S OWN PROOF, NOT THE STORY'S E2E. It asserts exactly one
+// thing: that a `system.code-graph-refresh` run claimed by the lane's worker
+// reaches a SUCCEEDED ledger row through the path the job really takes — since
+// MOTIR-11883, the handoff to motir-ai (read the head, hand off, poll the status)
+// rather than a container. `code-graph-refresh-engine.spec.ts` builds the story's
+// assertions on top of it.
 //
-// ⚠️ WHY THE SEAM WAS NEEDED AT ALL. `bootIndexContainer` crosses two boundaries
-// before it provisions: motir-ai's run-credential mint and GitHub's tarball
-// redirect. Neither had a stub in this lane, and `migrate-index-fleet.spec.ts` —
-// which looks like it drives the fleet — SEEDS ledger rows and says so in its own
-// header. `lib/test-code-graph-mock.ts` is the stub; the worker installs it,
-// because the supervisor is a JOB and the worker is the process that makes both
-// calls.
+// ⚠️ THE SEAM. `lib/test-code-graph-mock.ts` stubs the boundaries the worker
+// crosses — GitHub's installation token, its live head and tarball redirect, and
+// motir-ai's handoff and status routes; the worker installs it, because the index
+// is a JOB and the worker is the process that makes the calls.
 //
-// ⚠️ AND NOTHING HERE REACHES THE NETWORK. The container is the `fake`
-// orchestrator (selected by the shipped `MOTIR_FLEET_ORCHESTRATOR` seam), the two
-// HTTP boundaries are undici intercepts, and the download host carries a trap
-// that fails loudly if anything ever tries to fetch the archive in-process.
+// ⚠️ AND NOTHING HERE REACHES THE NETWORK. Every boundary is an undici intercept,
+// and the download host carries a trap that fails loudly if anything ever tries to
+// fetch the archive in-process.
 
 import { expect, test } from '@playwright/test';
 import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
@@ -36,9 +31,9 @@ import {
 const REFRESH_JOB = 'system.code-graph-refresh';
 const [REPO] = E2E_INDEX_REPOS;
 
-// A supervised run boots, polls at the shipped 3s cadence and settles, plus the
-// worker's claim interval. The declared 2m debounce window is elapsed as STATE
-// rather than slept through — see the note at the `updateMany` below.
+// A handed-off run polls the status at the shipped 5 s cadence until the seam
+// reads published, plus the worker's claim interval. There is no debounce window
+// to wait out since MOTIR-11884: the row is due the moment the webhook writes it.
 test.describe.configure({ timeout: 180_000 });
 
 test.beforeEach(async () => {
@@ -106,21 +101,17 @@ test('a push drives the index writer to a SUCCEEDED ledger row on the engine @sm
   // as a missing ledger row.
   expect(await res.json()).toMatchObject({ result: { outcome: 'refresh_enqueued' } });
 
-  // ⚠️ LET THE DEBOUNCE WINDOW ELAPSE, AS STATE. `codeGraphRefresh` declares
-  // `period: '2m'`, so the row is not due yet — and this spec is about the WRITER
-  // reaching `settleIndexContainer`, not about the window (which
-  // `code-graph-refresh-engine.spec.ts` asserts by value). Moving `run_at` into
-  // the past is what the window's passage does to the claim; sleeping two real
-  // minutes here would buy the same execution and nothing else.
-  await adminDb.jobQueueRun.updateMany({
-    where: { jobId: REFRESH_JOB, state: 'pending' },
-    data: { runAt: new Date(Date.now() - 1_000) },
-  });
+  // ⚠️ DUE AT ONCE (MOTIR-11884): no debounce, so nothing is moved here.
+  const [due] = await adminDb.jobQueueRun.findMany({ where: { jobId: REFRESH_JOB } });
+  expect(due!.runAt.getTime(), 'the refresh is due when it is written').toBeLessThanOrEqual(
+    Date.now(),
+  );
+  expect(due!.debounceKey).toBeNull();
 
   // ⚠️ THE AUTHORITATIVE SIGNAL IS THE LEDGER ROW, never a timer and never a
-  // rendered pixel. The run is debounced (2m by declaration), claimed by the
-  // worker, supervised across several polls and then settled — so the wait is on
-  // the row reaching a TERMINAL state, and the assertion is on what it says.
+  // rendered pixel. The run is claimed by the worker, hands off, defers across
+  // status polls and then settles — so the wait is on the row reaching a TERMINAL
+  // state, and the assertion is on what it says.
   await expect
     .poll(
       async () =>
@@ -147,28 +138,26 @@ test('a push drives the index writer to a SUCCEEDED ledger row on the engine @sm
     indexed: true,
     repoRef: indexRepoRef(REPO!),
     projectsIndexed: 1,
+    indexedBy: 'motir-codegraph',
   });
 
-  // ⚠️ AND IT REALLY WENT THROUGH THE SUPERVISOR, which is what distinguishes
-  // this from a seeded row. The memoized steps the collapse kept are the
-  // evidence: a run that short-circuited would have written none of them.
+  // ⚠️ AND IT REALLY WENT THROUGH THE HANDOFF, which is what distinguishes this
+  // from a seeded row. The memoized steps are the evidence: a run that
+  // short-circuited would have written none of them, and one that took the
+  // container path would have written `index-boot:`.
   const queued = await adminDb.jobQueueRun.findFirstOrThrow({
     where: { jobId: REFRESH_JOB },
   });
   expect(queued.state).toBe('succeeded');
   const steps = await adminDb.jobStep.findMany({ where: { runId: queued.id } });
   const ids = steps.map((s) => s.stepId).filter((id) => !id.startsWith('job-run:'));
-  expect(ids).toContain('resolve-target-v2');
-  expect(ids.some((id) => id.startsWith('index-admit:'))).toBe(true);
-  expect(ids.some((id) => id.startsWith('index-boot:'))).toBe(true);
-  expect(ids.some((id) => id.startsWith('index-settle:'))).toBe(true);
-  // And no poll or wait checkpoint — the collapse, observed from the outside
-  // (MOTIR-3484). A run that polled N times wrote none of them.
-  expect(ids.filter((id) => id.startsWith('index-poll:') || id.startsWith('index-wait:'))).toEqual(
-    [],
+  expect(ids).toEqual(
+    expect.arrayContaining(['resolve-target-v2', 'index-head-v1', 'index-handoff-v1']),
   );
+  expect(ids.filter((id) => /^index-(admit|boot|settle):/.test(id))).toEqual([]);
+  // ⚠️ THE SOURCE URL IS A BEARER SECRET: no memo the run wrote carries it.
+  expect(JSON.stringify(steps.map((s) => s.result))).not.toContain('E2E_PRESIGNED');
 
-  // The admission slot was taken and given back: the container is provably gone,
-  // so the capacity is provably free.
+  // And no fleet capacity was ever taken.
   expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
 });

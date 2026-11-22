@@ -264,8 +264,9 @@ export const gitlabWebhookService = {
     if (push.branch !== repo.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
 
     // POST-tx, best-effort: the ack never hinges on the queue (the enqueue swallows
-    // + logs a transport failure). The job re-fetches the default branch's CURRENT
-    // head at run time, so debounced/coalesced pushes index the newest state once.
+    // + logs a transport failure). The job reads the default branch's CURRENT head
+    // at run time and hands it off as a `push` with the changes since the stamped
+    // head (MOTIR-11884).
     await enqueueCodeGraphRefresh({
       installationId: repo.installation.installationId,
       // The repo row's own tenancy (MOTIR-1931). A GitLab connection is never
@@ -276,6 +277,7 @@ export const gitlabWebhookService = {
       repoOwner: repo.owner,
       repoName: repo.name,
       defaultBranch: repo.defaultBranch,
+      refreshCause: 'push',
     });
     return { event: 'push', outcome: 'refresh_enqueued' };
   },

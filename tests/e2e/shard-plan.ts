@@ -337,7 +337,10 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * that unbalances a bin-packer.
  *
  * ⚠️ AND THESE TWO NUMBERS ARE ONLY HONEST BECAUSE THE SPECS STOPPED SLEEPING.
- * `system.code-graph-refresh` declares `debounce: { period: '2m' }`, and a
+ * (Measured while `system.code-graph-refresh` still declared its debounce;
+ * MOTIR-11884 removed it, so the window below no longer exists and each spec now
+ * waits only for its runs' status polls — no longer than before.)
+ * `system.code-graph-refresh` declared `debounce: { period: '2m' }`, and a
  * SIGKILLed worker holds its claim for `LEASE_MS` (60 s). Written the obvious
  * way — waiting both out — the same five tests measured **522 s** and **132 s**,
  * i.e. one spec alone would have exceeded the whole 160–280 s budget of the leg

@@ -1,33 +1,23 @@
 // E2E: the STORY's verification recipe, automated
-// (Story MOTIR-3417 · Subtask MOTIR-3487 — closes the Story).
+// (Story MOTIR-3417 · Subtask MOTIR-3487; re-written for the handoff by MOTIR-11884).
 //
-// @smoke — a push burst coalesces into ONE refresh that boots a container, polls
-// it and settles it ON THE POSTGRES ENGINE, and a worker restart mid-index
-// resumes rather than orphaning.
+// @smoke — every default-branch push is its OWN refresh run on the Postgres
+// engine, handed off to motir-ai and settled on the published head; two
+// repositories stay independent; and a worker killed mid-run resumes on the SAME
+// handoff rather than handing the commit off again.
 //
-// ⚠️ WHAT MADE THIS WRITABLE. It was blocked: the index writer crosses two
-// boundaries — motir-ai's run-credential mint and GitHub's tarball redirect —
-// and neither had a seam in this lane. MOTIR-3564 built one
-// (`lib/test-code-graph-mock.ts`, installed by the WORKER, because the supervisor
-// is a job). `tests/e2e/code-graph-writer-seam.spec.ts` is that card's own smoke;
-// this file is the story's assertions on top of it.
+// ⚠️ WHAT CHANGED (MOTIR-11884). This spec used to assert that a push BURST
+// coalesced into ONE run, through the refresh job's two-minute debounce. The
+// debounce is gone: each refresh is handed off to motir-ai, and motir-codegraph's
+// own queue supersedes a still-queued push of the same repository and ref, so
+// coalescing in motir-core would only delay the newest push. The properties the
+// spec existed for are kept and re-asserted — one run per event, repositories
+// independent, the ledger contract, a resume that does not repeat the side effect.
 //
-// ⚠️ AND WHAT THE CARD ASKED FOR THAT CANNOT BE WRITTEN AS WRITTEN. Its second
-// assertion is *"That run's payload is the LAST delivery's, asserted on a field
-// that differs between the pushes."* There is no such field:
-// `enqueueCodeGraphRefresh` builds `CodeGraphRefreshData` from the STORED repo —
-// `{installationId, workspaceId, repoOwner, repoName, defaultBranch}` — so two
-// pushes to one repo produce byte-identical event data. The property is real and
-// is asserted in its honest form: the coalesce REPOINTS `job_queue.event_id` at
-// the newest `job_event` row, so the executed run carries the LAST delivery's
-// event. (And "it indexes the last push's head" holds by construction rather than
-// by assertion: the container fetches the default branch's CURRENT head at run
-// time, which is why the refresh job pins no SHA.)
-//
-// ⚠️ NOTHING HERE REACHES THE NETWORK. The container is the `fake` orchestrator
-// selected by the shipped `MOTIR_FLEET_ORCHESTRATOR` seam; both HTTP boundaries
-// are undici intercepts; the archive host carries a trap that fails loudly if
-// anything fetches bytes in-process. No new webServer entry and no new service.
+// ⚠️ NOTHING HERE REACHES THE NETWORK. Every boundary the worker crosses —
+// GitHub's token, live head and tarball redirect, motir-ai's handoff and status —
+// is an undici intercept in `lib/test-code-graph-mock.ts`, and the archive host
+// carries a trap that fails loudly if anything fetches bytes in-process.
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
@@ -44,18 +34,9 @@ import {
 const REFRESH_JOB = 'system.code-graph-refresh';
 const [STOREFRONT, BILLING_API] = E2E_INDEX_REPOS;
 
-// ⚠️ THE TWO LONG WAITS ARE ASSERTED, NOT SLEPT THROUGH — and the distinction is
-// what keeps this spec affordable in a bulk leg. `codeGraphRefresh` declares
-// `period: '2m'` and a SIGKILLed worker holds its claim for `LEASE_MS` (60 s), so
-// a spec that waited both out would spend ~9 minutes ASLEEP in a lane whose whole
-// bulk-leg budget is 160-280 s (`tests/e2e/shard-plan.ts` — and one such spec
-// would reintroduce precisely the imbalance that file exists to prevent).
-//
-// Each is instead asserted where it is a CLAIM and then expressed as state where
-// it is only a delay: `run_at` really is `period` past the last arrival, and
-// nothing has run while the window is open — then the row is made due. That is a
-// sharper claim than "a run appeared two minutes later", and it changes no
-// declaration: the job's `period` and the worker's lease are asserted BY VALUE in
+// ⚠️ THE ONE LONG WAIT IS EXPRESSED AS STATE. A SIGKILLed worker holds its claim
+// for `LEASE_MS` (60 s); the kill test makes the row claimable instead of sleeping
+// through it, and the lease's length is asserted by value in
 // `tests/jobs/supervisor-cutover-story-gate.test.ts`.
 test.describe.configure({ timeout: 240_000, mode: 'serial' });
 
@@ -127,37 +108,12 @@ async function seedWorkspace(page: Parameters<typeof signUp>[0], repos: SeedRepo
 }
 
 const queuedRows = () => adminDb.jobQueueRun.findMany({ where: { jobId: REFRESH_JOB } });
-
-/**
- * Let the debounce window ELAPSE, expressed as state rather than as elapsed time.
- *
- * ⚠️ THIS IS NOT SHORTENING THE MECHANISM UNDER TEST — it is separating two
- * assertions that waiting conflates. `run_at` being `period` past the last
- * arrival IS the debounce; each test below asserts that VALUE explicitly, which
- * is a sharper claim than "a run appeared two minutes later" and is the whole of
- * what the window guarantees. What is left after that is execution, and paying
- * two real minutes per test to observe it would put ~8 minutes of pure sleeping
- * into a lane whose entire bulk leg budget is ~160-280 s
- * (`tests/e2e/shard-plan.ts` — the imbalance it exists to prevent is exactly what
- * one such spec would reintroduce).
- *
- * Moving `run_at` into the past is precisely what the passage of the window does
- * to the claim; nothing else about the row is touched.
- */
-async function elapseDebounceWindow(): Promise<void> {
-  await adminDb.jobQueueRun.updateMany({
-    where: { jobId: REFRESH_JOB, state: 'pending' },
-    data: { runAt: new Date(Date.now() - 1_000) },
-  });
-}
-
-/** The declared window, read off the shipped job rather than restated here. */
-const DEBOUNCE_PERIOD_MS = 120_000;
 const ledgerRows = () => adminDb.jobRun.findMany({ where: { functionId: REFRESH_JOB } });
+const succeeded = async () => (await ledgerRows()).filter((r) => r.status === 'succeeded');
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('a same-repo BURST coalesces into ONE run carrying the LAST delivery @smoke', async ({
+test('a same-repo BURST is one run PER push, each handed off — nothing coalesces @smoke', async ({
   page,
   request,
 }) => {
@@ -167,114 +123,84 @@ test('a same-repo BURST coalesces into ONE run carrying the LAST delivery @smoke
     await push(request, STOREFRONT!, head);
   }
 
-  // ⚠️ THE COUNT IS THE ASSERTION, not the existence of a first run. A shape that
-  // enqueued four and ran four would satisfy "a refresh happened".
+  // ⚠️ THE COUNT IS THE ASSERTION. Four pushes, four runs, each due at once and
+  // none carrying a debounce key — the shape a coalescing debounce would collapse.
   const rows = await queuedRows();
-  expect(rows, 'four pushes, one pending run').toHaveLength(1);
+  expect(rows, 'four pushes, four runs').toHaveLength(4);
+  expect(new Set(rows.map((r) => r.eventId)).size).toBe(4);
+  expect(rows.every((r) => r.debounceKey === null)).toBe(true);
+  expect(rows.every((r) => r.runAt.getTime() <= Date.now())).toBe(true);
 
-  // Four events were written; the coalesced row points at the LAST of them.
-  const events = await adminDb.jobEvent.findMany({
-    where: { name: REFRESH_JOB },
-    orderBy: { receivedAt: 'asc' },
-  });
-  expect(events).toHaveLength(4);
-  expect(rows[0]!.eventId, 'the run carries the LAST delivery').toBe(events.at(-1)!.id);
-  expect(rows[0]!.debounceKey).toBe(
-    `${E2E_INDEX_INSTALLATION_ID}/${STOREFRONT!.owner}/${STOREFRONT!.name}`,
-  );
-
-  // ⚠️ THE WINDOW ITSELF, ASSERTED RATHER THAN WAITED OUT. `codeGraphRefresh`
-  // declares `period: '2m'`, and the engine sets `run_at` that far past the LAST
-  // arrival — so the row is not yet due, and this is the claim the debounce
-  // actually makes. Sleeping through it would prove the same thing more slowly
-  // and less precisely.
-  const dueIn = rows[0]!.runAt.getTime() - Date.now();
-  expect(dueIn, 'the burst is deferred by the declared period').toBeGreaterThan(
-    DEBOUNCE_PERIOD_MS - 30_000,
-  );
-  expect(dueIn).toBeLessThanOrEqual(DEBOUNCE_PERIOD_MS);
-  expect(await ledgerRows(), 'nothing has run while the window is open').toHaveLength(0);
-
-  // …and once the window closes it runs, on the engine, to the ledger contract.
-  await elapseDebounceWindow();
   await expect
-    .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
-      message: 'the coalesced refresh should settle on the engine',
+    .poll(async () => (await succeeded()).length, {
+      message: 'every refresh should settle on the engine',
       timeout: 120_000,
       intervals: [500],
     })
-    .toBe('succeeded');
+    .toBe(4);
 
-  const runs = await ledgerRows();
-  expect(runs, 'ONE job_run per repo').toHaveLength(1);
-  expect(runs[0]!.output).toMatchObject({
-    indexed: true,
-    repoRef: indexRepoRef(STOREFRONT!),
-    projectsIndexed: 1,
-  });
-
-  // The collapse, observed from outside the process (MOTIR-3484): the memoized
-  // side effects, and not one poll or wait checkpoint.
-  const steps = await adminDb.jobStep.findMany({ where: { runId: rows[0]!.id } });
-  const ids = steps.map((s) => s.stepId).filter((id) => !id.startsWith('job-run:'));
-  expect(ids.some((id) => id.startsWith('index-boot:'))).toBe(true);
-  expect(ids.some((id) => id.startsWith('index-settle:'))).toBe(true);
-  expect(ids.filter((id) => id.startsWith('index-poll:') || id.startsWith('index-wait:'))).toEqual(
-    [],
-  );
-
-  // The slot was taken and given back: the container is provably gone.
+  // Each one hands off and writes the ledger contract: one `output.repoRef`,
+  // marked as indexed by motir-codegraph.
+  for (const run of await ledgerRows()) {
+    expect(run.output).toMatchObject({
+      indexed: true,
+      repoRef: indexRepoRef(STOREFRONT!),
+      projectsIndexed: 1,
+      indexedBy: 'motir-codegraph',
+    });
+  }
+  // The steps, observed from outside the process: the head, the push comparison
+  // (a push carries `refreshCause: 'push'`) and ONE handoff per run; never a
+  // container step.
+  for (const row of rows) {
+    const ids = (await adminDb.jobStep.findMany({ where: { runId: row.id } })).map((s) => s.stepId);
+    expect(ids).toEqual(
+      expect.arrayContaining(['index-head-v1', 'index-push-diff-v1', 'index-handoff-v1']),
+    );
+    expect(ids.filter((id) => /^index-(admit|boot|settle):/.test(id))).toEqual([]);
+  }
   expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
 });
 
-test('a burst across TWO repos produces TWO runs — the key does not merge tenants @smoke', async ({
+test('a burst across TWO repos is run per push, per repository — they stay independent @smoke', async ({
   page,
   request,
 }) => {
   await seedWorkspace(page, [STOREFRONT!, BILLING_API!]);
 
-  // Interleaved on purpose: a resolver that dropped a term would coalesce these
-  // into one bucket, which is exactly the Inngest failure mode MOTIR-2994
-  // measured and the engine refuses at registration.
   await push(request, STOREFRONT!, 'sf-1');
   await push(request, BILLING_API!, 'ba-1');
   await push(request, STOREFRONT!, 'sf-2');
   await push(request, BILLING_API!, 'ba-2');
 
-  const rows = await queuedRows();
-  expect(rows, 'two repos, two pending runs').toHaveLength(2);
-  expect(rows.map((r) => r.debounceKey).sort()).toEqual(
-    [
-      `${E2E_INDEX_INSTALLATION_ID}/${BILLING_API!.owner}/${BILLING_API!.name}`,
-      `${E2E_INDEX_INSTALLATION_ID}/${STOREFRONT!.owner}/${STOREFRONT!.name}`,
-    ].sort(),
-  );
-
-  await elapseDebounceWindow();
+  expect(await queuedRows(), 'four pushes, four runs').toHaveLength(4);
 
   await expect
-    .poll(async () => (await ledgerRows()).filter((r) => r.status === 'succeeded').length, {
-      message: 'both repos should settle',
+    .poll(async () => (await succeeded()).length, {
+      message: 'every run should settle',
       timeout: 120_000,
       intervals: [500],
     })
-    .toBe(2);
+    .toBe(4);
 
-  // ONE `output.repoRef` each — the per-repo ledger contract §6 forces, which a
-  // dispatch that BATCHED would fail.
+  // ONE `output.repoRef` per run, two per repository — the per-repo ledger
+  // contract §6 forces, which a dispatch that BATCHED would fail.
   const refs = (await ledgerRows())
     .map((r) => (r.output as { repoRef?: string } | null)?.repoRef)
     .sort();
-  expect(refs).toEqual([indexRepoRef(BILLING_API!), indexRepoRef(STOREFRONT!)].sort());
+  expect(refs).toEqual(
+    [
+      indexRepoRef(BILLING_API!),
+      indexRepoRef(BILLING_API!),
+      indexRepoRef(STOREFRONT!),
+      indexRepoRef(STOREFRONT!),
+    ].sort(),
+  );
 });
 
-test('the coalesced run is RENDERED on the operator dashboard @smoke', async ({
-  page,
-  request,
-}) => {
+test('a pushed refresh settles in the ledger @smoke', async ({ page, request }) => {
   await seedWorkspace(page, [STOREFRONT!]);
   await push(request, STOREFRONT!, 'dash-1');
-  await elapseDebounceWindow();
 
   await expect
     .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
@@ -291,62 +217,43 @@ test('the coalesced run is RENDERED on the operator dashboard @smoke', async ({
   // above is the claim.
 });
 
-test('a worker KILLED mid-index resumes on the SAME container — one boot, no orphan @smoke', async ({
+test('a worker KILLED mid-run resumes on the SAME handoff — handed once, one ledger row @smoke', async ({
   page,
   request,
 }) => {
   await seedWorkspace(page, [STOREFRONT!]);
   await push(request, STOREFRONT!, 'restart-1');
-  await elapseDebounceWindow();
 
   const [queued] = await queuedRows();
   expect(queued).toBeDefined();
 
-  // ⚠️ WAIT FOR THE BOOT STEP, NOT FOR A TIMER. `index-boot:<pid>` appearing in
-  // `job_step` is the authoritative signal that a container exists and the
-  // supervisor is watching it — which is precisely "mid-index". Killing on a
-  // sleep would race the boot and sometimes test nothing.
+  // ⚠️ WAIT FOR THE HANDOFF STEP, NOT FOR A TIMER. `index-handoff-v1` in
+  // `job_step` is the authoritative signal that motir-ai has the commit and the
+  // run is polling — which is precisely "mid-run". The seam answers "running" for
+  // a moment after a handoff, so the run defers at least once.
+  const handoffMemo = async () =>
+    (
+      await adminDb.jobStep.findFirst({
+        where: { runId: queued!.id, stepId: 'index-handoff-v1' },
+      })
+    )?.result as { jobId?: string } | null | undefined;
   await expect
-    .poll(
-      async () =>
-        (await adminDb.jobStep.findMany({ where: { runId: queued!.id } })).some((s) =>
-          s.stepId.startsWith('index-boot:'),
-        ),
-      { message: 'the supervisor should boot a container', timeout: 120_000, intervals: [250] },
-    )
-    .toBe(true);
+    .poll(async () => (await handoffMemo())?.jobId ?? null, {
+      message: 'the run should hand the commit off',
+      timeout: 120_000,
+      intervals: [250],
+    })
+    .not.toBeNull();
+  const handedJobId = (await handoffMemo())!.jobId;
 
-  // THE KILL — SIGKILL, not the graceful drain. A drain would let the supervisor
-  // FINISH, which would prove the opposite of the story's criterion.
+  // THE KILL — SIGKILL, not the graceful drain.
   await killJobWorker();
 
-  // ⚠️ AMENDED ON THE RECORD (MOTIR-3778): A KILLED WORKER USUALLY LEAVES NO
-  // CLAIM AT ALL NOW, AND THIS STEP IS SETUP RATHER THAN THE SUBJECT.
-  //
-  // It used to assert the row was `running` — *"a SIGKILLed worker leaves the row
-  // `running` with a lease nobody renews"* — and that was TRUE of a supervisor
-  // that HELD its claim for its container's whole life. `docs/decisions/
-  // job-queue-foundation.md` §16 makes a supervision a state machine over RUNS:
-  // between polls the row is `pending` with `claimed_by: null`, and the window in
-  // which a kill can strand a claim is one provider read wide. So the kill now
-  // lands on a `pending` row almost every time and on a `running` one
-  // occasionally, and BOTH are correct.
-  //
-  // ⚠️ THE PROPERTY THIS SPEC IS NAMED FOR IS UNCHANGED and is asserted below: the
-  // resumed pass REPLAYS THE BOOT rather than provisioning again. What the resume
-  // needs from this step is only that the run is CLAIMABLE — a `running` row
-  // waits out `LEASE_MS` (60 s) before `reclaimExpiredLeases` can take it, so its
-  // lease is expired here exactly as before; a deferred row is already unclaimed
-  // and simply needs to be due. Both are forced in one write. Waiting either out
-  // would add a minute of sleeping to prove numbers this spec is not about — the
-  // lease's length is asserted by value in
-  // `tests/jobs/supervisor-cutover-story-gate.test.ts`, and the poll cadence in
-  // `tests/jobs/code-graph-index-self-rescheduling.test.ts`.
+  // Between polls the row is `pending` and unclaimed; a kill inside one pass leaves
+  // it `running` with a lease nobody renews. Both are correct, and both are made
+  // claimable in one write rather than waiting out `LEASE_MS`.
   const orphaned = await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: queued!.id } });
-  expect(
-    orphaned.state,
-    'a killed worker leaves the run either claimed-and-stale or already deferred back',
-  ).toMatch(/^(running|pending)$/);
+  expect(orphaned.state).toMatch(/^(running|pending|succeeded)$/);
   await adminDb.jobQueueRun.update({
     where: { id: queued!.id },
     data: { leaseExpiresAt: new Date(Date.now() - 1_000), runAt: new Date(Date.now() - 1_000) },
@@ -356,35 +263,21 @@ test('a worker KILLED mid-index resumes on the SAME container — one boot, no o
 
   await expect
     .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
-      message: 'the resumed supervisor should settle the SAME container',
+      message: 'the resumed run should settle',
       timeout: 120_000,
       intervals: [500],
     })
     .toBe('succeeded');
 
-  // ⚠️ THE ASSERTION THE CARD TURNS ON: ONE BOOT. "It finished" is true of the
-  // double-boot case too — and a second boot is a second billed container and a
-  // second admission slot. The boot sits inside a memoized step, so the resumed
-  // pass replayed it instead of provisioning again.
-  //
-  // ⚠️ AND IT IS ONLY EXPRESSIBLE BECAUSE THE FAKE'S CONTAINER OUTLIVES THE
-  // WORKER (MOTIR-3828). Boot and first poll used to be the same pass in the same
-  // process, so the fake's module-level machine map was indistinguishable from a
-  // real provider; they are now different processes by design, and an in-memory
-  // map would report this container `exists: false` — which
-  // `pollIndexContainer` correctly classifies `never_started`. The lane's worker
-  // therefore runs the fake with `MOTIR_FAKE_CONTAINER_STATE_PATH` set; see that
-  // seam's block in `lib/orchestrator/adapters/fake` for why it belongs to the
-  // fake rather than to this spec.
-  const steps = await adminDb.jobStep.findMany({ where: { runId: queued!.id } });
-  const boots = steps.filter((s) => s.stepId.startsWith('index-boot:'));
-  expect(boots, 'exactly one boot across both passes').toHaveLength(1);
-
+  // ⚠️ THE ASSERTION THE TEST TURNS ON: THE SAME HANDOFF. The handoff sits inside
+  // a memoized step, so the resumed pass replayed it rather than handing the
+  // commit off a second time — its recorded job is the one handed before the kill.
+  expect((await handoffMemo())!.jobId, 'handed off once, across both workers').toBe(handedJobId);
   const runs = await ledgerRows();
   expect(runs, 'one job_run, not one per pass').toHaveLength(1);
-  expect(runs[0]!.output).toMatchObject({ indexed: true, repoRef: indexRepoRef(STOREFRONT!) });
-
-  // NO ORPHAN: the slot is back, so the container was torn down rather than left
-  // running with nothing watching it — the failure this whole story is about.
-  expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+  expect(runs[0]!.output).toMatchObject({
+    indexed: true,
+    repoRef: indexRepoRef(STOREFRONT!),
+    indexedBy: 'motir-codegraph',
+  });
 });

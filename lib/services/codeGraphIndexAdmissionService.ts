@@ -327,7 +327,7 @@ function heldVerdict(
  * ⚠️ WHAT THIS KEY ALONE CANNOT DECIDE, AND WHERE THAT IS DECIDED (MOTIR-2160).
  * It says a slot for this work is taken; it does not say BY WHOM. Nothing else
  * in the system said either — `system.code-graph-refresh`'s 2-minute debounce
- * coalesces pushes inside one window and does nothing once a run has started,
+ * (removed by MOTIR-11884) coalesced pushes inside one window and did nothing once a run had started,
  * while an index of a large tree runs for minutes, so a second run for the same
  * repo is ordinary, not exotic. Reading a held slot as "mine" therefore let that
  * second run boot a container judged against NONE of the three caps, and let

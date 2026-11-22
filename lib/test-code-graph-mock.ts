@@ -19,6 +19,21 @@ import type { MockAgent } from 'undici';
 // `settleIndexContainer` at all — so no spec could assert the ledger contract,
 // the coalescing that feeds it, or a mid-index worker restart.
 //
+// ⚠️ AND SINCE MOTIR-11883 THE TWO JOBS HAND THE INDEX OFF INSTEAD (story
+// MOTIR-11022). `runIndexHandoffSteps` crosses three more boundaries, stubbed here
+// beside the fleet's two so both paths stay drivable in the lane:
+//
+//   3. `resolveRef` → `GET api.github.com/repos/{owner}/{name}/commits/{ref}`, the
+//      live head — answered with {@link e2eHeadSha}, a fixed 40-hex per repository;
+//   4. `handOffCodeGraphIndex` → `POST {MOTIR_AI_URL}/v1/code-graph/index-handoff`,
+//      answered `202 { jobId }` and remembered per repository;
+//   5. `readCodeGraphIndexStatus` → `GET {MOTIR_AI_URL}/v1/code-graph/index-status`,
+//      answered "running" for {@link E2E_INDEX_PUBLISH_DELAY_MS} after a handoff and
+//      "published at the head" after it — so a run defers at least once, which is
+//      what gives a mid-run worker kill a window to land in. A worker restarted
+//      inside that window forgets the handoff and answers "published", which is
+//      the answer the restarted run needs.
+//
 // `tests/helpers/indexFleet.ts`'s `stubIndexFleet()` does this IN-PROCESS for the
 // vitest suites. A Playwright server is a separately-spawned process, so an
 // in-process stub cannot reach it — which is exactly why every other external
@@ -76,6 +91,7 @@ export function codeGraphMockJournal(): readonly CodeGraphMockJournalEntry[] {
 /** Per-test reset. */
 export function resetCodeGraphMockJournal(): void {
   journal = [];
+  handed.clear();
 }
 
 function record(method: string, path: string): void {
@@ -100,6 +116,24 @@ export const CODELOAD_ORIGIN = 'https://codeload.github.com';
 export function e2eTarballUrl(owner: string, name: string, ref: string): string {
   return `${CODELOAD_ORIGIN}/${owner}/${name}/legacy.tar.gz/${ref}?token=E2E_PRESIGNED`;
 }
+
+/**
+ * The live head GitHub answers for a repository: 40 lowercase hex derived from its
+ * `owner/name`, so the spec process can compute the commit the worker handed off.
+ */
+export function e2eHeadSha(owner: string, name: string): string {
+  let hash = 0x811c9dc5;
+  for (const ch of `${owner}/${name}`.toLowerCase()) {
+    hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0').repeat(5);
+}
+
+/** How long a handed-off commit reads "running" before it reads published. */
+export const E2E_INDEX_PUBLISH_DELAY_MS = 2_000;
+
+/** The last handoff per `repoRef`, in this process. */
+const handed = new Map<string, { commit: string; at: number; jobId: string; kind: string }>();
 
 /** The credential the mint returns. Opaque by contract; a test asserts identity, never shape. */
 export const E2E_INDEX_RUN_CREDENTIAL = 'mrc1.e2e.index-run-credential';
@@ -162,9 +196,84 @@ export function installCodeGraphBoundaryMock(agent: MockAgent): void {
         return { statusCode: 200, data, responseOptions: json };
       })
       .persist();
+
+    // 4. THE HANDOFF (MOTIR-11883). The body carries the pre-signed source URL, a
+    // bearer secret: it is read for the commit and kind and never journalled.
+    agent
+      .get(aiOrigin)
+      .intercept({ path: '/v1/code-graph/index-handoff', method: 'POST' })
+      .reply((opts) => {
+        record('POST', '/v1/code-graph/index-handoff');
+        const body = parseBody(opts.body);
+        const jobId = `e2e-index-job-${String(handed.size + 1)}-${String(Date.now())}`;
+        handed.set(String(body['repoRef']), {
+          commit: String(body['commitSha']),
+          at: Date.now(),
+          jobId,
+          kind: String(body['kind']),
+        });
+        return { statusCode: 202, data: { jobId }, responseOptions: json };
+      })
+      .persist();
+
+    // 5. THE STATUS: running for a moment after a handoff, then published at the head.
+    agent
+      .get(aiOrigin)
+      .intercept({
+        path: (p) => p.split('?')[0] === '/v1/code-graph/index-status',
+        method: 'GET',
+      })
+      .reply((opts) => {
+        record('GET', '/v1/code-graph/index-status');
+        const repoRef =
+          new URL(String(opts.path), 'http://status.local').searchParams.get('repoRef') ?? '';
+        const [owner = '', name = ''] = repoRef.split('/');
+        const last = handed.get(repoRef);
+        const data: Record<string, unknown> =
+          last && Date.now() - last.at < E2E_INDEX_PUBLISH_DELAY_MS
+            ? {
+                state: 'not_indexed',
+                indexedCommit: null,
+                inProgressJob: {
+                  jobId: last.jobId,
+                  kind: last.kind,
+                  commit: last.commit,
+                  ref: null,
+                  state: 'running',
+                  enqueuedAt: new Date(last.at).toISOString(),
+                  startedAt: new Date(last.at).toISOString(),
+                },
+                lastFailure: null,
+              }
+            : {
+                state: 'indexed',
+                indexedCommit: {
+                  commit: last?.commit ?? e2eHeadSha(owner, name),
+                  publishedAt: new Date().toISOString(),
+                },
+                inProgressJob: null,
+                lastFailure: null,
+              };
+        return { statusCode: 200, data, responseOptions: json };
+      })
+      .persist();
   }
 
   const github = agent.get('https://api.github.com');
+
+  // 3. THE LIVE HEAD the handoff reads (`application/vnd.github.sha`: the bare sha).
+  github
+    .intercept({
+      path: (p) => /^\/repos\/[^/]+\/[^/]+\/commits\/[^/]+$/.test(p.split('?')[0] ?? p),
+      method: 'GET',
+    })
+    .reply((req) => {
+      const path = String(req.path).split('?')[0] ?? '';
+      record('GET', '/repos/:owner/:name/commits/:ref');
+      const m = /^\/repos\/([^/]+)\/([^/]+)\/commits\//.exec(path);
+      return { statusCode: 200, data: e2eHeadSha(m?.[1] ?? '', m?.[2] ?? '') };
+    })
+    .persist();
 
   // The installation token the tarball resolve mints from the App JWT.
   //
@@ -254,6 +363,15 @@ function mintTtlSeconds(body: unknown): number {
   }
   if (typeof requested !== 'number' || !Number.isFinite(requested)) return 15 * 60;
   return Math.min(60 * 60, Math.max(60, Math.floor(requested)));
+}
+
+function parseBody(body: unknown): Record<string, unknown> {
+  if (typeof body !== 'string') return {};
+  try {
+    return JSON.parse(body) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 function inOneHour(): string {

@@ -11,7 +11,7 @@ import { INDEX_AI_URL, INDEX_SERVICE_TOKEN, stubAppCredentials } from './indexFl
 //             GET  /v1/code-graph/index-status   answers the next `statuses` entry
 //             GET  /v1/code-audit                "already audited" (a neutral first audit)
 //   GitHub    /access_tokens                     an installation token
-//             /commits/<ref>                     the live head, `HANDOFF_HEAD`
+//             /commits/<ref>                     the live head, `handoffWorld.head`
 //             /tarball/<ref>                     a 302 to a URL carrying `SOURCE_URL_SENTINEL`
 //
 // Any other request throws, so a call to the container path (a credential mint, a
@@ -33,6 +33,8 @@ type StatusAnswer = Record<string, unknown>;
 
 export const handoffWorld: {
   allowanceOutcome: string;
+  /** The head `/commits/<ref>` answers; `HANDOFF_HEAD` unless a case moves it. */
+  head: string;
   /** What the handoff answers: accepted, the registration retry, or a refusal. */
   handoff: 'accepted' | 'rate_limited' | 'refused';
   /** Answered in order; the last entry repeats. */
@@ -45,6 +47,7 @@ export const handoffWorld: {
   aiPaths: string[];
 } = {
   allowanceOutcome: 'ok',
+  head: HANDOFF_HEAD,
   handoff: 'accepted',
   statuses: [],
   handoffs: [],
@@ -66,11 +69,11 @@ export function statusAnswer(fields: Partial<Record<string, unknown>> = {}): Sta
   };
 }
 
-/** Published at `commit`. */
-export const publishedAt = (commit: string): StatusAnswer =>
+/** Published at `commit`, at `when` (a fixed past instant unless given). */
+export const publishedAt = (commit: string, when = '2026-11-22T10:00:00.000Z'): StatusAnswer =>
   statusAnswer({
     state: 'indexed',
-    indexedCommit: { commit, publishedAt: '2026-11-22T10:00:00.000Z' },
+    indexedCommit: { commit, publishedAt: when },
   });
 
 /** A job for `commit` still running. */
@@ -120,6 +123,7 @@ function allowanceVerdict(outcome: string): unknown {
 /** Install the world. Call in `beforeEach`; `vi.unstubAllGlobals` removes it. */
 export function stubIndexHandoff(): void {
   handoffWorld.allowanceOutcome = 'ok';
+  handoffWorld.head = HANDOFF_HEAD;
   handoffWorld.handoff = 'accepted';
   handoffWorld.statuses = [publishedAt(HANDOFF_HEAD)];
   handoffWorld.handoffs = [];
@@ -191,7 +195,7 @@ export function stubIndexHandoff(): void {
       const commits = /\/repos\/[^/]+\/[^/]+\/commits\/([^/]+)$/.exec(parsed.pathname);
       if (commits) {
         handoffWorld.headReads.push(decodeURIComponent(commits[1]!));
-        return new Response(HANDOFF_HEAD, { status: 200 });
+        return new Response(handoffWorld.head, { status: 200 });
       }
       const tarball = /\/repos\/[^/]+\/[^/]+\/tarball\/([^/]+)$/.exec(parsed.pathname);
       if (tarball) {

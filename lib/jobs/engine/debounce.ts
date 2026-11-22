@@ -7,7 +7,11 @@ import {
 
 // THE ENGINE'S DEBOUNCE (Story MOTIR-3417 · Subtask MOTIR-3483).
 //
-// `defineJob`'s `debounce` option has been declared by `system.code-graph-refresh`
+// (Since MOTIR-11884 no shipped job declares a `debounce`: the refresh it was
+// built for now hands off to motir-ai, whose service queue supersedes. The
+// mechanism stays, pinned by tests/jobs/engine-debounce.test.ts.)
+//
+// `defineJob`'s `debounce` option had been declared by `system.code-graph-refresh`
 // and forwarded to Inngest since MOTIR-893, and the engine never had one: the
 // dispatcher wrote `runAt: new Date()` for every subscriber, unconditionally.
 // Moving the refresh to a lane without this would take a job whose whole point is

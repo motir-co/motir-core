@@ -453,6 +453,19 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/indexHandoffSteps.ts',
     shape: '{ paid: boolean }',
   },
+  'index-head-v1': {
+    file: 'lib/jobs/indexHandoffSteps.ts',
+    // MOTIR-11884. The live head, read once per run: the URL, the comparison and the
+    // settle all use it.
+    shape: '{ commitSha: string }',
+  },
+  'index-push-diff-v1': {
+    file: 'lib/jobs/indexHandoffSteps.ts',
+    // MOTIR-11884. The push-or-refresh decision over the stamped head and the host's
+    // changed paths; memoized so a retry does not ask the host again.
+    shape:
+      '{ changedPaths: Array<string>; kind: "push"; previousCommitSha: string } | { fallback: "comparison_threw" | "head_unchanged" | "host_error" | "no_stamped_head" | "no_such_ref" | "not_connected" | "revoked" | "sha_not_hex" | "too_large" | "truncated"; kind: "refresh" }',
+  },
   'index-handoff-v1': {
     file: 'lib/jobs/indexHandoffSteps.ts',
     // MOTIR-11883. NEVER the source URL: it is a bearer secret and a memo is stored.

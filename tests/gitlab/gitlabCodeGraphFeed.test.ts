@@ -139,6 +139,8 @@ describe('gitlabWebhookService — push → code-graph refresh enqueue (MOTIR-14
       repoOwner: 'octocat',
       repoName: 'acme',
       defaultBranch: 'main',
+      // MOTIR-11884: a push says it is one, so the run can hand motir-ai a `push`.
+      refreshCause: 'push',
     });
   });
 

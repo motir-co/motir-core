@@ -148,6 +148,9 @@ async function passDriver(def: EngineJobDefinition, slug: string) {
   return { ...seeded, memo, pass };
 }
 
+/** A handoff memo at the head, handed at a fixed instant. */
+const HANDED = { commitSha: HANDOFF_HEAD, handedAt: '2026-11-22T10:00:00.000Z' };
+
 const leaksUrl = (value: unknown): boolean =>
   JSON.stringify(value ?? null).includes(SOURCE_URL_SENTINEL);
 
@@ -192,6 +195,7 @@ describe('system.code-graph-index hands a first_index off and settles on the pub
       'resolve-target-v2',
       'index-allowance',
       'index-ai-plan',
+      'index-head-v1',
       'index-handoff-v1',
       'cancel-offboarding',
       'derive-first-audit',
@@ -256,15 +260,11 @@ describe('system.code-graph-refresh hands off as a refresh, whatever enqueued it
     },
   );
 
-  it('keeps its event, retry policy and debounce', () => {
+  it('keeps its event and retry policy, and declares no debounce (MOTIR-11884)', () => {
     expect(codeGraphRefresh.id).toBe('system.code-graph-refresh');
     expect(codeGraphRefresh.trigger).toBe('system.code-graph-refresh');
     expect(codeGraphRefresh.retryPolicy).toBe('idempotent');
-    expect(codeGraphRefresh.debounce).toEqual({
-      key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
-      period: '2m',
-      timeout: '15m',
-    });
+    expect(codeGraphRefresh.debounce).toBeUndefined();
   });
 
   it('the two jobs share one step shape, except the first-audit step', async () => {
@@ -426,7 +426,7 @@ describe('the run settles on the HANDED commit', () => {
 
   it('a failure of an OLDER commit is history, not this run’s outcome', () => {
     expect(
-      settledOutcome(failedAt(HANDOFF_OLDER, 'repository_too_large', 'old') as never, HANDOFF_HEAD),
+      settledOutcome(failedAt(HANDOFF_OLDER, 'repository_too_large', 'old') as never, HANDED),
     ).toEqual({ kind: 'pending' });
     expect(
       settledOutcome(
@@ -435,7 +435,7 @@ describe('the run settles on the HANDED commit', () => {
           lastFailure: (failedAt(HANDOFF_HEAD, 'fetch_failed', 'x') as { lastFailure: unknown })
             .lastFailure,
         }) as never,
-        HANDOFF_HEAD,
+        HANDED,
       ),
     ).toEqual({ kind: 'pending' });
   });

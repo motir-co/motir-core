@@ -386,6 +386,10 @@ export type IndexRepoResult =
        *  motir-ai's handoff; absent on an old-fleet row. It is what tells the two
        *  kinds of succeeded row apart. */
       indexedBy?: 'motir-codegraph';
+      /** MOTIR-11884. The newer commit the service published instead of the handed
+       *  one, when the handed job was superseded or overtaken; the head stamped is
+       *  this one. */
+      supersededBy?: string;
     };
 
 /**

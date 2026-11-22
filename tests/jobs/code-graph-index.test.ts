@@ -1083,9 +1083,10 @@ describe('the admission cap queues, and nothing is dropped', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // TWO RUNS, ONE (repo × project) — MOTIR-2160.
 //
-// The refresh job debounces pushes on `installationId/owner/name` with a 2-minute
-// window, which coalesces merges INSIDE one window and does nothing once a run has
-// started — while an index takes minutes. So a second run arriving mid-index is
+// The refresh job debounced pushes on `installationId/owner/name` with a 2-minute
+// window (removed by MOTIR-11884, so now every push is a run), which coalesced
+// merges INSIDE one window and did nothing once a run had started — while an index
+// takes minutes. So a second run arriving mid-index is
 // ordinary merge cadence. What the caps could not see is that the slot key names
 // the WORK, not the worker: a second run's held-slot read was indistinguishable
 // from a replay, and it booted a container judged against none of the three bounds.
@@ -1240,7 +1241,7 @@ describe('the job definition carries NO concurrency number', () => {
 // the 180 s upload client deadline, and its five idempotent
 // retries starved every other repo's refresh against motir-ai's one parse
 // permit. So what these cases pin is that a PUSH refresh dispatches containers,
-// that its per-repo debounce survived the move, and that the first-index path
+// that its per-repo debounce survived the move (until MOTIR-11884 removed it), and that the first-index path
 // did not change — not one of which is safe to read off the diff.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1327,20 +1328,15 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     expect(fakeOrchestrator.teardowns).toHaveLength(1);
   }, 30_000);
 
-  it('keeps the per-repo DEBOUNCE, and carries no concurrency number', () => {
-    // Read off the SHIPPED definition — what the module actually declared.
-    // Coalescing happens at ENQUEUE (`lib/jobs/engine/dispatcher.ts`), which
-    // `tests/jobs/engine-debounce.test.ts` drives directly; what THIS test pins is
-    // that the declaration survived the move, which is exactly what a path swap
-    // risks dropping.
+  it('declares NO debounce, and carries no concurrency number', () => {
+    // Read off the SHIPPED definition — what the module actually declared. The
+    // per-repo debounce this test used to pin was REMOVED by MOTIR-11884: each
+    // refresh is handed off to motir-ai, whose service queue supersedes a
+    // still-queued push of the same repository and ref, so coalescing here would
+    // only delay the newest push. `tests/jobs/engine-debounce.test.ts` asserts two
+    // same-repo events are two runs.
     expect(codeGraphRefresh.id).toBe('system.code-graph-refresh');
-    // A push storm still coalesces: same key (installation + repo), same 2m
-    // window, same 15m cap on the total deferral.
-    expect(codeGraphRefresh.debounce).toEqual({
-      key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
-      period: '2m',
-      timeout: '15m',
-    });
+    expect(codeGraphRefresh.debounce).toBeUndefined();
     // `concurrency: 2` is GONE (MOTIR-2057), for MOTIR-1990's three reasons — a
     // stepped supervisor holds its slot for the container's whole life, an
     // unkeyed limit IS the starvation this job suffered, and its scale-to-zero

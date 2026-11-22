@@ -447,6 +447,12 @@ It now dead-letters at once as `EMAIL_QUOTA_EXHAUSTED`.
 
 ## Debounce — coalescing is REAL; the `timeout` cap and an unresolvable KEY are not
 
+> **`system.code-graph-refresh` no longer declares a debounce (MOTIR-11884).** It
+> hands each refresh off to motir-ai, and motir-codegraph's own queue supersedes a
+> still-queued push of the same repository and ref, so coalescing here would only
+> delay the newest push. Where the sections below name it, they describe the job
+> as it was when they were measured.
+
 `debounce` delays a run until `period` has passed with no further same-`key`
 event, then runs ONCE with the LATEST event. `timeout` is meant to cap the total
 deferral so a continuous stream still runs.
@@ -572,9 +578,10 @@ characterization so a change upstream surfaced here. **It was deleted with the
 dependency it drove** (MOTIR-3418); the current guard is
 `tests/jobs/engine-debounce.test.ts`, and any job that grows a `debounce` belongs
 in THAT one — a scheduler that drops runs then fails the build
-instead of a story. It also asserts that `system.code-graph-refresh`'s key names
-only fields `CodeGraphRefreshData` makes required, which is the compile-time half
-of the unresolvable-key rule.
+instead of a story. It asserted that `system.code-graph-refresh`'s key named
+only fields `CodeGraphRefreshData` made required — the compile-time half of the
+unresolvable-key rule — until MOTIR-11884 removed that job's debounce; it now
+asserts the job declares none.
 
 The standalone probe that produced the table (`LAB_MODE=…
 scripts/experiments/inngest-debounce-coalescing.mjs`, driven against a
@@ -601,7 +608,8 @@ That is what shipped. `job_queue` carries `debounce_key` and
 **How the key is resolved, and when the resolver REFUSES.** One resolver serves
 `debounce.key` and `idempotency` alike (`lib/jobs/engine/eventExpression.ts`).
 The grammar is a `+`-joined sequence of `event.data.<field>` terms and
-single-quoted literals — the shape `system.code-graph-refresh` declares — and it
+single-quoted literals — the shape `system.code-graph-refresh` declared until
+MOTIR-11884 — and it
 is TOTAL: an expression it cannot parse throws at REGISTRATION, as the definition
 module is evaluated, so every process that loads the registry sees it. **This is
 the one place the engine is deliberately STRICTER than Inngest**, and it is the
@@ -647,9 +655,11 @@ pending run forward. It is NOT a way to skip the debounce. The row still carries
 the key, so every later same-key arrival coalesces into it and the queue still
 never holds two pending runs for one key. The switch belongs to the EMITTER, per
 dispatch, because one job can serve a trigger that arrives in bursts and one with
-a person waiting. Its one user is the planning-session refresh
+a person waiting. Its one user was the planning-session refresh
 (`enqueueCodeGraphRefresh(…, { trigger: 'session_start' })`), where the push
-debounce cost 122 s of a ≈ 211 s wait.
+debounce cost 122 s of a ≈ 211 s wait; since MOTIR-11884 that job has no debounce,
+so every refresh is due at once and nothing passes the switch. The switch stays
+for the next job that serves both kinds of trigger.
 
 **An arrival never moves an already-due run back into the future.** Once
 `run_at` has passed, the run is only waiting for a worker. A coalescing arrival
