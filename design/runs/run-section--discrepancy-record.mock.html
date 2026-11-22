@@ -6499,10 +6499,11 @@
       </h1>
       <section
         class="flex flex-col gap-3"
-        aria-label="0 · Where it sits: directly below Run and above Development, and the doors that land on it"
+        aria-label="0 · Where it sits, collapsed by default: directly below Run and above Development, and the doors that open it"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          0 · Where it sits: directly below Run and above Development, and the doors that land on it
+          0 · Where it sits, collapsed by default: directly below Run and above Development, and the
+          doors that open it
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -6516,8 +6517,11 @@
                 Design result · Children · Plans · Pages · Attachments · Activity) is unchanged. It
                 carries the fragment id
                 <code class="font-mono text-xs text-(--el-text)">run-discrepancy</code>, so a link
-                can land on it. With no record the section is not rendered at all, and Run is
-                followed by Development exactly as today.
+                can land on it. <strong>It starts collapsed</strong>: one row with how many points
+                and decisions it holds and who recorded the latest, so a long record never pushes
+                Development down. Pressing the row opens it, and <em>Hide</em> in the header closes
+                it again; it opens collapsed on every visit. With no record the section is not
+                rendered at all, and Run is followed by Development exactly as today.
               </p>
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[52rem]">
@@ -6696,186 +6700,35 @@
                           </div>
                         </div>
                         <div>
-                          <div class="flex flex-col gap-4">
-                            <div class="flex flex-col gap-3">
-                              <p
-                                class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
-                              >
-                                <span>Recorded Nov 22, 11:20 UTC by Zhu Yue</span
-                                ><span aria-hidden="true">·</span
-                                ><a
-                                  href="/runs?run=run_8f2k"
-                                  aria-label="Open the run of Nov 22, 10:58 UTC"
-                                  class="font-medium text-(--el-link) underline underline-offset-2 hover:text-(--el-link-pressed)"
-                                  >Run of Nov 22, 10:58 UTC</a
-                                >
-                              </p>
-                              <section class="flex flex-col gap-2">
-                                <div class="flex flex-col gap-0.5">
-                                  <h4
-                                    class="flex flex-wrap items-center gap-2 font-sans text-sm font-semibold text-(--el-text)"
-                                  >
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      width="24"
-                                      height="24"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      stroke-width="2"
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      class="lucide lucide-route size-4 shrink-0 text-(--el-text-secondary)"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="6" cy="19" r="3"></circle>
-                                      <path
-                                        d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"
-                                      ></path>
-                                      <circle cx="18" cy="5" r="3"></circle></svg
-                                    >Built differently from the plan<span
-                                      class="font-normal text-(--el-text-secondary)"
-                                      >· 2 points</span
-                                    >
-                                  </h4>
-                                  <p class="font-sans text-xs text-(--el-text-secondary)">
-                                    The outcome was kept. The route to it changed.
-                                  </p>
-                                </div>
-                                <ol class="flex flex-col gap-2">
-                                  <li
-                                    class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border-soft) p-(--spacing-card-padding-12)"
-                                  >
-                                    <div>
-                                      <span
-                                        class="inline-flex items-center rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong) bg-(--el-tint-sky)"
-                                        >Point 1</span
-                                      >
-                                    </div>
-                                    <dl class="flex flex-col gap-2">
-                                      <div class="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
-                                        <dt
-                                          class="font-sans text-sm font-medium text-(--el-text-secondary)"
-                                        >
-                                          Plan asked
-                                        </dt>
-                                        <dd class="min-w-0 [overflow-wrap:anywhere]">
-                                          <div
-                                            class="wmde-markdown motir-prose text-sm text-(--el-text)"
-                                          >
-                                            <p>
-                                              Add the export button to
-                                              <code>IssueToolbar</code> beside
-                                              <strong>Filter</strong>.
-                                            </p>
-                                          </div>
-                                        </dd>
-                                      </div>
-                                      <div class="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
-                                        <dt
-                                          class="font-sans text-sm font-medium text-(--el-text-secondary)"
-                                        >
-                                          Built
-                                        </dt>
-                                        <dd class="min-w-0 [overflow-wrap:anywhere]">
-                                          <div
-                                            class="wmde-markdown motir-prose text-sm text-(--el-text)"
-                                          >
-                                            <p>
-                                              Added it to <code>ListHeaderActions</code>, which the
-                                              toolbar renders; <code>IssueToolbar</code> has no slot
-                                              for actions since ACME-31.
-                                            </p>
-                                          </div>
-                                        </dd>
-                                      </div>
-                                      <div class="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
-                                        <dt
-                                          class="font-sans text-sm font-medium text-(--el-text-secondary)"
-                                        >
-                                          Why
-                                        </dt>
-                                        <dd class="min-w-0 [overflow-wrap:anywhere]">
-                                          <div
-                                            class="wmde-markdown motir-prose text-sm text-(--el-text)"
-                                          >
-                                            <p>
-                                              The toolbar named by the plan no longer owns its
-                                              actions. The outcome, an export button in the list
-                                              header, is unchanged.
-                                            </p>
-                                          </div>
-                                        </dd>
-                                      </div>
-                                    </dl>
-                                  </li>
-                                  <li
-                                    class="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border-soft) p-(--spacing-card-padding-12)"
-                                  >
-                                    <div>
-                                      <span
-                                        class="inline-flex items-center rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong) bg-(--el-tint-sky)"
-                                        >Point 2</span
-                                      >
-                                    </div>
-                                    <dl class="flex flex-col gap-2">
-                                      <div class="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
-                                        <dt
-                                          class="font-sans text-sm font-medium text-(--el-text-secondary)"
-                                        >
-                                          Plan asked
-                                        </dt>
-                                        <dd class="min-w-0 [overflow-wrap:anywhere]">
-                                          <div
-                                            class="wmde-markdown motir-prose text-sm text-(--el-text)"
-                                          >
-                                            <p>
-                                              Reuse the <code>csvExport</code> helper in
-                                              <code>lib/export</code>.
-                                            </p>
-                                          </div>
-                                        </dd>
-                                      </div>
-                                      <div class="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
-                                        <dt
-                                          class="font-sans text-sm font-medium text-(--el-text-secondary)"
-                                        >
-                                          Built
-                                        </dt>
-                                        <dd class="min-w-0 [overflow-wrap:anywhere]">
-                                          <div
-                                            class="wmde-markdown motir-prose text-sm text-(--el-text)"
-                                          >
-                                            <p>
-                                              Wrote the rows with the shipped
-                                              <code>toCsvStream</code>, which streams.
-                                            </p>
-                                          </div>
-                                        </dd>
-                                      </div>
-                                      <div class="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
-                                        <dt
-                                          class="font-sans text-sm font-medium text-(--el-text-secondary)"
-                                        >
-                                          Why
-                                        </dt>
-                                        <dd class="min-w-0 [overflow-wrap:anywhere]">
-                                          <div
-                                            class="wmde-markdown motir-prose text-sm text-(--el-text)"
-                                          >
-                                            <p>
-                                              <code>csvExport</code> was deleted in ACME-37;
-                                              <code>toCsvStream</code> is its replacement.
-                                            </p>
-                                          </div>
-                                        </dd>
-                                      </div>
-                                    </dl>
-                                  </li>
-                                </ol>
-                              </section>
-                            </div>
-                          </div>
+                          <button
+                            type="button"
+                            aria-expanded="false"
+                            aria-controls="run-discrepancy-body"
+                            class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                              aria-hidden="true"
+                            >
+                              <path d="m9 18 6-6-6-6"></path></svg
+                            ><span class="font-sans text-sm font-medium text-(--el-text)"
+                              >2 points</span
+                            ><span class="font-sans text-sm text-(--el-text-secondary)"
+                              >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                            ><span
+                              class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                              >Show</span
+                            >
+                          </button>
                         </div>
                       </div>
                       <div
@@ -7092,7 +6945,8 @@
                 <code class="font-mono text-xs text-(--el-text)"
                   >/items/ACME-42#run-discrepancy</code
                 >
-                — this section, focused — instead of the top of the work item.
+                — this section, focused — instead of the top of the work item. Arriving through that
+                link opens the section, because the reader asked to read it.
               </p>
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[32rem]">
@@ -7133,7 +6987,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · light · landed: the section takes focus and draws the ring
+                    EN · light · landed: the section opens, takes focus and draws the ring
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -7154,10 +7008,36 @@
                             <span class="font-sans text-sm text-(--el-text-secondary)"
                               >— what a run built or decided that the plan didn’t say</span
                             >
+                            <div class="ml-auto flex items-center">
+                              <button
+                                type="button"
+                                data-variant="ghost"
+                                class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                                aria-expanded="true"
+                                aria-controls="run-discrepancy-body"
+                              >
+                                <span aria-hidden="true" class="inline-flex"
+                                  ><svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="m6 9 6 6 6-6"></path></svg></span
+                                ><span>Hide</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                         <div>
-                          <div class="flex flex-col gap-4">
+                          <div id="run-discrepancy-body" class="flex flex-col gap-4">
                             <div class="flex flex-col gap-3">
                               <p
                                 class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -7365,7 +7245,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · one record · 2 points · light
+                    EN · one record · 2 points · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -7388,7 +7268,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >2 points</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · one record · 2 points · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >2 points</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · one record · 2 points · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -7574,7 +7603,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · one record · 2 points · dark
+                    EN · one record · 2 points · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -7599,10 +7628,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -7810,7 +7865,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · one record · 2 decisions · light
+                    EN · one record · 2 decisions · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -7833,7 +7888,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >2 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · one record · 2 decisions · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >2 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · one record · 2 decisions · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -8029,7 +8233,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · one record · 2 decisions · dark
+                    EN · one record · 2 decisions · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -8054,10 +8258,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -8277,7 +8507,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · one record · 2 points + 2 decisions · light
+                    EN · one record · 2 points + 2 decisions · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -8300,7 +8530,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >2 points · 2 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · one record · 2 points + 2 decisions · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >2 points · 2 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · one record · 2 points + 2 decisions · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -8677,7 +9056,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · one record · 2 points + 2 decisions · dark
+                    EN · one record · 2 points + 2 decisions · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -8702,10 +9081,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -9102,10 +9507,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -9498,15 +9929,15 @@
           <div>
             <div class="flex flex-col gap-4">
               <p class="max-w-prose font-sans text-sm text-(--el-text-secondary)">
-                One record per run leg, so a re-run or a continue adds one. The header counts them.
-                The newest is drawn open; each older one is folded to a single row (who, when, what
-                it holds) that opens in place, its run link inside. Two older records, the second
-                opened, on the right.
+                One record per run leg, so a re-run or a continue adds one. The header counts them,
+                and the collapsed row totals every readable record. Once opened, the newest is drawn
+                open; each older one is folded to a single row (who, when, what it holds) that opens
+                in place, its run link inside. Two older records, the second opened, on the right.
               </p>
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · 3 records · older folded · light
+                    EN · 3 records · older folded · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -9532,7 +9963,162 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >3 points · 4 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· latest recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · 3 records · older folded · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          ><span
+                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                            >3 records</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >3 points · 4 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· latest recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · 3 records · older folded · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          ><span
+                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                            >3 records</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -9827,7 +10413,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · 3 records · older folded · dark
+                    EN · 3 records · older folded · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -9855,10 +10441,36 @@
                             class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
                             >3 records</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -10155,7 +10767,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · 3 records · the oldest opened · light
+                    EN · 3 records · the oldest opened · opened · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -10178,10 +10790,36 @@
                             class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
                             >3 records</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -10768,7 +11406,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · 3 records · the oldest opened · dark
+                    EN · 3 records · the oldest opened · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -10796,10 +11434,36 @@
                             class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
                             >3 records</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -11404,7 +12068,9 @@
               </p>
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
-                  <p class="font-mono text-xs text-(--el-text-secondary)">EN · no run · light</p>
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · no run · collapsed · light
+                  </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
                   >
@@ -11426,7 +12092,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >1 point</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · no run · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >1 point</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · no run · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -11536,7 +12351,9 @@
                   </div>
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
-                  <p class="font-mono text-xs text-(--el-text-secondary)">EN · no run · dark</p>
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · no run · opened · dark
+                  </p>
                   <div
                     data-appearance-scope="true"
                     data-theme="dark"
@@ -11560,10 +12377,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -11695,7 +12538,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · backfilled · recorder gone · light
+                    EN · backfilled · recorder gone · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -11718,7 +12561,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >1 point · 1 decision</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Oct 1, 13:05 UTC by a former member</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · backfilled · recorder gone · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >1 point · 1 decision</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Oct 1, 13:05 UTC by a former member</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · backfilled · recorder gone · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -11955,7 +12947,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · backfilled · recorder gone · dark
+                    EN · backfilled · recorder gone · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -11980,10 +12972,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -12243,7 +13261,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · unreadable · 2 points + 1 decision lost · light
+                    EN · unreadable · 2 points + 1 decision lost · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -12266,7 +13284,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >This record couldn’t be recovered</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Oct 1, 13:05 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · unreadable · 2 points + 1 decision lost · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >This record couldn’t be recovered</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Oct 1, 13:05 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · unreadable · 2 points + 1 decision lost · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -12320,7 +13487,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · unreadable · 2 points + 1 decision lost · dark
+                    EN · unreadable · 2 points + 1 decision lost · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -12345,10 +13512,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -12404,7 +13597,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · unreadable · no run · 3 points lost · light
+                    EN · unreadable · no run · 3 points lost · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -12427,7 +13620,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >This record couldn’t be recovered</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Sep 28, 07:44 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · unreadable · no run · 3 points lost · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >This record couldn’t be recovered</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Sep 28, 07:44 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · unreadable · no run · 3 points lost · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -12475,7 +13817,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · unreadable · no run · 3 points lost · dark
+                    EN · unreadable · no run · 3 points lost · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -12500,10 +13842,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -12572,7 +13940,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · 8 points + 2 decisions · folded · light
+                    EN · 8 points + 2 decisions · folded · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -12595,7 +13963,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >8 points · 2 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · 8 points + 2 decisions · folded · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >8 points · 2 decisions</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· recorded Nov 22, 11:20 UTC by Zhu Yue</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >Show</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    EN · 8 points + 2 decisions · folded · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            Run discrepancy
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— what a run built or decided that the plan didn’t say</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -13064,7 +14581,7 @@
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    EN · 8 points + 2 decisions · folded · dark
+                    EN · 8 points + 2 decisions · folded · opened · dark
                   </p>
                   <div
                     data-appearance-scope="true"
@@ -13089,10 +14606,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -13583,10 +15126,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— what a run built or decided that the plan didn’t say</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>Hide</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -14387,7 +15956,9 @@
               </p>
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
-                  <p class="font-mono text-xs text-(--el-text-secondary)">ZH · 3 records · light</p>
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · 3 records · collapsed · light
+                  </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
                   >
@@ -14412,7 +15983,162 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >3 项差异 · 4 项决定</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· 最近一次由 Zhu Yue 于 11月22日 11:20 UTC 记录</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >展开</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · 3 records · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            运行差异记录
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— 运行中构建或决定的、计划没有写明的内容</span
+                          ><span
+                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                            >3 条记录</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >3 项差异 · 4 项决定</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· 最近一次由 Zhu Yue 于 11月22日 11:20 UTC 记录</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >展开</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · 3 records · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            运行差异记录
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— 运行中构建或决定的、计划没有写明的内容</span
+                          ><span
+                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                            >3 条记录</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>收起</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -14898,7 +16624,9 @@
                   </div>
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
-                  <p class="font-mono text-xs text-(--el-text-secondary)">ZH · 3 records · dark</p>
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · 3 records · opened · dark
+                  </p>
                   <div
                     data-appearance-scope="true"
                     data-theme="dark"
@@ -14925,10 +16653,36 @@
                             class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
                             >3 条记录</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>收起</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -15417,7 +17171,7 @@
               <div class="flex flex-wrap items-start gap-6">
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
                   <p class="font-mono text-xs text-(--el-text-secondary)">
-                    ZH · unreadable · light
+                    ZH · unreadable · collapsed · light
                   </p>
                   <div
                     class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
@@ -15440,7 +17194,156 @@
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >无法恢复此记录</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· 由 Zhu Yue 于 10月1日 13:05 UTC 记录</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >展开</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · unreadable · collapsed · dark
+                  </p>
+                  <div
+                    data-appearance-scope="true"
+                    data-theme="dark"
+                    data-style="warm-editorial"
+                    data-palette="motir"
+                    data-type="motir"
+                    class="rounded-(--radius-card) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            运行差异记录
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— 运行中构建或决定的、计划没有写明的内容</span
+                          >
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          aria-expanded="false"
+                          aria-controls="run-discrepancy-body"
+                          class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) text-left hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-right size-4 shrink-0 text-(--el-text-secondary)"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 18 6-6-6-6"></path></svg
+                          ><span class="font-sans text-sm font-medium text-(--el-text)"
+                            >无法恢复此记录</span
+                          ><span class="font-sans text-sm text-(--el-text-secondary)"
+                            >· 由 Zhu Yue 于 10月1日 13:05 UTC 记录</span
+                          ><span
+                            class="ml-auto font-sans text-sm font-medium text-(--el-accent-on-surface)"
+                            >展开</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-start gap-6">
+                <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · unreadable · opened · light
+                  </p>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-4"
+                  >
+                    <div
+                      class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none"
+                      data-tilt=""
+                      data-surface="card"
+                      tabindex="-1"
+                      id="run-discrepancy"
+                    >
+                      <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                            运行差异记录
+                          </h2>
+                          <span class="font-sans text-sm text-(--el-text-secondary)"
+                            >— 运行中构建或决定的、计划没有写明的内容</span
+                          >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>收起</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
@@ -15493,7 +17396,9 @@
                   </div>
                 </div>
                 <div class="flex min-w-0 max-w-full flex-col gap-2 w-[46rem]">
-                  <p class="font-mono text-xs text-(--el-text-secondary)">ZH · unreadable · dark</p>
+                  <p class="font-mono text-xs text-(--el-text-secondary)">
+                    ZH · unreadable · opened · dark
+                  </p>
                   <div
                     data-appearance-scope="true"
                     data-theme="dark"
@@ -15517,10 +17422,36 @@
                           <span class="font-sans text-sm text-(--el-text-secondary)"
                             >— 运行中构建或决定的、计划没有写明的内容</span
                           >
+                          <div class="ml-auto flex items-center">
+                            <button
+                              type="button"
+                              data-variant="ghost"
+                              class="inline-flex items-center justify-center gap-2 font-sans font-medium whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                              aria-expanded="true"
+                              aria-controls="run-discrepancy-body"
+                            >
+                              <span aria-hidden="true" class="inline-flex"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-chevron-down size-3.5 rotate-180"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6"></path></svg></span
+                              ><span>收起</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div>
-                        <div class="flex flex-col gap-4">
+                        <div id="run-discrepancy-body" class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3">
                             <p
                               class="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-(--el-text-secondary)"
