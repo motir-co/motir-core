@@ -10,7 +10,7 @@ import {
   ReviewHostedRefusalNotice,
   ReviewHostedRow,
   useReviewWithMotirAgent,
-} from '@/components/github/ReviewDoors';
+} from '@/components/github/ReviewHostedDoor';
 import { ModelsEmpty, ModelsUnavailable } from '@/components/hosted/ContinueHostedControl';
 import { useHostedModels } from '@/components/hosted/HostedModelsProvider';
 import { useSurfaceTitleText } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
