@@ -523,9 +523,10 @@ describe('listRunningOrgs', () => {
     if (first.meter !== 'enabled') throw new Error('expected the meter enabled');
     expect(first.total).toBe(60);
     expect(first.mismatched).toBe(1);
-    // The head stats sum the WHOLE set, not the page: 1 runner, no hosted run.
+    // The head stats sum the WHOLE set, not the page: the leaking org's 1 runner
+    // and the 59 quiet orgs' hosted runs, one each (on page 1 or not).
     expect(first.ciRunners).toBe(1);
-    expect(first.hostedAgents).toBe(0);
+    expect(first.hostedAgents).toBe(59);
     expect(first.agentInstances).toBe(0);
     expect(first).not.toHaveProperty('defaultPool');
     expect(first).not.toHaveProperty('pooledContainers');
