@@ -38,6 +38,12 @@ const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+/**
+ * How far back to move a window that ends an hour after `liveAt` (≈ now) so
+ * its charge day has ENDED, whatever the time of day. A bare `DAY` lands it on
+ * today during the last UTC hour, where `chargeEndedDays` rightly skips it.
+ */
+const ENDED_DAY_SHIFT = DAY + 2 * HOUR;
 const MANIFEST: HostingManifest = {
   schemaVersion: 1,
   targets: ['fly', 'serverless'],
@@ -405,7 +411,7 @@ describe('the daily charge', () => {
     const until = new Date(live.liveAt.getTime() + HOUR);
     releaseUsage(until, 3600);
     await meter.accrue({ now: () => until });
-    await shiftSlices(live.appId, DAY);
+    await shiftSlices(live.appId, ENDED_DAY_SHIFT);
     return live;
   }
 
@@ -815,7 +821,9 @@ describe('the meter’s edges', () => {
 
   it('charges a removed repository’s days at the time of the call when no clock is given', async () => {
     const live = await liveApp();
-    releaseUsage(new Date(live.liveAt.getTime() + HOUR));
+    // The window ends NOW, not an hour ahead: an hour ahead is tomorrow during
+    // the last UTC hour, and a charge "at the time of the call" covers today.
+    releaseUsage(new Date(Math.max(Date.now(), live.liveAt.getTime() + 1)));
 
     await meter.accrueOutgoingRelease(live.releaseId, { chargeNow: true });
 
@@ -853,7 +861,7 @@ describe('the meter’s edges', () => {
     const until = new Date(live.liveAt.getTime() + HOUR);
     releaseUsage(until);
     await meter.accrue({ now: () => until });
-    await shiftSlices(live.appId, DAY);
+    await shiftSlices(live.appId, ENDED_DAY_SHIFT);
     debitFailures.push({ status: 404, code: 'not_found' });
 
     await meter.chargeEndedDays(target(live), new Date());
