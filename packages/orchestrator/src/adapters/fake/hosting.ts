@@ -3,6 +3,7 @@ import { OrchestratorApiError } from '../../errors';
 import {
   CustomerRepositoryRefusedError,
   IdlePolicyUnsupportedError,
+  LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
@@ -18,7 +19,12 @@ import type {
   ReleaseCommandResult,
   ReleaseDescription,
   ReleaseHandle,
+  ReleaseLastExit,
+  ReleaseLogLine,
+  ReleaseLogPage,
+  ReleaseLogQuery,
   ReleaseRuntime,
+  ReleaseRuntimeHealth,
   ReleaseShape,
   ReleaseSize,
   ReleaseSummary,
@@ -36,6 +42,7 @@ import {
   saveFakeHostingSlice,
   takeArmedFakeHostingFailure,
   type FakeHostingSlice,
+  type FakeLogLine,
 } from './hostingStore';
 
 // The FAKE hosting deploy port (MOTIR-5773) — the second implementation shipped
@@ -64,6 +71,15 @@ import {
 // was. Only a fake built with `shareAcrossProcesses` takes the seam — the
 // composition root's singleton (MOTIR-10040); a fake a test builds itself stays
 // in memory even with the variable set.
+//
+// THE RUNTIME READS (MOTIR-12099): `readLogs` answers the lines a test appended
+// with `appendLogLines`, applying the window, the filter, the limit and the
+// newest-first cursor exactly as a real adapter must, and returning every
+// message as appended — masking is the caller's. `readHealth` derives the
+// running process's state from what the fake already models (a held or
+// deploying release, an idle stop, a running release) and from the controls
+// that arrange the rest: an exit or a memory kill (`setRuntimeState`), and an
+// exit the target already restarted from (`recordRestartedExit`).
 //
 // The HOLD sidecar (`<path>.hold.json`, `{ "held": ["deploy"] }`) is how a spec
 // in a THIRD process keeps a release open long enough to be seen building
@@ -149,10 +165,27 @@ export interface FakeHostingControls {
    *  the address only: the release's state and origin credential are unchanged.
    *  Refuses a value that is not an absolute http(s) URL, and an unknown app. */
   setUpstream(appRef: string, address: string | null): void;
+  /** Append lines to an app's log, as its target would have recorded them. */
+  appendLogLines(appRef: string, lines: readonly ReleaseLogLine[]): void;
+  /** Make the app's logs unreadable at the target (`readLogs` throws
+   *  `LogsUnavailableError` with this reason), or, with null, readable again. */
+  setLogsUnavailable(appRef: string, reason: string | null): void;
+  /** The release's process exited (with its code) or was killed for memory,
+   *  from the fake's clock now; null clears it. `wake`, `deploy` and `rollback`
+   *  clear it too. */
+  setRuntimeState(appRef: string, state: FakeRuntimeStateInput | null): void;
+  /** The target restarted the running release from this exit; null clears it.
+   *  `deploy` and `rollback` clear it too. */
+  recordRestartedExit(appRef: string, exit: ReleaseLastExit | null): void;
   /** Forget every app, release, credential and armed failure — in the shared
    *  store too, so a lane's next spec inherits nothing. */
   reset(): void;
 }
+
+/** The runtime states `setRuntimeState` arranges. */
+export type FakeRuntimeStateInput =
+  | { readonly state: 'exited'; readonly exitCode: number | null }
+  | { readonly state: 'oom_killed' };
 
 /** The operations a test can make fail once at the "provider". */
 export type FakeHostingFailure =
@@ -226,6 +259,40 @@ function originOf(appRef: string, address: string): string {
   return url.origin;
 }
 
+/** Where a log page stopped: the last line it returned. Lines strictly older
+ *  are the next page, so lines appended meanwhile never shift it. */
+interface LogCursor {
+  readonly at: number;
+  readonly seq: number;
+}
+
+function encodeLogCursor(line: FakeLogLine): string {
+  return Buffer.from(JSON.stringify({ at: line.at, seq: line.seq })).toString('base64url');
+}
+
+function decodeLogCursor(appRef: string, cursor: string): LogCursor {
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<LogCursor>;
+    if (Number.isFinite(parsed.at) && Number.isInteger(parsed.seq)) {
+      return { at: parsed.at as number, seq: parsed.seq as number };
+    }
+  } catch {
+    // fall through to the refusal
+  }
+  throw new OrchestratorApiError('fake', 400, `app ${appRef}: "${cursor}" is not a log cursor`);
+}
+
+/** Newest first: the later instant, and at one instant the later line. */
+function newerFirst(a: FakeLogLine, b: FakeLogLine): number {
+  return b.at - a.at || b.seq - a.seq;
+}
+
+function olderThan(line: FakeLogLine, cursor: LogCursor): boolean {
+  return line.at < cursor.at || (line.at === cursor.at && line.seq < cursor.seq);
+}
+
 export function createFakeHostingDeployPort(
   options: FakeHostingOptions = {},
 ): HostingDeployPort & FakeHostingControls {
@@ -286,6 +353,27 @@ export function createFakeHostingDeployPort(
     const app = state.apps[appRef];
     if (!app) throw new OrchestratorApiError('fake', 404, `app ${appRef} does not exist`);
     return app;
+  }
+
+  /** The app a runtime read names, refused when it holds no live or pending
+   *  release — as every adapter refuses it. */
+  function releasedApp(appRef: string): FakeHostedApp {
+    const app = state.apps[appRef];
+    if (!app || (!app.live && !app.pending)) throw new ReleaseNotFoundError(appRef);
+    return app;
+  }
+
+  /** A new process: forget the exit or memory kill a test arranged, and — on a
+   *  new or restored release — the exit the old process was restarted from. */
+  function clearRuntime(appRef: string, newRelease: boolean): void {
+    delete state.runtimeStates[appRef];
+    if (newRelease) delete state.restartedExits[appRef];
+  }
+
+  /** When the app last started or stopped running, or now. */
+  function lastTransitionAt(app: FakeHostedApp, running: boolean): Date {
+    const last = [...app.transitions].reverse().find((t) => t.running === running);
+    return last ? new Date(last.at) : now();
   }
 
   function setRunning(app: FakeHostedApp, running: boolean): void {
@@ -389,6 +477,8 @@ export function createFakeHostingDeployPort(
     setHealth(appRef, health) {
       load();
       appOf(appRef).health = health;
+      if (health === 'deploying') state.deployingSince[appRef] = state.clock;
+      else delete state.deployingSince[appRef];
       save();
     },
     idleStop(appRef) {
@@ -399,6 +489,55 @@ export function createFakeHostingDeployPort(
     wake(appRef) {
       load();
       setRunning(appOf(appRef), true);
+      clearRuntime(appRef, false);
+      save();
+    },
+    appendLogLines(appRef, lines) {
+      load();
+      appOf(appRef);
+      const log = (state.logs[appRef] ??= []);
+      for (const line of lines) {
+        state.logSequence += 1;
+        log.push({
+          seq: state.logSequence,
+          at: line.at.getTime(),
+          stream: line.stream,
+          message: line.message,
+        });
+      }
+      save();
+    },
+    setLogsUnavailable(appRef, reason) {
+      load();
+      appOf(appRef);
+      if (reason === null) delete state.logsUnavailable[appRef];
+      else state.logsUnavailable[appRef] = reason;
+      save();
+    },
+    setRuntimeState(appRef, runtime) {
+      load();
+      appOf(appRef);
+      if (runtime === null) delete state.runtimeStates[appRef];
+      else if (runtime.state === 'exited') {
+        state.runtimeStates[appRef] = {
+          state: 'exited',
+          exitCode: runtime.exitCode,
+          since: state.clock,
+        };
+      } else state.runtimeStates[appRef] = { state: 'oom_killed', since: state.clock };
+      save();
+    },
+    recordRestartedExit(appRef, exit) {
+      load();
+      appOf(appRef);
+      if (exit === null) delete state.restartedExits[appRef];
+      else {
+        state.restartedExits[appRef] = {
+          exitCode: exit.exitCode,
+          oomKilled: exit.oomKilled,
+          at: exit.at.getTime(),
+        };
+      }
       save();
     },
     app: (appRef) => load().apps[appRef],
@@ -498,6 +637,7 @@ export function createFakeHostingDeployPort(
       const next = release(input, shape, app.pending?.releaseId);
       if (target === 'aws' && !state.accountReady) {
         app.pending = next;
+        state.deployingSince[app.appRef] ??= state.clock;
         save();
         return handleFor(app, next);
       }
@@ -505,6 +645,8 @@ export function createFakeHostingDeployPort(
       app.previous = app.live;
       app.live = next;
       app.health = 'healthy';
+      delete state.deployingSince[app.appRef];
+      clearRuntime(app.appRef, true);
       setRunning(app, true);
       save();
       return handleFor(app, next);
@@ -550,6 +692,7 @@ export function createFakeHostingDeployPort(
       const restored = app.previous;
       app.previous = app.live;
       app.live = restored;
+      clearRuntime(appRef, true);
       setRunning(app, true);
       save();
       return handleFor(app, restored);
@@ -575,6 +718,7 @@ export function createFakeHostingDeployPort(
       setRunning(app, false);
       app.live = null;
       app.previous = null;
+      clearRuntime(app.appRef, true);
       save();
       return result;
     },
@@ -584,6 +728,10 @@ export function createFakeHostingDeployPort(
       const { apps, namespaces, liveTokens } = load();
       const app = apps[appRef];
       delete apps[appRef];
+      clearRuntime(appRef, true);
+      delete state.deployingSince[appRef];
+      delete state.logs[appRef];
+      delete state.logsUnavailable[appRef];
       // On Fly a push namespace IS an app (`mh-<rid>-pv`), destroyed the same way
       // at takeover (MOTIR-5776).
       state.namespaces = namespaces.filter((n) => n !== appRef);
@@ -615,6 +763,69 @@ export function createFakeHostingDeployPort(
       injectedFailure('runReleaseCommand');
       return commandResult;
     },
+
+    async readLogs(handle, query: ReleaseLogQuery): Promise<ReleaseLogPage> {
+      load();
+      const app = releasedApp(handle.appRef);
+      const unavailable = state.logsUnavailable[app.appRef];
+      if (unavailable !== undefined) throw new LogsUnavailableError(target, unavailable);
+      if (!Number.isInteger(query.limit) || query.limit < 1) {
+        throw new OrchestratorApiError('fake', 400, `a log limit must be a positive integer`);
+      }
+      const cursor = query.cursor ? decodeLogCursor(app.appRef, query.cursor) : null;
+      const since = query.since?.getTime() ?? -Infinity;
+      const until = query.until?.getTime() ?? Infinity;
+      const needle = query.filter ? query.filter.toLowerCase() : null;
+      const matching = (state.logs[app.appRef] ?? [])
+        .filter(
+          (line) =>
+            line.at >= since &&
+            line.at <= until &&
+            (needle === null || line.message.toLowerCase().includes(needle)) &&
+            (cursor === null || olderThan(line, cursor)),
+        )
+        .sort(newerFirst);
+      const page = matching.slice(0, query.limit);
+      const last = page[page.length - 1];
+      return {
+        lines: page.map((line) => ({
+          at: new Date(line.at),
+          stream: line.stream,
+          message: line.message,
+        })),
+        cursor: last && matching.length > page.length ? encodeLogCursor(last) : null,
+      };
+    },
+
+    async readHealth(handle): Promise<ReleaseRuntimeHealth> {
+      load();
+      const app = releasedApp(handle.appRef);
+      const deployingSince = new Date(state.deployingSince[app.appRef] ?? state.clock);
+      if (app.pending) return { state: 'deploying', since: deployingSince };
+      const runtime = state.runtimeStates[app.appRef];
+      if (runtime?.state === 'exited') {
+        return { state: 'exited', exitCode: runtime.exitCode, since: new Date(runtime.since) };
+      }
+      if (runtime?.state === 'oom_killed') {
+        return { state: 'oom_killed', since: new Date(runtime.since) };
+      }
+      if (!app.running) return { state: 'suspended', since: lastTransitionAt(app, false) };
+      if (app.health === 'deploying') return { state: 'deploying', since: deployingSince };
+      const exit = state.restartedExits[app.appRef];
+      return {
+        state: 'running',
+        since: lastTransitionAt(app, true),
+        ...(exit
+          ? {
+              lastExit: {
+                exitCode: exit.exitCode,
+                oomKilled: exit.oomKilled,
+                at: new Date(exit.at),
+              },
+            }
+          : {}),
+      };
+    },
   };
 
   // The call log and the hold wrap every operation, so a test can assert their
@@ -633,6 +844,8 @@ export function createFakeHostingDeployPort(
     'destroyApp',
     'listReleases',
     'runReleaseCommand',
+    'readLogs',
+    'readHealth',
   ];
   const record = port as unknown as Record<FakeHostingOperation, (input: unknown) => unknown>;
   for (const operation of operations) {

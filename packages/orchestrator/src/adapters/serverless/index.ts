@@ -1,8 +1,11 @@
 import { OrchestratorApiError } from '../../errors';
 import {
+  LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
+  RUNTIME_READ_NOT_BUILT,
+  RuntimeHealthUnavailableError,
 } from '../../hosting/errors';
 import type {
   DeployCredential,
@@ -363,6 +366,17 @@ export function createServerlessHostingDeployPort(
     // migration fails by name rather than going live unmigrated (MOTIR-10030).
     async runReleaseCommand() {
       throw new ReleaseCommandUnsupportedError('serverless');
+    },
+
+    // The runtime reads (MOTIR-12099) are this target's own cards; until each
+    // lands, a read is refused by name, and a caller shows the target's logs or
+    // health as unavailable rather than failing.
+    async readLogs() {
+      throw new LogsUnavailableError('serverless', RUNTIME_READ_NOT_BUILT);
+    },
+
+    async readHealth() {
+      throw new RuntimeHealthUnavailableError('serverless', RUNTIME_READ_NOT_BUILT);
     },
   };
 }

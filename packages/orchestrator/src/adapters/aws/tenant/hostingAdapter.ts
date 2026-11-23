@@ -3,8 +3,11 @@ import {
   CustomerRepositoryRefusedError,
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
+  LogsUnavailableError,
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
+  RUNTIME_READ_NOT_BUILT,
+  RuntimeHealthUnavailableError,
 } from '../../../hosting/errors';
 import { hostingAppNames, sameEnvironment } from '../../../hosting/names';
 import { requireReleaseShape } from '../../../hosting/shape';
@@ -498,6 +501,17 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
     // release that needs a migration fails by name (MOTIR-10030).
     async runReleaseCommand() {
       throw new ReleaseCommandUnsupportedError('aws');
+    },
+
+    // The runtime reads (MOTIR-12099) are this target's own cards; until each
+    // lands, a read is refused by name, and a caller shows the target's logs or
+    // health as unavailable rather than failing.
+    async readLogs() {
+      throw new LogsUnavailableError('aws', RUNTIME_READ_NOT_BUILT);
+    },
+
+    async readHealth() {
+      throw new RuntimeHealthUnavailableError('aws', RUNTIME_READ_NOT_BUILT);
     },
   };
 }

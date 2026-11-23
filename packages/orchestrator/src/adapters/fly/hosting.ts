@@ -1,9 +1,12 @@
 import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
 import {
+  LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
   ReleaseRuntimeRefusedError,
+  RUNTIME_READ_NOT_BUILT,
+  RuntimeHealthUnavailableError,
 } from '../../hosting/errors';
 import { hostingAppNames, pushNamespaceName } from '../../hosting/names';
 import { deriveOriginSecret } from '../../hosting/originSecret';
@@ -848,6 +851,17 @@ export function createFlyHostingDeployPort(
       } finally {
         await flyRequest(appPath(appRef, `${path}?force=true`), { method: 'DELETE', token });
       }
+    },
+
+    // The runtime reads (MOTIR-12099) are this target's own cards; until each
+    // lands, a read is refused by name, and a caller shows the target's logs or
+    // health as unavailable rather than failing.
+    async readLogs() {
+      throw new LogsUnavailableError('fly', RUNTIME_READ_NOT_BUILT);
+    },
+
+    async readHealth() {
+      throw new RuntimeHealthUnavailableError('fly', RUNTIME_READ_NOT_BUILT);
     },
   };
 }
