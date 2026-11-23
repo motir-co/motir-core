@@ -405,7 +405,9 @@ describe('the daily charge', () => {
     const until = new Date(live.liveAt.getTime() + HOUR);
     releaseUsage(until, 3600);
     await meter.accrue({ now: () => until });
-    await shiftSlices(live.appId, DAY);
+    // Two days back, not one: a slice that starts in the last hour before UTC midnight
+    // ends after it, so one day back would still land its charge day on today.
+    await shiftSlices(live.appId, 2 * DAY);
     return live;
   }
 
@@ -815,9 +817,16 @@ describe('the meter’s edges', () => {
 
   it('charges a removed repository’s days at the time of the call when no clock is given', async () => {
     const live = await liveApp();
-    releaseUsage(new Date(live.liveAt.getTime() + HOUR));
-
-    await meter.accrueOutgoingRelease(live.releaseId, { chargeNow: true });
+    const until = new Date(live.liveAt.getTime() + HOUR);
+    releaseUsage(until);
+    // The call reads the system clock, so stand it after the window: a window that
+    // starts in the last hour before UTC midnight ends tomorrow, a day not yet chargeable.
+    vi.useFakeTimers({ toFake: ['Date'], now: until });
+    try {
+      await meter.accrueOutgoingRelease(live.releaseId, { chargeNow: true });
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(debits).toHaveLength(1);
   });
@@ -853,7 +862,7 @@ describe('the meter’s edges', () => {
     const until = new Date(live.liveAt.getTime() + HOUR);
     releaseUsage(until);
     await meter.accrue({ now: () => until });
-    await shiftSlices(live.appId, DAY);
+    await shiftSlices(live.appId, 2 * DAY);
     debitFailures.push({ status: 404, code: 'not_found' });
 
     await meter.chargeEndedDays(target(live), new Date());
