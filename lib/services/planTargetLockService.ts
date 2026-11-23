@@ -15,6 +15,9 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { choiceGateService } from '@/lib/services/choiceGateService';
+import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
+import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { PlanTargetLockedError, type PlanTargetWaitingCause } from '@/lib/planChange/errors';
@@ -496,9 +499,12 @@ async function releaseOne(
 
   if (!item || item.status !== PLANNING_STATUS_KEY) return 'left_as_is';
   if (!lock.statusHeld) {
-    return isAdoptedByPlan(lock) || (opts.approved === true && isHandParkedSessionLock(lock))
-      ? restAdoptedTarget(item, actor, tx)
-      : 'left_as_is';
+    const outcome =
+      isAdoptedByPlan(lock) || (opts.approved === true && isHandParkedSessionLock(lock))
+        ? await restAdoptedTarget(item, actor, tx)
+        : 'left_as_is';
+    if (outcome === 'rested') await askReleasedQuestion(lock.workItemId, actor, tx, opts);
+    return outcome;
   }
   await applyLockStatus(lock.workItemId, lock.priorStatus, actor, tx, {
     // The restore is AUTHORITATIVE, not an interactive move: it puts the item
@@ -507,7 +513,54 @@ async function releaseOne(
     // would leave the item stuck, which is the failure this whole card is about.
     system: opts.system ?? true,
   });
+  await askReleasedQuestion(lock.workItemId, actor, tx, opts);
   return 'restored';
+}
+
+/**
+ * ASK AGAIN THE QUESTION THE PARK WITHDREW (bug MOTIR-12163) — after a release has
+ * given a card back its status (`restored`) or rested it (`rested`).
+ *
+ * The park into `planning` is a pull-back, so it supersedes every awaiting gate on
+ * the card (`pulled_back`) — a `type: choice` card's `decision_choice` question and
+ * a `human` decision's `decision_confirmation` one among them. Giving the status
+ * back gave nothing else back: the two raisers are `workItemsService`'s create /
+ * edit / blocker-done paths, and a release is none of them. So a declined plan left
+ * an asked choice In Review with its question withdrawn and nothing in Waiting on
+ * you, for ever.
+ *
+ * The rule is the one an edit follows (`choiceGateService.reconcile` /
+ * `decisionConfirmationGateService.reconcile`), run over the card as the release
+ * leaves it: asked at the body's current stamp when it parses complete, nothing open
+ * blocks it and it is not done — and walked to review by DECLARED edges when it is
+ * not already there, as a create or an edit walks it. A card that asks neither
+ * question is not read further. A same-stamp question still awaiting (a release of
+ * a card whose park withdrew nothing) is left alone by the reconcile itself.
+ *
+ * The walk is a system write for the restore's own reason: the release is a
+ * decision about the PLAN (`ai:decide_plan`, or the sweep), not an interactive edit
+ * of the card, and its signer may not hold `work_item:edit`.
+ */
+async function askReleasedQuestion(
+  workItemId: string,
+  actor: ServiceContext,
+  tx: Prisma.TransactionClient,
+  opts: { system?: boolean },
+): Promise<void> {
+  const item = await workItemRepository.findById(workItemId, tx);
+  /* istanbul ignore next -- the release locked and read this row in the same
+     transaction; the guard narrows the nullable type only */
+  if (!item) return;
+  const reconcilers = [
+    ...(item.type === 'choice' ? [choiceGateService.reconcile] : []),
+    ...(asksTheConfirmQuestion(item) ? [decisionConfirmationGateService.reconcile] : []),
+  ];
+  for (const reconcile of reconcilers) {
+    const { hopsToReview } = await reconcile(item, tx);
+    for (const toKey of hopsToReview) {
+      await applyLockStatus(workItemId, toKey, actor, tx, { system: opts.system ?? true });
+    }
+  }
 }
 
 /** What one release did to its target: `restored` to the status it was parked
