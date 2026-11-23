@@ -4,14 +4,13 @@ import type {
 } from '@/lib/dto/runnerImageFreshness';
 
 // THE FLEET STATUS PAGE'S IMAGES SECTION (MOTIR-10886; design MOTIR-10885,
-// `design/platform-admin/design-notes.md` § Fleet status; the indexer row
-// MOTIR-10986, design MOTIR-10987). One row per image
+// `design/platform-admin/design-notes.md` § Fleet status). One row per image
 // Motir boots, each read on its own so one source that does not answer leaves
 // only its own row saying so.
 
-/** The four images, in the page's fixed order: the indexer after the runner
- *  (MOTIR-10986, design MOTIR-10987). */
-export const FLEET_IMAGE_KEYS = ['hosted', 'runner', 'indexer', 'sandbox'] as const;
+/** The three images, in the page's fixed order. The indexer row (MOTIR-10986)
+ *  left with the container-based indexer (MOTIR-12044). */
+export const FLEET_IMAGE_KEYS = ['hosted', 'runner', 'sandbox'] as const;
 export type FleetImageKey = (typeof FLEET_IMAGE_KEYS)[number];
 
 /** The source a row could not read. */
@@ -64,26 +63,12 @@ export interface FleetPublishRecordDTO {
  *  the deploy after a successful run, until the pin reaches its target. */
 export type FleetPublishProgressDTO =
   | { state: 'idle' }
-  | {
-      state: 'running';
-      startedAt: string;
-      /** The indexer pin's two stages (MOTIR-10986): its pull request is open
-       *  and queued, or it merged and the deploy is rolling web and worker.
-       *  Absent for the other images, whose band has one stage. */
-      stage?: 'queued' | 'rolling';
-    }
+  | { state: 'running'; startedAt: string }
   | { state: 'done'; endedAt: string }
   | { state: 'failed'; endedAt: string; error: string | null };
 
 /** Why Publish latest is off, when it is. */
-export type FleetPublishBlock =
-  | 'up_to_date'
-  | 'release_needed'
-  | 'running'
-  | 'not_republishable'
-  /** A part of the row the target is read from did not answer (the indexer's
-   *  pin or newest release, MOTIR-10986). */
-  | 'not_read';
+export type FleetPublishBlock = 'up_to_date' | 'release_needed' | 'running' | 'not_republishable';
 
 /** The publish half every read row carries. */
 export interface FleetImagePublishDTO {
@@ -143,50 +128,6 @@ export interface RunnerImageReadDTO {
   publish: FleetImagePublishDTO;
 }
 
-/** A part of the indexer row a source did not answer for (MOTIR-10986). Its
- *  part never renders as a figure; the rest of the card still does. */
-export interface FleetImagePartNotReadDTO {
-  state: 'not_read';
-  source: FleetImageReadSource;
-  /** The read's own words, for the server log. Never rendered. */
-  detail: string;
-}
-
-/** One part of the indexer row: read, or not. */
-export type FleetImagePartDTO<T> = { state: 'read'; value: T } | FleetImagePartNotReadDTO;
-
-/**
- * THE INDEXER ROW (MOTIR-10986; design MOTIR-10987). The runner row's shape,
- * read from ECR and motir-ai: `pinned` is the `MOTIR_INDEXER_IMAGE` digest with
- * the `indexer-<x.y.z>` tag ECR holds for it, `newest` the highest such tag, each
- * built from the commit motir-ai's `indexer-v<x.y.z>` git tag names. Each of
- * the three parts is read on its own, so one source that does not answer leaves
- * only its part saying so.
- */
-export interface IndexerImageReadDTO {
-  status: 'read';
-  /** The pin as deployed; `version` null when no `indexer-*` tag names its bytes. */
-  pinned: FleetImagePartDTO<FleetRunnerBuildDTO>;
-  newest: FleetImagePartDTO<FleetRunnerBuildDTO & { version: string }>;
-  /** False whenever the pin or the newest release is not read. */
-  behind: boolean;
-  /** Releases newer than the pinned one, oldest first; null when the pinned
-   *  version is not known. */
-  releasesBetween: string[] | null;
-  daysBehind: number | null;
-  /** Commits to the indexer's inputs between the two build commits. */
-  indexerCommits: number | null;
-  /** motir-ai's compare between the two releases. */
-  compareUrl: string | null;
-  /** motir-ai's commit history, which the gap count and `unreleased` come from. */
-  history: { state: 'read' } | FleetImagePartNotReadDTO;
-  /** Merged changes to the indexer's inputs after the newest release's commit. */
-  unreleased: RunnerImageUnreleasedChangeDTO[];
-  /** The tag the next release would take, or null when the newest is not read. */
-  nextTag: string | null;
-  publish: FleetImagePublishDTO;
-}
-
 export interface SandboxProfileTagDTO {
   /** `base` or a profile id. */
   id: string;
@@ -209,7 +150,6 @@ export interface SandboxImageReadDTO {
 
 export type HostedImageRowDTO = FleetImageUnsetDTO | FleetImageNotReadDTO | HostedImageReadDTO;
 export type RunnerImageRowDTO = FleetImageUnsetDTO | FleetImageNotReadDTO | RunnerImageReadDTO;
-export type IndexerImageRowDTO = FleetImageUnsetDTO | FleetImageNotReadDTO | IndexerImageReadDTO;
 export type SandboxImageRowDTO = FleetImageUnsetDTO | FleetImageNotReadDTO | SandboxImageReadDTO;
 
 /** What a press of Publish latest did. */
@@ -217,6 +157,8 @@ export type FleetImagePublishOutcomeDTO =
   | { outcome: 'dispatched'; runUrl: string; runNumber: number | null }
   | {
       outcome: 'refused';
-      reason: FleetPublishBlock | 'unset';
+      /** `not_read`: the row the target is read from did not answer, or the
+       *  image is not one the page knows. */
+      reason: FleetPublishBlock | 'unset' | 'not_read';
     }
   | { outcome: 'failed'; detail: string };

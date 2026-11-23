@@ -1,19 +1,7 @@
 import 'server-only';
 
-import {
-  flyIndexerImage,
-  INDEXER_IMAGE_ENV_VAR,
-  listImageTags,
-  readImageCreated,
-  readImageLabels,
-} from '@motir/orchestrator';
+import { listImageTags, readImageCreated, readImageLabels } from '@motir/orchestrator';
 import { catalogRegistry, compareVersions } from '@/lib/agentInstances/imageCatalog';
-import {
-  createEcrImagesReader,
-  parseEcrImageReference,
-  type EcrImageRead,
-  type EcrImagesReader,
-} from '@/lib/awsServices/ecrImagesReader';
 import { SANDBOX_IMAGE_REPOSITORY } from '@/lib/agentInstances/profiles';
 import {
   imageRepositoryOf,
@@ -24,8 +12,6 @@ import type {
   FleetImageBuildDTO,
   FleetImageKey,
   FleetImageNotReadDTO,
-  FleetImagePartDTO,
-  FleetImagePartNotReadDTO,
   FleetImagePublishDTO,
   FleetImagePublishOutcomeDTO,
   FleetImageReadSource,
@@ -33,9 +19,7 @@ import type {
   FleetPublishProgressDTO,
   FleetPublishRecordDTO,
   FleetPublishTargetDTO,
-  FleetRunnerBuildDTO,
   HostedImageRowDTO,
-  IndexerImageRowDTO,
   RunnerImageRowDTO,
   SandboxImageRowDTO,
   SandboxProfileTagDTO,
@@ -85,43 +69,22 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //     `infra/ci-runner` changes and the AMI are `runnerImageFreshnessProbeService`'s,
 //     not a second probe; the changes the newest release already contains are
 //     left out, because those are a publish, not a release, away.
-//   - INDEXER (MOTIR-10986): the pinned `MOTIR_INDEXER_IMAGE` digest against the
-//     highest `indexer-<x.y.z>` tag motir-ai's release lane mirrored into core's
-//     own ECR repository (`DescribeImages`, which carries no labels, so each
-//     build's commit is the one motir-ai's `indexer-v<x.y.z>` git tag names), and
-//     the merged changes to the indexer's inputs no release holds. Its three
-//     parts — the pin, the newest release, the history — are read on their own.
 //   - SANDBOX: the newest `cli-v*` tag against `base` and every profile of the CI
 //     matrix having its `<profile>-<version>` tag, read through the published-
 //     image catalog's registry, and how many live agents run an older version.
 //
 // PUBLISH LATEST dispatches the image's workflow with the target the row reads
-// (`workflow_dispatch` inputs added by this card): the three pins open their pin
+// (`workflow_dispatch` inputs added by this card): the two pins open their pin
 // pull request and queue it to merge, and the deploy rolls web and worker onto
 // it; the sandbox re-runs its release tag, which pushes only the missing tags
 // (MOTIR-10884). The audit row is written in the transaction that dispatches, so
 // a refused dispatch writes none.
 
 const MOTIR_CORE = RUNNER_IMAGE_SOURCE_REPO;
-/** Where the indexer is built and released (`release-indexer-image.yml`). */
-const MOTIR_AI = { owner: MOTIR_CORE.owner, name: 'motir-ai' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RUNNER_REPOSITORY = 'ghcr.io/motir-co/motir-ci-runner';
 const RELEASE_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
 const CLI_TAG = /^cli-v(\d+\.\d+\.\d+)$/;
-/** The tag motir-ai's `mirror-ecr` job gives a release in ECR. */
-const INDEXER_ECR_TAG = /^indexer-(\d+\.\d+\.\d+)$/;
-/** The branch `indexer-image-pin.yml` opens its pull request from. */
-const INDEXER_PIN_BRANCH = 'chore/indexer-image-pin';
-/** motir-ai's inputs to the indexer image: a merged commit touching one is a
- *  change only a new `indexer-v*` release ships. The Dockerfile is under
- *  `infra/indexer/`. */
-export const INDEXER_INPUTS: readonly string[] = [
-  'src/indexer',
-  'infra/indexer',
-  'package.json',
-  'pnpm-lock.yaml',
-];
 /** The script whose `plan` makes a re-run of a release push only its gap
  *  (MOTIR-10884). A release cut before it would push every tag again. */
 const RELEASE_SET_SCRIPT = 'packages/cli/sandbox/smoke/release-set.mjs';
@@ -136,7 +99,6 @@ const ROLL_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const PUBLISH_WORKFLOWS: Record<FleetImageKey, string> = {
   hosted: 'hosted-agent-image.yml',
   runner: 'release-runner-image.yml',
-  indexer: 'indexer-image-pin.yml',
   sandbox: 'release-sandbox.yml',
 };
 
@@ -252,7 +214,7 @@ async function progressOf(
     if (err instanceof PublishWorkflowError) return { state: 'idle' };
     throw err;
   }
-  if (run.status !== 'completed') return running(image, record.at, null);
+  if (run.status !== 'completed') return { state: 'running', startedAt: record.at };
   const endedAt = run.updatedAt || record.at;
   const age = now - Date.parse(endedAt);
   const reached = landed(record.target);
@@ -261,36 +223,13 @@ async function progressOf(
     // A pin run has opened and queued its pull request; the pin moves when it
     // merges and the deploy rolls. The sandbox run IS the publish.
     if (image === 'sandbox' || age > ROLL_WINDOW_MS) return { state: 'idle' };
-    return running(image, record.at, image === 'indexer' ? await pinMergedAt(token) : null);
+    return { state: 'running', startedAt: record.at };
   }
   if (reached) return { state: 'idle' };
   const error = await publishWorkflowsClient
     .failureDetail(MOTIR_CORE, run.id, token)
     .catch(() => null);
   return { state: 'failed', endedAt, error };
-}
-
-/** A press still publishing. The indexer's band names its stage: the pin pull
- *  request is queued until a merge from its branch lands after the press. */
-function running(
-  image: FleetImageKey,
-  startedAt: string,
-  mergedAt: string | null,
-): FleetPublishProgressDTO {
-  if (image !== 'indexer') return { state: 'running', startedAt };
-  const rolling = mergedAt !== null && Date.parse(mergedAt) > Date.parse(startedAt);
-  return { state: 'running', startedAt, stage: rolling ? 'rolling' : 'queued' };
-}
-
-/** When the indexer pin's pull request last merged; a read GitHub refuses
- *  leaves the band on its first stage rather than failing the row. */
-async function pinMergedAt(token: string | null): Promise<string | null> {
-  try {
-    return await publishWorkflowsClient.mergedFromBranchAt(MOTIR_CORE, INDEXER_PIN_BRANCH, token);
-  } catch (err) {
-    if (err instanceof PublishWorkflowError) return null;
-    throw err;
-  }
 }
 
 async function publishHalf(
@@ -334,38 +273,6 @@ function toRecord(row: {
     runUrl: str('runUrl') || null,
     runNumber: num('runNumber'),
   };
-}
-
-const partNotRead = (source: FleetImageReadSource, detail: string): FleetImagePartNotReadDTO => ({
-  state: 'not_read',
-  source,
-  detail,
-});
-
-const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
-
-/** The highest `indexer-<x.y.z>` version among an image's tags, or null. */
-function releaseOf(image: EcrImageRead): string | null {
-  let best: string | null = null;
-  for (const tag of image.tags) {
-    const version = INDEXER_ECR_TAG.exec(tag)?.[1];
-    if (version && (best === null || compareVersions(version, best) > 0)) best = version;
-  }
-  return best;
-}
-
-/**
- * The commit motir-ai's `indexer-v<version>` git tag names, or null when there is
- * no such tag. `tags` is the tag list, read once; a peel GitHub refuses throws.
- */
-async function releaseCommit(
-  tags: ReadonlyMap<string, string>,
-  version: string | null,
-  token: string | null,
-): Promise<string | null> {
-  const named = version ? tags.get(`indexer-v${version}`) : undefined;
-  if (!named) return null;
-  return publishWorkflowsClient.peel(MOTIR_AI, named, token);
 }
 
 export type FleetPublishRecords = Record<FleetImageKey, FleetPublishRecordDTO | null>;
@@ -604,220 +511,6 @@ export const fleetStatusImagesService = {
     });
   },
 
-  /**
-   * The INDEXER row (MOTIR-10986; design MOTIR-10987). Never throws on a source
-   * that did not answer: ECR (the pin and the newest release) and motir-ai's
-   * tags and history each fail only their own part.
-   */
-  async readIndexer(
-    record: FleetPublishRecordDTO | null,
-    now: Date = new Date(),
-    reader?: EcrImagesReader,
-  ): Promise<IndexerImageRowDTO> {
-    await requirePlatformStaff('superadmin');
-    const pinnedRef = flyIndexerImage();
-    if (!pinnedRef) return { status: 'unset', variable: INDEXER_IMAGE_ENV_VAR };
-    return settleRow(async () => {
-      const token = await sourceRepoToken(MOTIR_CORE.owner);
-      const reference = parseEcrImageReference(pinnedRef);
-      const pinnedDigest = reference?.digest ?? digestOf(pinnedRef);
-
-      // ECR: the pin's bytes and the newest release, in one listing.
-      let images: EcrImageRead[] | null = null;
-      let ecrFailure: string;
-      if (!reference) {
-        ecrFailure = `${pinnedRef} is not an ECR reference by digest`;
-      } else {
-        ecrFailure = '';
-        try {
-          images = await (reader ?? createEcrImagesReader()).listImages(reference);
-        } catch (err) {
-          ecrFailure = `${reference.repositoryUri}: ${errorText(err)}`;
-        }
-      }
-
-      // motir-ai's `indexer-v*` git tags: each release's build commit.
-      let gitTags: Map<string, string> | null = null;
-      let gitFailure = '';
-      try {
-        const tags = await publishWorkflowsClient.tagsWithPrefix(MOTIR_AI, 'indexer-v', token);
-        gitTags = new Map(tags.map((t) => [t.name, t.commit]));
-      } catch (err) {
-        if (!(err instanceof PublishWorkflowError)) throw err;
-        gitFailure = err.message;
-      }
-      const commitOf = async (version: string | null): Promise<string | null> => {
-        if (!gitTags) return null;
-        try {
-          return await releaseCommit(gitTags, version, token);
-        } catch (err) {
-          if (!(err instanceof PublishWorkflowError)) throw err;
-          gitFailure = err.message;
-          return null;
-        }
-      };
-
-      let pinned: FleetImagePartDTO<FleetRunnerBuildDTO>;
-      let newest: FleetImagePartDTO<FleetRunnerBuildDTO & { version: string }>;
-      const versions: string[] = [];
-      if (!images) {
-        pinned = partNotRead('aws', ecrFailure);
-        newest = partNotRead('aws', ecrFailure);
-      } else {
-        const pinnedImage = images.find((i) => i.digest === pinnedDigest);
-        const pinnedVersion = pinnedImage ? releaseOf(pinnedImage) : null;
-        pinned = {
-          state: 'read',
-          value: {
-            digest: pinnedDigest,
-            commit: await commitOf(pinnedVersion),
-            createdAt: pinnedImage?.pushedAt ?? null,
-            version: pinnedVersion,
-          },
-        };
-        const releases = new Map<string, EcrImageRead>();
-        for (const image of images) {
-          for (const tag of image.tags) {
-            const version = INDEXER_ECR_TAG.exec(tag)?.[1];
-            if (version) releases.set(version, image);
-          }
-        }
-        versions.push(...[...releases.keys()].sort((a, b) => compareVersions(b, a)));
-        const newestVersion = versions[0];
-        const newestImage = newestVersion ? releases.get(newestVersion) : undefined;
-        if (!newestVersion || !newestImage) {
-          newest = partNotRead('aws', `${reference!.repositoryUri} holds no indexer-* release tag`);
-        } else if (!gitTags) {
-          newest = partNotRead('github', gitFailure);
-        } else {
-          const commit = await commitOf(newestVersion);
-          newest = gitFailure
-            ? partNotRead('github', gitFailure)
-            : {
-                state: 'read',
-                value: {
-                  digest: newestImage.digest,
-                  commit,
-                  createdAt: newestImage.pushedAt,
-                  version: newestVersion,
-                },
-              };
-        }
-      }
-
-      const both =
-        pinned.state === 'read' && newest.state === 'read'
-          ? { pinned: pinned.value, newest: newest.value }
-          : null;
-      const behind = both !== null && both.newest.digest !== both.pinned.digest;
-
-      // motir-ai's history: the gap's commit count and the unreleased changes.
-      let history: { state: 'read' } | FleetImagePartNotReadDTO = { state: 'read' };
-      let indexerCommits: number | null = null;
-      let unreleased: RunnerImageUnreleasedChangeDTO[] = [];
-      const newestCommit = newest.state === 'read' ? newest.value.commit : null;
-      if (newestCommit) {
-        try {
-          if (behind && both?.pinned.commit) {
-            const between = await publishWorkflowsClient.pathCommitsBetween(
-              MOTIR_AI,
-              both.pinned.commit,
-              newestCommit,
-              INDEXER_INPUTS,
-              token,
-            );
-            indexerCommits = between.length;
-          }
-          const after = await publishWorkflowsClient.pathCommitsBetween(
-            MOTIR_AI,
-            newestCommit,
-            'main',
-            INDEXER_INPUTS,
-            token,
-          );
-          unreleased = after.map((c) => ({
-            commit: c.sha,
-            committedAt: c.committedAt,
-            subject: c.subject,
-            paths: c.paths,
-            relation: 'ahead' as const,
-          }));
-        } catch (err) {
-          if (!(err instanceof PublishWorkflowError)) throw err;
-          history = partNotRead('github', err.message);
-          indexerCommits = null;
-          unreleased = [];
-        }
-      }
-
-      const tag = (version: string) => `indexer-v${version}`;
-      const pinnedVersion = both?.pinned.version ?? null;
-      const target: FleetPublishTargetDTO | null =
-        both && behind && reference
-          ? {
-              workflow: PUBLISH_WORKFLOWS.indexer,
-              ref: 'main',
-              inputs: {
-                pin_reference: `${reference.repositoryUri}@${both.newest.digest ?? ''}`,
-                pin_version: both.newest.version,
-              },
-              from: pinnedVersion
-                ? `${tag(pinnedVersion)} (${pinnedDigest ?? ''})`
-                : `${pinnedDigest ?? ''}`,
-              to: `${tag(both.newest.version)} (${both.newest.digest ?? ''})`,
-              target: both.newest.digest ?? '',
-            }
-          : null;
-      const nextTag =
-        newest.state === 'read'
-          ? (() => {
-              const [major, minor, patch] = RELEASE_VERSION.exec(newest.value.version)!
-                .slice(1)
-                .map(Number);
-              return tag(`${major}.${minor}.${patch! + 1}`);
-            })()
-          : null;
-      const landed = (digest: string) => digest === pinnedDigest;
-      return {
-        status: 'read' as const,
-        pinned,
-        newest,
-        behind,
-        releasesBetween:
-          behind && both && pinnedVersion
-            ? versions
-                .filter((v) => compareVersions(v, pinnedVersion) > 0)
-                .reverse()
-                .map(tag)
-            : behind
-              ? null
-              : [],
-        daysBehind: behind && both ? wholeDays(both.pinned.createdAt, both.newest.createdAt) : null,
-        indexerCommits,
-        compareUrl:
-          !behind || !both
-            ? null
-            : pinnedVersion
-              ? compareUrl(tag(pinnedVersion), tag(both.newest.version), MOTIR_AI)
-              : both.pinned.commit && both.newest.commit
-                ? compareUrl(both.pinned.commit, both.newest.commit, MOTIR_AI)
-                : null,
-        history,
-        unreleased,
-        nextTag,
-        publish: await publishHalf(
-          'indexer',
-          record,
-          target,
-          !both ? 'not_read' : unreleased.length > 0 ? 'release_needed' : 'up_to_date',
-          landed,
-          token,
-          now.getTime(),
-        ),
-      };
-    });
-  },
-
   /** The agent-instance (sandbox) row. Never throws on a source that did not answer. */
   async readSandbox(
     record: FleetPublishRecordDTO | null,
@@ -939,9 +632,7 @@ export const fleetStatusImagesService = {
         ? await this.readHosted(record)
         : image === 'runner'
           ? await this.readRunner(record)
-          : image === 'indexer'
-            ? await this.readIndexer(record)
-            : await this.readSandbox(record);
+          : await this.readSandbox(record);
     if (row.status !== 'read') return { outcome: 'refused', reason: row.status };
     const { target, blocked } = row.publish;
     if (!target || blocked) return { outcome: 'refused', reason: blocked ?? 'up_to_date' };
@@ -1026,12 +717,7 @@ export const fleetStatusImagesService = {
     }
     if (run.status !== 'completed') return false;
     if (run.conclusion !== 'success' || image === 'sandbox') return true;
-    const pinned =
-      image === 'runner'
-        ? configuredFleetRunnerImage()
-        : image === 'indexer'
-          ? flyIndexerImage()
-          : safeHostedPin();
+    const pinned = image === 'runner' ? configuredFleetRunnerImage() : safeHostedPin();
     return pinned !== null && digestOf(pinned) === target;
   },
 };

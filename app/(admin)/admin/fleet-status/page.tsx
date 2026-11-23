@@ -16,12 +16,7 @@ import {
   pageTenantAccounts,
 } from '@/lib/services/fleetStatusTenantAccountsService';
 import { BlindSpotsCard } from './_components/BlindSpotsCard';
-import {
-  HostedImageCard,
-  IndexerImageCard,
-  RunnerImageCard,
-  SandboxImageCard,
-} from './_components/ImageCards';
+import { HostedImageCard, RunnerImageCard, SandboxImageCard } from './_components/ImageCards';
 import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
 import { TenantAccountsCard } from './_components/TenantAccountsCard';
 
@@ -36,8 +31,8 @@ import { TenantAccountsCard } from './_components/TenantAccountsCard';
  *
  * ⚠️ EACH CARD IS READ AND SETTLED ON ITS OWN, behind its own `<Suspense>`, so a
  * registry, GitHub or AWS that does not answer leaves only its own card saying
- * so (Panel 9). The publish records are one audited read, shared by the four
- * image cards (the Indexer image card is MOTIR-10986).
+ * so (Panel 9). The publish records are one audited read, shared by the three
+ * image cards (the Indexer image card left with MOTIR-12044).
  *
  * Pools' third card, Tenant hosting accounts (MOTIR-12014; design MOTIR-12013,
  * § AMENDMENT 2026-11-22), reads each tenant AWS account's quotas live; its
@@ -195,14 +190,6 @@ async function ImageRow({
     return (
       <RunnerImageCard
         row={await fleetStatusImagesService.readRunner(record)}
-        actorEmail={principal.email}
-      />
-    );
-  }
-  if (image === 'indexer') {
-    return (
-      <IndexerImageCard
-        row={await fleetStatusImagesService.readIndexer(record)}
         actorEmail={principal.email}
       />
     );
