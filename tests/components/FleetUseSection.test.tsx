@@ -36,10 +36,8 @@ function proAtLimit(over: Partial<FleetUseDTO> = {}): FleetUseDTO {
         figureSource: 'plan',
       },
     },
-    codeGraphIndex: { inUse: 2 },
     whereItRuns: [
       { fleetKind: 'ci_runner', provider: 'fly' },
-      { fleetKind: 'code_graph_index', provider: 'fly' },
       { fleetKind: 'hosted_agent', provider: 'shared_aws_pool' },
       { fleetKind: 'agent_instance', provider: 'shared_aws_pool' },
     ],
@@ -62,7 +60,6 @@ function account(over: Partial<FleetUseHostAccountDTO> = {}): FleetUseHostAccoun
     vcpuGranted: 256,
     quotaOutcome: 'approved',
     onSharedFloor: false,
-    keptIndexSpots: null,
     capacityRequests: [],
     ...over,
   };
@@ -98,6 +95,16 @@ afterEach(() => {
 });
 
 describe('FleetUseSection — the figures', () => {
+  it('lists where each of billing’s three kinds runs, and no indexer', async () => {
+    stubFetch([ok(proAtLimit())]);
+    renderSection();
+    expect(await screen.findByText('Where it runs')).toBeTruthy();
+    for (const label of ['CI runner', 'Agent runner', 'Agent hoster']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.queryByText('Indexer')).toBeNull();
+  });
+
   it('reads Pro at its limits: 3 of 3 agent runs with 2 waiting on the plan, 10 of 10 hosted agents', async () => {
     stubFetch([ok(proAtLimit())]);
     renderSection();
@@ -115,7 +122,7 @@ describe('FleetUseSection — the figures', () => {
     expect(within(ci).getByText('1 of 3')).toBeTruthy();
     expect(within(ci).getByText('Nothing waiting')).toBeTruthy();
     expect(screen.getByText(/Your plan:/).textContent).toContain('Pro');
-    expect(screen.getByText(/Code-graph indexing: 2 running/)).toBeTruthy();
+    expect(screen.queryByText(/Code-graph indexing/)).toBeNull();
     expect(screen.queryByTestId('fleet-own-accounts')).toBeNull();
   });
 
@@ -173,6 +180,7 @@ describe('FleetUseSection — the figures', () => {
       expect(within(screen.getByTestId(`fleet-figure-${key}`)).getByText('Not read')).toBeTruthy();
     }
     expect(screen.queryByText(/^0 of/)).toBeNull();
+    expect(screen.queryByText(/Code-graph indexing/)).toBeNull();
     fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('3 of 3')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -182,7 +190,7 @@ describe('FleetUseSection — the figures', () => {
     stubFetch([ok(proAtLimit({ countsRead: false }))]);
     renderSection();
     expect(await screen.findByText('Plan not read')).toBeTruthy();
-    expect(screen.getByText(/Code-graph indexing: not read/)).toBeTruthy();
+    expect(screen.queryByText(/Code-graph indexing/)).toBeNull();
   });
 
   it('renders nothing for a member (403) or an org off the cloud (404)', async () => {
@@ -215,6 +223,7 @@ describe('FleetUseSection — the figures', () => {
     expect(screen.getByText('12 running')).toBeTruthy();
     expect(screen.queryByTestId('fleet-figure-agentsPerPerson')).toBeNull();
     expect(screen.getAllByText('No limit')).toHaveLength(3);
+    expect(screen.queryByText(/Code-graph indexing/)).toBeNull();
   });
 
   it('says the Free plan runs no fleet', async () => {
@@ -232,7 +241,7 @@ describe('FleetUseSection — the figures', () => {
     stubFetch([ok(proAtLimit())]);
     renderSection();
     expect(await screen.findByText('Where it runs')).toBeTruthy();
-    expect(screen.getAllByText('Fly')).toHaveLength(2);
+    expect(screen.getAllByText('Fly')).toHaveLength(1);
     expect(screen.getAllByText("Motir's shared AWS pool")).toHaveLength(2);
   });
 
@@ -304,24 +313,61 @@ describe('FleetUseSection — own AWS accounts', () => {
     expect(within(row).getByText(/stays at “Quota requested”/)).toBeTruthy();
   });
 
-  it('shows the merged account kept index spots and a granted account waiting on its network', async () => {
+  it('lists the agent hoster with no kept-spots line, and a granted account waiting on its network', async () => {
     stubFetch([
       ok(
         host([
           account({
-            accountKind: 'indexer_and_hoster',
-            fleetKinds: ['code_graph_index', 'agent_instance'],
+            accountKind: 'agent_hoster',
+            fleetKinds: ['agent_instance'],
             requestKind: 'agent_instance',
             state: 'granted',
-            keptIndexSpots: 4,
           }),
         ]),
       ),
     ]);
     renderSection();
-    const row = await screen.findByTestId('fleet-account-indexer_and_hoster');
-    expect(within(row).getByText(/4 machine spots are always kept for indexing/)).toBeTruthy();
+    const row = await screen.findByTestId('fleet-account-agent_hoster');
+    expect(within(row).getByText('Agent hoster')).toBeTruthy();
+    expect(within(row).getByText('Hosts your agents')).toBeTruthy();
+    expect(within(row).queryByText(/kept for indexing/)).toBeNull();
+    expect(within(row).queryByText(/Indexer/)).toBeNull();
     expect(within(row).getByText(/Live once the account's network is built/)).toBeTruthy();
+  });
+
+  it('keeps a past index capacity request on the agent hoster, labelled by the account', async () => {
+    stubFetch([
+      ok(
+        host([
+          account({
+            accountKind: 'agent_hoster',
+            fleetKinds: ['agent_instance'],
+            requestKind: 'agent_instance',
+            onSharedFloor: true,
+            capacityRequests: [
+              {
+                id: 'past-index',
+                fleetKind: 'code_graph_index',
+                desiredVcpu: 128,
+                reasonMd: 'Index more repos',
+                status: 'closed',
+                closedNote: null,
+                createdAt: '2026-10-10T08:00:00.000Z',
+                filedAt: '2026-10-10T09:00:00.000Z',
+                closedAt: '2026-10-12T08:00:00.000Z',
+                outcome: { status: 'approved', grantedValue: 96, lastReadAt: null },
+              },
+            ],
+          }),
+        ]),
+      ),
+    ]);
+    renderSection();
+    const row = await screen.findByTestId('fleet-account-agent_hoster');
+    const status = within(row).getByTestId('fleet-request-status');
+    expect(within(status).getByText('Granted 96 vCPU')).toBeTruthy();
+    expect(status.textContent).not.toMatch(/kind\.|Indexer|billing\.fleetUse/);
+    expect(within(row).getByText(/Agent hosting still on the shared floor/)).toBeTruthy();
   });
 
   it('notes an accounts read it could not make, with a retry', async () => {

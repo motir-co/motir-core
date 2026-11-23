@@ -251,7 +251,7 @@ function EffectList({ preview }: { preview: OrgFleetStopPreviewDTO }) {
   const t = useTranslations('settings.organization.fleet.stopAll');
   const format = useFormatter();
   const containers = preview.ciContainers ?? 0;
-  const lines: { key: string; count: number | null; text: ReactNode; kept?: boolean }[] = [
+  const lines: { key: string; count: number | null; text: ReactNode }[] = [
     {
       key: 'ci',
       count: preview.ciRuns,
@@ -270,29 +270,20 @@ function EffectList({ preview }: { preview: OrgFleetStopPreviewDTO }) {
       count: preview.runningAgents,
       text: t('agents', { count: preview.runningAgents ?? 0 }),
     },
-    {
-      key: 'index',
-      count: preview.indexContainers,
-      text: t('index', { count: preview.indexContainers ?? 0 }),
-      kept: true,
-    },
   ];
   return (
     <ul className="flex flex-col gap-1" data-testid="stop-all-effects">
       {lines.map((line) => {
         const quiet =
-          line.kept ||
-          (line.key === 'ci' ? (line.count ?? 0) === 0 && containers === 0 : line.count === 0);
+          line.key === 'ci' ? (line.count ?? 0) === 0 && containers === 0 : line.count === 0;
         return (
           <li
             key={line.key}
             data-testid={`stop-all-effect-${line.key}`}
             className={
-              line.kept
-                ? 'flex items-baseline gap-2 rounded-(--radius-control) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-sm text-(--el-text-secondary)'
-                : quiet
-                  ? 'flex items-baseline gap-2 font-sans text-sm text-(--el-text-secondary)'
-                  : 'flex items-baseline gap-2 font-sans text-sm text-(--el-text)'
+              quiet
+                ? 'flex items-baseline gap-2 font-sans text-sm text-(--el-text-secondary)'
+                : 'flex items-baseline gap-2 font-sans text-sm text-(--el-text)'
             }
           >
             <span className="min-w-6 text-right font-semibold tabular-nums">

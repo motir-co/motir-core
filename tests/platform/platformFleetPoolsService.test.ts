@@ -253,7 +253,6 @@ describe('platformFleetPoolsService.listPools', () => {
     expect(blocks.map((b) => [b.fleetKind, b.provider])).toEqual([
       ['ci_runner', 'aws'],
       ['hosted_agent', 'fly'],
-      ['code_graph_index', 'fly'],
       ['agent_instance', 'fly'],
     ]);
     for (const block of blocks.slice(1))
@@ -376,7 +375,6 @@ describe('platformFleetPoolsService.listPools', () => {
       expect(blocks.map((b) => [b.fleetKind, b.provider])).toEqual([
         ['ci_runner', 'aws'],
         ['hosted_agent', 'unavailable'],
-        ['code_graph_index', 'fly'],
         ['agent_instance', 'fly'],
       ]);
       expect(aws(blocks, 'ci_runner').accounts).toHaveLength(1);
@@ -385,18 +383,6 @@ describe('platformFleetPoolsService.listPools', () => {
       const { agentRunnerOnPool } = await import('@/lib/ciFleet/fleetKindSwitches');
       wireFleetKindSwitch('hosted_agent', agentRunnerOnPool);
     }
-  });
-
-  it('answers the indexer’s switch, though nothing in this read places an index', async () => {
-    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'aws');
-    try {
-      const { blocks } = await platformFleetPoolsService.listPools(currentPrincipal, NOW);
-      expect(blocks.find((b) => b.fleetKind === 'code_graph_index')!.provider).toBe('aws');
-    } finally {
-      vi.unstubAllEnvs();
-    }
-    const { blocks } = await platformFleetPoolsService.listPools(currentPrincipal, NOW);
-    expect(blocks.find((b) => b.fleetKind === 'code_graph_index')!.provider).toBe('fly');
   });
 
   it('a pool with no account yet is incomplete, with nothing to sum', () => {

@@ -108,8 +108,6 @@ export const OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND: Record<FleetWorkloadKind, stri
     "Your organization's own CI capacity is full right now. This job starts when one of your runners finishes.",
   hosted_agent:
     "Your organization's own agent-run capacity is full right now. This run starts when another of your runs finishes.",
-  code_graph_index:
-    "Your organization's own indexing capacity is full right now. This index starts when another of yours finishes.",
   agent_instance:
     "Your organization's own agent-hosting capacity is full right now. This agent starts when one of yours stops.",
 };
@@ -121,10 +119,9 @@ type ShardInFlightCounter = (
   tx: Prisma.TransactionClient,
 ) => Promise<number>;
 
-/** Each kind's per-account counter. CI, the agent runner (MOTIR-9421), the
- *  agent hoster (MOTIR-9471) and the indexer (MOTIR-9445) are wired here. A
- *  slot-backed kind counts its live fleet slots on the account, never another
- *  workload's. */
+/** Each kind's per-account counter: CI, the agent runner (MOTIR-9421) and the
+ *  agent hoster (MOTIR-9471). A slot-backed kind counts its live fleet slots on
+ *  the account, never another workload's. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
   ci_runner: (shardId, _now, tx) => intents.countInFlightForShardInTx(shardId, tx),
   hosted_agent: (shardId, now, tx) =>
@@ -132,8 +129,6 @@ const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter
   // The agent hoster (MOTIR-9471): every live instance placed on the account,
   // a reservation included — placement writes it inside the counting transaction.
   agent_instance: (shardId, _now, tx) => agentInstanceRepository.countLiveOnFleetShard(shardId, tx),
-  code_graph_index: (shardId, now, tx) =>
-    slots.countLiveForWorkloadOnShardInTx('code_graph_index', shardId, now, tx),
 };
 
 /**
@@ -270,11 +265,6 @@ export const fleetShardAdmissionService = {
     if (await this.installFleetTakesInTx(job, tx)) return { shardId: null, installFleet: true };
     if (!options.switchRead && !(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
 
-    const countInFlight = IN_FLIGHT_ON_SHARD[job.fleetKind];
-    if (!countInFlight) {
-      throw new Error(`fleet kind ${job.fleetKind} has no per-account in-flight count yet`);
-    }
-
     let best: { shardId: string; headroom: number } | null = null;
     const shards = await this.selectionSetInTx(job, tx);
     // The set is the org's own account or shared accounts, never a mix.
@@ -283,7 +273,8 @@ export const fleetShardAdmissionService = {
       if (options.exclude?.has(shard.id)) continue;
       if (shard.admissionPausedUntil && shard.admissionPausedUntil > now) continue;
       const ceiling = own ? await this.ownCeilingInTx(shard, tx) : this.effectiveCeiling(shard);
-      const headroom = ceiling - (await countInFlight(shard.id, now, tx));
+      const headroom =
+        ceiling - (await this.countInFlightOnShardInTx(job.fleetKind, shard.id, now, tx));
       if (headroom <= 0) continue;
       if (
         best === null ||
@@ -310,15 +301,13 @@ export const fleetShardAdmissionService = {
   /**
    * An own account's ceiling (MOTIR-9586): the platform admin's override, else
    * its AWS ACCOUNT's largest granted vCPU ÷ 2 (one job is 2 vCPU), rounded down.
-   * The granted value is read across every row of the account, because the
-   * tracker records it on the row the raise was filed on — the merged account's
-   * indexer row — and the hoster row's own `vcpuQuota` stays null. No known
-   * grant ⇒ no job.
+   * The granted value is read across every row of the AWS account — the
+   * tracker records it on the row the raise was filed on, and an account's rows
+   * share its one quota. No known grant ⇒ no job.
    *
-   * The merged indexer + agent hoster account (MOTIR-9589) shares that one grant
-   * between its two rows: its indexer row takes the split's index cap and its
-   * hoster row the agent cap (`mergedAccountSplit`), so the two kinds together
-   * never exceed the one quota.
+   * The merged account's `agent_instance` row (MOTIR-9589; the account's only
+   * row since MOTIR-12038) takes the whole grant as its agent cap, up to its
+   * account-side ceiling (`mergedAccountSplit`).
    */
   async ownCeilingInTx(
     shard: Pick<FleetShard, 'admissionCeilingOverride' | 'awsAccountId' | 'fleetKind'>,
@@ -330,24 +319,8 @@ export const fleetShardAdmissionService = {
       shard.awsAccountId,
       tx,
     );
-    if (shard.fleetKind === 'code_graph_index') return mergedAccountSplit(granted).indexCap;
     if (shard.fleetKind === 'agent_instance') return mergedAccountSplit(granted).agentCap;
     return shardAdmissionCeiling({ vcpuQuota: granted, machineLimit: null }) ?? 0;
-  },
-
-  /**
-   * Does the org's own account take this kind's jobs (MOTIR-9589) — the kind is
-   * on its pool and the org has a live own account of it. The same switch and
-   * live-own read `chooseInTx` places by, so a caller exempting the org from a
-   * shared bound can never disagree with where the job lands.
-   */
-  async ownAccountTakesInTx(
-    job: ShardPlacementJob,
-    tx: Prisma.TransactionClient,
-  ): Promise<boolean> {
-    if (!(await fleetKindOnPool(job.fleetKind))) return false;
-    const own = await this.ownAccountInTx(job, tx);
-    return own !== null && own !== 'plan_unknown';
   },
 
   /**
@@ -363,19 +336,6 @@ export const fleetShardAdmissionService = {
     if (!installFleetTakesKind(job.fleetKind)) return false;
     if (!isCloud()) return true;
     return isInstallOrganization(await organizationRepository.findByIdInTx(job.organizationId, tx));
-  },
-
-  /**
-   * Is this job bounded by its own place rather than the shared caps — an own
-   * account (MOTIR-9589) or the install fleet (MOTIR-10794)? The same reads
-   * `chooseInTx` places by, so the exemption and the placement cannot disagree.
-   */
-  async outsideSharedCapsInTx(
-    job: ShardPlacementJob,
-    tx: Prisma.TransactionClient,
-  ): Promise<boolean> {
-    if (await this.installFleetTakesInTx(job, tx)) return true;
-    return this.ownAccountTakesInTx(job, tx);
   },
 
   /** The `shard_capacity` words for a job no account could take — its own

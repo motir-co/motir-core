@@ -1,8 +1,4 @@
 import {
-  AWS_INDEX_IMAGE_COMMENT,
-  AWS_INDEX_EXIT_MARKER,
-  AWS_INDEX_PULL_ERROR_PREFIX,
-  AWS_INDEX_PULL_FAILED_MARKER,
   Ec2ApiError,
   type Ec2Api,
   type Ec2AvailabilityZone,
@@ -52,13 +48,10 @@ import {
 // REACH (MOTIR-9470): a running instance has a PUBLIC ADDRESS, a new one on
 // every start and none while stopped; AuthorizeSecurityGroupIngress records one
 // rule per (group, port, range) and answers a repeat `InvalidPermission.Duplicate`.
-// AN INDEX VM (MOTIR-9446) runs its boot script's pull: the fake reads the image
-// the script names, and when that image was marked unpullable the VM writes the
-// pull-failure marker to its console and powers off, exactly the two facts the
-// adapter reads. Its container's exit (MOTIR-9449) is scripted per instance with
-// `exitIndexContainer`: the exit marker on the console, then the power-off. A
-// power-off follows the launch's `InstanceInitiatedShutdownBehavior` — an index
-// VM's `stop` leaves it `stopped`, a runner's `terminate` ends it.
+// A power-off follows the launch's `InstanceInitiatedShutdownBehavior`: `stop`
+// leaves the VM `stopped`, the runner's `terminate` ends it. (The index VM that
+// launched with `stop` and reported through its console was retired with
+// MOTIR-12037.)
 
 export interface FakeCall {
   readonly method: string;
@@ -161,8 +154,6 @@ export class AwsEc2Fake implements Ec2Api {
   private readonly outOfStockZones = new Set<string>();
   private seq = 0;
   private readonly failures = new Map<string, string>();
-  /** Image references no VM can pull. */
-  private readonly unpullableImages = new Set<string>();
   /** Each instance's serial console, as GetConsoleOutput reads it. */
   readonly consoles = new Map<string, string>();
 
@@ -201,7 +192,6 @@ export class AwsEc2Fake implements Ec2Api {
       map.clear();
     }
     this.failures.clear();
-    this.unpullableImages.clear();
     this.leaveNextPending = false;
     this.nextLaunchLag = null;
     this.lags.clear();
@@ -335,86 +325,6 @@ export class AwsEc2Fake implements Ec2Api {
   /** The next RunInstances makes its instance, then answers `code` as a 5xx. */
   failNextRunAfterCreate(code = 'InternalError'): void {
     this.failNextAfterCreate = code;
-  }
-
-  /** No VM can pull `image`: an index VM booted for it fails its pull. With
-   *  `failure`, the failed VM's console carries those error lines before the
-   *  marker, the first glued to `failure.gluedTo` (a getty login prompt the
-   *  console printed with no line break, MOTIR-11276). */
-  markImageUnpullable(
-    image: string,
-    failure?: { readonly errorLines: readonly string[]; readonly gluedTo?: string },
-  ): void {
-    this.unpullableImages.add(image);
-    if (failure) this.unpullableConsoles.set(image, failure);
-  }
-
-  private readonly unpullableConsoles = new Map<
-    string,
-    { readonly errorLines: readonly string[]; readonly gluedTo?: string }
-  >();
-
-  /** The console lines a failed pull writes: each error line with its prefix,
-   *  the first glued to `gluedTo` when given, then the marker. */
-  private pullFailureConsole(errorLines: readonly string[], gluedTo = ''): string {
-    const errors = errorLines.map((line) => `${AWS_INDEX_PULL_ERROR_PREFIX}${line}\n`).join('');
-    return `${gluedTo}${errors}${AWS_INDEX_PULL_FAILED_MARKER}\n`;
-  }
-
-  /** The image an index VM's boot script pulls, or null for any other launch. */
-  indexImageOf(instanceId: string): string | null {
-    const script = Buffer.from(this.instance(instanceId).request.userData ?? '', 'base64');
-    const line = script
-      .toString('utf8')
-      .split('\n')
-      .find((l) => l.startsWith(AWS_INDEX_IMAGE_COMMENT));
-    return line ? line.slice(AWS_INDEX_IMAGE_COMMENT.length) : null;
-  }
-
-  /** An index VM's container returns `code`: the boot script writes the exit
-   *  marker to the console, then powers the VM off. */
-  exitIndexContainer(instanceId: string, code: number): void {
-    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
-    this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
-    this.powerOff(instanceId);
-  }
-
-  /** An index VM's container returns `code` and the script writes the exit
-   *  marker, then HOLDS the VM up before its power-off (MOTIR-10823): the VM is
-   *  still `running`, so only a live read sees the marker. */
-  exitIndexContainerHeld(instanceId: string, code: number): void {
-    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
-    this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
-  }
-
-  /** An index VM's login or pull fails: the script copies the failed command's
-   *  lines and the pull-failure marker to the console, then HOLDS the VM up
-   *  (MOTIR-10823) — still `running`. `gluedTo` is console text the first line
-   *  is glued to, as a getty login prompt is (MOTIR-11276). */
-  failIndexPullHeld(instanceId: string, errorLines: readonly string[], gluedTo?: string): void {
-    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
-    this.consoles.set(instanceId, `${before}${this.pullFailureConsole(errorLines, gluedTo)}`);
-  }
-
-  /** Console text EC2 has not posted yet — what a buffered read cannot see until
-   *  {@link postConsole} (MOTIR-10805). */
-  readonly unpostedConsoles = new Map<string, string>();
-
-  /** As {@link exitIndexContainer}, but the marker reaches the buffered console
-   *  only when {@link postConsole} is called — EC2 posts a stopped instance's
-   *  output minutes after the stop, and a live read of it answers empty. */
-  exitIndexContainerUnposted(instanceId: string, code: number): void {
-    this.unpostedConsoles.set(instanceId, `${AWS_INDEX_EXIT_MARKER}${code}\n`);
-    this.powerOff(instanceId);
-  }
-
-  /** EC2 posts the buffered console output written before the stop. */
-  postConsole(instanceId: string): void {
-    const pending = this.unpostedConsoles.get(instanceId);
-    if (pending === undefined) return;
-    this.unpostedConsoles.delete(instanceId);
-    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
-    this.consoles.set(instanceId, `${before}${pending}`);
   }
 
   /** The VM powers itself off: `stopped` or `terminated`, as its launch asked. */
@@ -829,16 +739,6 @@ export class AwsEc2Fake implements Ec2Api {
     this.nextLaunchLag = null;
     this.userData.set(instanceId, Buffer.from(input.userData, 'base64').toString('utf8'));
     this.byToken.set(input.clientToken, instanceId);
-    const image = this.indexImageOf(instanceId);
-    if (image !== null && this.unpullableImages.has(image)) {
-      // The pull fails on the VM: the marker on its console, then a power-off.
-      const failed = this.unpullableConsoles.get(image);
-      this.consoles.set(
-        instanceId,
-        `[  12.3] cloud-init\n${this.pullFailureConsole(failed?.errorLines ?? [], failed?.gluedTo)}`,
-      );
-      this.powerOff(instanceId);
-    }
     if (this.failNextAfterCreate) {
       const code = this.failNextAfterCreate;
       this.failNextAfterCreate = null;

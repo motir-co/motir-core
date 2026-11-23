@@ -1,8 +1,7 @@
 import type { FleetQuotaRequest, FleetShard } from '@/generated/prisma/client';
 import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { stateFromTimes, type HostAccountState } from '@/lib/ciFleet/hostAccountState';
-import { MERGED_INDEX_SPOTS } from '@/lib/ciFleet/hostMergedAccountSplit';
-import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import type { OrgPlanFiguresDTO } from '@/lib/dto/orgPlanFigures';
 import type {
   FleetUseFigureSource,
@@ -17,13 +16,23 @@ import type {
 // `tests/billing/fleetUseHelpers.test.ts`.
 
 /**
+ * The fleet kinds billing describes (MOTIR-12039), in the order the section lists
+ * them. Billing's OWN list rather than the fleet's `FLEET_WORKLOAD_KINDS`: the
+ * code-graph indexer left motir-core (Story MOTIR-11026), so it is no use billing
+ * shows, and removing a fleet kind must not have to touch billing.
+ */
+export const FLEET_USE_KINDS = ['ci_runner', 'hosted_agent', 'agent_instance'] as const;
+
+export type FleetUseKind = (typeof FLEET_USE_KINDS)[number];
+
+/**
  * Where a kind of the org's work runs, in ADMISSION'S order
  * (`fleetShardAdmissionService.chooseInTx`): the kind's switch first — off is
  * Fly, even with a live own account — then the org's own live account when
  * admission would place the kind there, else the shared AWS pool.
  */
 export function providerFor(
-  kind: FleetWorkloadKind,
+  kind: FleetUseKind,
   onPool: boolean,
   ownAccountKinds: ReadonlySet<FleetWorkloadKind>,
 ): FleetUseProvider {
@@ -67,19 +76,26 @@ export function figureSourceFor(
   return grantedKinds.has(ownKind) ? 'granted_quota' : 'shared_floor';
 }
 
-/** One own AWS account, grouped from its rows; the service adds the floor and requests. */
-export type OwnAccountGroup = Omit<FleetUseHostAccountDTO, 'onSharedFloor' | 'capacityRequests'>;
+/**
+ * One own AWS account, grouped from its rows; the service adds the floor and
+ * requests. `shardIds` are the account's rows — internal, so the mapper can
+ * attach the account's history by shard; never copied to the DTO.
+ */
+export type OwnAccountGroup = Omit<FleetUseHostAccountDTO, 'onSharedFloor' | 'capacityRequests'> & {
+  shardIds: ReadonlySet<string>;
+};
 
-function accountKindOf(kinds: ReadonlySet<string>): FleetUseHostAccountDTO['accountKind'] {
+function accountKindOf(kinds: ReadonlySet<string>): FleetUseHostAccountDTO['accountKind'] | null {
   if (kinds.has('ci_runner')) return 'ci_runner';
   if (kinds.has('hosted_agent')) return 'hosted_agent';
-  return 'indexer_and_hoster';
+  if (kinds.has('agent_instance')) return 'agent_hoster';
+  return null;
 }
 
 const ACCOUNT_ORDER: FleetUseHostAccountDTO['accountKind'][] = [
   'ci_runner',
   'hosted_agent',
-  'indexer_and_hoster',
+  'agent_hoster',
 ];
 
 function maxOf(values: readonly (number | null)[]): number | null {
@@ -92,10 +108,15 @@ function earliest(times: readonly (Date | null)[]): Date | null {
   return present.length > 0 ? new Date(Math.min(...present.map((at) => at.getTime()))) : null;
 }
 
-function groupOne(rows: readonly FleetShard[], requests: readonly FleetQuotaRequest[]) {
+function groupOne(
+  rows: readonly FleetShard[],
+  requests: readonly FleetQuotaRequest[],
+): OwnAccountGroup | null {
   const kindSet = new Set<string>(rows.map((row) => row.fleetKind));
-  const fleetKinds = FLEET_WORKLOAD_KINDS.filter((kind) => kindSet.has(kind));
+  const fleetKinds = FLEET_USE_KINDS.filter((kind) => kindSet.has(kind));
   const accountKind = accountKindOf(kindSet);
+  // An account running none of billing's kinds is no account billing describes.
+  if (accountKind === null) return null;
   const times = {
     quotaRequestedAt: earliest(rows.map((row) => row.quotaRequestedAt)),
     grantedAt: earliest(rows.map((row) => row.grantedAt)),
@@ -106,8 +127,7 @@ function groupOne(rows: readonly FleetShard[], requests: readonly FleetQuotaRequ
   return {
     accountKind,
     fleetKinds,
-    // The merged account's raise sits on its indexer row (`hostAccountPlan`).
-    requestKind: fleetKinds.includes('code_graph_index') ? 'code_graph_index' : fleetKinds[0]!,
+    requestKind: fleetKinds[0]!,
     state,
     createdAt: earliest(rows.map((row) => row.createdAt))!.toISOString(),
     quotaRequestedAt: times.quotaRequestedAt?.toISOString() ?? null,
@@ -116,13 +136,12 @@ function groupOne(rows: readonly FleetShard[], requests: readonly FleetQuotaRequ
     vcpuAsked: maxOf(requests.map((request) => request.desiredValue)),
     vcpuGranted: maxOf(requests.map((request) => request.grantedValue)),
     quotaOutcome: latest?.status ?? null,
-    keptIndexSpots: accountKind === 'indexer_and_hoster' ? MERGED_INDEX_SPOTS : null,
-  } satisfies OwnAccountGroup;
+    shardIds: new Set(rows.map((row) => row.id)),
+  };
 }
 
 /**
- * A Host org's own-account rows as ACCOUNTS: grouped by AWS account (the merged
- * indexer + agent hoster account is two rows on one), with the account's times,
+ * A Host org's own-account rows as ACCOUNTS: grouped by AWS account, with the account's times,
  * its largest asked and granted vCPU across every row's raises, and AWS's status
  * on the latest raise. The AWS account id groups and is never returned.
  */
@@ -135,13 +154,15 @@ export function groupOwnAccounts(
     const key = row.awsAccountId ?? `row:${row.id}`;
     byAccount.set(key, [...(byAccount.get(key) ?? []), row]);
   }
-  const groups = [...byAccount.values()].map((accountRows) => {
-    const ids = new Set(accountRows.map((row) => row.id));
-    return groupOne(
-      accountRows,
-      quotaRequests.filter((request) => ids.has(request.shardId)),
-    );
-  });
+  const groups = [...byAccount.values()]
+    .map((accountRows) => {
+      const ids = new Set(accountRows.map((row) => row.id));
+      return groupOne(
+        accountRows,
+        quotaRequests.filter((request) => ids.has(request.shardId)),
+      );
+    })
+    .filter((group): group is OwnAccountGroup => group !== null);
   return groups.sort(
     (a, b) => ACCOUNT_ORDER.indexOf(a.accountKind) - ACCOUNT_ORDER.indexOf(b.accountKind),
   );

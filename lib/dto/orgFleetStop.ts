@@ -19,8 +19,6 @@ export interface OrgFleetStopPreviewDTO {
   hostedRuns: number | null;
   /** Agent instances running now. */
   runningAgents: number | null;
-  /** Index containers — for information: they are never stopped. */
-  indexContainers: number | null;
 }
 
 /** What one Stop everything achieved. A partial stop is a result, never a throw. */

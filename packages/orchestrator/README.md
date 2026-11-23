@@ -33,7 +33,7 @@ which does three things and nothing else:
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **the adapter choice** — `getOrchestrator()` reads `MOTIR_FLEET_ORCHESTRATOR` and the Fly credentials | it is a fact about a DEPLOYMENT, not about the port. A self-hosted `motir-core` must boot with no fleet credentials at all                                    |
 | **a `UsageMeter`** — `createUsageSink(ciFleetCostMeterService)`                                       | persisting a cost record needs the app's database, its tenancy and its schema. The port fixes the FIELDS; the meter owns the SCHEMA (`ci-runner-fleet.md` §5) |
-| **the index-fleet config** — `indexFleetConfig()`                                                     | same reason as the first: it reads this deployment's environment for a digest-pinned image                                                                    |
+| **the container-fleet config** — `hostedAgentFleetConfig()`                                           | same reason as the first: it reads this deployment's environment for a digest-pinned image                                                                    |
 
 ## What it may NOT depend on
 

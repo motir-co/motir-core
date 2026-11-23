@@ -9,7 +9,6 @@ import {
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { isPrivateNetworkHost } from '@/lib/ai/containerAiAddress';
-import { motirAiContainerBaseUrl } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { engineJob } from '@/lib/jobs/engine/registry';
@@ -18,7 +17,6 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { agentInstanceRunService, agentRunLaunchKey } from '@/lib/services/agentInstanceRunService';
 import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifecycleService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
-import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -44,12 +42,11 @@ import {
 // calls the function that builds what the machine is handed (or captures the
 // value where that output reaches a fake orchestrator), and holds every Motir
 // address in it to ONE checker: an https origin, on a host the classifier calls
-// public, equal to one of the three origins the motir-infra services stack
-// publishes (MOTIR_BASE_URL, MOTIR_AI_CONTAINER_URL, MOTIR_GATEWAY_RUN_URL).
+// public, equal to one of the origins the motir-infra services stack
+// publishes (MOTIR_BASE_URL, MOTIR_GATEWAY_RUN_URL).
 //
 //   kind           built by                                  Motir addresses
 //   CI runner      ciRunnerBootService.buildSpec             none
-//   indexer        codeGraphIndexDispatchService.buildIndexSpec  MOTIR_AI_BASE_URL
 //   agent runner   hostedRunService (+ hostedRunKeyService.mintRunKey)
 //                                                            MOTIR_API_URL, MOTIR_GATEWAY_URL
 //   hoster         agentInstanceRunService launch (stdin)    apiUrl
@@ -59,15 +56,14 @@ import {
 // (`agent_instance`).
 //
 // The source guard at the end reports a kind that starts carrying an address
-// outside the three, so that origin is added to the stack outputs.
+// outside the published ones, so that origin is added to the stack outputs.
 
 const PUBLISHED = {
   MOTIR_BASE_URL: 'https://app.motir.co',
-  MOTIR_AI_CONTAINER_URL: 'https://ai.motir.co',
   MOTIR_GATEWAY_RUN_URL: 'https://gateway-run.motir.co',
 } as const;
 
-type FleetKind = 'CI runner' | 'indexer' | 'agent runner' | 'hoster';
+type FleetKind = 'CI runner' | 'agent runner' | 'hoster';
 
 function stubPublishedOrigins(): void {
   for (const [name, value] of Object.entries(PUBLISHED)) vi.stubEnv(name, value);
@@ -105,7 +101,7 @@ function assertPublishedOrigin(args: { kind: FleetKind; variable: string; value:
   if (url.protocol !== 'https:') return refuse('not https');
   const published = Object.values(PUBLISHED).map((p) => new URL(p).origin);
   if (!published.includes(url.origin) || value.replace(/\/+$/, '') !== url.origin) {
-    return refuse('unpublished host: not one of the three published origins');
+    return refuse('unpublished host: not one of the published origins');
   }
   return url.origin;
 }
@@ -149,52 +145,6 @@ describe('CI runner — ciRunnerBootService.buildSpec', () => {
     for (const value of Object.values(spec.env)) {
       expect(String(value)).not.toMatch(/https?:\/\//);
     }
-  });
-});
-
-describe('indexer — codeGraphIndexDispatchService.buildIndexSpec', () => {
-  it('hands MOTIR_AI_BASE_URL, the published AiContainerOrigin', () => {
-    stubPublishedOrigins();
-    const spec = codeGraphIndexDispatchService.buildIndexSpec({
-      target: {
-        installationId: '556677',
-        providerId: 'github',
-        organizationId: 'org-1',
-        workspaceId: 'ws-1',
-        projectId: 'proj-1',
-        repoOwner: 'motir-co',
-        repoName: 'motir-core',
-        repoRef: 'motir-co/motir-core',
-        defaultBranch: 'main',
-        runId: 'run-abc',
-        dispatchId: 'evt-abc',
-      },
-      fleet: { image: 'motir/indexer@sha256:abc', region: 'ams' },
-      // The value production passes, read the way production reads it.
-      aiBaseUrl: motirAiContainerBaseUrl(),
-      tarballUrl: 'https://codeload.github.com/motir-co/motir-core/legacy.tar.gz/main?token=x',
-      runCredential: 'r'.repeat(48),
-      previousSnapshotUrl: 'https://snapshots.s3.amazonaws.com/motir-core.tar?sig=x',
-      timeoutSeconds: 1800,
-    });
-
-    expect(
-      assertPublishedOrigin({
-        kind: 'indexer',
-        variable: 'MOTIR_AI_BASE_URL',
-        value: spec.env['MOTIR_AI_BASE_URL']!,
-      }),
-    ).toBe(PUBLISHED.MOTIR_AI_CONTAINER_URL);
-    // The other two URL variables are PRE-SIGNED OBJECT URLS (the repository
-    // archive and the previous snapshot), not Motir origins: named, not checked.
-    const urlKeys = Object.keys(spec.env)
-      .filter((k) => /_URL$/.test(k))
-      .sort();
-    expect(urlKeys).toEqual([
-      'MOTIR_AI_BASE_URL',
-      'MOTIR_INDEX_SNAPSHOT_URL',
-      'MOTIR_INDEX_TARBALL_URL',
-    ]);
   });
 });
 
@@ -485,11 +435,11 @@ describe('assertPublishedOrigin refuses every form a fleet machine cannot use', 
   });
 
   it.each(['https://motir-core-123.us-east-1.elb.amazonaws.com', 'https://app.example.com'])(
-    '%s — a public host that is not one of the three published origins',
+    '%s — a public host that is not one of the published origins',
     (value) => {
-      expect(() =>
-        assertPublishedOrigin({ kind: 'indexer', variable: 'MOTIR_AI_BASE_URL', value }),
-      ).toThrow(`indexer MOTIR_AI_BASE_URL=${value}: unpublished host`);
+      expect(() => assertPublishedOrigin({ kind: 'hoster', variable: 'apiUrl', value })).toThrow(
+        `hoster apiUrl=${value}: unpublished host`,
+      );
     },
   );
 
@@ -529,22 +479,14 @@ describe('assertPublishedOrigin refuses every form a fleet machine cannot use', 
 
 // ── The source guard ────────────────────────────────────────────────────────
 //
-// Every address-bearing name the five builders hold today, with what it is. A
+// Every address-bearing name the four builders hold today (the indexer's left
+// with the indexer fleet, MOTIR-12036), with what it is. A
 // NEW `MOTIR_*_URL`, address accessor or `http(s)://` literal in one of them
 // fails here, naming the file and the name: decide whether the machine is
 // handed it, and if so publish it as a stack output and add a case above.
 
 const ADDRESS_NAMES: Record<string, Record<string, string>> = {
   'lib/services/ciRunnerBootService.ts': {},
-  'lib/services/codeGraphIndexDispatchService.ts': {
-    MOTIR_AI_BASE_URL: 'the indexer env key, from motirAiContainerBaseUrl (checked above)',
-    MOTIR_AI_CONTAINER_URL: 'named in comments; read through motirAiContainerBaseUrl',
-    MOTIR_AI_URL: "core's own private motir-ai seam, named in comments; never handed",
-    MOTIR_INDEX_TARBALL_URL: 'a pre-signed object URL, not a Motir origin',
-    MOTIR_INDEX_SNAPSHOT_URL: 'a pre-signed object URL, not a Motir origin',
-    'motirAiContainerBaseUrl(': 'the indexer address (checked above)',
-    'motirAiBaseUrl(': "core's own call to motir-ai; never handed to the machine",
-  },
   'lib/services/hostedRunKeyService.ts': {
     MOTIR_GATEWAY_URL: 'the agent runner env key, from gatewayRunUrl (checked above)',
     'gatewayRunUrl(': 'the agent runner gateway address (checked above)',
@@ -571,7 +513,7 @@ function addressNamesIn(source: string): string[] {
   return [...names].sort();
 }
 
-describe('the source guard over the five builders', () => {
+describe('the source guard over the four builders', () => {
   it.each(Object.keys(ADDRESS_NAMES))('%s holds only the addresses listed here', (file) => {
     const source = readFileSync(join(process.cwd(), file), 'utf8');
     const unlisted = addressNamesIn(source)

@@ -96,7 +96,10 @@ function isUniqueViolation(err: unknown): boolean {
  * `Record<SupervisionKind, …>`, so a supervisor added here without a settle path
  * is a COMPILE error there rather than a row handed to another fleet's teardown.
  */
-export const SUPERVISION_KINDS = ['index', 'ci-runner', 'hosted-agent'] as const;
+// The index-container supervisor left with the container-based indexer
+// (MOTIR-12036): a leftover `index` row is an unknown kind to the sweep, left
+// watching and logged, with the fleet reaper as its backstop.
+export const SUPERVISION_KINDS = ['ci-runner', 'hosted-agent'] as const;
 export type SupervisionKind = (typeof SUPERVISION_KINDS)[number];
 
 /** Narrow a `job_supervision.kind` read back from the database. */

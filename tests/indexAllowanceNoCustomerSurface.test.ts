@@ -111,7 +111,7 @@ describe('the index allowance reaches no customer surface (AC 9)', () => {
         containerRegion: 'iad',
         workspaceId: workspace.id,
         organizationId,
-        workload: 'code_graph_index',
+        workload: 'index',
         repoFullName: 'acme/web',
         cpuKind: 'performance',
         cpus: 2,

@@ -27,7 +27,7 @@ export const codeGraphIndexCatchUp = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    const paused = await ctx.step.run('catch-up-paused-indexes-v2', () =>
+    const paused = await ctx.step.run('catch-up-paused-indexes-v3', () =>
       services.codeGraphIndexCatchUp.catchUp(),
     );
     // Each repository's re-dispatch is claimed by a conditional release, so a

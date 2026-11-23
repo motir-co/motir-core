@@ -8,11 +8,12 @@ import {
 } from '@/lib/ai/fleetOrigins';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 
-// THE THREE FLEET ORIGINS, PREFLIGHTED (Story MOTIR-9714 · MOTIR-10750).
+// THE FLEET ORIGINS, PREFLIGHTED (Story MOTIR-9714 · MOTIR-10750).
 //
-// Every fleet machine is handed core's public origin, and the index and hosted
-// containers motir-ai's and the gateway's too. Each address has been wrong in
-// production before with every check green, so each gets the same four arms:
+// Every fleet machine that is handed a Motir address gets core's public origin,
+// and a hosted container the gateway's run lane too. (motir-ai's container-facing
+// origin left with the index container, MOTIR-12037.) Each address has been wrong
+// in production before with every check green, so each gets the same four arms:
 // unset, a definite failure decided from its shape, reachable, and could-not-tell.
 
 afterEach(() => {
@@ -28,13 +29,11 @@ const spec = (origin: FleetOriginSpec['origin']): FleetOriginSpec => {
 
 const PUBLIC = {
   core: 'https://app.example.test',
-  aiContainer: 'https://ai.example.test',
   gatewayRun: 'https://gateway-run.example.test',
 } as const;
 
 const publicEnv = {
   MOTIR_BASE_URL: PUBLIC.core,
-  MOTIR_AI_CONTAINER_URL: PUBLIC.aiContainer,
   MOTIR_GATEWAY_RUN_URL: PUBLIC.gatewayRun,
 };
 
@@ -49,9 +48,10 @@ const byOrigin = (readings: FleetOriginReading[], origin: FleetOriginSpec['origi
 
 describe('FLEET_ORIGINS', () => {
   it('names each variable beside the motir-infra stack output it must equal', () => {
+    // No `MOTIR_AI_CONTAINER_URL` / `AiContainerOrigin`: the index container was
+    // its only reader (MOTIR-12037).
     expect(FLEET_ORIGINS.map((s) => [s.origin, s.variable, s.output])).toEqual([
       ['core', 'MOTIR_BASE_URL', 'CoreOrigin'],
-      ['aiContainer', 'MOTIR_AI_CONTAINER_URL', 'AiContainerOrigin'],
       ['gatewayRun', 'MOTIR_GATEWAY_RUN_URL', 'GatewayRunOrigin'],
     ]);
   });
@@ -108,7 +108,7 @@ describe('classifyFleetOrigin for the run lane', () => {
     expect('detail' in reading && reading.detail).toContain('/v1/v1');
   });
 
-  it('takes /v1 as an ordinary path on the other two origins', () => {
+  it('takes /v1 as an ordinary path on core’s origin', () => {
     expect(classifyFleetOrigin(spec('core'), `${PUBLIC.core}/v1`)).toEqual({
       address: `${PUBLIC.core}/v1`,
     });
@@ -131,7 +131,6 @@ describe('verifyFleetOrigins', () => {
     expect(result.verdict).toBe('ok');
     expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
       `${PUBLIC.core}/api/health/ready`,
-      `${PUBLIC.aiContainer}/health`,
       `${PUBLIC.gatewayRun}/healthz`,
     ]);
     expect('readings' in result && result.readings).toEqual(
@@ -173,21 +172,20 @@ describe('verifyFleetOrigins', () => {
     expect(result.failures.map((f) => f.origin)).toEqual(['gatewayRun']);
     expect(byOrigin(result.readings, 'core')).toMatchObject({ verdict: 'indeterminate' });
     // The private address is never probed: the verdict comes from its shape.
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('is indeterminate, never failed, when a public origin answers non-2xx or not at all', async () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request): Promise<Response> => {
-      if (String(url).startsWith(PUBLIC.aiContainer)) throw new Error('fetch failed');
+      if (String(url).startsWith(PUBLIC.core)) throw new Error('fetch failed');
       if (String(url).startsWith(PUBLIC.gatewayRun)) return new Response('', { status: 503 });
       return new Response('ok', { status: 200 });
     });
     const result = await verifyFleetOrigins({ isConfigured: true, env: publicEnv, fetchImpl });
     expect(result.verdict).toBe('indeterminate');
     if (result.verdict !== 'indeterminate') return;
-    expect(byOrigin(result.readings, 'core')).toMatchObject({ verdict: 'reachable' });
     expect(result.detail).toBe(
-      `MOTIR_AI_CONTAINER_URL ${PUBLIC.aiContainer}/health: fetch failed; ` +
+      `MOTIR_BASE_URL ${PUBLIC.core}/api/health/ready: fetch failed; ` +
         `MOTIR_GATEWAY_RUN_URL ${PUBLIC.gatewayRun}/healthz: ${PUBLIC.gatewayRun}/healthz answered 503.`,
     );
   });
@@ -208,7 +206,7 @@ describe('verifyFleetOrigins', () => {
     const fetchImpl = answering();
     const result = await verifyFleetOrigins({
       isConfigured: true,
-      applies: { aiContainer: false, gatewayRun: false },
+      applies: { gatewayRun: false },
       env: { MOTIR_BASE_URL: PUBLIC.core },
       fetchImpl,
     });
@@ -216,7 +214,6 @@ describe('verifyFleetOrigins', () => {
     if (result.verdict !== 'ok') return;
     expect(result.readings.map((r) => [r.origin, r.verdict])).toEqual([
       ['core', 'reachable'],
-      ['aiContainer', 'not_applicable'],
       ['gatewayRun', 'not_applicable'],
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -224,7 +221,6 @@ describe('verifyFleetOrigins', () => {
 
   it('reads the process environment and the global fetch when none is injected', async () => {
     vi.stubEnv('MOTIR_BASE_URL', PUBLIC.core);
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', PUBLIC.aiContainer);
     vi.stubEnv('MOTIR_GATEWAY_RUN_URL', PUBLIC.gatewayRun);
     vi.stubGlobal('fetch', answering());
     expect((await verifyFleetOrigins({ isConfigured: true })).verdict).toBe('ok');
@@ -234,7 +230,6 @@ describe('verifyFleetOrigins', () => {
 describe('fleetPreflightService.checkFleetOrigins', () => {
   function stubOrigins() {
     vi.stubEnv('MOTIR_BASE_URL', PUBLIC.core);
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', PUBLIC.aiContainer);
     vi.stubEnv('MOTIR_GATEWAY_RUN_URL', PUBLIC.gatewayRun);
     vi.stubGlobal('fetch', answering());
   }
@@ -253,7 +248,6 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
       'FLY_FLEET_API_TOKEN',
       'FLY_FLEET_APP',
       'MOTIR_RUNNER_IMAGE',
-      'MOTIR_INDEXER_IMAGE',
       'MOTIR_HOSTED_AGENT_IMAGE',
       'FLY_INSTANCES_API_TOKEN',
       'MOTIR_INSTALL_FLEET_KINDS',
@@ -266,22 +260,13 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
     });
   });
 
-  function wireOnly(kinds: {
-    ci?: boolean;
-    index?: boolean;
-    hosted?: boolean;
-    instances?: boolean;
-  }) {
+  function wireOnly(kinds: { ci?: boolean; hosted?: boolean; instances?: boolean }) {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    vi.stubEnv('FLY_FLEET_API_TOKEN', kinds.ci || kinds.index ? 'fly_fleet_token' : '');
-    vi.stubEnv('FLY_FLEET_APP', kinds.ci || kinds.index ? 'motir-ci-fleet' : '');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', kinds.ci ? 'fly_fleet_token' : '');
+    vi.stubEnv('FLY_FLEET_APP', kinds.ci ? 'motir-ci-fleet' : '');
     vi.stubEnv(
       'MOTIR_RUNNER_IMAGE',
-      kinds.ci || kinds.index ? 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d' : '',
-    );
-    vi.stubEnv(
-      'MOTIR_INDEXER_IMAGE',
-      kinds.index ? 'registry.fly.io/motir-indexer@sha256:0a1b2c3d' : '',
+      kinds.ci ? 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d' : '',
     );
     vi.stubEnv(
       'MOTIR_HOSTED_AGENT_IMAGE',
@@ -307,7 +292,6 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
     stubOrigins();
     expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
       ['core', 'reachable'],
-      ['aiContainer', 'not_applicable'],
       ['gatewayRun', 'not_applicable'],
     ]);
     vi.stubEnv('MOTIR_BASE_URL', '');
@@ -323,18 +307,6 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
     stubOrigins();
     expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
       ['core', 'reachable'],
-      ['aiContainer', 'not_applicable'],
-      ['gatewayRun', 'not_applicable'],
-    ]);
-  });
-
-  it("asks only motir-ai's origin of a deployment that only indexes", async () => {
-    wireOnly({ index: true });
-    stubOrigins();
-    vi.stubEnv('MOTIR_BASE_URL', '');
-    expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
-      ['core', 'not_applicable'],
-      ['aiContainer', 'reachable'],
       ['gatewayRun', 'not_applicable'],
     ]);
   });
@@ -342,20 +314,17 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
   it("asks core's and the gateway's origins of a deployment that runs hosted agents", async () => {
     wireOnly({ hosted: true });
     stubOrigins();
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
     expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
       ['core', 'reachable'],
-      ['aiContainer', 'not_applicable'],
       ['gatewayRun', 'reachable'],
     ]);
   });
 
-  it('asks all three of a deployment that indexes and runs hosted agents', async () => {
+  it('fails on the run lane of a deployment that runs CI and hosted agents', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', 'registry.fly.io/motir-indexer@sha256:0a1b2c3d');
     vi.stubEnv('MOTIR_HOSTED_AGENT_IMAGE', 'ghcr.io/motir-co/motir-agent@sha256:9f8e7d6c');
     stubOrigins();
     vi.stubEnv('MOTIR_GATEWAY_RUN_URL', 'https://motir-gateway.fly.dev');

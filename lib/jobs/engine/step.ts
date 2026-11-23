@@ -76,7 +76,7 @@ import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 // entirely and resumes later.
 //
 // ⚠️ AN IN-PROCESS `await` WOULD BE SIMPLER AND WOULD WORK UNTIL THE FIRST
-// DEPLOY. `ciRunnerFleet` and `indexFleetSteps` sleep in supervision loops that
+// DEPLOY. `ciRunnerFleet` and the hosted-agent run sleep in supervision loops that
 // can run for half an hour; a sleeping supervisor held in memory vanishes when
 // the worker restarts, leaving a container running with nothing watching it.
 // Durability here is the requirement, not an optimisation.

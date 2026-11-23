@@ -14,7 +14,6 @@ import {
   clearOrgFleetRows,
   seedCiJob,
   seedFleetPeople,
-  seedIndexJob,
   seedLiveHostedRun,
   seedMotirStop,
   seedOtherOrg,
@@ -164,7 +163,6 @@ test.describe('Fleet in Settings › Organization', () => {
     await seedCiJob(org, 'pending');
     const memberAgent = await seedRunningAgent(org, member.id, `mira-${stamp}`);
     const adminAgent = await seedRunningAgent(org, admin.id, `ada-${stamp}`);
-    const indexRef = await seedIndexJob(org);
     await seedMotirStop(org.organizationId, new Date(Date.now() - 3 * 60 * 60_000));
     const other = await seedOtherOrg(stamp);
 
@@ -188,19 +186,17 @@ test.describe('Fleet in Settings › Organization', () => {
       await page.locator(`a[href="${fleetPath}"]`).first().click();
       await expect(page).toHaveURL(new RegExp(`${fleetPath}$`));
       await expect(page.getByRole('heading', { name: copy.title, level: 1 })).toBeVisible();
-      for (const tile of ['agent-runs', 'agents', 'ci', 'index']) {
+      for (const tile of ['agent-runs', 'agents', 'ci']) {
         await expect(main(page).getByTestId(`fleet-tile-${tile}`)).toBeVisible();
       }
+      await expect(main(page).getByTestId('fleet-tile-index')).toHaveCount(0);
       await expect(section(page, 'hosted').getByTestId('fleet-hosted-row')).toHaveCount(2);
       await expect(section(page, 'agents').getByTestId('fleet-agent-row')).toHaveCount(2);
       await expect(agentRow(page, member.name)).toContainText(copy.agents.running);
       await expect(section(page, 'ci').getByTestId('fleet-ci-row')).toHaveCount(2);
       await expect(section(page, 'ci')).toContainText(copy.ci.cause.planLimit);
-      // Index jobs: a count and the not-charged-or-stopped line, no control.
-      const index = section(page, 'index');
-      await expect(index).toContainText(copy.index.note);
-      await expect(index).toContainText(/1\s*running/);
-      await expect(index.getByRole('button')).toHaveCount(0);
+      // Code indexing no longer runs on the fleet: the page has no index section.
+      await expect(main(page).getByTestId('fleet-index')).toHaveCount(0);
       await expect(section(page, 'motir-stops').getByTestId('fleet-motir-stop-row')).toHaveCount(1);
       await expect(section(page, 'motir-stops')).toContainText(copy.motirStops.reason.record_ended);
       // The second organisation's work is nowhere on the page.
@@ -369,9 +365,7 @@ test.describe('Fleet in Settings › Organization', () => {
       await expect(dialog.getByTestId('stop-all-effect-ci')).toContainText('1 container');
       await expect(dialog.getByTestId('stop-all-effect-hosted')).toContainText('1');
       await expect(dialog.getByTestId('stop-all-effect-agents')).toContainText('1');
-      await expect(dialog.getByTestId('stop-all-effect-index')).toContainText(
-        'indexing is not stopped here',
-      );
+      await expect(dialog.getByTestId('stop-all-effect-index')).toHaveCount(0);
       await beat();
     });
 
@@ -389,7 +383,6 @@ test.describe('Fleet in Settings › Organization', () => {
       await expect(main(page).getByTestId('fleet-stop-result-agents')).toContainText(
         'the stop did not confirm',
       );
-      await expect(result).toContainText(copy.result.index);
       await expect(main(page).getByTestId('fleet-last-stop')).toContainText(/Last stopped by you/);
 
       const ci = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
@@ -422,13 +415,6 @@ test.describe('Fleet in Settings › Organization', () => {
       await expect(main(page).getByTestId('fleet-last-stop')).toContainText(
         new RegExp(`Last stopped by ${admin.name}, today at`),
       );
-      // The index job kept running: its row and its count are unchanged.
-      await expect(section(page, 'index')).toContainText(/1\s*running/);
-      expect(
-        await adminDb.fleetInFlightSlot.count({
-          where: { ref: indexRef, workload: 'code_graph_index' },
-        }),
-      ).toBe(1);
       await beat();
 
       await result.getByRole('button', { name: copy.result.dismissAria }).click();

@@ -29,7 +29,6 @@ export * from './imagePull';
 export * from './persistentLiveness';
 export * from './adapters/fly';
 export * from './adapters/fly/flyMachines';
-export * from './adapters/fly/indexImage';
 export * from './adapters/fake';
 export * from './adapters/fly/persistent';
 export * from './adapters/fake/persistent';

@@ -46,7 +46,7 @@ const ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const PRIMARY_ACCOUNT = '111122223333';
 const SPARE_ACCOUNT = '444455556666';
-const INDEX_ACCOUNT = '999900001111';
+const FLY_KIND_ACCOUNT = '999900001111';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
   sessionKeyId: 'ASIA_SESSION_never_printed',
@@ -368,37 +368,35 @@ describe('the pool-growth walk', () => {
     expect(count('createOrganizationAccount')).toBe(creates + 1);
   });
 
-  it('step 7: code_graph_index on Fly never grows while ci_runner grows in the same pass', async () => {
-    const indexer = await fleetShardService.createShard({
-      name: 'code-graph-index-use1-1',
-      fleetKind: 'code_graph_index',
+  it('step 7: hosted_agent on Fly never grows while ci_runner grows in the same pass', async () => {
+    const onFly = await fleetShardService.createShard({
+      name: 'hosted-agent-use1-1',
+      fleetKind: 'hosted_agent',
       provider: 'aws',
       state: 'active',
       githubOrg: ORG,
       githubInstallationId: '9001',
-      awsAccountId: INDEX_ACCOUNT,
+      awsAccountId: FLY_KIND_ACCOUNT,
       awsRegion: 'us-east-1',
-      credentialRef: 'FLEET_SHARD_CODE_GRAPH_INDEX_USE1_1',
+      credentialRef: 'FLEET_SHARD_HOSTED_AGENT_USE1_1',
       limits: { vcpuQuota: 100 },
     });
-    organization.quotaByAccount.set(INDEX_ACCOUNT, 100);
-    usage.set(indexer.id, 90);
+    organization.quotaByAccount.set(FLY_KIND_ACCOUNT, 100);
+    usage.set(onFly.id, 90);
     organization.createFailure = null;
     const alertsBefore = alerts.length;
 
     tick(31); // past ci_runner's backoff
     const summary = await pass();
-    const growth = await fleetAdmin('growth-events', '--kind', 'code_graph_index');
-    const status = await fleetAdmin('pool-status', '--kind', 'code_graph_index');
+    const growth = await fleetAdmin('growth-events', '--kind', 'hosted_agent');
+    const status = await fleetAdmin('pool-status', '--kind', 'hosted_agent');
 
-    expect(summary.kinds).toMatchObject({ ci_runner: 'grown', code_graph_index: 'on_fly' });
-    expect(growth.out).toBe('code_graph_index: no growth events');
-    expect(status.out).toBe('code_graph_index: fly (no growth)');
-    expect(await adminDb.fleetShard.count({ where: { fleetKind: 'code_graph_index' } })).toBe(1);
-    expect(
-      await adminDb.fleetQuotaRequest.count({ where: { fleetKind: 'code_graph_index' } }),
-    ).toBe(0);
-    expect(organization.calls.some((c) => c.includes(INDEX_ACCOUNT))).toBe(false);
+    expect(summary.kinds).toMatchObject({ ci_runner: 'grown', hosted_agent: 'on_fly' });
+    expect(growth.out).toBe('hosted_agent: no growth events');
+    expect(status.out).toBe('hosted_agent: fly (no growth)');
+    expect(await adminDb.fleetShard.count({ where: { fleetKind: 'hosted_agent' } })).toBe(1);
+    expect(await adminDb.fleetQuotaRequest.count({ where: { fleetKind: 'hosted_agent' } })).toBe(0);
+    expect(organization.calls.some((c) => c.includes(FLY_KIND_ACCOUNT))).toBe(false);
     expect(alerts.slice(alertsBefore)).toEqual([]);
   });
 

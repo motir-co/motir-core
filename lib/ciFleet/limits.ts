@@ -20,10 +20,9 @@
 //   * The per-project tier caps (`PROJECT_IN_FLIGHT_CAPS`,
 //     `MOTIR_FLEET_PROJECT_CAP_*`) are RETIRED (§6): how an org shares its pool
 //     between its own projects is its own business.
-//   * The INDEX caps (MOTIR-1990) keep their shape. The global one keys off the
-//     environment and is now the one Motir-side bound on a workload nobody is
-//     charged for (§7); the per-tenant one is DERIVED as `ceil(global / 2)` and
-//     is now per ORGANISATION, because the org is the unit of capacity.
+//   * The INDEX caps (MOTIR-1990, `MOTIR_INDEX_MAX_IN_FLIGHT` and its derived
+//     per-organisation half) left with the indexer fleet (MOTIR-12036): indexing
+//     runs in motir-codegraph, which bounds its own capacity.
 //
 // ⚠️ AGENT INSTANCES ARE NOT IN THE ORG POOL (`docs/decisions/agent-instances.md`
 // AMENDMENT 2). They are an `own`-pool workload: slotted under the same lock,
@@ -33,10 +32,6 @@
 
 /** The env var an operator sets to `0` to stop every new boot — the kill switch. */
 const FLEET_KILL_SWITCH_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
-
-/** The env var an operator raises or lowers the INDEX workload's own cap with
- *  (MOTIR-1990). Fairness and throughput, UNDERNEATH the ceiling above. */
-const INDEX_CAP_ENV = 'MOTIR_INDEX_MAX_IN_FLIGHT';
 
 /** The env var that tunes how long an unreleased slot keeps occupying capacity
  *  before the safety net ages it out. */
@@ -56,24 +51,6 @@ const FLEET_SLOT_TTL_ENV = 'MOTIR_FLEET_SLOT_TTL_SECONDS';
  * clears within a working day rather than never.
  */
 export const DEFAULT_FLEET_SLOT_TTL_SECONDS = 6 * 60 * 60;
-
-/**
- * THE GLOBAL INDEX CAP when the environment sets none — how many code-graph
- * INDEX containers may run at once, across every tenant (MOTIR-1990,
- * `docs/decisions/code-graph-index-fleet.md` §7).
- *
- * ⚠️ IT IS NOW THE ONE MOTIR-SIDE BOUND ON INDEXING (`fleet-per-org-pool.md` §7).
- * It was sized as "a quarter of the fleet" under the retired ceiling of 24; with
- * that ceiling gone, and with Motir charging nobody for indexing, money cannot
- * bound this workload the way it bounds CI — so this number does, the same shape
- * as `MOTIR_INSTANCE_MAX_RUNNING`'s safety valve.
- *
- * Six, kept from MOTIR-1990 (it replaced the job's `concurrency: 2`, which under
- * the stepped supervision shape would have held its Inngest slot for the
- * CONTAINER'S WHOLE LIFE and hard-capped the fleet at two). It is a starting
- * number to tune against MOTIR-1995's real index spend, not a capacity claim.
- */
-export const DEFAULT_INDEX_IN_FLIGHT_CAP = 6;
 
 /**
  * Read a non-negative integer from the environment, or fall back.
@@ -133,71 +110,6 @@ export function fleetKillSwitchEngaged(): boolean {
 export function fleetSlotTtlSeconds(): number {
   /* istanbul ignore next -- unreachable: a non-null fallback means the reader never answers null. */
   return readCeilingEnv(FLEET_SLOT_TTL_ENV, DEFAULT_FLEET_SLOT_TTL_SECONDS) ?? 0;
-}
-
-/**
- * THE GLOBAL INDEX CAP — the maximum number of code-graph index containers the
- * whole fleet may have in flight at once, across every tenant.
- *
- * Read from the environment on every call, never captured in a module constant,
- * so moving it needs no code change. With no fleet ceiling left it is the one
- * Motir-side bound on a workload nobody is charged for (`fleet-per-org-pool.md`
- * §7): money cannot bound indexing the way it bounds CI. Always a number — an
- * unbounded index workload is not expressible — and `0` is the index-only kill
- * switch, stopping indexing without touching CI.
- */
-export function indexInFlightCap(): number {
-  /* istanbul ignore next -- the `?? 0` is UNREACHABLE for the same reason as
-     `fleetSlotTtlSeconds`': a non-null fallback means the shared reader cannot answer
-     null here. */
-  return readCeilingEnv(INDEX_CAP_ENV, DEFAULT_INDEX_IN_FLIGHT_CAP) ?? 0;
-}
-
-/**
- * THE PER-ORGANISATION INDEX CAP — `ceil(global / 2)`, so no single organisation
- * can hold more than half the index lane (`fleet-per-org-pool.md` §7, replacing
- * MOTIR-1990's per-WORKSPACE share: the organisation is now the unit of
- * capacity, so it is the tenant that must not hold more than half).
- *
- * ⚠️ DERIVED, NEVER SEPARATELY CONFIGURED, and that is the decision rather than
- * an implementation detail (`code-graph-index-fleet.md` §7). Two independent
- * numbers drift — an operator raises one and forgets the other, and the fairness
- * property silently stops holding — while the invariant that actually matters,
- * *"no tenant takes more than half"*, is only expressible as a RELATION between
- * them. So there is deliberately no `MOTIR_INDEX_MAX_IN_FLIGHT_PER_ORG`.
- *
- * `ceil`, not `floor`: at a global cap of 1 the floor would be 0, which is not
- * "fair" but "nothing indexes, ever". The rounding always errs toward work
- * happening, and the global cap is what keeps that bounded.
- */
-export function orgIndexInFlightCap(globalCap: number): number {
-  return Math.ceil(globalCap / 2);
-}
-
-/** The env var holding the indexer's Fly↔AWS switch (MOTIR-9445): `aws` puts
- *  `code_graph_index` on its pool of AWS accounts, `fly` (or unset) keeps it on
- *  the process-wide Fly fleet. */
-export const INDEX_FLEET_PROVIDER_ENV = 'MOTIR_INDEX_FLEET_PROVIDER';
-
-/**
- * IS INDEXING ON ITS POOL? — the indexer's Fly↔AWS switch
- * (`fleet-per-org-pool.md` AMENDMENT 1, A1.3: one switch per fleet kind, read on
- * every boot). `wireFleetKindSwitch('code_graph_index', …)` wires this reader, so
- * `fleetKindOnPool` reads it per job, uncached: flipping it moves the next index
- * and no other fleet kind.
- *
- * Only `aws` turns it on. Unset and `fly` read Fly; any other value reads Fly
- * WITH A WARNING — a typo must leave indexing where it is today, never move it.
- */
-export function indexFleetOnPool(): boolean {
-  const raw = process.env[INDEX_FLEET_PROVIDER_ENV]?.trim().toLowerCase();
-  if (!raw || raw === 'fly') return false;
-  if (raw === 'aws') return true;
-  console.warn('[ciFleet/limits] ignoring a malformed index fleet provider; using Fly', {
-    env: INDEX_FLEET_PROVIDER_ENV,
-    raw,
-  });
-  return false;
 }
 
 /** The env var sizing a CI runner's Docker volume, and its default (MOTIR-8839). */

@@ -8,7 +8,7 @@ import { HOSTED_AGENT_IMAGE_ENV_VAR, verifyHostedAgentImagePullable } from '@/li
 // the wire is the anonymous Bearer token the registry itself issued.
 //
 // The registry is stubbed the way `fleetImagePull.test.ts` stubs GHCR for
-// `verifyIndexFleetBootable`: the measured wire shapes, `fetch` the only fake.
+// `verifyFleetBootable`: the measured wire shapes, `fetch` the only fake.
 // No database, no network.
 
 const REPO = 'motir-co/motir-hosted-agent';

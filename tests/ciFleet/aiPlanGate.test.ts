@@ -12,7 +12,6 @@ import {
   PLAN_UNKNOWN_ADMISSION_DETAIL,
 } from '@/lib/services/aiPlanGateService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
-import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
@@ -320,42 +319,6 @@ describe('CI admission — plan before pool', () => {
       reason: 'fleet_ceiling',
     });
     expect(subscriptionCalls(fetchMock)).toBe(0);
-  });
-});
-
-describe('index admission — plan before pool', () => {
-  function admitIndex(fx: Fixture) {
-    return codeGraphIndexAdmissionService.admit(
-      {
-        projectId: fx.projectId,
-        repoRef: 'moooon/acme',
-        dispatchId: 'run-1',
-        workspaceId: fx.workspaceId,
-        organizationId: fx.organizationId,
-        containerTimeoutMs: 600_000,
-      },
-      NOW,
-    );
-  }
-
-  it('defers ai_plan_required and takes no slot', async () => {
-    const fx = await seedTenant();
-    stubMotirAi({ status: null });
-
-    expect(await admitIndex(fx)).toMatchObject({
-      outcome: 'deferred',
-      reason: 'ai_plan_required',
-    });
-    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
-  });
-
-  it('defers plan_unknown and takes no slot', async () => {
-    const fx = await seedTenant();
-    stubMotirAi({ subscriptionHttp: 500 });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    expect(await admitIndex(fx)).toMatchObject({ outcome: 'deferred', reason: 'plan_unknown' });
-    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
   });
 });
 

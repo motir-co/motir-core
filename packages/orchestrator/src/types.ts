@@ -20,8 +20,6 @@
 export type FleetWorkloadKind =
   /** MOTIR-1921/1922: one ephemeral GitHub Actions runner per queued job. */
   | 'ci_runner'
-  /** MOTIR-1981/1990: one container per code-graph index run. */
-  | 'code_graph_index'
   /** Epic 9: one container per hosted agent run. */
   | 'hosted_agent'
   /**
@@ -117,8 +115,8 @@ export interface ContainerSpec {
   readonly repoFullName: string;
   /**
    * WHAT this container is, from the fleet's own registry
-   * (`lib/ciFleet/workloads.ts`). MOTIR-1997 declared `code_graph_index` and
-   * `hosted_agent` on that union BEFORE either shipped, precisely so a new
+   * (`lib/ciFleet/workloads.ts`). MOTIR-1997 declared `hosted_agent` (and the
+   * code-graph index kind, retired by MOTIR-12041) on that union BEFORE either shipped, precisely so a new
    * workload would be COUNTED rather than discovered; the same reasoning applies
    * one layer down, to how the container is NAMED and TAGGED at the provider.
    *

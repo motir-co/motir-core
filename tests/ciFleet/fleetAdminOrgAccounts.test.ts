@@ -13,8 +13,9 @@ import { randomInt, randomToken } from '../helpers/random';
 
 // `fleet-admin org-accounts` (Story MOTIR-9365 · MOTIR-9588) against real
 // Postgres: one line per own account row with its owner, kind, state, requested
-// and granted vCPU — the merged account's two rows alike — and `pool-status`
-// showing none of them, nor their raises, under a shared pool.
+// and granted vCPU — the merged account one `agent_instance` row carrying its
+// raise since MOTIR-12038 — and `pool-status` showing none of them, nor their
+// raises, under a shared pool.
 
 const NOW = new Date('2026-10-26T12:00:00Z');
 const CREDENTIAL_REF = 'FLEET_SHARD_HOST_SECRET_REF';
@@ -101,7 +102,7 @@ async function raise(
   });
 }
 
-/** The three accounts the reconcile creates for one Host org (four rows). */
+/** The three accounts the reconcile creates for one Host org — one row each. */
 async function hostAccounts(organizationId: string, prefix = 'host') {
   const [ci] = await ownAccount(organizationId, `${prefix}-ci`, ['ci_runner'], {
     quotaRequestedAt: NOW,
@@ -113,14 +114,13 @@ async function hostAccounts(organizationId: string, prefix = 'host') {
     quotaRequestedAt: NOW,
   });
   await raise(agents!, 32, { status: 'denied' });
-  const merged = await ownAccount(
-    organizationId,
-    `${prefix}-merged`,
-    ['code_graph_index', 'agent_instance'],
-    { quotaRequestedAt: NOW, grantedAt: NOW },
-  );
-  await raise(merged[0]!, 120, { status: 'approved', granted: 96 });
-  return { ci: ci!, agents: agents!, merged };
+  // The merged account is its one `agent_instance` row, the raise filed on it.
+  const [merged] = await ownAccount(organizationId, `${prefix}-index`, ['agent_instance'], {
+    quotaRequestedAt: NOW,
+    grantedAt: NOW,
+  });
+  await raise(merged!, 120, { status: 'approved', granted: 96 });
+  return { ci: ci!, agents: agents!, merged: merged! };
 }
 
 beforeEach(async () => {
@@ -143,7 +143,7 @@ describe('fleet-admin org-accounts', () => {
     await hostAccounts(org);
     const result = await run('org-accounts');
     expect(result.code).toBe(0);
-    expect(result.out).toHaveLength(4);
+    expect(result.out).toHaveLength(3);
     expect(result.out).toContain(
       `${org}  ci_runner  host-ci  live  requested 200  granted 200  (approved)`,
     );
@@ -151,12 +151,9 @@ describe('fleet-admin org-accounts', () => {
     expect(result.out).toContain(
       `${org}  hosted_agent  host-agents  quota_requested  requested 32  granted -  (denied)`,
     );
-    // The merged account: two lines, the same state and figures.
+    // The merged account: one line, its raise on that row.
     expect(result.out).toContain(
-      `${org}  code_graph_index  host-merged-code_graph_index  granted  requested 120  granted 96  (approved)`,
-    );
-    expect(result.out).toContain(
-      `${org}  agent_instance  host-merged-agent_instance  granted  requested 120  granted 96  (approved)`,
+      `${org}  agent_instance  host-index  granted  requested 120  granted 96  (approved)`,
     );
   });
 
@@ -174,31 +171,42 @@ describe('fleet-admin org-accounts', () => {
     ]);
   });
 
-  it('an account with no raise yet prints no figures; the merged pair takes its most advanced row', async () => {
+  it('an account with no raise yet prints no figures; the merged row prints its own state', async () => {
     const org = await seedOrg();
     await ownAccount(org, 'host-agents', ['hosted_agent']);
-    const [index, hoster] = await ownAccount(org, 'host-merged', [
-      'code_graph_index',
-      'agent_instance',
-    ]);
-    // The index row reads live while the hoster row has only asked.
-    await adminDb.fleetShard.update({
-      where: { id: index!.id },
-      data: { quotaRequestedAt: NOW, grantedAt: NOW, liveAt: NOW },
-    });
-    await adminDb.fleetShard.update({
-      where: { id: hoster!.id },
-      data: { quotaRequestedAt: NOW },
+    await ownAccount(org, 'host-index', ['agent_instance'], {
+      quotaRequestedAt: NOW,
+      grantedAt: NOW,
+      liveAt: NOW,
     });
 
     const out = (await run('org-accounts', '--org', org)).out;
-    expect(out).toContain(`${org}  hosted_agent  host-agents  created  requested -  granted -`);
-    expect(out).toContain(
-      `${org}  code_graph_index  host-merged-code_graph_index  live  requested -  granted -`,
-    );
-    expect(out).toContain(
-      `${org}  agent_instance  host-merged-agent_instance  live  requested -  granted -`,
-    );
+    expect(out).toEqual([
+      `${org}  hosted_agent  host-agents  created  requested -  granted -`,
+      `${org}  agent_instance  host-index  live  requested -  granted -`,
+    ]);
+  });
+
+  it('an AWS account carrying two rows prints each row with the account’s furthest state and its one raise', async () => {
+    const org = await seedOrg();
+    const [first, second] = await ownAccount(org, 'host-shared', ['ci_runner', 'hosted_agent'], {
+      quotaRequestedAt: NOW,
+    });
+    // One row reached live; the raise was filed on the other.
+    await adminDb.fleetShard.update({
+      where: { id: first!.id },
+      data: { grantedAt: NOW, liveAt: NOW, state: 'active' },
+    });
+    await raise(second!, 64, { status: 'approved', granted: 64 });
+
+    expect((await run('org-accounts', '--org', org)).out).toEqual([
+      `${org}  ci_runner  host-shared-ci_runner  live  requested 64  granted 64  (approved)`,
+      `${org}  hosted_agent  host-shared-hosted_agent  live  requested 64  granted 64  (approved)`,
+    ]);
+    // Under --kind, the listed row still reads the whole account.
+    expect((await run('org-accounts', '--org', org, '--kind', 'ci_runner')).out).toEqual([
+      `${org}  ci_runner  host-shared-ci_runner  live  requested 64  granted 64  (approved)`,
+    ]);
   });
 
   it('--org and --kind narrow the listing; the merged figures hold under --kind', async () => {
@@ -208,12 +216,12 @@ describe('fleet-admin org-accounts', () => {
     await hostAccounts(other, 'other');
 
     const byOrg = await run('org-accounts', '--org', org);
-    expect(byOrg.out).toHaveLength(4);
+    expect(byOrg.out).toHaveLength(3);
     expect(byOrg.out.every((line) => line.startsWith(org))).toBe(true);
 
     const byKind = await run('org-accounts', '--org', org, '--kind', 'agent_instance');
     expect(byKind.out).toEqual([
-      `${org}  agent_instance  host-merged-agent_instance  granted  requested 120  granted 96  (approved)`,
+      `${org}  agent_instance  host-index  granted  requested 120  granted 96  (approved)`,
     ]);
   });
 

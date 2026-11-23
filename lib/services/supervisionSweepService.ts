@@ -5,10 +5,6 @@ import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { platformMeterReportEnqueue } from '@/lib/services/platformMeterReportEnqueue';
-import {
-  codeGraphIndexDispatchService,
-  type IndexSession,
-} from '@/lib/services/codeGraphIndexDispatchService';
 import { ciRunnerBootService, type SupervisionSession } from '@/lib/services/ciRunnerBootService';
 import {
   hostedAgentBootStepId,
@@ -50,7 +46,7 @@ import { isSupervisionKind, type SupervisionKind } from '@/lib/jobs/supervision/
 // ===========================================================================
 // ⚠️ IT RE-IMPLEMENTS NO TEARDOWN, AND THAT IS THE DESIGN
 // ===========================================================================
-// It calls `settleIndexContainer` / `settleSupervision` — the same functions the
+// It calls `settleSupervision` / `hostedAgentContainerService.settle` — the same functions the
 // driver's terminal transition calls. Those already destroy the container, meter
 // the container-seconds with full attribution, release the admission slot and
 // settle the intent, and each has its own suite. A sweep with its own teardown
@@ -134,17 +130,6 @@ export interface SupervisionSettler {
  * entry here is a COMPILE error. Do not weaken it to a `Partial` or a fallback.
  */
 export const SUPERVISION_SETTLERS: Record<SupervisionKind, SupervisionSettler> = {
-  index: {
-    bootStepId: (subject) => `index-boot:${subject}`,
-    settle: (session, abandoned) =>
-      codeGraphIndexDispatchService.settleIndexContainer(session as IndexSession, {
-        done: true,
-        reason: 'job_timed_out',
-        startedAt: abandoned.startedAt,
-        exitCode: null,
-        failureDetail: abandoned.failureDetail,
-      }),
-  },
   'ci-runner': {
     bootStepId: () => 'boot-runner',
     settle: (session, abandoned) => {

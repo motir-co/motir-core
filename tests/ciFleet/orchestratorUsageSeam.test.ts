@@ -138,7 +138,7 @@ describe('the composition root binds the package’s UsageMeter port to the real
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
       repoFullName: 'motir-projects/acme-web',
-      workload: 'code_graph_index',
+      workload: 'agent_instance',
       workflowJobId: null,
       cpuKind: 'performance',
       cpus: 2,
@@ -155,10 +155,10 @@ describe('the composition root binds the package’s UsageMeter port to the real
     const row = await adminDb.ciContainerUsage.findFirst({ where: { handleId } });
     expect(row, 'the accrual seam is bound to nothing if this is null').not.toBeNull();
     // The COLUMN's vocabulary is the app registry's, not the port's: the port
-    // says `code_graph_index` and `containerWorkloadFor` maps it to the stored
+    // says `agent_instance` and `containerWorkloadFor` maps it to the stored
     // value. Asserting through the mapper rather than through a literal is what
     // keeps this a test of the BINDING rather than of the enum.
-    expect(row?.workload).toBe(containerWorkloadFor('code_graph_index'));
+    expect(row?.workload).toBe(containerWorkloadFor('agent_instance'));
     expect(Number(row?.billableSeconds)).toBe(90);
   });
 
