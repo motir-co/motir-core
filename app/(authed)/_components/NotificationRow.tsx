@@ -26,8 +26,8 @@ import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 // in the event's hue (finding #54 — the palette, not grey) · the one-line
 // summary (actor + action + issue key, actor & key in --el-text-strong) with
 // the relative time pushed right (absolute on hover/title) · the denormalized
-// excerpt, single-line truncated. Read rows persist (greyed via --el-text-muted,
-// no dot).
+// excerpt, single-line truncated. Read rows persist (greyed via
+// --el-text-secondary, which clears AA on the hover surface too; no dot).
 //
 // ⚠️ No nested interactive elements (the portal-popover / nested-button
 // lessons): the whole row is ONE clickable deep-link `<Link>`, and the per-row
@@ -291,7 +291,7 @@ export function NotificationRow({
           <span
             className={cn(
               'min-w-0 flex-1 text-[13px] leading-[1.4]',
-              read ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+              read ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
             )}
           >
             {summary}
