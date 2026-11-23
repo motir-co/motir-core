@@ -466,6 +466,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ changedPaths: Array<string>; kind: "push"; previousCommitSha: string } | { fallback: "comparison_threw" | "head_unchanged" | "host_error" | "no_stamped_head" | "no_such_ref" | "not_connected" | "revoked" | "sha_not_hex" | "too_large" | "truncated"; kind: "refresh" }',
   },
+  'forward-started-v1': {
+    file: 'lib/jobs/definitions/codeGraphForward.ts',
+    // MOTIR-12055. The run's start, the only thing a forward remembers: the backoff
+    // and the 24 h deadline are measured from it. The call itself is never memoized.
+    shape: '{ startedAt: string }',
+  },
   'index-handoff-v1': {
     file: 'lib/jobs/indexHandoffSteps.ts',
     // MOTIR-11883. NEVER the source URL: it is a bearer secret and a memo is stored.

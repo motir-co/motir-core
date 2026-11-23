@@ -45,6 +45,7 @@ import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { projectRunnerGroupService } from './projectRunnerGroupService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import { githubCodeGraphForwardService } from './githubCodeGraphForwardService';
 import { repoDeploymentService } from './repoDeploymentService';
 import { productionMergeReleaseService } from './productionMergeReleaseService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
@@ -345,15 +346,24 @@ export const githubWebhookService = {
         return this.handleInstallation(body);
       case 'installation_repositories':
         return this.handleInstallationRepositories(body);
-      case 'pull_request':
+      case 'pull_request': {
         await runPreviewLifecycle('pull_request', () =>
           previewLifecycleService.onPullRequest(body),
         );
-        return this.handlePullRequest(body, deliveryId);
+        const result = await this.handlePullRequest(body, deliveryId);
+        // AFTER the handling, so its early returns and its answer stay as they are; it
+        // never throws (MOTIR-12056).
+        await githubCodeGraphForwardService.onPullRequest(body);
+        return result;
+      }
       case 'pull_request_review':
         return this.handlePullRequestReview(body);
-      case 'push':
-        return this.handlePush(body);
+      case 'push': {
+        const result = await this.handlePush(body);
+        // A branch delete is `ignored_ref` above and still retired here (MOTIR-12056).
+        await githubCodeGraphForwardService.onPush(body);
+        return result;
+      }
       case 'check_suite':
       case 'check_run':
         return this.handleCiStatus(body);
