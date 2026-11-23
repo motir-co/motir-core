@@ -213,7 +213,7 @@ describe('the install fleet card', () => {
   it('flags the quota near at 70%, and a pool not on the fleet reads Not applicable (Panel 7)', async () => {
     const pools = install().pools;
     pools[0] = { fleetKind: 'hosted_agent', enabled: false };
-    pools[2] = { ...(pools[2] as Extract<InstallPoolDTO, { enabled: true }>), running: 1 };
+    pools[1] = { ...(pools[1] as Extract<InstallPoolDTO, { enabled: true }>), running: 1 };
     const root = await installCard(
       install({ pools, usedVcpu: 288, percent: 75, nearQuota: true, leftVcpu: 96 }),
     );
