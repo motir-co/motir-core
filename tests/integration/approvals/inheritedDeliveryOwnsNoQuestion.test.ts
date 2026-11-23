@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { ownDeliverySetVersion } from '@/lib/agentReview/ownVersion';
+import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
+import { withoutAncestorDeliveriesForCards } from '@/lib/approvalGates/ownDeliveriesForCards';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { linkPrByIdentifier } from '../../helpers/prLink';
@@ -38,10 +41,6 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
-const { ownDeliverySetVersion } = await import('@/lib/agentReview/ownVersion');
-const { withoutAncestorDeliveriesForCards } =
-  await import('@/lib/approvalGates/ownDeliveriesForCards');
-const { listOwnDeliveriesWithChecks } = await import('@/lib/approvalGates/ownDeliveries');
 const { workItemDeliveryRepository } =
   await import('@/lib/repositories/workItemDeliveryRepository');
 const { bindWorkspaceContext, withSystemContext } = await import('@/lib/workspaces/context');
@@ -176,15 +175,6 @@ async function childOnItsOwnBranch(
   await ci(headSha, number);
 }
 
-const inSystem = <T>(
-  s: Scenario,
-  fn: (tx: Parameters<Parameters<typeof withSystemContext>[0]>[0]) => Promise<T>,
-) =>
-  withSystemContext(async (tx) => {
-    await bindWorkspaceContext(tx, s.workspace.id);
-    return fn(tx);
-  });
-
 beforeEach(async () => {
   await truncateAuthTables();
   _resetInstallationTokenCache();
@@ -258,7 +248,8 @@ describe('a child that delivers its own pull request under a story that is not d
 
     const childRow = await adminDb.workItem.findUniqueOrThrow({ where: { id: child!.id } });
     const parentRow = await adminDb.workItem.findUniqueOrThrow({ where: { id: parent.id } });
-    await inSystem(s, async (tx) => {
+    await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, s.workspace.id);
       // The verdict door's version (both review doors share it) is the gate's.
       expect(await ownDeliverySetVersion(childRow, s.workspace.id, tx)).toBe(
         review!.subjectVersion,
