@@ -836,6 +836,9 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
             branch: pr.branch,
             baseRef: pr.baseRef,
             headSha: pr.headSha,
+            // Bug MOTIR-12096 (contract 1.92.0): the claim's mergeability, as recorded.
+            conflicted: pr.conflicted,
+            outOfDate: pr.outOfDate,
           })),
           resume: body.repair.resume ? { ...body.repair.resume } : null,
           findings: body.repair.findings ? { ...body.repair.findings } : null,

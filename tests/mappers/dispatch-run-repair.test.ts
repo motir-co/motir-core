@@ -37,6 +37,9 @@ const HOSTED_REVIEW = {
       headRef: 'subtask/acme-7',
       baseRef: 'main',
       headSha: 'c'.repeat(40),
+      ci: 'passing',
+      conflicted: false,
+      outOfDate: false,
     },
   ],
 };
@@ -54,6 +57,8 @@ describe('toDispatchRunRepairDto', () => {
           branch: 'subtask/acme-7',
           baseRef: 'main',
           headSha: 'c'.repeat(40),
+          conflicted: false,
+          outOfDate: false,
         },
       ],
       findings: {
@@ -109,8 +114,47 @@ describe('toDispatchRunRepairDto', () => {
         branch: 'x/y',
         baseRef: null,
         headSha: null,
+        conflicted: false,
+        outOfDate: false,
       },
     ]);
+  });
+
+  // Bug MOTIR-12096: the claim's mergeability rides its recorded decision, so an adopted
+  // repair (hosted, or in the person's own agent) can take the base-merge turn.
+  it.each([
+    [
+      { conflicted: true, outOfDate: false },
+      { conflicted: true, outOfDate: false },
+    ],
+    [
+      { conflicted: false, outOfDate: true },
+      { conflicted: false, outOfDate: true },
+    ],
+    [
+      { conflicted: true, outOfDate: true },
+      { conflicted: true, outOfDate: true },
+    ],
+  ])('reads the recorded mergeability %o as %o', (recorded, read) => {
+    const good = HOSTED_REVIEW.pullRequests[0]!;
+    const dto = toDispatchRunRepairDto({
+      repairClass: 'ci',
+      pullRequests: [{ ...good, ...recorded }],
+    });
+    expect(dto?.pullRequests[0]).toMatchObject(read);
+  });
+
+  it.each([
+    ['absent — a run opened before the claim kept it', {}],
+    ['not a boolean', { conflicted: 'true', outOfDate: 1 }],
+    ['null', { conflicted: null, outOfDate: null }],
+  ])('reads mergeability that is %s as neither, never a guess', (_label, recorded) => {
+    const { conflicted: _c, outOfDate: _o, ...legacy } = HOSTED_REVIEW.pullRequests[0]!;
+    const dto = toDispatchRunRepairDto({
+      repairClass: 'ci',
+      pullRequests: [{ ...legacy, ...recorded }],
+    });
+    expect(dto?.pullRequests[0]).toMatchObject({ conflicted: false, outOfDate: false });
   });
 
   it('drops a pull request it cannot fully read — never hands a container a half-read branch', () => {

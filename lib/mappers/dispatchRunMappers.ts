@@ -376,7 +376,19 @@ export function toDispatchRunRepairDto(data: unknown): DispatchRunRepairDto | nu
         const number = pr?.number;
         if (!repo || !branch || !url || typeof number !== 'number') return [];
         return [
-          { repo, number, url, branch, baseRef: str(pr?.baseRef), headSha: str(pr?.headSha) },
+          {
+            repo,
+            number,
+            url,
+            branch,
+            baseRef: str(pr?.baseRef),
+            headSha: str(pr?.headSha),
+            // Bug MOTIR-12096: the claim's mergeability reading, so a hosted or agent-door
+            // repair takes the same base-merge turn as a terminal one. Only a recorded
+            // `true` counts — a run opened before the claim kept them reads as neither.
+            conflicted: pr?.conflicted === true,
+            outOfDate: pr?.outOfDate === true,
+          },
         ];
       })
     : [];
