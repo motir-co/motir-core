@@ -8,6 +8,7 @@ import type { ProposalInput } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RELEASING A PLAN'S HOLD ASKS THE QUESTION AGAIN (bug MOTIR-12163). Real
@@ -132,25 +133,14 @@ async function plannedPlan(proposals: ProposalInput[]): Promise<string> {
   return planId;
 }
 
-/**
- * The status hops `act` wrote on one card, read off its revisions. Not
- * `expectEachHopAnnounced`: a release announces none of its status writes, the
- * restore included — bug MOTIR-12164, filed by this card's run, owns that.
- */
+/** Every status hop `act` wrote on the card, each announced exactly once (MOTIR-12164). */
 async function hopsDuring(workItemId: string, act: () => Promise<unknown>) {
-  const before = new Set(
-    (await adminDb.workItemRevision.findMany({ where: { workItemId } })).map((row) => row.id),
+  const { hops } = await expectEachHopAnnounced(
+    workItemId,
+    { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+    act,
   );
-  await act();
-  const rows = await adminDb.workItemRevision.findMany({ where: { workItemId } });
-  return rows
-    .filter((row) => !before.has(row.id))
-    .flatMap((row) => {
-      const diff = row.diff as { status?: { from?: string; to?: string } } | null;
-      return diff?.status?.from && diff.status.to
-        ? [{ fromStatusKey: diff.status.from, toStatusKey: diff.status.to }]
-        : [];
-    });
+  return hops;
 }
 
 describe('DECLINE re-asks a parked question', () => {
