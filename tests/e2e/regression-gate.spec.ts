@@ -253,9 +253,9 @@ test.describe('the acceptance-video gate', () => {
     // The single-card run delivered from the E2E SUBTASK, so the pull requests are ITS.
     //
     // ⚠️ ONLY WHILE "COMPLETE CHILDREN WHEN A PARENT IS DONE" IS OFF (Bug MOTIR-11955). With
-    // it on, the link door writes the subtask's pull requests on the story too (MOTIR-11835),
-    // so the story delivers them and is asked as a story run — the shape `storyRun` already
-    // walks. The single-card shape this chapter is about (MOTIR-5903) is a project with the
+    // it on, the link door writes the subtask's pull requests on the story too (MOTIR-11835) —
+    // an inherited copy that asks nothing since MOTIR-12091, but holds the story's completion
+    // on the subtask's merge. The single-card shape this chapter is about (MOTIR-5903) is a project with the
     // switch off, and the switch is read only when a link is written. So it is off for these
     // two links and back on before anything merges, because the story-run chapters rely on
     // the cascade closing the children of a merged story.

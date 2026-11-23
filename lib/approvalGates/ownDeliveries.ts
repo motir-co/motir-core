@@ -5,54 +5,74 @@ import {
 } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 
-// A CARD'S OWN DELIVERY SET (Bugs MOTIR-11624 · MOTIR-11673 · MOTIR-11693).
+// A CARD'S OWN DELIVERY SET (Bugs MOTIR-11624 · MOTIR-11673 · MOTIR-11693 · MOTIR-12091).
 //
-// A pull request linked both to a card and to one of its ancestors is the ANCESTOR's: it is
-// the parent run's branch, and only the parent's approval may ask to merge it — the merge
-// cascades down and closes every child, built or not. So the review and approve-and-merge
-// gates are raised over a card's OWN members only (`gateSetFor`), and every reader that
-// measures a version AGAINST one of those gates has to measure the same set.
+// A pull request linked both to a card and, EXPLICITLY, to one of its ancestors is the
+// ANCESTOR's: it is the parent run's branch, and only the parent's approval may ask to
+// merge it — the merge cascades down and closes every child, built or not. So the review
+// and approve-and-merge gates are raised over a card's OWN members only (`gateSetFor`), and
+// every reader that measures a version AGAINST one of those gates has to measure the same
+// set.
+//
+// ⚠️ AN INHERITED ROW OWNS NOTHING (Bug MOTIR-12091). With "Complete children when a parent
+// is done" on, a child's explicit delivery is copied onto every ancestor as an
+// `inherited = true` row (MOTIR-11835), so the parent's completion waits for the child's
+// pull request to merge. That row is DERIVED from the child's own link, so it says nothing
+// about whose branch the pull request is:
+//   · it never takes a pull request out of a descendant's own set — counted as the
+//     ancestor's, it emptied the child's set, and the child's question was never asked
+//     while the story, still In Progress beside its open siblings, asked nothing either;
+//   · and it is not the holder's own question — the child asks it, so the story asking it
+//     too would be a second approve-and-merge question over one pull request.
+// Only an EXPLICIT ancestor row (`inherited = false`) is the parent run's branch.
 //
 // ⚠️ ONE DEFINITION, BECAUSE TWO SPLIT (Bug MOTIR-11693). The verdict door, the dismissal and
 // the To fix derivation used to measure the card's WHOLE linked set. For a child with one
 // pull request of its own and one its story also delivers, the review gate named one pull
 // request and every reader named two — so no verdict could ever decide that gate. Every
-// reader of the version now goes through this module.
+// reader of the version now goes through this module (`ownDeliveriesForCards.ts` is the
+// batch form of the same rule).
 
 /** The card fields the ancestor walk needs. `parentId` omitted means "not known — walk". */
 export type OwnDeliveriesCard = Pick<WorkItem, 'id' | 'workspaceId'> &
   Partial<Pick<WorkItem, 'parentId'>>;
 
 /**
- * The card's delivery rows WITHOUT the ones an ANCESTOR also delivers, and how many it left
- * out. Two reads, and only for a card that delivers something and may have a parent: the
- * ancestor chain (one recursive CTE) and every delivery row of the card's pull requests (one
- * indexed read). A card known to be top-level (`parentId: null`) reads nothing.
+ * The card's delivery rows WITHOUT the ones it only INHERITED and the ones an ANCESTOR also
+ * delivers EXPLICITLY, and how many the ancestors took. Two reads, and only for a card that
+ * delivers something of its own and may have a parent: the ancestor chain (one recursive
+ * CTE) and every delivery row of the card's pull requests (one indexed read). A card known
+ * to be top-level (`parentId: null`) reads nothing.
  */
-export async function withoutAncestorDeliveries<T extends { githubPullRequestId: string }>(
+export async function withoutAncestorDeliveries<
+  T extends { githubPullRequestId: string; inherited: boolean },
+>(
   item: OwnDeliveriesCard,
   deliveries: readonly T[],
   tx: Prisma.TransactionClient,
 ): Promise<{ own: T[]; ancestorOwned: number }> {
-  if (item.parentId === null || deliveries.length === 0) {
-    return { own: [...deliveries], ancestorOwned: 0 };
+  const explicit = deliveries.filter((delivery) => !delivery.inherited);
+  if (item.parentId === null || explicit.length === 0) {
+    return { own: explicit, ancestorOwned: 0 };
   }
   const [chains, rows] = await Promise.all([
     workItemRepository.findAncestorIdsForItems([item.id], item.workspaceId, tx),
     workItemDeliveryRepository.listByPullRequests(
-      deliveries.map((delivery) => delivery.githubPullRequestId),
+      explicit.map((delivery) => delivery.githubPullRequestId),
       tx,
     ),
   ]);
   // The batch walk seeds every id it is asked about, so the card's chain is always present.
   const ancestorIds = new Set(chains.get(item.id)!);
   const ancestorPullRequests = new Set(
-    rows.filter((row) => ancestorIds.has(row.workItemId)).map((row) => row.githubPullRequestId),
+    rows
+      .filter((row) => !row.inherited && ancestorIds.has(row.workItemId))
+      .map((row) => row.githubPullRequestId),
   );
-  const own = deliveries.filter(
+  const own = explicit.filter(
     (delivery) => !ancestorPullRequests.has(delivery.githubPullRequestId),
   );
-  return { own, ancestorOwned: deliveries.length - own.length };
+  return { own, ancestorOwned: explicit.length - own.length };
 }
 
 /**

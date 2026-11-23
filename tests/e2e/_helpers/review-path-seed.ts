@@ -31,8 +31,9 @@ export const APP_GITHUB = { id: 7_270_003, login: 'motir-e2e[bot]' } as const;
 export async function seedReviewPath(slug: string): Promise<ContinueHostedSeed> {
   const s = await seedReviewAgent(slug);
   // ⚠️ "COMPLETE CHILDREN WHEN A PARENT IS DONE" IS OFF HERE (Bug MOTIR-11955). With it on, a
-  // pull request linked to a child is linked to every non-epic ancestor as well, and the
-  // parent's one merge question covers it — the child is asked nothing (MOTIR-11835). The
+  // pull request linked to a child is linked to every non-epic ancestor as well (MOTIR-11835);
+  // since MOTIR-12091 that inherited copy asks nothing and the child still answers its own
+  // question, but it holds the story's completion on the child's merge. The
   // walk's two PARTS are children of a story that each answer their own review and merge
   // question (MOTIR-11673), which is the shape a project with the switch off has. Nothing in
   // this walk relies on the cascade: no story here delivers or merges a pull request.

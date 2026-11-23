@@ -388,9 +388,13 @@ describe('moving a child to another parent (AC 2)', () => {
   });
 });
 
-describe('each removal re-asks the parent over its new set (AC 3)', () => {
-  /** A story with its own green pull request #30 and a child's green #31, asked once over both. */
-  async function askedOverBoth(email: string, childKind: 'subtask' | 'task' = 'subtask') {
+// AMENDED BY Bug MOTIR-12091: an inherited row is NOBODY'S question. The story is asked over
+// its own #30 alone and the child over its own #31, so moving the inherited copy of #31
+// changes neither question — each removal below leaves both exactly where they are, and
+// only a change to a card's OWN rows (unlinking the child) re-draws its question.
+describe('each removal leaves the questions alone (AC 3, amended by MOTIR-12091)', () => {
+  /** A story with its own green pull request #30 and a child's green #31, each asked its own. */
+  async function askedOverOwn(email: string, childKind: 'subtask' | 'task' = 'subtask') {
     const s = await makeScenario(email);
     const parent = await create(s, 'story', 'The story');
     const child = await create(s, childKind, 'The child', parent.id);
@@ -407,44 +411,49 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
     await workItemsService.updateStatus(parent.id, 'implemented', s.ctx);
     await ci('sha-story', 30);
     await ci('sha-child', 31);
+    expect(await deliveries(parent.id)).toEqual(['#30', '#31 inherited']);
     const [before] = await awaitingOf(parent.id);
-    expect(before!.subjectVersion).toContain('#30@sha-story');
-    expect(before!.subjectVersion).toContain('#31@sha-child');
-    return { s, parent, child: child, before: before! };
+    expect(before!.subjectVersion).toBe('moooon/acme#30@sha-story');
+    const [childBefore] = await awaitingOf(child.id);
+    expect(childBefore!.subjectVersion).toBe('moooon/acme#31@sha-child');
+    return { s, parent, child, before: before!, childBefore: childBefore! };
   }
 
-  it('on an unlink: the question over both is withdrawn as `set_changed` and asked again over #30 alone', async () => {
-    const { s, parent, child, before } = await askedOverBoth('11839-gate-unlink@example.com');
+  /** The story's one awaiting question is still the one asked before the change. */
+  async function storyStillAsked(parentId: string, before: { id: string }) {
+    expect((await mergeGatesOf(parentId)).map((g) => [g.id, g.state])).toEqual([
+      [before.id, 'awaiting'],
+    ]);
+  }
+
+  it('on an unlink: the story is still asked over #30, and the child, which delivers nothing now, is asked nothing', async () => {
+    const { s, parent, child, before, childBefore } = await askedOverOwn(
+      '11839-gate-unlink@example.com',
+    );
 
     await unlink(s, child, 31);
 
-    const gates = await mergeGatesOf(parent.id);
-    expect(gates.find((g) => g.id === before.id)).toMatchObject({
+    expect(await deliveries(parent.id)).toEqual(['#30']);
+    await storyStillAsked(parent.id, before);
+    expect((await mergeGatesOf(child.id)).find((g) => g.id === childBefore.id)).toMatchObject({
       state: 'superseded',
       supersededCause: 'set_changed',
     });
-    const awaiting = gates.filter((g) => g.state === 'awaiting');
-    expect(awaiting).toHaveLength(1);
-    expect(awaiting[0]!.subjectVersion).toBe('moooon/acme#30@sha-story');
+    expect(await awaitingOf(child.id)).toEqual([]);
   });
 
-  it('on a move: the old story is re-asked over #30 alone, and the new story is asked about #31', async () => {
-    const { s, parent, child, before } = await askedOverBoth('11839-gate-move@example.com');
+  it('on a move: the old story is still asked over #30, the new story inherits #31, and the child is still asked about it', async () => {
+    const { s, parent, child, before, childBefore } = await askedOverOwn(
+      '11839-gate-move@example.com',
+    );
     const to = await create(s, 'story', 'To');
 
     await workItemsService.moveWorkItem(child.id, { newParentId: to.id }, s.ctx);
 
-    const gates = await mergeGatesOf(parent.id);
-    expect(gates.find((g) => g.id === before.id)).toMatchObject({
-      state: 'superseded',
-      supersededCause: 'set_changed',
-    });
-    expect((await awaitingOf(parent.id)).map((g) => g.subjectVersion)).toEqual([
-      'moooon/acme#30@sha-story',
-    ]);
+    await storyStillAsked(parent.id, before);
     expect(await deliveries(to.id)).toEqual(['#31 inherited']);
-    // The child is still asked nothing: its pull request is its new story's.
-    expect(await mergeGatesOf(child.id)).toEqual([]);
+    expect(await mergeGatesOf(to.id)).toEqual([]);
+    expect(await awaitingOf(child.id)).toEqual([childBefore]);
   });
 
   for (const [how, moveOut] of [
@@ -463,87 +472,64 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
       },
     ],
   ] as const) {
-    it(`on a child ${how}: the story is re-asked over #30, and the child is asked about its own #31`, async () => {
-      const { s, parent, child } = await askedOverBoth(
+    it(`on a child ${how}: the story is still asked over #30, and the child about its own #31`, async () => {
+      const { s, parent, child, before, childBefore } = await askedOverOwn(
         `11839-gate-out-${how.length}@example.com`,
         'task',
       );
 
       await moveOut(s, child.id);
 
-      expect((await awaitingOf(parent.id)).map((g) => g.subjectVersion)).toEqual([
-        'moooon/acme#30@sha-story',
-      ]);
-      expect((await awaitingOf(child.id)).map((g) => g.subjectVersion)).toEqual([
-        'moooon/acme#31@sha-child',
-      ]);
+      expect(await deliveries(parent.id)).toEqual(['#30']);
+      await storyStillAsked(parent.id, before);
+      expect(await awaitingOf(child.id)).toEqual([childBefore]);
     });
   }
 
-  it('on a delete: the question over both is withdrawn as `set_changed` and asked again over #30 alone', async () => {
-    const { s, parent, child, before } = await askedOverBoth('11901-gate-delete@example.com');
+  it('on a delete: the story is still asked over #30', async () => {
+    const { s, parent, child, before } = await askedOverOwn('11901-gate-delete@example.com');
 
     await workItemsService.deleteWorkItem(child.id, s.ctx);
 
     expect(await deliveries(parent.id)).toEqual(['#30']);
-    const gates = await mergeGatesOf(parent.id);
-    expect(gates.find((g) => g.id === before.id)).toMatchObject({
-      state: 'superseded',
-      supersededCause: 'set_changed',
-    });
-    expect(gates.filter((g) => g.state === 'awaiting').map((g) => g.subjectVersion)).toEqual([
-      'moooon/acme#30@sha-story',
-    ]);
+    await storyStillAsked(parent.id, before);
   });
 
-  it('on an archive: the question over both is withdrawn as `set_changed` and asked again over #30 alone, and the archived child is asked nothing (Bug MOTIR-11917)', async () => {
-    const { s, parent, child, before } = await askedOverBoth('11917-gate-archive@example.com');
+  it('on an archive: the story is still asked over #30, and the archived child is asked nothing (Bug MOTIR-11917)', async () => {
+    const { s, parent, child, before } = await askedOverOwn('11917-gate-archive@example.com');
 
     await workItemsService.archiveWorkItem(child.id, s.ctx);
 
     expect(await deliveries(parent.id)).toEqual(['#30']);
-    const gates = await mergeGatesOf(parent.id);
-    expect(gates.find((g) => g.id === before.id)).toMatchObject({
-      state: 'superseded',
-      supersededCause: 'set_changed',
-    });
-    expect(gates.filter((g) => g.state === 'awaiting').map((g) => g.subjectVersion)).toEqual([
-      'moooon/acme#30@sha-story',
-    ]);
-    // #31 is no longer an ancestor's, yet the child is archived: no question about it.
-    expect(await mergeGatesOf(child.id)).toEqual([]);
+    await storyStillAsked(parent.id, before);
+    expect(await awaitingOf(child.id)).toEqual([]);
   });
 
-  it('on an unarchive: the story is asked over both again, and the child still nothing (Bug MOTIR-11917)', async () => {
-    const { s, parent, child } = await askedOverBoth('11917-gate-unarchive@example.com');
+  it('on an unarchive: the story inherits #31 again and is still asked over #30, and the child is asked about #31 again', async () => {
+    const { s, parent, child, before } = await askedOverOwn('11917-gate-unarchive@example.com');
     await workItemsService.archiveWorkItem(child.id, s.ctx);
-    const [alone] = await awaitingOf(parent.id);
 
     await workItemsService.unarchiveWorkItem(child.id, s.ctx);
 
     expect(await deliveries(parent.id)).toEqual(['#30', '#31 inherited']);
-    expect((await mergeGatesOf(parent.id)).find((g) => g.id === alone!.id)).toMatchObject({
-      state: 'superseded',
-      supersededCause: 'set_changed',
-    });
-    const [again] = await awaitingOf(parent.id);
-    expect(again!.subjectVersion).toContain('#30@sha-story');
-    expect(again!.subjectVersion).toContain('#31@sha-child');
-    expect(await mergeGatesOf(child.id)).toEqual([]);
-  });
-
-  it("unlinking the story's inherited row while the child delivers it leaves the question alone", async () => {
-    const { s, parent, before } = await askedOverBoth('11839-gate-noop@example.com');
-
-    expect(await unlink(s, parent, 31)).toMatchObject({ removed: false });
-
-    expect(await mergeGatesOf(parent.id)).toEqual([
-      expect.objectContaining({ id: before.id, state: 'awaiting' }),
+    await storyStillAsked(parent.id, before);
+    expect((await awaitingOf(child.id)).map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#31@sha-child',
     ]);
   });
 
-  it('on the switch turned off: the story is re-asked over #30, and the child is asked about its own #31', async () => {
-    const { s, parent, child, before } = await askedOverBoth('11839-gate-switch@example.com');
+  it("unlinking the story's inherited row while the child delivers it leaves the question alone", async () => {
+    const { s, parent, before } = await askedOverOwn('11839-gate-noop@example.com');
+
+    expect(await unlink(s, parent, 31)).toMatchObject({ removed: false });
+
+    await storyStillAsked(parent.id, before);
+  });
+
+  it('on the switch turned off: the story is still asked over #30, and the child about its own #31', async () => {
+    const { s, parent, child, before, childBefore } = await askedOverOwn(
+      '11839-gate-switch@example.com',
+    );
 
     await projectStatusAutomationService.updateStatusAutomation(
       'ACME',
@@ -552,16 +538,8 @@ describe('each removal re-asks the parent over its new set (AC 3)', () => {
     );
 
     expect(await deliveries(parent.id)).toEqual(['#30']);
-    expect((await mergeGatesOf(parent.id)).find((g) => g.id === before.id)).toMatchObject({
-      state: 'superseded',
-      supersededCause: 'set_changed',
-    });
-    expect((await awaitingOf(parent.id)).map((g) => g.subjectVersion)).toEqual([
-      'moooon/acme#30@sha-story',
-    ]);
-    expect((await awaitingOf(child.id)).map((g) => g.subjectVersion)).toEqual([
-      'moooon/acme#31@sha-child',
-    ]);
+    await storyStillAsked(parent.id, before);
+    expect(await awaitingOf(child.id)).toEqual([childBefore]);
   });
 });
 

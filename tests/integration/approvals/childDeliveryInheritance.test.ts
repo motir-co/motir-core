@@ -13,9 +13,14 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 // child's. Approving the story merged only the story's; "Complete children when a parent is
 // done" then closed the child with its pull request open and its own approve-and-merge
 // question awaiting on a Done card. With that setting on, a link now writes the same delivery
-// on every non-epic ancestor, so the parent's ONE question covers the child's pull request,
-// and the child (whose pull request an ancestor now also delivers, MOTIR-11624) is asked
-// nothing. With the setting off nothing is inherited.
+// on every non-epic ancestor, so the parent cannot complete until the child's pull request
+// has merged. With the setting off nothing is inherited.
+//
+// ⚠️ AMENDED BY Bug MOTIR-12091: the inherited row is NOBODY'S QUESTION. It first made the
+// parent's one question cover the child's pull request and the child ask nothing — but the
+// parent asks only at In Review, which a story beside open siblings never reaches, so a
+// child's green pull request was asked of nobody. The child now asks its own question over
+// its own pull request, and the parent asks over its own explicit ones only.
 
 vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
@@ -176,7 +181,7 @@ describe('with "Complete children when a parent is done" ON', () => {
     expect(inheritedOn).toEqual([parent.id]);
   });
 
-  it('writes it when the parent has none, so one question on the story covers every child', async () => {
+  it('writes it when the parent has none, and each child is asked about its own pull request (MOTIR-12091)', async () => {
     const s = await makeScenario('11835-none@example.com');
     const {
       parent,
@@ -196,17 +201,18 @@ describe('with "Complete children when a parent is done" ON', () => {
     await ci('sha-b', 83);
 
     expect(await statusOf(parent.id)).toBe('in_review');
-    // The children are asked nothing: their pull requests are the story's.
-    expect(await mergeGatesOf(a!.id)).toEqual([]);
-    expect(await mergeGatesOf(b!.id)).toEqual([]);
-    // The story is asked once, over both.
-    const gates = (await mergeGatesOf(parent.id)).filter((g) => g.state === 'awaiting');
-    expect(gates).toHaveLength(1);
-    expect(gates[0]!.subjectVersion).toContain('#82@sha-a');
-    expect(gates[0]!.subjectVersion).toContain('#83@sha-b');
+    // Each child is asked about its own pull request…
+    expect((await mergeGatesOf(a!.id)).map((g) => [g.state, g.subjectVersion])).toEqual([
+      ['awaiting', 'moooon/acme#82@sha-a'],
+    ]);
+    expect((await mergeGatesOf(b!.id)).map((g) => [g.state, g.subjectVersion])).toEqual([
+      ['awaiting', 'moooon/acme#83@sha-b'],
+    ]);
+    // …and the story, which only inherited them, is asked nothing about either.
+    expect(await mergeGatesOf(parent.id)).toEqual([]);
   });
 
-  it('reproduction: a story and a child on separate pull requests raise ONE question, on the story, over both', async () => {
+  it('a story and a child on separate pull requests are each asked about their own (MOTIR-12091)', async () => {
     const s = await makeScenario('11835-repro@example.com');
     const {
       parent,
@@ -225,14 +231,16 @@ describe('with "Complete children when a parent is done" ON', () => {
     await ci('sha-child', 85);
 
     expect(await statusOf(child!.id)).toBe('in_review');
-    expect(await mergeGatesOf(child!.id)).toEqual([]);
-    const gates = (await mergeGatesOf(parent.id)).filter((g) => g.state === 'awaiting');
-    expect(gates).toHaveLength(1);
-    expect(gates[0]!.subjectVersion).toContain('#84@sha-story');
-    expect(gates[0]!.subjectVersion).toContain('#85@sha-child');
+    expect((await mergeGatesOf(child!.id)).map((g) => [g.state, g.subjectVersion])).toEqual([
+      ['awaiting', 'moooon/acme#85@sha-child'],
+    ]);
+    // ONE question on the story, over its own pull request alone: #85 is the child's.
+    expect((await mergeGatesOf(parent.id)).map((g) => [g.state, g.subjectVersion])).toEqual([
+      ['awaiting', 'moooon/acme#84@sha-story'],
+    ]);
   });
 
-  it("supersedes the parent's awaiting question as `set_changed` and re-asks over the full set", async () => {
+  it("leaves the parent's awaiting question standing when a child's pull request is inherited, and asks the child (MOTIR-12091)", async () => {
     const s = await makeScenario('11835-supersede@example.com');
     const {
       parent,
@@ -254,21 +262,19 @@ describe('with "Complete children when a parent is done" ON', () => {
     await opened(87, childRef);
     await link(child!.identifier, 87, childRef);
 
-    // The question asked about #86 alone is withdrawn the moment #87 joins the set…
-    const [withdrawn] = await mergeGatesOf(parent.id);
-    expect(withdrawn).toMatchObject({ state: 'superseded', supersededCause: 'set_changed' });
-    expect((await mergeGatesOf(parent.id)).filter((g) => g.state === 'awaiting')).toEqual([]);
+    // The story inherits #87, and its question about #86 — its own set — still stands…
+    expect(await deliveredNumbers(parent.id)).toEqual([86, 87]);
+    expect(await mergeGatesOf(parent.id)).toEqual([before]);
 
-    // …and re-asked over both once the new member is green.
+    // …while the child is asked about #87 once it is green.
     await ci('sha-child', 87);
-    const gates = await mergeGatesOf(parent.id);
-    const awaiting = gates.filter((g) => g.state === 'awaiting');
-    expect(awaiting).toHaveLength(1);
-    expect(awaiting[0]!.subjectVersion).toContain('#86@sha-story');
-    expect(awaiting[0]!.subjectVersion).toContain('#87@sha-child');
+    expect(await mergeGatesOf(parent.id)).toEqual([before]);
+    expect((await mergeGatesOf(child!.id)).map((g) => [g.state, g.subjectVersion])).toEqual([
+      ['awaiting', 'moooon/acme#87@sha-child'],
+    ]);
   });
 
-  it('withdraws a question the child already holds once its pull request becomes the story’s', async () => {
+  it('keeps a question the child already holds when its pull request becomes inherited (MOTIR-12091)', async () => {
     const s = await makeScenario('11835-child-gate@example.com');
     const {
       parent,
@@ -294,9 +300,10 @@ describe('with "Complete children when a parent is done" ON', () => {
     await link(child!.identifier, 88, childRef);
 
     expect(await deliveredNumbers(parent.id)).toEqual([88]);
-    const [gate] = await mergeGatesOf(child!.id);
-    expect(gate).toMatchObject({ state: 'superseded', supersededCause: 'set_changed' });
-    expect((await mergeGatesOf(child!.id)).filter((g) => g.state === 'awaiting')).toEqual([]);
+    // The child's own set did not change, so its question is not withdrawn and re-asked.
+    expect((await mergeGatesOf(child!.id)).map((g) => [g.state, g.subjectVersion])).toEqual([
+      ['awaiting', 'moooon/acme#88@sha-child'],
+    ]);
   });
 
   it('walks every non-epic ancestor and stops below the epic', async () => {
