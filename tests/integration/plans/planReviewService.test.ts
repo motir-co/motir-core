@@ -6,6 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { arrivalLevel } from '@/lib/planning/planArrival';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -794,6 +795,57 @@ describe('planReviewService.getPlanReview', () => {
     // `parentId: null` scoped by project — the root level, not every project's.
     expect(review.arrivalLevelSize).toBe(3);
     expect(review.arrivalLevelTotal).toBe(3);
+  });
+
+  it('measures the level the plan ADDS on, not the finished one it only marks outdated (Bug MOTIR-12097)', async () => {
+    // The dogfooded shape: three adds under the story the plan is about, and four
+    // mark-only modifies on the done children of an older container. Counted alike,
+    // the four marks out-number the three adds; the size has to be the level the
+    // canvas opens on, which is where the adds are.
+    const fx = await makeWorkItemFixture();
+    const current = await seedChild(fx, 'epic', 'Move every code read');
+    await seedChild(fx, 'story', 'Committed sibling', current.id);
+    const finished = await seedChild(fx, 'epic', 'The old graph service');
+    const done: { id: string }[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const card = await seedChild(fx, 'story', `Done ${i}`, finished.id);
+      await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
+      done.push(card);
+    }
+    await seedChild(fx, 'story', 'Done 4, unmarked', finished.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Switch' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        ...done.map((card) => ({
+          op: 'modify' as const,
+          workItemId: card.id,
+          patch: { obsolescence: 'outdated' as const, obsolescenceNoteMd: 'Replaced.' },
+        })),
+        ...['Map the reads', 'Switch the tools', 'Delete the old client'].map((title) => ({
+          op: 'add' as const,
+          proposedFields: { title, kind: 'story' as const },
+          parentRef: current.id,
+        })),
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    // The marks reached the review as mark-only, under the finished container.
+    const marks = review.items.filter((i) => i.op === 'modify');
+    expect(marks).toHaveLength(4);
+    for (const mark of marks) {
+      expect(mark.parentNodeId).toBe(finished.id);
+      expect(mark.proposal.changedFields).toEqual(['obsolescence', 'obsolescenceNote']);
+    }
+    // The canvas opens on the adds' level, and the size measures that same level:
+    // 1 committed + 3 adds — not the finished container's 5 committed cards.
+    expect(arrivalLevel(review.items, 'New')?.id).toBe(current.id);
+    expect(review.arrivalLevelSize).toBe(4);
+    expect(review.arrivalLevelTotal).toBe(4);
   });
 
   it('does NOT count the project root for a plan with NO items — it has no arrival level (MOTIR-10739)', async () => {
