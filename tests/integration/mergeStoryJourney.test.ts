@@ -127,7 +127,10 @@ function resetHost(): void {
           node_id: `PR_${n}`,
           merged: false,
           state: 'open',
-          head: { sha: host.heads[n] ?? 'unknown' },
+          // A head nobody has reported yet is one the host does not name: the link door asks
+          // the host about the pull request it links (MOTIR-12094), and a made-up head would be
+          // stored as the one CI must report at.
+          head: host.heads[n] ? { sha: host.heads[n] } : {},
           base: { ref: 'main' },
           ...(count > 1 ? host.reread(n) : {}),
         });
