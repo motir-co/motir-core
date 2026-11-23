@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Ein Agent hat Änderungen angefordert",
             "desc": "Ein Review-Agent hat ein Ihnen zugewiesenes Arbeitselement mit seinen Befunden zurückgeschickt."
+          },
+          "production_app_crashed": {
+            "label": "Eine Produktions-App ist abgestürzt",
+            "desc": "Eine App, die Motir für ein von Ihnen verwaltetes Projekt hostet, ist abgestürzt oder hat ihre Zustandsprüfung nicht bestanden."
           }
         },
         "soon": "Demnächst",

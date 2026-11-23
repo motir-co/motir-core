@@ -846,6 +846,10 @@ export interface JobEventDataMap {
    *  enterprise tenant AWS account not yet ready is created or found, then
    *  bootstrapped. Cross-tenant by design: it walks every requested account. */
   'system.hosting-tenant-account-reconcile': SystemScheduledData;
+  /** The production health prober (Story MOTIR-9799 · MOTIR-12106) — every
+   *  Motir-hosted production app's state and crash events. Cross-tenant by
+   *  design: it walks every application, writing under each row's workspace. */
+  'system.production-health-probe': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;

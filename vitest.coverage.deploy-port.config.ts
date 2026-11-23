@@ -82,6 +82,13 @@ const MEASURED = [
   'lib/hosting/productionLogQuery.ts',
   'lib/services/productionLogsService.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/logs/route.ts',
+  // Story MOTIR-9799 — MOTIR-12106's health prober and crash events.
+  'lib/hosting/healthState.ts',
+  'lib/hosting/healthProbe.ts',
+  'lib/repositories/hostedApplicationHealthRepository.ts',
+  'lib/services/productionHealthService.ts',
+  'lib/jobs/definitions/productionHealthProbe.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/health/route.ts',
 ];
 
 /**
@@ -121,6 +128,7 @@ export const SHARED_NOT_FLOORED = [
   'lib/dto/productionPanel.ts',
   'lib/dto/idlePolicy.ts',
   'lib/dto/productionLogs.ts',
+  'lib/dto/productionHealth.ts',
   // Argv and console around `productionEnablementService`, which IS floored.
   'scripts/backfill-production-enablement.ts',
 ];
@@ -182,6 +190,10 @@ export default defineConfig({
       'tests/hosting/logMasking.test.ts',
       'tests/hosting/productionLogsService.test.ts',
       'tests/api/productionLogsRoute.test.ts',
+      // MOTIR-12106 — the health prober, its rule and its route.
+      'tests/hosting/healthState.test.ts',
+      'tests/services/productionHealthService.test.ts',
+      'tests/api/production-health-route.test.ts',
     ],
     coverage: {
       provider: 'v8',

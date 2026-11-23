@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Agent poprosił o zmiany",
             "desc": "Agent przeglądu odesłał przypisany do ciebie element roboczy wraz ze swoimi uwagami."
+          },
+          "production_app_crashed": {
+            "label": "Aplikacja produkcyjna uległa awarii",
+            "desc": "Aplikacja hostowana przez Motir dla projektu, którym administrujesz, uległa awarii lub nie przeszła kontroli stanu."
           }
         },
         "soon": "Wkrótce",

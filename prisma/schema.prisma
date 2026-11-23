@@ -1817,6 +1817,8 @@ model Workspace {
   // Production hosting (Story MOTIR-9797 · MOTIR-10026).
   hostedApplications          HostedApplication[]          @relation("HostedApplicationWorkspace")
   hostedReleases              HostedRelease[]
+  hostedApplicationHealths    HostedApplicationHealth[]
+  hostedApplicationEvents     HostedApplicationEvent[]
   defaultApplication          HostedApplication?           @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
@@ -13266,6 +13268,9 @@ model HostedApplication {
   defaultOf         Workspace?      @relation("WorkspaceDefaultApplication")
   /// The customer domains bound to this application (ADR MOTIR-9521 §1).
   customDomains     PublicAddress[] @relation("HostedApplicationCustomDomains")
+  /// Its one health state and its crash events (MOTIR-12106).
+  health            HostedApplicationHealth?
+  events            HostedApplicationEvent[]
 
   @@unique([workspaceId, slug])
   @@index([projectId])
@@ -13323,6 +13328,7 @@ model HostedRelease {
   previousOf  HostedApplication? @relation("HostedApplicationPreviousRelease")
   restoredBy  User?              @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
   requestedBy User?              @relation("HostedReleaseRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  events      HostedApplicationEvent[]
 
   @@index([applicationId, createdAt])
   @@index([workspaceId])
@@ -13359,6 +13365,95 @@ enum HostingShape {
   container
 
   @@map("hosting_shape")
+}
+
+/// A hosted application's ONE health state (MOTIR-12106): the deploy port's
+/// runtime read and the manifest's health-check probe combined by
+/// `combineHealthState`, written by the per-minute prober. One row per
+/// application; `since` is when the state began and does not move while it holds.
+model HostedApplicationHealth {
+  id                       String                 @id @default(cuid())
+  workspaceId              String                 @map("workspace_id")
+  applicationId            String                 @unique @map("application_id")
+  state                    HostedHealthState
+  since                    DateTime               @db.Timestamptz(3)
+  /// `probe_unreachable`: the last probe made no connection, so the state was
+  /// kept rather than judged.
+  condition                HostedHealthCondition?
+  /// Failed probes in a row; the second makes the state `unhealthy`.
+  consecutiveProbeFailures Int                    @default(0) @map("consecutive_probe_failures")
+  /// The release whose manifest `healthCheckPath` was read from — re-read only
+  /// when the current release changes.
+  probedReleaseId          String?                @map("probed_release_id")
+  healthCheckPath          String?                @map("health_check_path")
+  lastProbedAt             DateTime?              @map("last_probed_at") @db.Timestamptz(3)
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
+
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("hosted_application_health")
+}
+
+/// A crash event of a hosted application (MOTIR-12106): its process exited or
+/// was killed for memory, or its health check failed twice. Written once per
+/// transition — `transitionKey` is unique per application — with up to 50 of the
+/// release's last log lines, MASKED by the logs read.
+model HostedApplicationEvent {
+  id            String                     @id @default(cuid())
+  workspaceId   String                     @map("workspace_id")
+  applicationId String                     @map("application_id")
+  releaseId     String?                    @map("release_id")
+  kind          HostedApplicationEventKind
+  /// `exit code <n>`, `out of memory`, `HTTP <status>` or `timed out`.
+  reason        String
+  exitCode      Int?                       @map("exit_code")
+  occurredAt    DateTime                   @map("occurred_at") @db.Timestamptz(3)
+  /// `[{ at, stream, message }]`, newest first, every secret masked; `[]` when
+  /// the target's logs could not be read.
+  lastLogLines  Json                       @default("[]") @map("last_log_lines")
+  /// `<state>:<since ISO>` for a state transition, `exit:<at ISO>` for an exit
+  /// the target restarted from.
+  transitionKey String                     @map("transition_key")
+  createdAt     DateTime                   @default(now()) @map("created_at")
+
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  release     HostedRelease?    @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+
+  @@unique([applicationId, transitionKey])
+  @@index([applicationId, occurredAt])
+  @@index([workspaceId])
+  @@index([releaseId])
+  @@map("hosted_application_event")
+}
+
+/// An application's health state (MOTIR-12106).
+enum HostedHealthState {
+  healthy
+  unhealthy
+  suspended
+  crashed
+  deploying
+
+  @@map("hosted_health_state")
+}
+
+/// A condition beside the health state (MOTIR-12106).
+enum HostedHealthCondition {
+  probe_unreachable
+
+  @@map("hosted_health_condition")
+}
+
+/// What a crash event records (MOTIR-12106).
+enum HostedApplicationEventKind {
+  crashed
+  health_check_failed
+
+  @@map("hosted_application_event_kind")
 }
 
 /// A hosted application's idle policy (MOTIR-12107) — the port's

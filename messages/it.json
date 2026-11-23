@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Un agente ha chiesto modifiche",
             "desc": "Un agente di revisione ha rimandato indietro un elemento di lavoro assegnato a te, con i suoi rilievi."
+          },
+          "production_app_crashed": {
+            "label": "Un'app di produzione si è arrestata",
+            "desc": "Un'app che Motir ospita per un progetto che amministri si è arrestata in modo anomalo o non ha superato il controllo di integrità."
           }
         },
         "soon": "Presto",

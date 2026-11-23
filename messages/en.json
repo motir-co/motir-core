@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "An agent asked for changes",
             "desc": "A review agent sent back a work item assigned to you, with its findings."
+          },
+          "production_app_crashed": {
+            "label": "A production app crashed",
+            "desc": "An app Motir hosts for a project you administer crashed or failed its health check."
           }
         },
         "soon": "Soon",

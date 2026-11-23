@@ -1,9 +1,11 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
+import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf } from '@/lib/workspaces/roles';
 import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
@@ -1014,6 +1016,62 @@ export const projectAccessService = {
   ): Promise<ReadonlySet<PermissionKey>> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     return resolvePermissions(inputs);
+  },
+
+  /**
+   * Every user who holds `permission` on the project (MOTIR-12106) — who an
+   * event about the project tells, when no actor asks. The candidates are the
+   * workspace's members and the owners and admins of its organization (who reach
+   * every workspace of it as a Manager without a membership); each is then
+   * resolved by {@link getPermissions} itself, as that user, so the list and a
+   * user's own permission read can never disagree. Ordered by user id.
+   *
+   * Opens its own reads: call it outside a transaction.
+   */
+  async listUserIdsWithPermission(
+    scope: { projectId: string; workspaceId: string },
+    permission: PermissionKey,
+  ): Promise<string[]> {
+    const { ids: candidates, organizationId } = await withWorkspaceServiceContext(
+      scope.workspaceId,
+      async (tx) => {
+        const members = await workspaceMembershipRepository.findMembersByWorkspace(
+          scope.workspaceId,
+          tx,
+        );
+        const workspace = await workspaceRepository.findByIdInTx(scope.workspaceId, tx);
+        return {
+          ids: new Set(members.map((m) => m.userId)),
+          organizationId: workspace?.organizationId ?? null,
+        };
+      },
+    );
+    // The org's Owner and Admins are other people's org rows, read in the
+    // userless org-service context of the workspace's own organization — a
+    // trusted resolution (the workspace row just read), never caller input.
+    if (organizationId) {
+      const managers = await withOrgServiceWriteContext(organizationId, (tx) =>
+        organizationMembershipRepository.findManagerUserIdsByOrganization(organizationId, tx),
+      );
+      for (const id of managers) candidates.add(id);
+    }
+
+    const holders: string[] = [];
+    for (const userId of [...candidates].sort()) {
+      let held: ReadonlySet<PermissionKey>;
+      try {
+        held = await this.getPermissions(scope.projectId, {
+          userId,
+          workspaceId: scope.workspaceId,
+        });
+      } catch (err) {
+        // A candidate who cannot see the project holds nothing on it.
+        if (err instanceof ProjectNotFoundError) continue;
+        throw err;
+      }
+      if (held.has(permission)) holders.push(userId);
+    }
+    return holders;
   },
 
   /**

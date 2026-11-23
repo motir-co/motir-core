@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Een agent vroeg om wijzigingen",
             "desc": "Een review-agent stuurde een werkitem dat aan je is toegewezen terug, met zijn bevindingen."
+          },
+          "production_app_crashed": {
+            "label": "Een productie-app is gecrasht",
+            "desc": "Een app die Motir host voor een project dat je beheert, is gecrasht of heeft de statuscontrole niet doorstaan."
           }
         },
         "soon": "Binnenkort",

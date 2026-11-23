@@ -47,6 +47,10 @@ export const NOTIFICATION_EVENT_TYPE = {
   /** An agent SENT BACK the recipient's card (Story MOTIR-10327 · MOTIR-10338;
    *  `approval-gates.md` §12.16). Actorless; one row per send-back verdict record. */
   reviewSentBack: 'review_sent_back',
+  /** A Motir-hosted production app CRASHED or failed its health check (Story
+   *  MOTIR-9799 · MOTIR-12106). Actorless; one row per crash event, to each
+   *  project administrator. */
+  productionAppCrashed: 'production_app_crashed',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -125,6 +129,15 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // nobody to approve it, so the assignee is the one person who must hear of it.
   {
     type: NOTIFICATION_EVENT_TYPE.reviewSentBack,
+    settable: true,
+    defaults: { email: true, in_app: true },
+  },
+  // APPENDED, for the same reason (MOTIR-12106). A crash is the event an
+  // administrator most needs to hear of, so in-app is on by default. Email
+  // defaults on like every row above, and has no producer yet: the cell is the
+  // user's standing choice for when one ships.
+  {
+    type: NOTIFICATION_EVENT_TYPE.productionAppCrashed,
     settable: true,
     defaults: { email: true, in_app: true },
   },

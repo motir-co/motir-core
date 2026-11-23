@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Un agent a réclamé des modifications",
             "desc": "Un agent de revue a renvoyé un élément de travail qui vous est attribué, avec ses constats."
+          },
+          "production_app_crashed": {
+            "label": "Une app de production a planté",
+            "desc": "Une app hébergée par Motir pour un projet que vous administrez a planté ou a échoué à son contrôle de santé."
           }
         },
         "soon": "Bientôt",

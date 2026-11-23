@@ -66,6 +66,8 @@ describe('notificationPreferencesService.getMatrix', () => {
       'review_to_run',
       // MOTIR-10338 — an agent sent the person's work item back, appended after it.
       'review_sent_back',
+      // MOTIR-12106 — a hosted production app crashed, appended last.
+      'production_app_crashed',
     ]);
     // Direct/mention events default ON for both channels — INCLUDING the
     // access-refused row, and its email arm is a decision rather than an

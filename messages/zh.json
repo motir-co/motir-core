@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "智能体要求修改",
             "desc": "审查智能体退回了一个分配给你的工作项，并附上了发现。"
+          },
+          "production_app_crashed": {
+            "label": "生产应用崩溃了",
+            "desc": "Motir 为你管理的项目托管的应用崩溃了，或未通过健康检查。"
           }
         },
         "soon": "即将推出",

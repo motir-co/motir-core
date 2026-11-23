@@ -90,6 +90,10 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
   // ready, so the reconcile runs at the Host reconcile's cadence.
   'system.hosting-tenant-account-reconcile':
     "an enterprise tenant's deploys wait on its account being ready",
+  // MOTIR-12106 · a live app's state must change within two minutes of the app,
+  // and `unhealthy` takes two consecutive failed probes.
+  'system.production-health-probe':
+    "a live app's health must change within two minutes, and unhealthy takes two probes",
   // MOTIR-9612 · the gateway capacity contract §3 *Lanes*.
   'system.capacity-alert-evaluation':
     'the gateway counts rpm/tpm per fixed clock minute, so one late read per minute is one reading per window',

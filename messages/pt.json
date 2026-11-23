@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Um agente pediu alterações",
             "desc": "Um agente de revisão devolveu um item de trabalho atribuído a você, com suas constatações."
+          },
+          "production_app_crashed": {
+            "label": "Um app de produção falhou",
+            "desc": "Um app que o Motir hospeda para um projeto que você administra falhou ou não passou na verificação de integridade."
           }
         },
         "soon": "Em breve",

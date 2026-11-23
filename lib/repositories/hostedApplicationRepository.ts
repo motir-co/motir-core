@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import type { HostedIdleMode, HostingTarget, Prisma } from '@/generated/prisma/client';
+import type {
+  HostedIdleMode,
+  HostedReleaseState,
+  HostingTarget,
+  Prisma,
+} from '@/generated/prisma/client';
 import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicationMappers';
 
 // Single-op data access for `hosted_application` — one production home per Motir
@@ -20,6 +25,26 @@ const WITH_RELEASES = {
 /** The default reads never select the database URL's ciphertext: only
  *  `findDatabaseById` does, for the production database service (MOTIR-10028). */
 const WITHOUT_SECRET = { databaseUrlCiphertext: true } as const;
+
+/** What the health prober reads of an application (MOTIR-12106). */
+export interface HostedApplicationProbeTarget {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  projectRepositoryId: string;
+  target: HostingTarget;
+  productionAddress: string | null;
+  projectKey: string;
+  repositoryName: string;
+  seedSource: string;
+  currentRelease: {
+    id: string;
+    state: HostedReleaseState;
+    commitSha: string;
+    providerReleaseId: string | null;
+    providerRef: string | null;
+  } | null;
+}
 
 /** What the production database service reads of an application. */
 export interface HostedApplicationDatabaseRow {
@@ -332,6 +357,61 @@ export const hostedApplicationRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     await tx.hostedApplication.update({ where: { id }, data: policy });
+  },
+
+  /**
+   * The applications the health prober reads (MOTIR-12106): every one with a
+   * current release. The caller drops the customer repositories by
+   * `isOrganizationSeedSource`; ids only, oldest first, so one run's order is
+   * stable.
+   */
+  async listWithCurrentRelease(
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; seedSource: string }>> {
+    const rows = await tx.hostedApplication.findMany({
+      where: { currentReleaseId: { not: null } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, projectRepository: { select: { seedSource: true } } },
+    });
+    return rows.map((r) => ({ id: r.id, seedSource: r.projectRepository.seedSource }));
+  },
+
+  /** What the health prober reads of one application and its current release
+   *  (MOTIR-12106), or null when it is gone. */
+  async findProbeTarget(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationProbeTarget | null> {
+    const row = await tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        projectRepositoryId: true,
+        target: true,
+        productionAddress: true,
+        project: { select: { identifier: true } },
+        projectRepository: { select: { name: true, seedSource: true } },
+        currentRelease: {
+          select: {
+            id: true,
+            state: true,
+            commitSha: true,
+            providerReleaseId: true,
+            providerRef: true,
+          },
+        },
+      },
+    });
+    if (!row) return null;
+    const { project, projectRepository, ...rest } = row;
+    return {
+      ...rest,
+      projectKey: project.identifier,
+      repositoryName: projectRepository.name,
+      seedSource: projectRepository.seedSource,
+    };
   },
 
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {

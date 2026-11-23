@@ -3212,6 +3212,10 @@
           "review_sent_back": {
             "label": "Un agente pidió cambios",
             "desc": "Un agente de revisión devolvió un elemento de trabajo asignado a ti, con sus hallazgos."
+          },
+          "production_app_crashed": {
+            "label": "Una app de producción se bloqueó",
+            "desc": "Una app que Motir aloja para un proyecto que administras se bloqueó o no superó su comprobación de estado."
           }
         },
         "soon": "Próximamente",

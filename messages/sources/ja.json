@@ -2593,6 +2593,8 @@
   "settings.account.notifications.events.review_to_run.desc": "A work item routed to you is waiting for a review: start it from the item, or run motir review.",
   "settings.account.notifications.events.review_sent_back.label": "An agent asked for changes",
   "settings.account.notifications.events.review_sent_back.desc": "A review agent sent back a work item assigned to you, with its findings.",
+  "settings.account.notifications.events.production_app_crashed.label": "A production app crashed",
+  "settings.account.notifications.events.production_app_crashed.desc": "An app Motir hosts for a project you administer crashed or failed its health check.",
   "settings.account.notifications.soon": "Soon",
   "settings.account.notifications.cellAria": "{channel} for {event}",
   "settings.account.notifications.cellAriaSoon": "{channel} for {event} (coming soon)",
