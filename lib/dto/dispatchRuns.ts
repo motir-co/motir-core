@@ -234,6 +234,14 @@ export interface DispatchRunRepairDto {
     baseRef: string | null;
     /** The head the claim was handed, or null when no check row named one. */
     headSha: string | null;
+    /** The claim found it CONFLICTED with `baseRef` at that head (Bug MOTIR-12096) — the
+     *  same reading as the terminal claim's `conflicted`. False on a run recorded before
+     *  the claim kept it. */
+    conflicted: boolean;
+    /** The claim found it OUT OF DATE with a base that requires branches to be up to date
+     *  (`mergeable_state: behind`) — the terminal claim's `outOfDate`. False on a run
+     *  recorded before the claim kept it. */
+    outOfDate: boolean;
   }>;
   /**
    * The conversation an agent-door repair can resume (MOTIR-9052): the profile of the

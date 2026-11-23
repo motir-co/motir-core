@@ -473,10 +473,10 @@ export function claimFromRun(input: {
       ci: null,
       failingChecks: [],
       queueExit: null,
-      // The run's recorded decision carries no mergeability (Bug MOTIR-12095 leaves the
-      // hosted read as it was; Bug MOTIR-12096 tracks it), so a hosted repair reads none.
-      conflicted: false,
-      outOfDate: false,
+      // The claim's mergeability, as its decision recorded it (Bug MOTIR-12096), so an
+      // adopted repair takes the same base-merge turn as a terminal one.
+      conflicted: pr.conflicted,
+      outOfDate: pr.outOfDate,
     })),
   };
 }
