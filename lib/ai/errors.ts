@@ -527,6 +527,10 @@ export function errorFromProblem(p: Problem): MotirAiError {
     // where `ai_job_failed` means the handler ran and rejected something. The
     // lost-machine distinction itself is kept on `JobView.lostMachine` (MOTIR-8304).
     case 'ai_job_abandoned':
+    // `codegraph_unavailable` (503; motir-ai MOTIR-12054) — motir-ai could not reach
+    // motir-codegraph. Named so a reader sees it is the code-graph forward's one
+    // retryable answer; the 5xx fallback below would give the same class by accident.
+    case 'codegraph_unavailable':
     case 'internal_error':
       return new MotirAiUnavailableError(p.detail ?? p.title);
     default:

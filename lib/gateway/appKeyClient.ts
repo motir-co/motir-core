@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   GatewayAppKeyConfigError,
+  GatewayAppKeyInvalidInputError,
   GatewayAppKeyRefusedError,
   GatewayAppKeyUnavailableError,
   GatewayRunKeyConfigError,
@@ -15,13 +16,20 @@ import { GATEWAY_RUN_KEY_TIMEOUT_MS, gatewayBaseUrl } from './runKeyClient';
 //
 // The contract is the gateway's (`controller/motir_app_key.go` there):
 //
-//   POST   /api/motir/app-keys                   {projectRef, coreOrganizationId, expiresAt, models?}
+//   POST   /api/motir/app-keys                   {projectRef, coreOrganizationId, expiresAt, quota, models}
 //                                                → 201 {key, keyId, projectRef, coreOrganizationId, expiresAt, lane}
 //   DELETE /api/motir/app-keys/:keyId            → 200 {keyId, revoked}
 //   DELETE /api/motir/app-keys?projectRef=<ref>  → 200 {projectRef, revoked}
 //
 // authorised by `Authorization: Bearer <MOTIR_APP_KEY_MINT_SECRET>` and refusing
 // with `{ error: { code, message } }`. `expiresAt` is UNIX SECONDS.
+//
+// ⚠️ THE LIMITS ARE REQUIRED (MOTIR-8341). Every key carries a finite `quota` (a
+// positive integer in the gateway's own quota units) and a non-empty `models`
+// allow-list, and the gateway refuses a mint without either. Nothing here picks a
+// default for either: the caller chooses the values and converts the units. A
+// value the gateway would refuse is refused HERE with no request
+// (`GatewayAppKeyInvalidInputError`), by the gateway's own rules.
 //
 // ⚠️ `MOTIR_APP_KEY_MINT_SECRET` IS READ HERE AND NOWHERE ELSE, AT CALL TIME, and
 // it is NOT the run-key secret: a leak of one must never open the other. Either
@@ -111,8 +119,26 @@ export interface MintGatewayAppKeyInput {
   coreOrganizationId: string;
   /** Required: there is no never-expiring app key. */
   expiresAt: Date;
-  /** The key's model allow-list — BARE gateway ids. Omitted from the request when not given. */
-  models?: string[];
+  /** Required: the key's spend ceiling, a positive safe integer in gateway quota units. */
+  quota: number;
+  /** Required and non-empty: the key's model allow-list — BARE gateway ids. */
+  models: string[];
+}
+
+/**
+ * Why the gateway would refuse these limits, or `null` when it would accept them.
+ * The rules are the gateway's own (`MotirAppKeyMint.validate`): a positive integer
+ * quota, a non-empty list, and no model name that is blank or holds a comma (the
+ * gateway stores the list comma-joined).
+ */
+export function appKeyLimitsProblem(quota: number, models: readonly string[]): string | null {
+  if (!Number.isSafeInteger(quota) || quota <= 0) {
+    return `quota must be a positive safe integer, got ${String(quota)}`;
+  }
+  if (models.length === 0) return 'models must name at least one model';
+  const bad = models.find((m) => m.trim() === '' || m.includes(','));
+  if (bad !== undefined) return `${JSON.stringify(bad)} is not a model name`;
+  return null;
 }
 
 export interface MintedGatewayAppKey {
@@ -126,11 +152,14 @@ export interface MintedGatewayAppKey {
   lane: string;
 }
 
-/** POST /api/motir/app-keys. Throws a typed {@link GatewayAppKeyConfigError},
- *  {@link GatewayAppKeyRefusedError} or {@link GatewayAppKeyUnavailableError}. */
+/** POST /api/motir/app-keys. Throws a typed {@link GatewayAppKeyInvalidInputError}
+ *  (nothing sent), {@link GatewayAppKeyConfigError}, {@link GatewayAppKeyRefusedError}
+ *  or {@link GatewayAppKeyUnavailableError}. */
 export async function mintGatewayAppKey(
   input: MintGatewayAppKeyInput,
 ): Promise<MintedGatewayAppKey> {
+  const problem = appKeyLimitsProblem(input.quota, input.models);
+  if (problem !== null) throw new GatewayAppKeyInvalidInputError(problem);
   const { url, secret } = appKeyTarget();
   const res = await gatewayFetch(`${url}/api/motir/app-keys`, {
     method: 'POST',
@@ -139,7 +168,8 @@ export async function mintGatewayAppKey(
       projectRef: input.projectRef,
       coreOrganizationId: input.coreOrganizationId,
       expiresAt: Math.floor(input.expiresAt.getTime() / 1000),
-      ...(input.models === undefined ? {} : { models: input.models }),
+      quota: input.quota,
+      models: input.models,
     }),
   });
   if (!res.ok) throw await refusal(res);

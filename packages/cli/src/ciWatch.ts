@@ -849,6 +849,82 @@ export function renderReviewFixPrompt(input: ReviewFixInput): string {
   return lines.join('\n');
 }
 
+/** What a pull request handed over for its BASE hands its agent (Bug MOTIR-12095) — the
+ *  shape `motir fix` receives on the claim, restated so this module stays free of the
+ *  client's types. */
+export interface BaseMergeInput {
+  key: string;
+  title: string | null;
+  /** The members the host reports conflicted with, or behind, their base at their head. */
+  pullRequests: ReadonlyArray<{
+    repo: string;
+    number: number;
+    url: string;
+    baseRef: string | null;
+    conflicted: boolean;
+    outOfDate: boolean;
+  }>;
+  checkouts: readonly FixCheckout[];
+}
+
+/**
+ * THE BASE-MERGE PROMPT (Bug MOTIR-12095) — a pull request the repair claim handed over
+ * because the host reports it CONFLICTED with its base, or OUT OF DATE with a base that
+ * requires branches to be up to date (`mergeable_state: behind`).
+ *
+ * ⚠️ ITS CHECKS ARE USUALLY GREEN, which is why this turn exists at all. The CI loop
+ * decides on the checks alone, so it would read such a set as green on its first poll and
+ * close the repair without anything being pushed — while the pull request still cannot
+ * merge. This one turn runs BEFORE the loop; its push moves the head, and the loop then
+ * watches the checks of the merged tree exactly as it watches any fix.
+ *
+ * ⚠️ A MERGE, NEVER A REBASE, and nothing past it: the repository squash-merges, a rebase
+ * rewrites a branch a reviewer has read, and a behind branch owes the base and nothing else.
+ */
+export function renderBaseMergePrompt(input: BaseMergeInput): string {
+  const lines: string[] = [];
+  lines.push(
+    `# Bring the branch up to date with its base — ${input.key}${input.title ? ` (${input.title})` : ''}`,
+  );
+  lines.push('');
+  lines.push("This card's pull requests are open and its run has ended. The host reports these");
+  lines.push('pull requests cannot merge as they stand — not because a check failed (their');
+  lines.push('checks may well be green), but because of their BASE branch:');
+  lines.push('');
+  for (const pr of input.pullRequests) {
+    const base = `\`${pr.baseRef ?? "the pull request's base"}\``;
+    const why = pr.conflicted
+      ? `CONFLICTS with ${base}`
+      : `is OUT OF DATE with ${base}, which requires branches to be up to date`;
+    lines.push(`- **${pr.repo}#${pr.number}** ${why} — ${pr.url}`);
+  }
+  lines.push('');
+  lines.push(...renderCheckoutList(input.checkouts));
+  lines.push('');
+  lines.push('## What to do');
+  lines.push('');
+  // One name when the set agrees, a pointer to the list above when it does not, exactly as
+  // the fix prompt names its merge target: a wrong branch name is worse than none.
+  const bases = [...new Set(input.pullRequests.map((pr) => pr.baseRef))];
+  const target =
+    bases.length === 1 && bases[0] !== null
+      ? `origin/${bases[0]}`
+      : "origin/<that pull request's base>";
+  lines.push(`1. **Merge the base into the branch:** \`git fetch origin && git merge ${target}\``);
+  lines.push('   in the checkout holding it. A MERGE, never a rebase, and never a force push.');
+  lines.push('2. **Resolve every conflict** the merge raises, keeping what BOTH sides meant: the');
+  lines.push("   base's change and this branch's. Read each side; never take one side wholesale.");
+  lines.push('3. **Run only what the merge touched** — the test files of the files that');
+  lines.push('   conflicted, plus lint and typecheck. Never the full suite: the push re-runs CI,');
+  lines.push('   and that is the verdict.');
+  lines.push('4. **Commit the merge and push to the same branch.** Open no pull request, link');
+  lines.push('   nothing, decide no approval and move no status. Even a merge that conflicted');
+  lines.push('   with nothing must be PUSHED: the new head is what clears the state.');
+  lines.push("5. Change nothing else. A failure the merged tree shows is the next step's to fix —");
+  lines.push('   CI is watched after this push, and a red check comes back to you.');
+  return lines.join('\n');
+}
+
 /** One failing pull request's branch, checked out where the fixing agent can
  *  reach it. */
 export interface FixCheckout {

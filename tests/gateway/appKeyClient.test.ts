@@ -6,6 +6,7 @@ import {
 } from '@/lib/gateway/appKeyClient';
 import {
   GatewayAppKeyConfigError,
+  GatewayAppKeyInvalidInputError,
   GatewayAppKeyRefusedError,
   GatewayAppKeyUnavailableError,
 } from '@/lib/gateway/errors';
@@ -44,7 +45,13 @@ function minted(overrides: Record<string, unknown> = {}): Response {
   );
 }
 
-const MINT = { projectRef: 'proj_1', coreOrganizationId: 'org_1', expiresAt: EXPIRES };
+const MINT = {
+  projectRef: 'proj_1',
+  coreOrganizationId: 'org_1',
+  expiresAt: EXPIRES,
+  quota: 5_000_000,
+  models: ['claude-sonnet-4-5', 'deepseek-v4-pro'],
+};
 
 function lastCall(fetchMock: ReturnType<typeof vi.fn>): [string, RequestInit] {
   return fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit];
@@ -63,7 +70,7 @@ afterEach(() => {
 });
 
 describe('the request shape', () => {
-  it('mints with POST, the app-key bearer, JSON and expiresAt in unix seconds, without models', async () => {
+  it('mints with POST, the app-key bearer, JSON, expiresAt in unix seconds, and the quota and models unchanged', async () => {
     const fetchMock = vi.fn(async () => minted());
     vi.stubGlobal('fetch', fetchMock);
 
@@ -86,19 +93,38 @@ describe('the request shape', () => {
       projectRef: 'proj_1',
       coreOrganizationId: 'org_1',
       expiresAt: EXPIRES_S,
+      quota: 5_000_000,
+      models: ['claude-sonnet-4-5', 'deepseek-v4-pro'],
     });
   });
 
-  it('sends models only when given', async () => {
+  it.each([
+    ['quota 0', { quota: 0 }],
+    ['quota -1', { quota: -1 }],
+    ['quota 1.5', { quota: 1.5 }],
+    ['quota NaN', { quota: Number.NaN }],
+    ['a quota past the safe integers', { quota: Number.MAX_SAFE_INTEGER + 1 }],
+    ['models []', { models: [] }],
+    ["a model ''", { models: [''] }],
+    ["a model '  '", { models: ['claude-sonnet-4-5', '  '] }],
+    ["a model 'a,b'", { models: ['a,b'] }],
+  ])('refuses %s with GatewayAppKeyInvalidInputError and sends nothing', async (_name, limits) => {
     const fetchMock = vi.fn(async () => minted());
     vi.stubGlobal('fetch', fetchMock);
-    await mintGatewayAppKey({ ...MINT, models: ['claude-sonnet-4-5'] });
-    expect(JSON.parse(String(lastCall(fetchMock)[1].body))).toEqual({
-      projectRef: 'proj_1',
-      coreOrganizationId: 'org_1',
-      expiresAt: EXPIRES_S,
-      models: ['claude-sonnet-4-5'],
-    });
+    await expect(mintGatewayAppKey({ ...MINT, ...limits })).rejects.toBeInstanceOf(
+      GatewayAppKeyInvalidInputError,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a bad limit before reading the deployment config', async () => {
+    vi.stubEnv('MOTIR_APP_KEY_MINT_SECRET', '');
+    const fetchMock = vi.fn(async () => minted());
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(mintGatewayAppKey({ ...MINT, quota: 0 })).rejects.toBeInstanceOf(
+      GatewayAppKeyInvalidInputError,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('revokes one key with DELETE on its keyId, and a project with DELETE on its url-encoded ref', async () => {

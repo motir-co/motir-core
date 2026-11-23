@@ -2583,6 +2583,8 @@ export interface components {
                     failingCheckName: string | null;
                     failingCheckUrl: string | null;
                 } | null;
+                conflicted: boolean;
+                outOfDate: boolean;
             }[];
         };
         WorkItemContinueClaim: {

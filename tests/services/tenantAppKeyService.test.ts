@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as client from '@/lib/gateway/appKeyClient';
 import {
   GatewayAppKeyConfigError,
+  GatewayAppKeyInvalidInputError,
   GatewayAppKeyRefusedError,
   GatewayAppKeyUnavailableError,
 } from '@/lib/gateway/errors';
@@ -22,7 +23,13 @@ const GATEWAY = 'https://gateway.test';
 const SECRET = 'app-key-mint-secret-value-of-enough-length';
 const NOW = new Date('2026-11-22T12:00:00.000Z');
 const LATER = new Date('2026-11-23T12:00:00.000Z');
-const INPUT = { projectId: 'proj_1', payingOrganizationId: 'org_1', expiresAt: LATER };
+const INPUT = {
+  projectId: 'proj_1',
+  payingOrganizationId: 'org_1',
+  expiresAt: LATER,
+  quota: 250_000,
+  models: ['m-1'],
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -59,9 +66,7 @@ describe('mintAppKey', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      tenantAppKeyService.mintAppKey({ ...INPUT, models: ['m-1'] }, NOW),
-    ).resolves.toEqual({
+    await expect(tenantAppKeyService.mintAppKey(INPUT, NOW)).resolves.toEqual({
       key: 'sk-app-1',
       keyId: 9,
       projectId: 'proj_1',
@@ -75,11 +80,12 @@ describe('mintAppKey', () => {
       projectRef: 'proj_1',
       coreOrganizationId: 'org_1',
       expiresAt: Math.floor(LATER.getTime() / 1000),
+      quota: 250_000,
       models: ['m-1'],
     });
   });
 
-  it('passes no models when none are given', async () => {
+  it('passes quota and models unchanged', async () => {
     const spy = vi.spyOn(client, 'mintGatewayAppKey').mockResolvedValue({
       key: 'sk',
       keyId: 1,
@@ -88,11 +94,13 @@ describe('mintAppKey', () => {
       expiresAt: LATER,
       lane: 'app',
     });
-    await tenantAppKeyService.mintAppKey(INPUT, NOW);
+    await tenantAppKeyService.mintAppKey({ ...INPUT, quota: 7, models: ['a', 'b'] }, NOW);
     expect(spy).toHaveBeenCalledWith({
       projectRef: 'proj_1',
       coreOrganizationId: 'org_1',
       expiresAt: LATER,
+      quota: 7,
+      models: ['a', 'b'],
     });
   });
 
@@ -101,6 +109,15 @@ describe('mintAppKey', () => {
     ['an empty org id', { payingOrganizationId: '' }],
     ['an expiry equal to now', { expiresAt: NOW }],
     ['an expiry in the past', { expiresAt: new Date(NOW.getTime() - 1) }],
+    ['quota 0', { quota: 0 }],
+    ['quota -1', { quota: -1 }],
+    ['quota 1.5', { quota: 1.5 }],
+    ['quota NaN', { quota: Number.NaN }],
+    ['a quota past the safe integers', { quota: Number.MAX_SAFE_INTEGER + 1 }],
+    ['models []', { models: [] }],
+    ["a model ''", { models: [''] }],
+    ["a model '  '", { models: ['  '] }],
+    ["a model 'a,b'", { models: ['a,b'] }],
   ])('refuses %s as invalid_request with no request', async (_name, patch) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -126,6 +143,7 @@ describe('mintAppKey', () => {
       new GatewayAppKeyRefusedError(400, 'app_key_not_minted', 'bad'),
       'app_key_not_minted',
     ],
+    ['invalid_request', new GatewayAppKeyInvalidInputError('quota must be positive'), null],
     ['unavailable', new GatewayAppKeyUnavailableError('down'), null],
     ['unavailable', new Error('surprise'), null],
     ['unavailable', 'a thrown string', null],
@@ -134,6 +152,18 @@ describe('mintAppKey', () => {
     const err = await tenantAppKeyService.mintAppKey(INPUT, NOW).catch((e) => e);
     expect(err).toBeInstanceOf(TenantAppKeyNotMintedError);
     expect(err).toMatchObject({ reason, gatewayCode: code, name: 'TenantAppKeyNotMintedError' });
+  });
+
+  it('surfaces the gateway refusing a mint as refused, not a raw HTTP failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({ error: { code: 'app_key_not_minted', message: 'models is required' } }, 400),
+      ),
+    );
+    const err = await tenantAppKeyService.mintAppKey(INPUT, NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(TenantAppKeyNotMintedError);
+    expect(err).toMatchObject({ reason: 'refused', gatewayCode: 'app_key_not_minted' });
   });
 
   it('fails closed as not_configured with no request when the secret is unset', async () => {
@@ -181,6 +211,7 @@ describe('revokeAppKeys', () => {
       new GatewayAppKeyRefusedError(401, 'app_key_unauthorized', 'no'),
       'app_key_unauthorized',
     ],
+    ['invalid_request', new GatewayAppKeyInvalidInputError('quota must be positive'), null],
     ['unavailable', new GatewayAppKeyUnavailableError('down'), null],
     ['unavailable', new Error('surprise'), null],
   ])('maps a gateway failure to reason %s', async (reason, thrown, code) => {
