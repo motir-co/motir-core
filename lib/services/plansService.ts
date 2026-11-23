@@ -339,6 +339,9 @@ import {
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { endSessionWithin } from '@/lib/services/planSessionEndService';
 import { reconcileInheritedDeliveriesAfterMove } from '@/lib/services/inheritedDeliveryService';
+import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
+import { choiceGateService } from '@/lib/services/choiceGateService';
+import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
 // every planner produces into. A `Plan` bundles proposed `PlanItem` operations
@@ -4349,7 +4352,8 @@ async function materialize(
   // (it cannot nest `workItemsService.createWorkItem`'s own transaction), so this
   // is where that hook belongs. ADD-only + idempotent, so it never duplicates or
   // downgrades the structural `is_blocked_by` edges from Pass 2.
-  for (const { created, prefix, todos } of createdAdds) {
+  for (const entry of createdAdds) {
+    const { created, prefix, todos } = entry;
     let finalRow = created;
     const { body: rewrittenDescription, unresolved } = rewriteIntraPlanRefs(
       created.descriptionMd ?? '',
@@ -4405,6 +4409,9 @@ async function materialize(
       },
       tx,
     );
+    // The row as it now stands, for the passes after this one (MOTIR-12145's
+    // question reads the rewritten body).
+    entry.created = finalRow;
   }
 
   // Every item this pass created — the embedding trigger's first half. Collected
@@ -4532,6 +4539,18 @@ async function materialize(
   }
   const restingMoves = await restPlanTargets(plan, ctx, tx, modifyTargets);
   restingMoves.push(...(await settleUnparkedModifyTargets(plan, ctx, tx, modifyTargets)));
+
+  // THE QUESTIONS A NEW CARD ASKS (bug MOTIR-12145) — after everything else, so
+  // the reconcile reads the bodies Pass 3 rewrote (fed back onto `createdAdds`)
+  // and the edges and statuses every earlier pass settled.
+  restingMoves.push(
+    ...(await askCreatedQuestions(
+      createdAdds.map(({ created }) => created),
+      plan,
+      ctx,
+      tx,
+    )),
+  );
 
   return { touchedWorkItemIds, reparented, restingMoves };
 }
@@ -4765,6 +4784,54 @@ async function writePlanDecidedStatus(
     tx,
   );
   return { workItemId: item.id, fromStatusKey: item.status, toStatusKey: toKey, revisionId };
+}
+
+/**
+ * ASK EVERY QUESTION A CARD THIS PLAN CREATED OWES (bug MOTIR-12145) —
+ * materialize's last pass.
+ *
+ * `workItemsService.createWorkItem` raises a `type: choice` card's
+ * `decision_choice` gate, and a `human` decision's `decision_confirmation` gate,
+ * at birth: when the body parses and nothing open blocks it. Materialize creates
+ * its cards through the leaf repositories instead (the header comment says why),
+ * so until this pass a card an approve created was asked only by the later
+ * trigger — a blocker entering `done`. One with NO blocker had no later trigger
+ * and was never asked: it sat In Progress with nothing in Waiting on you.
+ *
+ * The raisers decide exactly as they do for `createWorkItem` — the body, the
+ * blockers, a done status — so a choice born `blocked_by` open work still waits
+ * for that work, and a defective body still raises nothing.
+ *
+ * ⚠️ THE WALK TO REVIEW IS WRITTEN HERE, hop by declared hop, rather than through
+ * `workItemsService.applyStatusTransition`, for the reason `restPlanTargets`
+ * gives: that funnel asserts `work_item:edit`, and the approve is gated by
+ * `ai:decide_plan` alone. Each hop is recorded on a revision and returned as a
+ * move, so the approve announces it after the commit like any other status write.
+ */
+async function askCreatedQuestions(
+  created: readonly WorkItem[],
+  plan: Plan,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<RestingMove[]> {
+  const asking = created.filter((row) => row.type === 'choice' || asksTheConfirmQuestion(row));
+  if (asking.length === 0) return [];
+  const statuses = await workflowsRepository.findStatuses(plan.projectId, ctx.workspaceId, tx);
+  const moves: RestingMove[] = [];
+  for (const item of asking) {
+    const reconcile =
+      item.type === 'choice'
+        ? await choiceGateService.reconcile(item, tx)
+        : await decisionConfirmationGateService.reconcile(item, tx);
+    let at: { id: string; status: string } = item;
+    for (const toKey of reconcile.hopsToReview) {
+      // Never null here: every hop is a status of this project's own workflow,
+      // none is the status the card stands at, and `in_review` is not done.
+      moves.push((await writePlanDecidedStatus(at, toKey, statuses, ctx, tx))!);
+      at = { id: item.id, status: toKey };
+    }
+  }
+  return moves;
 }
 
 /**
