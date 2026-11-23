@@ -932,6 +932,91 @@ describe('planReviewService.getPlanReview', () => {
     expect(defaultPlanView(review)).toBe('canvas');
   });
 
+  it('counts the root\'s loose non-epic cards as the ONE "Not in epic" node the canvas draws (Bug MOTIR-12162)', async () => {
+    // More loose root tasks than the canvas holds. The canvas folds every unfiled,
+    // non-epic root the plan does not touch into one "Not in epic" node — as long as
+    // something stays on the road — so the drawn size swaps them for that one node,
+    // while the total (the capped read's rows, which are not grouped) keeps them.
+    const loose = ARRIVAL_LEVEL_MAX_NODES + 5;
+    const epicAdd = {
+      op: 'add' as const,
+      proposedFields: { title: 'New epic', kind: 'epic' as const },
+    };
+    const shapes: {
+      title: string;
+      epics: number;
+      proposals: (tasks: { id: string }[]) => Parameters<typeof plansService.addProposals>[1];
+      size: number;
+      total: number;
+      view: 'canvas' | 'list';
+    }[] = [
+      // The card's reproduction: 1 epic + the tasks, a plan with 1 root epic add.
+      // Drawn: the epic, the group, the `Bugs` folder and the add.
+      {
+        title: 'Repro',
+        epics: 1,
+        proposals: () => [epicAdd],
+        size: 4,
+        total: loose + 2,
+        view: 'canvas',
+      },
+      // A task the plan MODIFIES stays on the road (the third conjunct): the epic,
+      // that task, the group, `Bugs` and the add.
+      {
+        title: 'Touched',
+        epics: 1,
+        proposals: (tasks) => [
+          epicAdd,
+          { op: 'modify', workItemId: tasks[0]!.id, patch: { title: 'Renamed task' } },
+        ],
+        size: 5,
+        total: loose + 2,
+        view: 'canvas',
+      },
+      // No epic, and a plan touching one task: that task is the road, so the rest
+      // still group — the touched task, the group and `Bugs`.
+      {
+        title: 'No epic, touched',
+        epics: 0,
+        proposals: (tasks) => [
+          { op: 'modify', workItemId: tasks[0]!.id, patch: { title: 'Renamed task' } },
+        ],
+        size: 3,
+        total: loose,
+        view: 'canvas',
+      },
+      // No epic and nothing touched: grouping would take the WHOLE level, so the
+      // canvas groups none and draws every task, `Bugs` and the add.
+      {
+        title: 'All loose',
+        epics: 0,
+        proposals: () => [epicAdd],
+        size: loose + 2,
+        total: loose + 1,
+        view: 'list',
+      },
+    ];
+
+    for (const shape of shapes) {
+      const fx = await makeWorkItemFixture();
+      for (let i = 0; i < shape.epics; i += 1) await seedChild(fx, 'epic', `Epic ${i}`);
+      const tasks: { id: string }[] = [];
+      for (let i = 0; i < loose; i += 1) tasks.push(await seedChild(fx, 'task', `Loose task ${i}`));
+
+      const plan = await plansService.createPlan(fx.projectId, { title: shape.title }, fx.ctx);
+      await plansService.addProposals(plan.id, shape.proposals(tasks), fx.ctx);
+      await plansService.markPlanned(plan.id, fx.ctx);
+      const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+      expect(arrivalLevel(review.items, 'New')?.id ?? null).toBeNull();
+      expect({
+        plan: shape.title,
+        size: review.arrivalLevelSize,
+        total: review.arrivalLevelTotal,
+        view: defaultPlanView(review),
+      }).toEqual({ plan: shape.title, size: shape.size, total: shape.total, view: shape.view });
+    }
+  });
+
   it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
     // Three plans, each over its own copy of one tree (a plan holds its targets, so
     // the plans cannot share one): an epic with 2 children, and a folder holding 1
