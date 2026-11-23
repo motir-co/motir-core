@@ -4767,7 +4767,7 @@
         "notFound": "Este repositório não está mais disponível para você."
       },
       "readOnly": {
-        "note": "Você pode ver todas as versões. Somente administradores do projeto podem reverter."
+        "note": "Você pode ver cada versão, sua saúde, seus logs e seu consumo. Somente administradores do projeto podem reverter ou mudar quando o app entra em repouso."
       },
       "empty": {
         "title": "Nada em produção ainda",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "Em {target}, um {shape} só pode ficar sempre ativo, então não pode ser suspenso quando ocioso."
+          "unsupported": "Em {target}, um {shape} só pode ficar sempre ativo, então não pode ser suspenso quando ocioso.",
+          "unsupportedKeeps": "Este app fica em execução o tempo todo.",
+          "unsupportedShort": "A hospedagem deste app não aceita essa configuração, então nada mudou.",
+          "credits": "“Sempre ativo” não está disponível enquanto o saldo de créditos da sua organização estiver abaixo de zero. Recarregue créditos e configure novamente.",
+          "releaseInProgress": "Há uma versão em andamento. Altere isso quando ela terminar.",
+          "forbidden": "Somente administradores do projeto podem alterar isso.",
+          "noApplication": "Ainda não há nada em produção. Isso vale quando a primeira versão entrar no ar.",
+          "failed": "A nova configuração não foi aplicada, então nada mudou. Tente novamente."
         },
         "shape": {
           "function": "função",
           "container": "contêiner"
-        }
+        },
+        "heading": "Quando ocioso",
+        "option": {
+          "suspend": "Suspender quando ocioso",
+          "alwaysOn": "Sempre ativo"
+        },
+        "help": {
+          "suspend": "O app entra em repouso quando nada o solicita e desperta na próxima requisição. A primeira requisição após o repouso é mais lenta.",
+          "alwaysOn": "O app fica em execução o tempo todo, então nenhuma requisição espera que ele desperte. Ele consome créditos a cada hora."
+        },
+        "default": "Novos apps começam com “Suspender quando ocioso”. Vale a partir da primeira versão.",
+        "switching": "Aplicando à versão em execução…",
+        "switchingNote": "O mesmo build é reimplantado com a nova configuração. Nada é recompilado.",
+        "readOnly": "Somente administradores do projeto podem alterar isso.",
+        "loading": "Carregando a configuração…",
+        "loadError": "Não foi possível carregar esta configuração."
       },
       "health": {
         "heading": "Saúde",
@@ -4871,6 +4893,52 @@
         "retry": "Tentar novamente",
         "loading": "Carregando linhas…",
         "noRelease": "Os logs aparecem aqui assim que a primeira versão entrar no ar."
+      },
+      "usage": {
+        "heading": "Consumo neste período",
+        "loading": "Carregando o consumo…",
+        "loadError": "Não foi possível carregar o consumo deste período.",
+        "retry": "Tentar novamente",
+        "col": {
+          "what": "O que usou",
+          "amount": "Quantidade",
+          "credits": "Créditos"
+        },
+        "unit": {
+          "machine": "Máquina Fly · {size}",
+          "lambdaCompute": "Computação de funções (GB-segundos)",
+          "lambdaRequests": "Requisições a funções",
+          "containerCpu": "Contêiner AWS · vCPU",
+          "containerMemory": "Contêiner AWS · memória",
+          "dbCompute": "Banco de dados {provider} · computação",
+          "dbStorage": "Banco de dados {provider} · armazenamento"
+        },
+        "size": {
+          "small": "pequena",
+          "medium": "média",
+          "large": "grande"
+        },
+        "total": "Créditos cobrados neste período",
+        "footnote": "1 crédito é um minuto equivalente de Linux. O consumo de cada dia é cobrado uma vez, depois da meia-noite UTC, arredondado para um crédito inteiro, então o de hoje ainda não está no total.",
+        "noRelease": "Nada consumido ainda. O consumo começa com a primeira versão no ar.",
+        "exhausted": {
+          "title": "Sem créditos · saldo {balance}",
+          "titleNoBalance": "Sem créditos",
+          "body": "Este app continua em execução. Se o saldo ainda estiver abaixo de zero em {date}, o Motir o muda para “Suspender quando ocioso”, para que entre em repouso quando nada o solicitar. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "bodySuspended": "Este app continua em execução e entra em repouso quando nada o solicita. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "bodyCannotSuspend": "Este app roda como contêiner AWS, que não pode ser suspenso, então continua sempre ativo e consumindo créditos até o saldo ser recarregado. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "topUp": "Recarregar créditos",
+          "member": "Um proprietário ou administrador da organização pode recarregar créditos."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {

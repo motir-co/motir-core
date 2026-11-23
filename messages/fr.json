@@ -4767,7 +4767,7 @@
         "notFound": "Ce dépôt ne vous est plus accessible."
       },
       "readOnly": {
-        "note": "Vous pouvez voir toutes les versions. Seuls les administrateurs du projet peuvent revenir en arrière."
+        "note": "Vous pouvez voir chaque version, son état, ses journaux et sa consommation. Seuls les administrateurs du projet peuvent revenir en arrière ou changer quand elle se met en veille."
       },
       "empty": {
         "title": "Rien en production pour l’instant",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "Sur {target}, un {shape} ne peut que rester toujours actif : il ne peut pas se suspendre en cas d’inactivité."
+          "unsupported": "Sur {target}, un {shape} ne peut que rester toujours actif : il ne peut pas se suspendre en cas d’inactivité.",
+          "unsupportedKeeps": "Cette application tourne en permanence.",
+          "unsupportedShort": "L’hébergement de cette application ne permet pas ce réglage : rien n’a changé.",
+          "credits": "« Toujours active » n’est pas disponible tant que le solde de crédits de votre organisation est négatif. Rechargez des crédits, puis réessayez.",
+          "releaseInProgress": "Une version est en cours. Modifiez ce réglage une fois qu’elle est terminée.",
+          "forbidden": "Seuls les administrateurs du projet peuvent modifier ce réglage.",
+          "noApplication": "Rien n’est encore en production. Ce réglage s’applique dès que la première version est en ligne.",
+          "failed": "Le nouveau réglage n’a pas été appliqué : rien n’a changé. Réessayez."
         },
         "shape": {
           "function": "fonction",
           "container": "conteneur"
-        }
+        },
+        "heading": "En cas d’inactivité",
+        "option": {
+          "suspend": "Mettre en veille si inactive",
+          "alwaysOn": "Toujours active"
+        },
+        "help": {
+          "suspend": "L’application se met en veille quand personne ne la sollicite et se réveille à la requête suivante. La première requête après une veille est plus lente.",
+          "alwaysOn": "L’application tourne en permanence : aucune requête n’attend son réveil. Elle consomme des crédits chaque heure."
+        },
+        "default": "Les nouvelles applications démarrent avec « Mettre en veille si inactive ». Cela s’applique à la première version.",
+        "switching": "Application à la version en cours…",
+        "switchingNote": "Le même build est redéployé avec le nouveau réglage. Rien n’est reconstruit.",
+        "readOnly": "Seuls les administrateurs du projet peuvent modifier ce réglage.",
+        "loading": "Chargement du réglage…",
+        "loadError": "Impossible de charger ce réglage."
       },
       "health": {
         "heading": "État",
@@ -4871,6 +4893,52 @@
         "retry": "Réessayer",
         "loading": "Chargement des lignes…",
         "noRelease": "Les journaux apparaissent ici dès que la première version est en ligne."
+      },
+      "usage": {
+        "heading": "Consommation sur la période",
+        "loading": "Chargement de la consommation…",
+        "loadError": "Impossible de charger la consommation de cette période.",
+        "retry": "Réessayer",
+        "col": {
+          "what": "Ressource utilisée",
+          "amount": "Quantité",
+          "credits": "Crédits"
+        },
+        "unit": {
+          "machine": "Machine Fly · {size}",
+          "lambdaCompute": "Calcul de fonction (Go-secondes)",
+          "lambdaRequests": "Requêtes de fonction",
+          "containerCpu": "Conteneur AWS · vCPU",
+          "containerMemory": "Conteneur AWS · mémoire",
+          "dbCompute": "Base de données {provider} · calcul",
+          "dbStorage": "Base de données {provider} · stockage"
+        },
+        "size": {
+          "small": "petite",
+          "medium": "moyenne",
+          "large": "grande"
+        },
+        "total": "Crédits facturés sur la période",
+        "footnote": "1 crédit correspond à une minute équivalent Linux. La consommation de chaque jour est facturée une fois, après minuit UTC, arrondie au crédit supérieur : celle d’aujourd’hui n’est pas encore dans le total.",
+        "noRelease": "Aucune consommation pour l’instant. Elle commence avec la première version en ligne.",
+        "exhausted": {
+          "title": "Plus de crédits · solde {balance}",
+          "titleNoBalance": "Plus de crédits",
+          "body": "Cette application continue de tourner. Si le solde est toujours négatif le {date}, Motir la passe en « Mettre en veille si inactive » : elle se met en veille quand personne ne la sollicite. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "bodySuspended": "Cette application continue de tourner et se met en veille quand personne ne la sollicite. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "bodyCannotSuspend": "Cette application tourne en conteneur AWS, qui ne peut pas être mis en veille : elle reste toujours active et consomme des crédits jusqu’à ce que le solde soit rechargé. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "topUp": "Recharger des crédits",
+          "member": "Un propriétaire ou un administrateur de l’organisation peut recharger des crédits."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {

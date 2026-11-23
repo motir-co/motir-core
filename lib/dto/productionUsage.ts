@@ -35,8 +35,8 @@ export interface ProductionUsageDto {
   /** The calendar month in UTC (`[start, end)`), ISO-8601. */
   period: { start: string; end: string };
   usage: ProductionUsageLineDto[];
-  /** Whole credits for the period: each UTC day's credits rounded up once, as
-   *  they are (or will be) charged. Today's open day included. */
+  /** Whole credits CHARGED this period: each closed UTC day's credits rounded up
+   *  once, as they are debited. Today's open day is in `usage`, not here yet. */
   credits: number;
   /** True when the period holds slices, each of which carries Motir's own cost. */
   motirCostRecorded: boolean;

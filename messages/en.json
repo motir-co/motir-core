@@ -4767,7 +4767,7 @@
         "notFound": "This repository is no longer available to you."
       },
       "readOnly": {
-        "note": "You can see every release. Only project administrators can roll back."
+        "note": "You can see every release, its health, logs and usage. Only project administrators can roll back or change when it sleeps."
       },
       "empty": {
         "title": "Nothing in production yet",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "On {target}, a {shape} can only stay always on, so it can’t suspend when idle."
+          "unsupported": "On {target}, a {shape} can only stay always on, so it can’t suspend when idle.",
+          "unsupportedKeeps": "This app keeps running all the time.",
+          "unsupportedShort": "This app’s hosting can’t run that setting, so nothing changed.",
+          "credits": "Always on isn’t available while your organisation’s credit balance is below zero. Top up credits, then set it again.",
+          "releaseInProgress": "A release is in progress. Change this once it has finished.",
+          "forbidden": "Only project administrators can change this.",
+          "noApplication": "Nothing is in production yet. This applies once the first release is live.",
+          "failed": "The new setting didn’t apply, so nothing changed. Try again."
         },
         "shape": {
           "function": "function",
           "container": "container"
-        }
+        },
+        "heading": "When idle",
+        "option": {
+          "suspend": "Suspend when idle",
+          "alwaysOn": "Always on"
+        },
+        "help": {
+          "suspend": "The app sleeps when nothing asks for it, and wakes on the next request. The first request after a sleep is slower.",
+          "alwaysOn": "The app keeps running all the time, so no request ever waits for it to wake. It uses credits every hour."
+        },
+        "default": "New apps start with Suspend when idle. It applies to the first release.",
+        "switching": "Applying to the running release…",
+        "switchingNote": "The same build is redeployed with the new setting. Nothing is rebuilt.",
+        "readOnly": "Only project administrators can change this.",
+        "loading": "Loading the setting…",
+        "loadError": "Couldn’t load this setting."
       },
       "health": {
         "heading": "Health",
@@ -4871,6 +4893,52 @@
         "retry": "Try again",
         "loading": "Loading lines…",
         "noRelease": "Logs appear here once the first release is live."
+      },
+      "usage": {
+        "heading": "Usage this period",
+        "loading": "Loading usage…",
+        "loadError": "Couldn’t load this period’s usage.",
+        "retry": "Try again",
+        "col": {
+          "what": "What it used",
+          "amount": "Amount",
+          "credits": "Credits"
+        },
+        "unit": {
+          "machine": "Fly machine · {size}",
+          "lambdaCompute": "Function compute (GB-seconds)",
+          "lambdaRequests": "Function requests",
+          "containerCpu": "AWS container · vCPU",
+          "containerMemory": "AWS container · memory",
+          "dbCompute": "{provider} database compute",
+          "dbStorage": "{provider} database storage"
+        },
+        "size": {
+          "small": "small",
+          "medium": "medium",
+          "large": "large"
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        },
+        "total": "Credits charged this period",
+        "footnote": "1 credit is one Linux-equivalent minute. Each day’s usage is charged once, after midnight UTC, rounded up to a whole credit, so today’s is not in the total yet.",
+        "noRelease": "Nothing used yet. Usage starts with the first live release.",
+        "exhausted": {
+          "title": "Out of credits · balance {balance}",
+          "titleNoBalance": "Out of credits",
+          "body": "This app keeps running. If the balance is still below zero on {date}, Motir switches it to Suspend when idle, so it sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
+          "bodySuspended": "This app keeps running and sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
+          "bodyCannotSuspend": "This app runs as an AWS container, which can’t be suspended, so it keeps running always on and keeps using credits until the balance is topped up. Motir never stops or deletes a production app for being out of credits.",
+          "topUp": "Top up credits",
+          "member": "An organisation owner or admin can top up credits."
+        }
       }
     },
     "workspaceAddress": {

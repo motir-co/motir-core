@@ -79,11 +79,19 @@ const LIVE_OPS_RANGE = `${LIVE_OPS}range.15m`;
 const LIVE_OPS_APP = `${LIVE_OPS}stream.app`;
 const LIVE_OPS_LOGS = `${LIVE_OPS}heading`;
 const LIVE_OPS_RELEASE = 'settings.production.events.release';
+// The Usage section's amounts (MOTIR-12110) are a number and a unit symbol —
+// « h », « GB-s », « vCPU-h », « GB-h », « CU-h », « ACU-h » — written alike in
+// every language; « Credits » is the German and Dutch word as well.
+const USAGE_AMOUNTS = ['hours', 'gbSeconds', 'vcpuHours', 'gbHours', 'cuHours', 'acuHours'].map(
+  (k) => `settings.production.usage.amount.${k}`,
+);
+const USAGE_CREDITS = 'settings.production.usage.col.credits';
 const SAME_WORD: Record<string, string[]> = {
-  zh: [...FINDINGS_NAMES],
-  ko: [...FINDINGS_NAMES],
-  ja: [...FINDINGS_NAMES],
+  zh: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
+  ko: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
+  ja: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
   it: [
+    ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
     LIVE_OPS_APP,
     ...FINDINGS_NAMES,
@@ -93,6 +101,7 @@ const SAME_WORD: Record<string, string[]> = {
     IDLE_SHAPE_CONTAINER,
   ],
   fr: [
+    ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
     LIVE_OPS_APP,
     'reports.workload.tableTotal', // « Total »
@@ -122,6 +131,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.promote.fieldType',
   ],
   es: [
+    ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
     LIVE_OPS_APP,
     'reports.workload.tableTotal', // « Total »
@@ -136,6 +146,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.usage.failed.confirm.error',
   ],
   pt: [
+    ...USAGE_AMOUNTS,
     LIVE_OPS_LOGS,
     LIVE_OPS_RANGE,
     LIVE_OPS_APP,
@@ -148,6 +159,8 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.attribution.corpus',
   ],
   de: [
+    ...USAGE_AMOUNTS,
+    USAGE_CREDITS,
     LIVE_OPS_RELEASE,
     LIVE_OPS_LOGS,
     ...JOBS_STATUS,
@@ -161,6 +174,8 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.triage.title',
   ],
   nl: [
+    ...USAGE_AMOUNTS,
+    USAGE_CREDITS,
     LIVE_OPS_RELEASE,
     LIVE_OPS_LOGS,
     LIVE_OPS_RANGE,
@@ -185,6 +200,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.promote.fieldType',
   ],
   pl: [
+    ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
     ...JOBS_STATUS,
     ...FINDINGS_NAMES,

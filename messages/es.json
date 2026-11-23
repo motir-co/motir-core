@@ -4767,7 +4767,7 @@
         "notFound": "Este repositorio ya no está disponible para ti."
       },
       "readOnly": {
-        "note": "Puedes ver todas las versiones. Solo los administradores del proyecto pueden revertir."
+        "note": "Puedes ver cada versión, su estado, sus registros y su consumo. Solo los administradores del proyecto pueden revertir o cambiar cuándo entra en reposo."
       },
       "empty": {
         "title": "Todavía no hay nada en producción",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "En {target}, un {shape} solo puede estar siempre activo, así que no puede suspenderse cuando está inactivo."
+          "unsupported": "En {target}, un {shape} solo puede estar siempre activo, así que no puede suspenderse cuando está inactivo.",
+          "unsupportedKeeps": "Esta aplicación funciona todo el tiempo.",
+          "unsupportedShort": "El alojamiento de esta aplicación no admite ese ajuste, así que nada cambió.",
+          "credits": "«Siempre activa» no está disponible mientras el saldo de créditos de tu organización sea negativo. Recarga créditos y vuelve a configurarlo.",
+          "releaseInProgress": "Hay una versión en curso. Cámbialo cuando termine.",
+          "forbidden": "Solo los administradores del proyecto pueden cambiar esto.",
+          "noApplication": "Todavía no hay nada en producción. Esto se aplica cuando la primera versión esté en vivo.",
+          "failed": "El nuevo ajuste no se aplicó, así que nada cambió. Vuelve a intentarlo."
         },
         "shape": {
           "function": "función",
           "container": "contenedor"
-        }
+        },
+        "heading": "En inactividad",
+        "option": {
+          "suspend": "Suspender si está inactiva",
+          "alwaysOn": "Siempre activa"
+        },
+        "help": {
+          "suspend": "La aplicación entra en reposo cuando nadie la solicita y despierta con la siguiente solicitud. La primera solicitud tras el reposo es más lenta.",
+          "alwaysOn": "La aplicación funciona todo el tiempo, así que ninguna solicitud espera a que despierte. Consume créditos cada hora."
+        },
+        "default": "Las aplicaciones nuevas empiezan con «Suspender si está inactiva». Se aplica a la primera versión.",
+        "switching": "Aplicando a la versión en ejecución…",
+        "switchingNote": "Se vuelve a desplegar la misma compilación con el nuevo ajuste. No se recompila nada.",
+        "readOnly": "Solo los administradores del proyecto pueden cambiar esto.",
+        "loading": "Cargando el ajuste…",
+        "loadError": "No se pudo cargar este ajuste."
       },
       "health": {
         "heading": "Estado",
@@ -4871,6 +4893,52 @@
         "retry": "Reintentar",
         "loading": "Cargando líneas…",
         "noRelease": "Los registros aparecen aquí en cuanto la primera versión esté en vivo."
+      },
+      "usage": {
+        "heading": "Consumo de este periodo",
+        "loading": "Cargando el consumo…",
+        "loadError": "No se pudo cargar el consumo de este periodo.",
+        "retry": "Reintentar",
+        "col": {
+          "what": "Qué consumió",
+          "amount": "Cantidad",
+          "credits": "Créditos"
+        },
+        "unit": {
+          "machine": "Máquina de Fly · {size}",
+          "lambdaCompute": "Cómputo de funciones (GB-segundos)",
+          "lambdaRequests": "Solicitudes a funciones",
+          "containerCpu": "Contenedor de AWS · vCPU",
+          "containerMemory": "Contenedor de AWS · memoria",
+          "dbCompute": "Base de datos {provider} · cómputo",
+          "dbStorage": "Base de datos {provider} · almacenamiento"
+        },
+        "size": {
+          "small": "pequeña",
+          "medium": "mediana",
+          "large": "grande"
+        },
+        "total": "Créditos cobrados en este periodo",
+        "footnote": "1 crédito es un minuto equivalente de Linux. El consumo de cada día se cobra una vez, después de la medianoche UTC, redondeado a un crédito entero, así que el de hoy aún no está en el total.",
+        "noRelease": "Todavía no hay consumo. Empieza con la primera versión en vivo.",
+        "exhausted": {
+          "title": "Sin créditos · saldo {balance}",
+          "titleNoBalance": "Sin créditos",
+          "body": "Esta aplicación sigue funcionando. Si el saldo sigue siendo negativo el {date}, Motir la cambia a «Suspender si está inactiva», así entra en reposo cuando nadie la solicita. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
+          "bodySuspended": "Esta aplicación sigue funcionando y entra en reposo cuando nadie la solicita. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
+          "bodyCannotSuspend": "Esta aplicación se ejecuta como contenedor de AWS, que no se puede suspender, así que sigue siempre activa y consumiendo créditos hasta que se recargue el saldo. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
+          "topUp": "Recargar créditos",
+          "member": "Un propietario o administrador de la organización puede recargar créditos."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {

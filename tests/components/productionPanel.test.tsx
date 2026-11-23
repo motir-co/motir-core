@@ -92,14 +92,36 @@ const HEALTH: ProductionHealthDto = {
   events: [],
 };
 
-/** The panel's own routes go to `mock`. Health and Logs (MOTIR-12109) read on
- *  their own and are answered here, so a call count is the release routes' alone;
- *  `tests/components/productionRuntime.test.tsx` owns those two. */
+/** The panel's own routes go to `mock`. Health and Logs (MOTIR-12109), When idle
+ *  and Usage (MOTIR-12110) read on their own and are answered here, so a call
+ *  count is the release routes' alone; `productionRuntime.test.tsx` and
+ *  `productionOperations.test.tsx` own those four. */
 function stubPanelFetch(mock: (url: string, init?: RequestInit) => Promise<Response>) {
   vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
     if (String(url).startsWith(`${BASE}/health`)) return Promise.resolve(respond(200, HEALTH));
     if (String(url).startsWith(`${BASE}/logs`)) {
       return Promise.resolve(respond(200, { lines: [], cursor: null, state: 'ok' }));
+    }
+    if (String(url).startsWith(`${BASE}/idle-policy`)) {
+      return Promise.resolve(
+        respond(200, {
+          policy: { mode: 'suspend', idleSeconds: 300 },
+          editable: true,
+          refusal: null,
+        }),
+      );
+    }
+    if (String(url).startsWith(`${BASE}/usage`)) {
+      return Promise.resolve(
+        respond(200, {
+          period: { start: '2026-11-01T00:00:00.000Z', end: '2026-12-01T00:00:00.000Z' },
+          usage: [],
+          credits: 0,
+          motirCostRecorded: false,
+          state: 'no_release',
+          exhausted: null,
+        }),
+      );
     }
     return mock(url, init);
   });
@@ -283,7 +305,7 @@ describe('the Roll back control', () => {
     expect(screen.queryByRole('button', { name: 'Roll back' })).toBeNull();
     expect(screen.queryByTestId('production-rollback-helper')).toBeNull();
     expect(screen.getByRole('note').textContent).toBe(
-      'You can see every release. Only project administrators can roll back.',
+      'You can see every release, its health, logs and usage. Only project administrators can roll back or change when it sleeps.',
     );
   });
 });

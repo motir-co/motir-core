@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Info } from 'lucide-react';
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
+import type { IdlePolicyDto } from '@/lib/dto/idlePolicy';
 import type { ProductionHealthDto } from '@/lib/dto/productionHealth';
+import type { ProductionUsageDto } from '@/lib/dto/productionUsage';
 import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
 import {
   productionPanelClient,
@@ -17,6 +19,8 @@ import { CurrentReleaseCard } from '@/components/hosting/CurrentReleaseCard';
 import { ProductionCrashEvents } from '@/components/hosting/ProductionCrashEvents';
 import { ProductionHealthState, type HealthView } from '@/components/hosting/ProductionHealthState';
 import { ProductionLogsView } from '@/components/hosting/ProductionLogsView';
+import { IdlePolicyControl, type IdlePolicyView } from '@/components/hosting/IdlePolicyControl';
+import { ProductionUsage, type UsageView } from '@/components/hosting/ProductionUsage';
 import { ProductionEmptyState } from '@/components/hosting/ProductionEmptyState';
 import { ReleaseHistoryList } from '@/components/hosting/ReleaseHistoryList';
 import { RollbackDialog } from '@/components/hosting/RollbackDialog';
@@ -55,6 +59,8 @@ export function ProductionPanel({
   repositoryName,
   initial,
   initialHealth = null,
+  initialIdle = null,
+  initialUsage = null,
   focusEventId = null,
 }: {
   projectKey: string;
@@ -63,6 +69,10 @@ export function ProductionPanel({
   initial: ProductionPanelDto;
   /** The server's health read; null when there is no application or it failed. */
   initialHealth?: ProductionHealthDto | null;
+  /** The server's idle-policy and usage reads (MOTIR-12110); null when they
+   *  failed, and the island reads them itself. */
+  initialIdle?: IdlePolicyDto | null;
+  initialUsage?: ProductionUsageDto | null;
   /** The crash event a notification opened the page on. */
   focusEventId?: string | null;
 }) {
@@ -80,6 +90,31 @@ export function ProductionPanel({
   );
   const healthSeq = useRef(0);
   const hasApplication = panel.application !== null;
+
+  const [idle, setIdle] = useState<IdlePolicyView>(
+    initialIdle ? { kind: 'ready', idle: initialIdle } : { kind: 'loading' },
+  );
+  const [usage, setUsage] = useState<UsageView>(
+    initialUsage ? { kind: 'ready', usage: initialUsage } : { kind: 'loading' },
+  );
+  const readIdle = useCallback(
+    () =>
+      productionPanelClient.readIdlePolicy(projectKey, repositoryId).then((result) => {
+        setIdle(result.ok ? { kind: 'ready', idle: result.data } : { kind: 'failed' });
+      }),
+    [projectKey, repositoryId],
+  );
+  const readUsage = useCallback(
+    () =>
+      productionPanelClient.readUsage(projectKey, repositoryId).then((result) => {
+        setUsage(result.ok ? { kind: 'ready', usage: result.data } : { kind: 'failed' });
+      }),
+    [projectKey, repositoryId],
+  );
+  useEffect(() => {
+    if (!initialIdle) void readIdle();
+    if (!initialUsage) void readUsage();
+  }, [initialIdle, initialUsage, readIdle, readUsage]);
 
   /** One health read. A `shown` read (the first, Try again) shows its error; a
    *  `quiet` refresh that fails keeps the last state read rather than replacing
@@ -234,6 +269,29 @@ export function ProductionPanel({
         hasRelease={currentRelease !== null}
         asleep={healthDto?.state === 'suspended'}
       />
+
+      <div className="grid gap-6 lg:grid-cols-2" data-testid="production-operations-row">
+        <IdlePolicyControl
+          projectKey={projectKey}
+          repositoryId={repositoryId}
+          view={idle}
+          onView={setIdle}
+          onRetry={() => {
+            setIdle({ kind: 'loading' });
+            void readIdle();
+          }}
+          hasRelease={currentRelease !== null}
+          creditsExhausted={usage.kind === 'ready' && usage.usage.state === 'credits_exhausted'}
+        />
+        <ProductionUsage
+          view={usage}
+          isAdministrator={panel.isAdministrator}
+          onRetry={() => {
+            setUsage({ kind: 'loading' });
+            void readUsage();
+          }}
+        />
+      </div>
 
       {releases.length > 0 ? (
         <ReleaseHistoryList

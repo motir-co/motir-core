@@ -4767,7 +4767,7 @@
         "notFound": "此代码仓库已不再可用。"
       },
       "readOnly": {
-        "note": "你可以查看所有发布。只有项目管理员可以回滚。"
+        "note": "你可以查看每个发布及其健康状况、日志和用量。只有项目管理员可以回滚或更改应用何时休眠。"
       },
       "empty": {
         "title": "生产中尚无内容",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "在 {target} 上，{shape} 只能保持常开，因此无法在空闲时暂停。"
+          "unsupported": "在 {target} 上，{shape} 只能保持常开，因此无法在空闲时暂停。",
+          "unsupportedKeeps": "此应用会一直运行。",
+          "unsupportedShort": "此应用的托管方式不支持该设置，因此没有任何变化。",
+          "credits": "组织的额度余额低于零时无法使用“始终运行”。请先充值额度，然后重新设置。",
+          "releaseInProgress": "有发布正在进行。请在它完成后再更改。",
+          "forbidden": "只有项目管理员可以更改此设置。",
+          "noApplication": "生产环境中还没有内容。第一个发布上线后此设置生效。",
+          "failed": "新设置未能应用，因此没有任何变化。请重试。"
         },
         "shape": {
           "function": "函数",
           "container": "容器"
-        }
+        },
+        "heading": "空闲时",
+        "option": {
+          "suspend": "空闲时暂停",
+          "alwaysOn": "始终运行"
+        },
+        "help": {
+          "suspend": "没有请求时应用会休眠，并在下一个请求到来时唤醒。休眠后的第一个请求会慢一些。",
+          "alwaysOn": "应用一直运行，因此没有请求需要等待它唤醒。它每小时都会消耗额度。"
+        },
+        "default": "新应用默认“空闲时暂停”。从第一个发布开始生效。",
+        "switching": "正在应用到运行中的发布…",
+        "switchingNote": "同一构建会以新设置重新部署，不会重新构建。",
+        "readOnly": "只有项目管理员可以更改此设置。",
+        "loading": "正在加载设置…",
+        "loadError": "无法加载此设置。"
       },
       "health": {
         "heading": "健康状况",
@@ -4871,6 +4893,52 @@
         "retry": "重试",
         "loading": "正在加载行…",
         "noRelease": "第一个发布上线后，日志会显示在这里。"
+      },
+      "usage": {
+        "heading": "本期用量",
+        "loading": "正在加载用量…",
+        "loadError": "无法加载本期用量。",
+        "retry": "重试",
+        "col": {
+          "what": "用量项",
+          "amount": "数量",
+          "credits": "额度"
+        },
+        "unit": {
+          "machine": "Fly 机器 · {size}",
+          "lambdaCompute": "函数计算（GB·秒）",
+          "lambdaRequests": "函数请求",
+          "containerCpu": "AWS 容器 · vCPU",
+          "containerMemory": "AWS 容器 · 内存",
+          "dbCompute": "{provider} 数据库计算",
+          "dbStorage": "{provider} 数据库存储"
+        },
+        "size": {
+          "small": "小型",
+          "medium": "中型",
+          "large": "大型"
+        },
+        "total": "本期已扣额度",
+        "footnote": "1 额度为 1 个 Linux 等效分钟。每天的用量在 UTC 午夜后扣费一次，向上取整到整数额度，因此今天的用量尚未计入总额。",
+        "noRelease": "尚无用量。第一个发布上线后开始计算用量。",
+        "exhausted": {
+          "title": "额度已用完 · 余额 {balance}",
+          "titleNoBalance": "额度已用完",
+          "body": "此应用会继续运行。如果到 {date} 余额仍低于零，Motir 会将其切换为“空闲时暂停”，使其在没有请求时休眠。Motir 绝不会因为额度不足而停止或删除生产应用。",
+          "bodySuspended": "此应用会继续运行，并在没有请求时休眠。Motir 绝不会因为额度不足而停止或删除生产应用。",
+          "bodyCannotSuspend": "此应用以无法暂停的 AWS 容器运行，因此会一直运行并持续消耗额度，直到余额充值。Motir 绝不会因为额度不足而停止或删除生产应用。",
+          "topUp": "充值额度",
+          "member": "组织所有者或管理员可以充值额度。"
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {

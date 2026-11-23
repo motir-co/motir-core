@@ -4767,7 +4767,7 @@
         "notFound": "Dieses Repository ist für Sie nicht mehr verfügbar."
       },
       "readOnly": {
-        "note": "Sie können jedes Release sehen. Nur Projektadministratoren können zurücksetzen."
+        "note": "Sie können jedes Release, seinen Zustand, seine Logs und seine Nutzung sehen. Nur Projektadministratoren können zurücksetzen oder ändern, wann die App schläft."
       },
       "empty": {
         "title": "Noch nichts in Produktion",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "Auf {target} kann ein {shape} nur dauerhaft laufen und daher im Leerlauf nicht pausieren."
+          "unsupported": "Auf {target} kann ein {shape} nur dauerhaft laufen und daher im Leerlauf nicht pausieren.",
+          "unsupportedKeeps": "Diese App läuft ständig.",
+          "unsupportedShort": "Das Hosting dieser App unterstützt diese Einstellung nicht, daher hat sich nichts geändert.",
+          "credits": "„Dauerhaft an“ ist nicht verfügbar, solange das Credit-Guthaben Ihrer Organisation unter null liegt. Laden Sie Credits auf und stellen Sie es dann erneut ein.",
+          "releaseInProgress": "Ein Release läuft gerade. Ändern Sie dies, sobald es abgeschlossen ist.",
+          "forbidden": "Nur Projektadministratoren können dies ändern.",
+          "noApplication": "Noch ist nichts in Produktion. Dies gilt, sobald das erste Release live ist.",
+          "failed": "Die neue Einstellung wurde nicht übernommen, daher hat sich nichts geändert. Versuchen Sie es erneut."
         },
         "shape": {
           "function": "Function",
           "container": "Container"
-        }
+        },
+        "heading": "Bei Leerlauf",
+        "option": {
+          "suspend": "Bei Leerlauf pausieren",
+          "alwaysOn": "Dauerhaft an"
+        },
+        "help": {
+          "suspend": "Die App schläft, wenn nichts sie anfragt, und wacht bei der nächsten Anfrage auf. Die erste Anfrage nach dem Schlafen ist langsamer.",
+          "alwaysOn": "Die App läuft ständig, sodass keine Anfrage auf das Aufwachen warten muss. Sie verbraucht jede Stunde Credits."
+        },
+        "default": "Neue Apps starten mit „Bei Leerlauf pausieren“. Das gilt ab dem ersten Release.",
+        "switching": "Wird auf das laufende Release angewendet…",
+        "switchingNote": "Derselbe Build wird mit der neuen Einstellung erneut bereitgestellt. Nichts wird neu gebaut.",
+        "readOnly": "Nur Projektadministratoren können dies ändern.",
+        "loading": "Einstellung wird geladen…",
+        "loadError": "Diese Einstellung konnte nicht geladen werden."
       },
       "health": {
         "heading": "Zustand",
@@ -4871,6 +4893,52 @@
         "retry": "Erneut versuchen",
         "loading": "Zeilen werden geladen…",
         "noRelease": "Logs erscheinen hier, sobald das erste Release live ist."
+      },
+      "usage": {
+        "heading": "Nutzung in diesem Zeitraum",
+        "loading": "Nutzung wird geladen…",
+        "loadError": "Die Nutzung dieses Zeitraums konnte nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "col": {
+          "what": "Was verbraucht wurde",
+          "amount": "Menge",
+          "credits": "Credits"
+        },
+        "unit": {
+          "machine": "Fly-Maschine · {size}",
+          "lambdaCompute": "Function-Rechenzeit (GB-Sekunden)",
+          "lambdaRequests": "Function-Anfragen",
+          "containerCpu": "AWS-Container · vCPU",
+          "containerMemory": "AWS-Container · Arbeitsspeicher",
+          "dbCompute": "{provider}-Datenbank · Rechenzeit",
+          "dbStorage": "{provider}-Datenbank · Speicher"
+        },
+        "size": {
+          "small": "klein",
+          "medium": "mittel",
+          "large": "groß"
+        },
+        "total": "In diesem Zeitraum berechnete Credits",
+        "footnote": "1 Credit entspricht einer Linux-äquivalenten Minute. Die Nutzung eines Tages wird einmal nach Mitternacht UTC berechnet und auf ganze Credits aufgerundet, daher ist die heutige noch nicht in der Summe.",
+        "noRelease": "Noch nichts verbraucht. Die Nutzung beginnt mit dem ersten Live-Release.",
+        "exhausted": {
+          "title": "Keine Credits mehr · Guthaben {balance}",
+          "titleNoBalance": "Keine Credits mehr",
+          "body": "Diese App läuft weiter. Liegt das Guthaben am {date} noch unter null, stellt Motir sie auf „Bei Leerlauf pausieren“ um, sodass sie schläft, wenn nichts sie anfragt. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "bodySuspended": "Diese App läuft weiter und schläft, wenn nichts sie anfragt. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "bodyCannotSuspend": "Diese App läuft als AWS-Container, der nicht pausiert werden kann. Sie läuft daher dauerhaft weiter und verbraucht Credits, bis das Guthaben aufgeladen ist. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "topUp": "Credits aufladen",
+          "member": "Ein Inhaber oder Administrator der Organisation kann Credits aufladen."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {

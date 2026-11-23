@@ -4767,7 +4767,7 @@
         "notFound": "Deze repository is niet meer voor je beschikbaar."
       },
       "readOnly": {
-        "note": "Je kunt elke release zien. Alleen projectbeheerders kunnen terugdraaien."
+        "note": "Je kunt elke release zien, met de status, logs en het gebruik. Alleen projectbeheerders kunnen terugdraaien of wijzigen wanneer de app slaapt."
       },
       "empty": {
         "title": "Nog niets in productie",
@@ -4786,12 +4786,34 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "Op {target} kan een {shape} alleen altijd aan blijven, dus kan die niet pauzeren bij inactiviteit."
+          "unsupported": "Op {target} kan een {shape} alleen altijd aan blijven, dus kan die niet pauzeren bij inactiviteit.",
+          "unsupportedKeeps": "Deze app draait de hele tijd.",
+          "unsupportedShort": "De hosting van deze app ondersteunt die instelling niet, dus er is niets veranderd.",
+          "credits": "‘Altijd aan’ is niet beschikbaar zolang het creditsaldo van je organisatie onder nul staat. Vul credits aan en stel het daarna opnieuw in.",
+          "releaseInProgress": "Er loopt een release. Wijzig dit zodra die klaar is.",
+          "forbidden": "Alleen projectbeheerders kunnen dit wijzigen.",
+          "noApplication": "Er staat nog niets in productie. Dit geldt zodra de eerste release live is.",
+          "failed": "De nieuwe instelling is niet toegepast, dus er is niets veranderd. Probeer het opnieuw."
         },
         "shape": {
           "function": "functie",
           "container": "container"
-        }
+        },
+        "heading": "Bij inactiviteit",
+        "option": {
+          "suspend": "Pauzeren bij inactiviteit",
+          "alwaysOn": "Altijd aan"
+        },
+        "help": {
+          "suspend": "De app slaapt als niets erom vraagt en wordt wakker bij het volgende verzoek. Het eerste verzoek na het slapen is trager.",
+          "alwaysOn": "De app draait de hele tijd, dus geen enkel verzoek wacht tot hij wakker wordt. Hij verbruikt elk uur credits."
+        },
+        "default": "Nieuwe apps starten met ‘Pauzeren bij inactiviteit’. Dit geldt vanaf de eerste release.",
+        "switching": "Toepassen op de draaiende release…",
+        "switchingNote": "Dezelfde build wordt opnieuw uitgerold met de nieuwe instelling. Er wordt niets opnieuw gebouwd.",
+        "readOnly": "Alleen projectbeheerders kunnen dit wijzigen.",
+        "loading": "Instelling laden…",
+        "loadError": "Kon deze instelling niet laden."
       },
       "health": {
         "heading": "Status",
@@ -4871,6 +4893,52 @@
         "retry": "Opnieuw proberen",
         "loading": "Regels laden…",
         "noRelease": "Logs verschijnen hier zodra de eerste release live is."
+      },
+      "usage": {
+        "heading": "Gebruik deze periode",
+        "loading": "Gebruik laden…",
+        "loadError": "Kon het gebruik van deze periode niet laden.",
+        "retry": "Opnieuw proberen",
+        "col": {
+          "what": "Wat er is gebruikt",
+          "amount": "Hoeveelheid",
+          "credits": "Credits"
+        },
+        "unit": {
+          "machine": "Fly-machine · {size}",
+          "lambdaCompute": "Functierekenkracht (GB-seconden)",
+          "lambdaRequests": "Functieverzoeken",
+          "containerCpu": "AWS-container · vCPU",
+          "containerMemory": "AWS-container · geheugen",
+          "dbCompute": "{provider}-database · rekenkracht",
+          "dbStorage": "{provider}-database · opslag"
+        },
+        "size": {
+          "small": "klein",
+          "medium": "middel",
+          "large": "groot"
+        },
+        "total": "In deze periode afgerekende credits",
+        "footnote": "1 credit is één Linux-equivalente minuut. Het gebruik van elke dag wordt één keer afgerekend, na middernacht UTC, afgerond op een hele credit, dus dat van vandaag zit nog niet in het totaal.",
+        "noRelease": "Nog niets gebruikt. Het gebruik begint met de eerste live release.",
+        "exhausted": {
+          "title": "Geen credits meer · saldo {balance}",
+          "titleNoBalance": "Geen credits meer",
+          "body": "Deze app blijft draaien. Staat het saldo op {date} nog onder nul, dan zet Motir hem op ‘Pauzeren bij inactiviteit’, zodat hij slaapt als niets erom vraagt. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "bodySuspended": "Deze app blijft draaien en slaapt als niets erom vraagt. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "bodyCannotSuspend": "Deze app draait als AWS-container, die niet gepauzeerd kan worden. Hij blijft dus altijd aan en verbruikt credits tot het saldo is aangevuld. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "topUp": "Credits aanvullen",
+          "member": "Een eigenaar of beheerder van de organisatie kan credits aanvullen."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {

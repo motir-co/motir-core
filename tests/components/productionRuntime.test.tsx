@@ -133,6 +133,20 @@ function stubFetch({
     calls.push(url);
     if (url.pathname === `${BASE}/health`) return onHealth(url);
     if (url.pathname === `${BASE}/logs`) return onLogs(url);
+    // When idle and Usage (MOTIR-12110) read on their own; answered quietly here.
+    if (url.pathname === `${BASE}/idle-policy`) {
+      return respond(200, { policy: null, editable: false, refusal: null });
+    }
+    if (url.pathname === `${BASE}/usage`) {
+      return respond(200, {
+        period: { start: '2026-11-01T00:00:00.000Z', end: '2026-12-01T00:00:00.000Z' },
+        usage: [],
+        credits: 0,
+        motirCostRecorded: false,
+        state: 'no_release',
+        exhausted: null,
+      });
+    }
     return other(url);
   });
   vi.stubGlobal('fetch', mock);
@@ -196,7 +210,7 @@ describe('the layout', () => {
   });
 
   it('with no release: the empty state spans the row, no Health or events, and Logs say when they start', async () => {
-    const { mock } = stubFetch();
+    const { calls } = stubFetch();
     render(
       panel({ application: null, currentRelease: null, previousRelease: null, releases: [] }),
       null,
@@ -208,7 +222,8 @@ describe('the layout', () => {
     expect(screen.getByTestId('production-logs').textContent).toContain(
       'Logs appear here once the first release is live.',
     );
-    expect(mock).not.toHaveBeenCalled();
+    // Neither Health nor Logs reads; When idle and Usage read their defaults.
+    expect(calls.map((u) => u.pathname.slice(BASE.length))).toEqual(['/idle-policy', '/usage']);
   });
 });
 
