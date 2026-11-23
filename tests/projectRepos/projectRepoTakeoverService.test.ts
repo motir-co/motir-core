@@ -34,6 +34,8 @@ import { resetDatabaseFakes } from '@/lib/orchestrator/database';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { getDatabasePort } from '@/lib/orchestrator/database';
+import { hostedApplicationHandoverService } from '@/lib/services/hostedApplicationHandoverService';
+import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import type { FakeDatabaseControls } from '@motir/orchestrator';
 
 // TAKE IT OVER over real Postgres (Story MOTIR-1775 · MOTIR-711) — the handoff that
@@ -88,6 +90,10 @@ let transferStatus: number;
 let transferCompletes: boolean;
 /** Status the fake GitHub answers the Actions PUT with; 204 is the real success. */
 let actionsStatus: number;
+/** The repositories' deployment environments, `owner/repo/name` (MOTIR-12132). */
+let environments: Set<string>;
+/** Status the fake answers an environment DELETE with when not 204/404. */
+let environmentDeleteStatus: number | null;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -164,6 +170,14 @@ function installGitHub(): void {
             },
           ],
         });
+      }
+      const environment = /\/repos\/([^/]+)\/([^/]+)\/environments\/([^/]+)$/.exec(u);
+      if (environment && method === 'DELETE') {
+        if (environmentDeleteStatus) return json(environmentDeleteStatus, { message: 'nope' });
+        const key = environment.slice(1).map(decodeURIComponent).join('/');
+        return environments.delete(key)
+          ? new Response(null, { status: 204 })
+          : json(404, { message: 'Not Found' });
       }
       if (u.endsWith('/transfer') && method === 'POST') {
         if (transferStatus !== 202) return json(transferStatus, { message: 'no such owner' });
@@ -302,6 +316,8 @@ beforeEach(async () => {
   transferStatus = 202;
   transferCompletes = false;
   actionsStatus = 204;
+  environments = new Set();
+  environmentDeleteStatus = null;
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -1116,5 +1132,257 @@ describe('the `repository` archived / unarchived delivery', () => {
         repository: { id: 'host-acme-web' },
       }),
     ).toEqual({ event: 'ignored', reason: 'unhandled_repository_action:renamed' });
+  });
+});
+
+// ── A serverless or Fly app's grace window (MOTIR-12132) ────────────────────
+
+describe('a serverless or Fly app at takeover (MOTIR-12132)', () => {
+  const DAY = 86_400_000;
+  const fly = () => getHostingDeployPort('fly') as HostingDeployPort & FakeHostingControls;
+  const FULL = `${MOTIR_ORG}/acme-web`;
+
+  /** A Fly-hosted row with production switched on: its application, a live
+   *  deploy token, the `production` environment and both variables. */
+  async function productionRow(fx: WorkItemFixture, target: 'fly' | 'serverless' | 'aws' = 'fly') {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    resetHostingFakes();
+    resetDatabaseFakes();
+    const { rowId, repoId } = await motirOwnedRow(fx, 'acme-web');
+    await projectRepoSetService.setHosting(
+      rowId,
+      { target, useCase: 'mvp', size: 'small' },
+      fx.ctx,
+    );
+    const app = await fly().ensureApp({ repositoryId: rowId, environment: { kind: 'production' } });
+    await fly().mintDeployCredential({ pushNamespace: app.pushNamespace });
+    const at = new Date('2026-11-01T00:00:00Z');
+    const application = await adminDb.hostedApplication.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        projectRepositoryId: rowId,
+        target,
+        slug: 'acme-web',
+        productionAppName: app.appRef,
+        productionEnabledAt: at,
+        productionTokenMintedAt: at,
+      },
+    });
+    environments.add(`${FULL}/production`);
+    repoActions.variables(FULL).set('MOTIR_HOSTING_IMAGE_PRODUCTION', 'registry.fly.io/x');
+    repoActions.variables(FULL).set('MOTIR_HOSTING_TARGET', target);
+    calls.length = 0;
+    return { rowId, repoId, applicationId: application.id, pushNamespace: app.pushNamespace };
+  }
+
+  const application = (id: string) =>
+    adminDb.hostedApplication.findUniqueOrThrow({ where: { id } });
+
+  /** The grace-window steps and the transfer, in the order they ran. */
+  function graceSequence(): string[] {
+    // The preview step before it deletes its own variables; only the deletes
+    // after the production credential's revoke are this card's.
+    let revoked = false;
+    return calls.flatMap((c) => {
+      if (c.url === 'motir:revoke') revoked = true;
+      if (c.url.startsWith('motir:')) return [c.url.slice('motir:'.length)];
+      if (c.url.endsWith('/environments/production') && c.method === 'DELETE') {
+        return ['delete_environment'];
+      }
+      const variable = /\/actions\/variables\/([A-Z_]+)$/.exec(c.url);
+      if (variable && c.method === 'DELETE' && revoked) return [`delete_variable:${variable[1]}`];
+      if (c.url.endsWith('/transfer') && c.method === 'POST') return ['transfer'];
+      return [];
+    });
+  }
+
+  /** Mark the state write and the revoke in the call log. */
+  function markSteps() {
+    const setState = hostedApplicationRepository.setStateIfIn.bind(hostedApplicationRepository);
+    vi.spyOn(hostedApplicationRepository, 'setStateIfIn').mockImplementation(async (...args) => {
+      calls.push({ url: `motir:state:${args[2]}`, method: 'CALL', body: null });
+      return setState(...args);
+    });
+    const port = fly();
+    const revoke = port.revokeDeployCredentials.bind(port);
+    vi.spyOn(port, 'revokeDeployCredentials').mockImplementation(async (input) => {
+      calls.push({ url: 'motir:revoke', method: 'CALL', body: null });
+      return revoke(input);
+    });
+  }
+
+  /** Count the `transferred` notices actually sent. */
+  function countNotices() {
+    const send = hostedApplicationHandoverService.sendGraceNotice.bind(
+      hostedApplicationHandoverService,
+    );
+    const sent: string[] = [];
+    vi.spyOn(hostedApplicationHandoverService, 'sendGraceNotice').mockImplementation(
+      async (notice) => {
+        if (notice) sent.push(notice.applicationId);
+        return send(notice);
+      },
+    );
+    return sent;
+  }
+
+  async function deliver(repoId: string) {
+    return githubWebhookService.handleEvent('repository', {
+      action: 'transferred',
+      repository: {
+        id: repoId,
+        name: 'acme-web',
+        default_branch: 'main',
+        owner: { login: NEW_OWNER },
+      },
+    });
+  }
+
+  it('freezes the app, then withdraws the credential, the environment and both variables, BEFORE the transfer', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId, applicationId, pushNamespace } = await productionRow(fx);
+    markSteps();
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    expect(graceSequence()).toEqual([
+      'state:handing_over',
+      'revoke',
+      'delete_environment',
+      'delete_variable:MOTIR_HOSTING_IMAGE_PRODUCTION',
+      'delete_variable:MOTIR_HOSTING_TARGET',
+      'transfer',
+    ]);
+    expect(fly().liveCredentials(pushNamespace)).toBe(0);
+    expect(environments.size).toBe(0);
+    expect(repoActions.variables(FULL).size).toBe(0);
+    // A personal target awaits its accept: deploys stay frozen, nothing starts.
+    expect(await application(applicationId)).toMatchObject({
+      state: 'handing_over',
+      stopsAt: null,
+    });
+  });
+
+  it.each([
+    [
+      'the environment delete',
+      () => {
+        environmentDeleteStatus = 403;
+      },
+      /delete_environment/,
+    ],
+    ['the credential revoke', () => fly().failNext('revokeDeployCredentials'), /revoke_credential/],
+    [
+      'a variable delete',
+      () => repoActions.failNext('DELETE', '/variables/MOTIR_HOSTING_IMAGE_PRODUCTION', 500),
+      /delete_variables/,
+    ],
+  ])(
+    'fails the saga before the transfer when %s fails, and puts the app back',
+    async (_l, fail, step) => {
+      const fx = await makeWorkItemFixture();
+      await connectIdentity(fx);
+      const { rowId, applicationId } = await productionRow(fx);
+      fail();
+
+      const refusal = projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+      await expect(refusal).rejects.toBeInstanceOf(RepoTransferRefusedError);
+      await expect(refusal).rejects.toThrow(step);
+      expect(calls.some((c) => c.url.endsWith('/transfer'))).toBe(false);
+      expect((await readRow(rowId, fx)).takeover?.state).toBe('failed');
+      expect(await application(applicationId)).toMatchObject({
+        state: 'live',
+        stopsAt: null,
+        productionEnabledAt: null,
+        productionTokenMintedAt: null,
+      });
+    },
+  );
+
+  it('puts the app back to live when the transfer itself is refused', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId, applicationId } = await productionRow(fx);
+    transferStatus = 422;
+
+    await expect(
+      projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx),
+    ).rejects.toBeInstanceOf(RepoTransferRefusedError);
+    expect(await application(applicationId)).toMatchObject({ state: 'live', stopsAt: null });
+  });
+
+  it('still reports the refused transfer when putting the app back fails too', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await productionRow(fx);
+    transferStatus = 422;
+    vi.spyOn(hostedApplicationHandoverService, 'cancelPreparation').mockRejectedValue(
+      new Error('db down'),
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx),
+    ).rejects.toBeInstanceOf(RepoTransferRefusedError);
+    expect(logged).toHaveBeenCalled();
+  });
+
+  it('starts grace when the delivery records the transfer, 30 days out, with one notice across redeliveries', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId, repoId, applicationId } = await productionRow(fx);
+    const sent = countNotices();
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    expect(await deliver(repoId)).toEqual({ event: 'repository', outcome: 'applied' });
+    const { takeoverTransferredAt } = await adminDb.projectRepo.findUniqueOrThrow({
+      where: { id: rowId },
+    });
+    const app = await application(applicationId);
+    expect(app.state).toBe('grace');
+    expect(app.stopsAt!.getTime()).toBe(takeoverTransferredAt!.getTime() + 30 * DAY);
+
+    expect(await deliver(repoId)).toEqual({ event: 'repository', outcome: 'already_applied' });
+    expect((await application(applicationId)).stopsAt).toEqual(app.stopsAt);
+    expect(sent).toEqual([applicationId]);
+  });
+
+  it('starts grace at once when GitHub reports an organisation target already moved', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId, repoId, applicationId } = await productionRow(fx, 'serverless');
+    const sent = countNotices();
+    transferCompletes = true;
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+    const { takeoverTransferredAt } = await adminDb.projectRepo.findUniqueOrThrow({
+      where: { id: rowId },
+    });
+    const app = await application(applicationId);
+    expect(app.state).toBe('grace');
+    expect(app.stopsAt!.getTime()).toBe(takeoverTransferredAt!.getTime() + 30 * DAY);
+
+    expect(await deliver(repoId)).toEqual({ event: 'repository', outcome: 'already_applied' });
+    expect(await application(applicationId)).toMatchObject({
+      state: 'grace',
+      stopsAt: app.stopsAt,
+    });
+    expect(sent).toEqual([applicationId]);
+  });
+
+  it('leaves an AWS repository’s application and repository configuration alone', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId, applicationId } = await productionRow(fx, 'aws');
+    markSteps();
+    transferCompletes = true;
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    expect(graceSequence()).toEqual(['transfer']);
+    expect(environments.size).toBe(1);
+    expect(await application(applicationId)).toMatchObject({ state: 'live', stopsAt: null });
   });
 });

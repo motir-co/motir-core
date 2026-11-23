@@ -70,6 +70,16 @@ export const HANDOVER_APPLICATION_STATES = [
   'handed_over',
 ] as const satisfies readonly HostedApplicationState[];
 
+/** How long a serverless or Fly application keeps running after its repository
+ *  is transferred (decision MOTIR-9802): `stopsAt` is the transfer time plus
+ *  these days (MOTIR-12132). */
+export const HOSTED_APPLICATION_GRACE_DAYS = 30;
+
+/** The notices a grace window sends: at the transfer, seven and one day before
+ *  the stop, and at the stop (MOTIR-12132 enqueues `transferred`). */
+export const GRACE_NOTICE_KINDS = ['transferred', 'seven_days', 'one_day', 'stopped'] as const;
+export type GraceNoticeKind = (typeof GRACE_NOTICE_KINDS)[number];
+
 /** An application database export: an admin's `on_demand` download during the
  *  grace window, or the `final` one the stop takes before deleting the
  *  database. */

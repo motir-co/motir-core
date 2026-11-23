@@ -17,6 +17,10 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import {
+  hostedApplicationHandoverService,
+  type GraceNotice,
+} from '@/lib/services/hostedApplicationHandoverService';
 import { actionsPermissionsClient } from '@/lib/github/actionsPermissions';
 import { repoTransferClient, RepoTransferError } from '@/lib/github/repoTransfer';
 import { toProjectRepoDto, type ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
@@ -229,6 +233,22 @@ export const projectRepoTakeoverService = {
       });
     }
 
+    // MOTIR-12132 — a serverless or Fly app cannot leave with its repository
+    // (decision MOTIR-9802). Its deploy credential, its `production` environment
+    // and its variables would travel with the repository, so they go here,
+    // after the previews and BEFORE the transfer, the application reading
+    // `handing_over` first so every deploy is refused while they go. A failure
+    // fails the saga before anything moves and puts the application back.
+    try {
+      await hostedApplicationHandoverService.prepareForTransfer(rowId);
+    } catch (err) {
+      await this.markFailed(rowId, detailOf(err), ctx);
+      await cancelPreparationQuietly(rowId);
+      throw new RepoTransferRefusedError(
+        `could not withdraw the production deploy credentials before the transfer: ${detailOf(err)}`,
+      );
+    }
+
     let accepted = false;
     try {
       const result = await repoTransferClient.transferRepo({
@@ -240,6 +260,7 @@ export const projectRepoTakeoverService = {
       accepted = result.completed;
     } catch (err) {
       await this.markFailed(rowId, detailOf(err), ctx);
+      await cancelPreparationQuietly(rowId);
       throw new RepoTransferRefusedError(detailOf(err));
     }
 
@@ -248,10 +269,25 @@ export const projectRepoTakeoverService = {
     // accepted on github.com. Either way the `repository` `transferred` delivery
     // is what CONFIRMS it — this only skips the pending state when GitHub has
     // already reported the new owner, and the webhook remains idempotent over it.
+    //
+    // MOTIR-12132 — a transfer GitHub reports completed is recorded HERE, and
+    // the later delivery answers `already_applied`, so the grace window starts
+    // here too, in the same transaction as `takeoverTransferredAt`.
     const next: ProjectRepoTakeoverState = accepted ? 'awaiting_reinstall' : 'transfer_pending';
+    const transferredAt = accepted ? new Date() : null;
+    let notice: GraceNotice | null = null;
     const row = await this.transition(rowId, next, ctx, {
-      transferredAt: accepted ? new Date() : null,
+      transferredAt,
+      ...(transferredAt
+        ? {
+            inTransaction: async (tx: Prisma.TransactionClient) => {
+              notice = (await hostedApplicationHandoverService.startGrace(rowId, transferredAt, tx))
+                .notice;
+            },
+          }
+        : {}),
     });
+    await hostedApplicationHandoverService.sendGraceNotice(notice);
 
     // The re-enable above cleared Motir's pause on a repository it is handing over.
     // Clear the stored INTENT too, or MOTIR-1907's sweep would read the row as
@@ -336,17 +372,23 @@ export const projectRepoTakeoverService = {
       ) {
         return { outcome: 'already_applied' as const };
       }
+      const transferredAt = new Date();
       await projectRepoRepository.setTakeover(
         found.id,
         {
           takeoverState: 'awaiting_reinstall',
-          takeoverTransferredAt: new Date(),
+          takeoverTransferredAt: transferredAt,
           takeoverFailureReason: null,
         },
         tx,
       );
-      return { outcome: 'applied' as const };
+      // MOTIR-12132 — a serverless or Fly app's grace window starts with the
+      // transfer, committed with it; its notice is enqueued after the commit.
+      const grace = await hostedApplicationHandoverService.startGrace(found.id, transferredAt, tx);
+      return { outcome: 'applied' as const, notice: grace.notice };
     });
+    if (outcome.outcome === 'applied')
+      await hostedApplicationHandoverService.sendGraceNotice(outcome.notice);
 
     // POST-COMMIT, BEST-EFFORT — the repository has LEFT Motir's org, so it must
     // leave the project's runner group too (MOTIR-1972 · `ci-runner-fleet.md`
@@ -367,7 +409,7 @@ export const projectRepoTakeoverService = {
       workspaceId: found.workspaceId,
     });
 
-    return outcome;
+    return { outcome: outcome.outcome };
   },
 
   /**
@@ -417,7 +459,12 @@ export const projectRepoTakeoverService = {
     rowId: string,
     state: ProjectRepoTakeoverState,
     ctx: ServiceContext,
-    options: { failureReason?: string; transferredAt?: Date | null } = {},
+    options: {
+      failureReason?: string;
+      transferredAt?: Date | null;
+      /** Runs in the transaction that writes the state, after the write. */
+      inTransaction?: (tx: Prisma.TransactionClient) => Promise<void>;
+    } = {},
   ): Promise<ProjectRepoDto> {
     return inLockedRow(rowId, ctx, async (row, tx) => {
       const from = row.takeoverState;
@@ -441,6 +488,7 @@ export const projectRepoTakeoverService = {
         },
         tx,
       );
+      await options.inTransaction?.(tx);
       return toProjectRepoDto({
         ...updated,
         githubRepo: row.githubRepo,
@@ -595,6 +643,20 @@ async function inLockedRow<T>(
       return fn(fresh, tx);
     },
   );
+}
+
+/** Put a serverless or Fly application back after a takeover that failed
+ *  before the repository moved (MOTIR-12132). The caller is about to throw the
+ *  real failure, so a throw from here is logged rather than replacing it. */
+async function cancelPreparationQuietly(rowId: string): Promise<void> {
+  try {
+    await hostedApplicationHandoverService.cancelPreparation(rowId);
+  } catch (err) {
+    console.error(
+      `[projectRepoTakeoverService] could not put row ${rowId}'s application back to live:`,
+      err instanceof Error ? err.message : 'unknown',
+    );
+  }
 }
 
 /** GitHub logins are case-insensitive; the payload's casing need not match what

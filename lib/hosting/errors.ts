@@ -125,6 +125,31 @@ export class ApplicationNotFoundError extends Error {
   }
 }
 
+/** The step of a serverless or Fly application's preparation for a takeover
+ *  that failed (MOTIR-12132). */
+export type HostedApplicationHandoverStep =
+  | 'set_state'
+  | 'revoke_credential'
+  | 'delete_environment'
+  | 'delete_variables';
+
+/**
+ * Preparing an application for its repository's transfer stopped at `step`.
+ * Every step is look-before-act, so running it again repairs it; the takeover
+ * fails before the repository moves. `detail` never carries a credential. → 502
+ */
+export class HostedApplicationHandoverError extends Error {
+  readonly code = 'HOSTED_APPLICATION_HANDOVER_FAILED' as const;
+  constructor(
+    readonly projectRepositoryId: string,
+    readonly step: HostedApplicationHandoverStep,
+    readonly detail: string,
+  ) {
+    super(`Preparing ${projectRepositoryId} for its transfer failed at ${step}: ${detail}`);
+    this.name = 'HostedApplicationHandoverError';
+  }
+}
+
 /** The step of production enablement that failed (MOTIR-10027). */
 export type ProductionEnablementStep =
   | 'repository'

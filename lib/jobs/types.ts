@@ -36,6 +36,7 @@ import type {
 import type { MergeReleaseRequestedData } from '@/lib/services/productionMergeReleaseService';
 import type { ReleaseStatusRequestedData } from '@/lib/services/releaseDeploymentStatusService';
 import type { TenantHandoverAdvanceData } from '@/lib/services/tenantAccountHandoverService';
+import type { GraceNoticeKind } from '@/lib/hosting/vocabulary';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
@@ -932,6 +933,11 @@ export interface JobEventDataMap {
    *  MOTIR-12131): run its next step. Emitted by `tenantAccountHandoverService`
    *  on a start, an answer, a retry and each finished step; the account id only. */
   'hosting.tenant-handover.advance': TenantHandoverAdvanceData;
+  /** A serverless or Fly application's grace-window notice (Story MOTIR-9800):
+   *  `transferred` is enqueued by `hostedApplicationHandoverService.startGrace`
+   *  when the repository's transfer is recorded (MOTIR-12132); the reminders and
+   *  the stop by the notices card. Ids only; keyed per application and kind. */
+  'hosting.application-grace.notice': ApplicationGraceNoticeData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -953,6 +959,18 @@ export interface JobEventDataMap {
    *  one storage day per agent per UTC day on which it existed. Cross-tenant by
    *  design: it walks every instance that stood in its window. */
   'system.agent-instance-storage-charge': SystemScheduledData;
+}
+
+/** The `hosting.application-grace.notice` event payload (MOTIR-12132). */
+export interface ApplicationGraceNoticeData {
+  /** The application's workspace — the run's tenant. */
+  workspaceId: string;
+  /** The `hosted_application` row the notice is about. */
+  applicationId: string;
+  kind: GraceNoticeKind;
+  /** `<applicationId>:<kind>` — one notice of each kind per application, across
+   *  retries and redeliveries. */
+  idempotencyKey: string;
 }
 
 /**

@@ -247,6 +247,16 @@ export const hostedApplicationRepository = {
     });
   },
 
+  /** Forget that production was switched on (MOTIR-12132): a takeover that
+   *  failed before the transfer removed the deploy credential and variables, so
+   *  the backfill's next `enableProduction` must run its full path again. */
+  async clearProductionEnablement(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.hostedApplication.update({
+      where: { id },
+      data: { productionEnabledAt: null, productionTokenMintedAt: null },
+    });
+  },
+
   /** The application's database columns, ciphertext included — the one read
    *  that selects it (MOTIR-10028). */
   async findDatabaseById(
