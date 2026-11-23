@@ -457,6 +457,77 @@ export class FakeOrganization implements AwsManagementApi {
             },
     };
   }
+
+  // ── The handover's Organizations seam (MOTIR-12130) ────────────────────────
+  // One member account's primary email and its pending update, the one-time
+  // code AWS would mail, and whether the account is still in the organisation.
+  // A test seeds `primaryEmails` and reads `fakeEmailCode` to accept.
+
+  /** Each account's primary email, by account id. */
+  readonly primaryEmails = new Map<string, string>();
+  /** The update under way per account, and the code AWS sent for it. */
+  readonly emailUpdates = new Map<string, { email: string; code: string; status: string }>();
+  /** Accounts already removed, and the reason the next removal is refused. */
+  readonly removedAccounts = new Set<string>();
+  readonly removalRefusals = new Map<string, string>();
+
+  /** The code the fake "mails" for an account's pending update. */
+  fakeEmailCode(accountId: string): string | undefined {
+    return this.emailUpdates.get(accountId)?.code;
+  }
+
+  async startPrimaryEmailUpdate(accountId: string, email: string) {
+    this.calls.push(`startPrimaryEmailUpdate:${accountId}`);
+    this.emailUpdates.set(accountId, { email, code: `code-${accountId}`, status: 'PENDING' });
+    return { status: 'PENDING' as const };
+  }
+
+  async acceptPrimaryEmailUpdate(accountId: string, email: string, code: string) {
+    this.calls.push(`acceptPrimaryEmailUpdate:${accountId}`);
+    const update = this.emailUpdates.get(accountId);
+    if (!update || update.status !== 'PENDING') {
+      return { outcome: 'code_refused' as const, reason: 'ResourceNotFoundException' };
+    }
+    if (update.code !== code || update.email !== email) {
+      return { outcome: 'code_refused' as const, reason: 'ValidationException' };
+    }
+    update.status = 'ACCEPTED';
+    this.primaryEmails.set(accountId, email);
+    return { outcome: 'accepted' as const, status: 'ACCEPTED' as const };
+  }
+
+  async getPrimaryEmail(accountId: string) {
+    this.calls.push(`getPrimaryEmail:${accountId}`);
+    return this.primaryEmails.get(accountId) ?? `${accountId}@motir.example`;
+  }
+
+  async getPrimaryEmailUpdateStatus(accountId: string) {
+    this.calls.push(`getPrimaryEmailUpdateStatus:${accountId}`);
+    const update = this.emailUpdates.get(accountId);
+    return update ? { status: update.status as 'PENDING' | 'ACCEPTED', updatedAt: null } : null;
+  }
+
+  async readStandaloneReadiness(accountId: string) {
+    this.calls.push(`readStandaloneReadiness:${accountId}`);
+    return {
+      inOrganization: !this.removedAccounts.has(accountId),
+      waitPeriod: { status: 'met' as const, eligibleAt: null },
+      delegatedAdministrator: { status: 'met' as const, services: [] },
+      paymentMethod: 'unknown' as const,
+      supportPlan: 'unknown' as const,
+      contactInformation: 'unknown' as const,
+      ready: null,
+    };
+  }
+
+  async removeAccountFromOrganization(accountId: string) {
+    this.calls.push(`removeAccountFromOrganization:${accountId}`);
+    if (this.removedAccounts.has(accountId)) return { outcome: 'removed' as const };
+    const refusal = this.removalRefusals.get(accountId);
+    if (refusal) return { outcome: 'not_ready' as const, missing: [refusal] };
+    this.removedAccounts.add(accountId);
+    return { outcome: 'removed' as const };
+  }
 }
 
 /** The runner role's policy the stack applies, chosen by its parameters as the

@@ -17,6 +17,7 @@ export {
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   sdkTenantSsm,
+  sdkTenantIam,
   tenantApiError,
   type TenantSdkClientFactory,
   type TenantSdkCredentials,
@@ -30,4 +31,5 @@ export * from './function';
 export * from './container';
 export * from './releaseIds';
 export * from './hostingAdapter';
+export * from './handover';
 export * from './sigv4Fetch';

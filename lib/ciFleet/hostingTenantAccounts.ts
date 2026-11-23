@@ -287,6 +287,9 @@ function cloudFormationStatements(): Statement[] {
       ],
       STACKS,
     ),
+    // The handover's preview teardown lists the account's stacks (MOTIR-12130);
+    // ListStacks supports no resource-level permission.
+    allow('CloudFormationListStacks', ['cloudformation:ListStacks'], '*'),
   ];
 }
 

@@ -3,6 +3,9 @@ import type {
   TenantClients,
   TenantCloudFormation,
   TenantEc2,
+  TenantIam,
+  TenantIamRole,
+  TenantPolicyDocument,
   TenantRdsData,
   TenantSecretsManager,
   TenantSqlValue,
@@ -18,7 +21,7 @@ import type {
   TenantSsm,
   TenantTargetHealth,
 } from './container/ecsClient';
-import { AwsTenantApiError } from './errors';
+import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 import type {
   TenantCloudWatch,
   TenantFunctionState,
@@ -153,6 +156,15 @@ export function createFakeTenantCloudFormation(
       const record = stacks.get(name);
       if (!record) throw missing(name);
       Object.assign(record, { status, pendingPolls, settlesTo });
+    },
+
+    async listStacks() {
+      const lost = enter('listStacks', '*');
+      const answer = [...stacks.entries()]
+        .map(([name, record]) => ({ name, status: record.status }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (lost) throw injected();
+      return answer;
     },
 
     async describeStack(name) {
@@ -1081,6 +1093,362 @@ export function createFakeTenantEdge(cloudformation: FakeTenantCloudFormation): 
   };
 }
 
+// ── IAM, by the session that calls it (MOTIR-12130) ─────────────────────────
+//
+// One account's roles and customer-managed policies, held once, and a SESSION
+// per role: the handover reads and writes IAM as `motir-tenant-deploy` or as the
+// member access role, and the fake refuses each call the way AWS would —
+//
+//   - a session is assumed on its first call, and only when the role's trust
+//     names the management account (`TenantRoleUnavailableError` otherwise);
+//     like an STS session it then outlives a change to that trust;
+//   - a call on a session whose role is gone, or holds no policy, is
+//     `AccessDenied` — what makes an out-of-order strip fail a test;
+//   - the deploy role may act only on the roles its policy names (`motir-*`,
+//     `mh-*-push`), never on itself, and on no managed policy, instance profile
+//     or account-wide list.
+
+/** The fake's management account. */
+export const FAKE_MANAGEMENT_ACCOUNT_ID = '111122223333';
+/** The managed policy AWS attaches to the member access role it creates. */
+export const FAKE_ADMINISTRATOR_ACCESS_ARN = 'arn:aws:iam::aws:policy/AdministratorAccess';
+
+export interface FakeIamRole {
+  path: string;
+  trust: TenantPolicyDocument;
+  inline: Map<string, TenantPolicyDocument>;
+  attached: Set<string>;
+  description: string;
+  maxSessionSeconds: number;
+  tags: Record<string, string>;
+  instanceProfiles: Set<string>;
+}
+
+export interface FakeIamPolicy {
+  name: string;
+  path: string;
+  /** Versions besides the default one. */
+  extraVersions: number;
+}
+
+export type FakeIamOperation = keyof TenantIam;
+
+export interface FakeTenantIamAccount {
+  readonly accountId: string;
+  readonly managementAccountId: string;
+  readonly roles: Map<string, FakeIamRole>;
+  /** By ARN. */
+  readonly policies: Map<string, FakeIamPolicy>;
+  readonly instanceProfiles: Set<string>;
+  /** Every call, in order: `<session role>:<operation>:<target>`. */
+  readonly calls: string[];
+  /** The calls that changed something, in the same form. */
+  readonly writes: string[];
+  /** A session as `role`. */
+  session(role: string): TenantIam;
+  /** The `n`th call of `operation` (counted from now, on any session) throws
+   *  `code` — `before` it acts, or `after`. */
+  failAt(operation: FakeIamOperation, n: number, when?: 'before' | 'after', code?: string): void;
+  /** Put a role in the account, as another actor would. */
+  putRole(name: string, role: Partial<FakeIamRole> & { trust: TenantPolicyDocument }): FakeIamRole;
+  /** Put a customer-managed policy in the account; answers its ARN. */
+  putPolicy(name: string, path: string, extraVersions?: number): string;
+}
+
+/** A trust document whose one statement lets `principal` assume the role. */
+export function fakeAwsTrust(principal: string): TenantPolicyDocument {
+  return {
+    Version: '2012-10-17',
+    Statement: [{ Effect: 'Allow', Principal: { AWS: principal }, Action: 'sts:AssumeRole' }],
+  };
+}
+
+const DEPLOY_ROLE = 'motir-tenant-deploy';
+const DEPLOY_SCOPE = /^(motir-.+|mh-.+-push)$/;
+
+export function createFakeTenantIamAccount(
+  options: { accountId?: string; managementAccountId?: string } = {},
+): FakeTenantIamAccount {
+  const accountId = options.accountId ?? '210987654321';
+  const managementAccountId = options.managementAccountId ?? FAKE_MANAGEMENT_ACCOUNT_ID;
+  const roles = new Map<string, FakeIamRole>();
+  const policies = new Map<string, FakeIamPolicy>();
+  const instanceProfiles = new Set<string>();
+  const calls: string[] = [];
+  const writes: string[] = [];
+  const faults: Array<{ operation: string; at: number; when: 'before' | 'after'; code: string }> =
+    [];
+  const counts = new Map<string, number>();
+
+  const denied = () => new AwsTenantApiError('iam', 'AccessDenied', 403);
+  const noSuch = () => new AwsTenantApiError('iam', 'NoSuchEntity', 404);
+  const roleArn = (name: string, path = '/') => `arn:aws:iam::${accountId}:role${path}${name}`;
+
+  /** Does the trust let the management account (its root or any of its roles)
+   *  assume the role? */
+  function trustsManagement(trust: TenantPolicyDocument): boolean {
+    return trust.Statement.some(
+      (st) =>
+        st['Effect'] === 'Allow' &&
+        JSON.stringify(st['Principal'] ?? '').includes(`:${managementAccountId}:`),
+    );
+  }
+
+  function putRole(
+    name: string,
+    role: Partial<FakeIamRole> & { trust: TenantPolicyDocument },
+  ): FakeIamRole {
+    const record: FakeIamRole = {
+      path: role.path ?? '/',
+      trust: role.trust,
+      inline: role.inline ?? new Map(),
+      attached: role.attached ?? new Set(),
+      description: role.description ?? '',
+      maxSessionSeconds: role.maxSessionSeconds ?? 3600,
+      tags: role.tags ?? {},
+      instanceProfiles: role.instanceProfiles ?? new Set(),
+    };
+    for (const profile of record.instanceProfiles) instanceProfiles.add(profile);
+    roles.set(name, record);
+    return record;
+  }
+
+  function putPolicy(name: string, path: string, extraVersions = 0): string {
+    const arn = `arn:aws:iam::${accountId}:policy${path}${name}`;
+    policies.set(arn, { name, path, extraVersions });
+    return arn;
+  }
+
+  function snapshot(name: string, role: FakeIamRole): TenantIamRole {
+    return {
+      name,
+      arn: roleArn(name, role.path),
+      path: role.path,
+      trust: structuredClone(role.trust) as TenantPolicyDocument,
+    };
+  }
+
+  function session(principal: string): TenantIam {
+    let assumed = false;
+
+    /** Assume on the first call; refuse a call the principal may not make;
+     *  count it for the faults. Answers the code of an `after` fault that is
+     *  due, or null. */
+    function enter(operation: FakeIamOperation, target: string, scoped = true): string | null {
+      calls.push(`${principal}:${operation}:${target}`);
+      const self = roles.get(principal);
+      if (!assumed) {
+        if (!self || !trustsManagement(self.trust)) {
+          throw new TenantRoleUnavailableError(accountId, 'AccessDenied', principal);
+        }
+        assumed = true;
+      }
+      if (!self || self.inline.size + self.attached.size === 0) throw denied();
+      if (principal === DEPLOY_ROLE) {
+        if (!scoped) throw denied();
+        if (target === DEPLOY_ROLE || !DEPLOY_SCOPE.test(target)) throw denied();
+      }
+      const count = (counts.get(operation) ?? 0) + 1;
+      counts.set(operation, count);
+      const index = faults.findIndex((f) => f.operation === operation && f.at === count);
+      if (index < 0) return null;
+      const [fault] = faults.splice(index, 1);
+      if (fault!.when === 'before') throw new AwsTenantApiError('iam', fault!.code, null);
+      return fault!.code;
+    }
+    const lostAnswer = (lost: string | null) => {
+      if (lost) throw new AwsTenantApiError('iam', lost, null);
+    };
+    const write = (operation: string, target: string) =>
+      writes.push(`${principal}:${operation}:${target}`);
+
+    return {
+      async getRole(name) {
+        const lost = enter('getRole', name);
+        const role = roles.get(name);
+        lostAnswer(lost);
+        return role ? snapshot(name, role) : null;
+      },
+
+      async createRole(input) {
+        const lost = enter('createRole', input.name);
+        if (roles.has(input.name)) throw new AwsTenantApiError('iam', 'EntityAlreadyExists', 409);
+        putRole(input.name, {
+          path: input.path ?? '/',
+          trust: structuredClone(input.trust) as TenantPolicyDocument,
+          description: input.description,
+          maxSessionSeconds: input.maxSessionSeconds,
+          tags: { ...input.tags },
+        });
+        write('createRole', input.name);
+        lostAnswer(lost);
+      },
+
+      async updateAssumeRolePolicy(name, trust) {
+        const lost = enter('updateAssumeRolePolicy', name);
+        const role = roles.get(name);
+        if (!role) throw noSuch();
+        role.trust = structuredClone(trust) as TenantPolicyDocument;
+        write('updateAssumeRolePolicy', name);
+        lostAnswer(lost);
+      },
+
+      async getRolePolicy(name, policyName) {
+        const lost = enter('getRolePolicy', name);
+        const document = roles.get(name)?.inline.get(policyName);
+        lostAnswer(lost);
+        return document ? (structuredClone(document) as TenantPolicyDocument) : null;
+      },
+
+      async putRolePolicy(name, policyName, document) {
+        const lost = enter('putRolePolicy', name);
+        const role = roles.get(name);
+        if (!role) throw noSuch();
+        role.inline.set(policyName, structuredClone(document) as TenantPolicyDocument);
+        write('putRolePolicy', `${name}/${policyName}`);
+        lostAnswer(lost);
+      },
+
+      async deleteRolePolicy(name, policyName) {
+        const lost = enter('deleteRolePolicy', name);
+        if (roles.get(name)?.inline.delete(policyName)) {
+          write('deleteRolePolicy', `${name}/${policyName}`);
+        }
+        lostAnswer(lost);
+      },
+
+      async listRolePolicies(name) {
+        const lost = enter('listRolePolicies', name);
+        const role = roles.get(name);
+        if (!role) throw noSuch();
+        lostAnswer(lost);
+        return [...role.inline.keys()];
+      },
+
+      async listAttachedRolePolicies(name) {
+        const lost = enter('listAttachedRolePolicies', name);
+        const role = roles.get(name);
+        if (!role) throw noSuch();
+        lostAnswer(lost);
+        return [...role.attached].map((arn) => ({
+          name: arn.slice(arn.lastIndexOf('/') + 1),
+          arn,
+        }));
+      },
+
+      async detachRolePolicy(name, policyArn) {
+        const lost = enter('detachRolePolicy', name, false);
+        if (roles.get(name)?.attached.delete(policyArn)) {
+          write('detachRolePolicy', `${name}/${policyArn}`);
+        }
+        lostAnswer(lost);
+      },
+
+      async listInstanceProfilesForRole(name) {
+        const lost = enter('listInstanceProfilesForRole', name, false);
+        const role = roles.get(name);
+        if (!role) throw noSuch();
+        lostAnswer(lost);
+        return [...role.instanceProfiles];
+      },
+
+      async removeRoleFromInstanceProfile(profile, name) {
+        const lost = enter('removeRoleFromInstanceProfile', name, false);
+        if (roles.get(name)?.instanceProfiles.delete(profile)) {
+          write('removeRoleFromInstanceProfile', `${profile}/${name}`);
+        }
+        lostAnswer(lost);
+      },
+
+      async deleteInstanceProfile(profile) {
+        const lost = enter('deleteInstanceProfile', profile, false);
+        if ([...roles.values()].some((r) => r.instanceProfiles.has(profile))) {
+          throw new AwsTenantApiError('iam', 'DeleteConflict', 409);
+        }
+        if (instanceProfiles.delete(profile)) write('deleteInstanceProfile', profile);
+        lostAnswer(lost);
+      },
+
+      async deleteRole(name) {
+        const lost = enter('deleteRole', name);
+        const role = roles.get(name);
+        if (role) {
+          if (role.inline.size + role.attached.size + role.instanceProfiles.size > 0) {
+            throw new AwsTenantApiError('iam', 'DeleteConflict', 409);
+          }
+          roles.delete(name);
+          write('deleteRole', name);
+        }
+        lostAnswer(lost);
+      },
+
+      async listRoles() {
+        const lost = enter('listRoles', '*', false);
+        const answer = [...roles.entries()]
+          .map(([name, role]) => snapshot(name, role))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        lostAnswer(lost);
+        return answer;
+      },
+
+      async listPolicies(pathPrefix) {
+        const lost = enter('listPolicies', pathPrefix, false);
+        const answer = [...policies.entries()]
+          .filter(([, p]) => p.path.startsWith(pathPrefix))
+          .map(([arn, p]) => ({ name: p.name, arn }));
+        lostAnswer(lost);
+        return answer;
+      },
+
+      async deletePolicy(policyArn) {
+        const lost = enter('deletePolicy', policyArn, false);
+        if (policies.has(policyArn)) {
+          if ([...roles.values()].some((r) => r.attached.has(policyArn))) {
+            throw new AwsTenantApiError('iam', 'DeleteConflict', 409);
+          }
+          policies.delete(policyArn);
+          write('deletePolicy', policyArn);
+        }
+        lostAnswer(lost);
+      },
+    };
+  }
+
+  return {
+    accountId,
+    managementAccountId,
+    roles,
+    policies,
+    instanceProfiles,
+    calls,
+    writes,
+    session,
+    failAt(operation, n, when = 'before', code = 'InjectedFault') {
+      faults.push({ operation, at: (counts.get(operation) ?? 0) + n, when, code });
+    },
+    putRole,
+    putPolicy,
+  };
+}
+
+/** A tenant account's IAM as Motir leaves it after bring-up: the member access
+ *  role Organizations created (AdministratorAccess, trusting the management
+ *  account) and `motir-tenant-deploy` with its managed policies, trusting the
+ *  management role. */
+export function seedFakeTenantIam(account: FakeTenantIamAccount): void {
+  account.putRole('OrganizationAccountAccessRole', {
+    trust: fakeAwsTrust(`arn:aws:iam::${account.managementAccountId}:root`),
+    attached: new Set([FAKE_ADMINISTRATOR_ACCESS_ARN]),
+  });
+  const deployPolicies = ['compute', 'network', 'data', 'identity'].map((family) =>
+    account.putPolicy(`${DEPLOY_ROLE}-${family}`, `/${DEPLOY_ROLE}/`, 1),
+  );
+  account.putRole(DEPLOY_ROLE, {
+    trust: fakeAwsTrust(`arn:aws:iam::${account.managementAccountId}:role/motir-org-admin`),
+    attached: new Set(deployPolicies),
+  });
+}
+
 /** A container release stack: the release template's parameters. */
 const isContainerRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
   name.startsWith('motir-release-') && 'TaskCpu' in parameters;
@@ -1104,6 +1472,8 @@ export function createFakeTenantClients(
   readonly ssm: FakeTenantSsm;
   readonly ec2: FakeTenantEc2;
   readonly edge: FakeTenantEdge;
+  /** The account's IAM; `iam` is its `motir-tenant-deploy` session. */
+  readonly iamAccount: FakeTenantIamAccount;
 } {
   const accountId = options.accountId ?? '210987654321';
   const region = options.region ?? 'us-east-1';
@@ -1112,6 +1482,8 @@ export function createFakeTenantClients(
   const ecs = createFakeTenantEcs(accountId, region, now);
   const elb = createFakeTenantElb(ecs);
   const templates = fakeTenantStackOutputs(accountId, region);
+  const iamAccount = createFakeTenantIamAccount({ accountId });
+  seedFakeTenantIam(iamAccount);
   const cloudformation = createFakeTenantCloudFormation({
     outputs:
       options.outputs ??
@@ -1158,5 +1530,7 @@ export function createFakeTenantClients(
     ssm: createFakeTenantSsm(),
     ec2: createFakeTenantEc2(),
     edge: createFakeTenantEdge(cloudformation),
+    iam: iamAccount.session(DEPLOY_ROLE),
+    iamAccount,
   };
 }

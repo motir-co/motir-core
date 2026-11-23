@@ -481,6 +481,9 @@ importers:
 
   packages/orchestrator:
     dependencies:
+      '@aws-sdk/client-account':
+        specifier: ^3.1156.0
+        version: 3.1156.0
       '@aws-sdk/client-cloudformation':
         specifier: ^3.1156.0
         version: 3.1156.0
@@ -676,6 +679,10 @@ packages:
 
   '@aws-sdk/checksums@3.1000.26':
     resolution: {integrity: sha512-CGznePoL+1oWCSzqmkvlYMpWQEZohPR3LntjKXXfVH+oh6Kd8d+yHLkjpiAGwPIHAxFe4OAq3aKfRnv/wqWIyA==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-account@3.1156.0':
+    resolution: {integrity: sha512-ehFZlA1KTC9BdG6JjvVr+BmoF6pVggdxBt0/M6Joz6HHyStkjQQUNwjf+/p+TP5Olae6F5ocnyY0MeZGUbE2dg==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-cloudformation@3.1156.0':
@@ -7596,6 +7603,17 @@ snapshots:
       '@aws-sdk/core': 3.978.6
       '@aws-sdk/types': 3.975.0
       '@smithy/core': 3.37.0
+      '@smithy/types': 4.19.0
+      tslib: 2.8.1
+
+  '@aws-sdk/client-account@3.1156.0':
+    dependencies:
+      '@aws-sdk/core': 3.978.6
+      '@aws-sdk/credential-provider-node': 3.972.89
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.37.0
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.13.0
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 

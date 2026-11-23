@@ -338,8 +338,16 @@ describe('the tenant deploy policy — its tag conditions', () => {
   });
 
   it('limits CloudFormation to stacks named motir-*', () => {
-    const grants = ALLOWS.filter((s) =>
-      list(s.Action).some((a) => a.startsWith('cloudformation:')),
+    // ListStacks names no stack and supports no resource-level permission; it
+    // is the handover's preview teardown (MOTIR-12130), alone on `*`.
+    const listing = ALLOWS.filter((s) => s.Sid === 'CloudFormationListStacks');
+    expect(listing).toEqual([
+      expect.objectContaining({ Action: ['cloudformation:ListStacks'], Resource: '*' }),
+    ]);
+    const grants = ALLOWS.filter(
+      (s) =>
+        s.Sid !== 'CloudFormationListStacks' &&
+        list(s.Action).some((a) => a.startsWith('cloudformation:')),
     );
     expect(grants).not.toHaveLength(0);
     for (const s of grants) {

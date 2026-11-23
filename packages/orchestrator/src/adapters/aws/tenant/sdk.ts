@@ -4,8 +4,11 @@ import {
   DeleteStackCommand,
   DescribeStacksCommand,
   GetTemplateCommand,
+  ListStacksCommand,
+  StackStatus,
   UpdateStackCommand,
   type Stack,
+  type StackSummary,
 } from '@aws-sdk/client-cloudformation';
 import {
   CloudWatchClient,
@@ -36,6 +39,32 @@ import {
   type TargetHealthDescription,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
+  CreateRoleCommand,
+  DeleteInstanceProfileCommand,
+  DeletePolicyCommand,
+  DeletePolicyVersionCommand,
+  DeleteRoleCommand,
+  DeleteRolePolicyCommand,
+  DetachRolePolicyCommand,
+  GetRoleCommand,
+  GetRolePolicyCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+  ListInstanceProfilesForRoleCommand,
+  ListPoliciesCommand,
+  ListPolicyVersionsCommand,
+  ListRolePoliciesCommand,
+  ListRolesCommand,
+  PutRolePolicyCommand,
+  RemoveRoleFromInstanceProfileCommand,
+  UpdateAssumeRolePolicyCommand,
+  type AttachedPolicy,
+  type InstanceProfile,
+  type Policy,
+  type PolicyVersion,
+  type Role,
+} from '@aws-sdk/client-iam';
+import {
   GetAliasCommand,
   GetFunctionConfigurationCommand,
   LambdaClient,
@@ -60,10 +89,15 @@ import type { AwsSdkClient } from '../management';
 import type {
   TenantCloudFormation,
   TenantEc2,
+  TenantIam,
+  TenantIamPolicyRef,
+  TenantIamRole,
+  TenantPolicyDocument,
   TenantRdsData,
   TenantSecretsManager,
   TenantSqlValue,
   TenantStack,
+  TenantStackSummary,
   TenantStackWrite,
 } from './clients';
 import type {
@@ -98,6 +132,14 @@ import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './func
 //   API_PutParameter.html, API_AddTagsToResource.html, API_DeleteParameter.html
 //   https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeManagedPrefixLists.html
 //   (read 2026-11-20)
+//   https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_ListStacks.html
+//   https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetRole.html, API_CreateRole.html,
+//   API_UpdateAssumeRolePolicy.html, API_GetRolePolicy.html, API_PutRolePolicy.html,
+//   API_DeleteRolePolicy.html, API_ListRolePolicies.html, API_ListAttachedRolePolicies.html,
+//   API_DetachRolePolicy.html, API_ListInstanceProfilesForRole.html,
+//   API_RemoveRoleFromInstanceProfile.html, API_DeleteInstanceProfile.html, API_DeleteRole.html,
+//   API_ListRoles.html, API_ListPolicies.html, API_ListPolicyVersions.html,
+//   API_DeletePolicyVersion.html, API_DeletePolicy.html (read 2026-11-23)
 
 /** The services a tenant client bundle builds. Later cards add theirs. */
 export type TenantSdkService =
@@ -109,7 +151,8 @@ export type TenantSdkService =
   | 'ecs'
   | 'elasticloadbalancing'
   | 'ssm'
-  | 'ec2';
+  | 'ec2'
+  | 'iam';
 
 /** Temporary credentials, as the SDK's credential provider answers them. */
 export interface TenantSdkCredentials {
@@ -147,6 +190,8 @@ export const createTenantSdkClient: TenantSdkClientFactory = (service, config) =
       return new SSMClient(config);
     case 'ec2':
       return new EC2Client(config);
+    case 'iam':
+      return new IAMClient(config);
   }
 };
 
@@ -221,6 +266,10 @@ function writeOf(input: TenantStackWrite) {
   };
 }
 
+/** Every stack status but `DELETE_COMPLETE`: ListStacks keeps a deleted stack
+ *  for 90 days, and the filter leaves those out on AWS's side. */
+const LIVE_STACK_STATUSES = Object.values(StackStatus).filter((s) => s !== 'DELETE_COMPLETE');
+
 /** `TenantCloudFormation` over an SDK client. */
 export function sdkTenantCloudFormation(client: AwsSdkClient): TenantCloudFormation {
   async function send<T>(command: unknown): Promise<T> {
@@ -232,6 +281,26 @@ export function sdkTenantCloudFormation(client: AwsSdkClient): TenantCloudFormat
   }
 
   return {
+    async listStacks() {
+      const stacks: TenantStackSummary[] = [];
+      let nextToken: string | undefined;
+      do {
+        const page = await send<{ StackSummaries?: StackSummary[]; NextToken?: string }>(
+          new ListStacksCommand({
+            StackStatusFilter: LIVE_STACK_STATUSES,
+            ...(nextToken ? { NextToken: nextToken } : {}),
+          }),
+        );
+        for (const summary of page.StackSummaries ?? []) {
+          if (summary.StackName && summary.StackStatus !== 'DELETE_COMPLETE') {
+            stacks.push({ name: summary.StackName, status: summary.StackStatus ?? 'UNKNOWN' });
+          }
+        }
+        nextToken = page.NextToken;
+      } while (nextToken);
+      return stacks;
+    },
+
     async describeStack(name) {
       try {
         const { Stacks } = (await client.send(new DescribeStacksCommand({ StackName: name }))) as {
@@ -675,4 +744,220 @@ export function defaultChainCredentials(region: string): () => Promise<{
 }> {
   const client = new LambdaClient({ region });
   return () => client.config.credentials();
+}
+
+/** IAM returns policy documents URL-encoded. */
+function documentOf(encoded: string | undefined): TenantPolicyDocument {
+  if (!encoded) return { Version: '2012-10-17', Statement: [] };
+  return JSON.parse(decodeURIComponent(encoded)) as TenantPolicyDocument;
+}
+
+function roleOf(role: Role): TenantIamRole {
+  return {
+    name: role.RoleName ?? '',
+    arn: role.Arn ?? '',
+    path: role.Path ?? '/',
+    trust: documentOf(role.AssumeRolePolicyDocument),
+  };
+}
+
+/** `TenantIam` over an SDK client (MOTIR-12130). A delete of something already
+ *  gone answers quietly, so every caller is look-before-act by construction. */
+export function sdkTenantIam(client: AwsSdkClient): TenantIam {
+  const send = sender('iam', client);
+  const gone = (err: unknown) => named(err, 'NoSuchEntity', 'NoSuchEntityException');
+  async function quietly(command: unknown): Promise<void> {
+    try {
+      await send(command);
+    } catch (err) {
+      if (!gone(err)) throw err;
+    }
+  }
+
+  return {
+    async getRole(name) {
+      try {
+        const { Role: role } = await send<{ Role?: Role }>(new GetRoleCommand({ RoleName: name }));
+        return role ? roleOf(role) : null;
+      } catch (err) {
+        if (gone(err)) return null;
+        throw err;
+      }
+    },
+
+    async createRole(input) {
+      await send(
+        new CreateRoleCommand({
+          RoleName: input.name,
+          ...(input.path ? { Path: input.path } : {}),
+          AssumeRolePolicyDocument: JSON.stringify(input.trust),
+          Description: input.description,
+          MaxSessionDuration: input.maxSessionSeconds,
+          Tags: Object.entries(input.tags).map(([Key, Value]) => ({ Key, Value })),
+        }),
+      );
+    },
+
+    async updateAssumeRolePolicy(name, trust) {
+      await send(
+        new UpdateAssumeRolePolicyCommand({
+          RoleName: name,
+          PolicyDocument: JSON.stringify(trust),
+        }),
+      );
+    },
+
+    async getRolePolicy(role, policyName) {
+      try {
+        const { PolicyDocument } = await send<{ PolicyDocument?: string }>(
+          new GetRolePolicyCommand({ RoleName: role, PolicyName: policyName }),
+        );
+        return documentOf(PolicyDocument);
+      } catch (err) {
+        if (gone(err)) return null;
+        throw err;
+      }
+    },
+
+    async putRolePolicy(role, policyName, document) {
+      await send(
+        new PutRolePolicyCommand({
+          RoleName: role,
+          PolicyName: policyName,
+          PolicyDocument: JSON.stringify(document),
+        }),
+      );
+    },
+
+    async deleteRolePolicy(role, policyName) {
+      await quietly(new DeleteRolePolicyCommand({ RoleName: role, PolicyName: policyName }));
+    },
+
+    async listRolePolicies(role) {
+      const names: string[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{ PolicyNames?: string[]; IsTruncated?: boolean; Marker?: string }>(
+          new ListRolePoliciesCommand({ RoleName: role, ...(marker ? { Marker: marker } : {}) }),
+        );
+        names.push(...(page.PolicyNames ?? []));
+        marker = page.IsTruncated ? page.Marker : undefined;
+      } while (marker);
+      return names;
+    },
+
+    async listAttachedRolePolicies(role) {
+      const refs: TenantIamPolicyRef[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{
+          AttachedPolicies?: AttachedPolicy[];
+          IsTruncated?: boolean;
+          Marker?: string;
+        }>(
+          new ListAttachedRolePoliciesCommand({
+            RoleName: role,
+            ...(marker ? { Marker: marker } : {}),
+          }),
+        );
+        for (const p of page.AttachedPolicies ?? []) {
+          refs.push({ name: p.PolicyName ?? '', arn: p.PolicyArn ?? '' });
+        }
+        marker = page.IsTruncated ? page.Marker : undefined;
+      } while (marker);
+      return refs;
+    },
+
+    async detachRolePolicy(role, policyArn) {
+      await quietly(new DetachRolePolicyCommand({ RoleName: role, PolicyArn: policyArn }));
+    },
+
+    async listInstanceProfilesForRole(role) {
+      const names: string[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{
+          InstanceProfiles?: InstanceProfile[];
+          IsTruncated?: boolean;
+          Marker?: string;
+        }>(
+          new ListInstanceProfilesForRoleCommand({
+            RoleName: role,
+            ...(marker ? { Marker: marker } : {}),
+          }),
+        );
+        for (const p of page.InstanceProfiles ?? []) {
+          if (p.InstanceProfileName) names.push(p.InstanceProfileName);
+        }
+        marker = page.IsTruncated ? page.Marker : undefined;
+      } while (marker);
+      return names;
+    },
+
+    async removeRoleFromInstanceProfile(profile, role) {
+      await quietly(
+        new RemoveRoleFromInstanceProfileCommand({ InstanceProfileName: profile, RoleName: role }),
+      );
+    },
+
+    async deleteInstanceProfile(profile) {
+      await quietly(new DeleteInstanceProfileCommand({ InstanceProfileName: profile }));
+    },
+
+    async deleteRole(name) {
+      await quietly(new DeleteRoleCommand({ RoleName: name }));
+    },
+
+    async listRoles() {
+      const roles: TenantIamRole[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{ Roles?: Role[]; IsTruncated?: boolean; Marker?: string }>(
+          new ListRolesCommand(marker ? { Marker: marker } : {}),
+        );
+        roles.push(...(page.Roles ?? []).map(roleOf));
+        marker = page.IsTruncated ? page.Marker : undefined;
+      } while (marker);
+      return roles;
+    },
+
+    async listPolicies(pathPrefix) {
+      const refs: TenantIamPolicyRef[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{ Policies?: Policy[]; IsTruncated?: boolean; Marker?: string }>(
+          new ListPoliciesCommand({
+            Scope: 'Local',
+            PathPrefix: pathPrefix,
+            ...(marker ? { Marker: marker } : {}),
+          }),
+        );
+        for (const p of page.Policies ?? []) {
+          refs.push({ name: p.PolicyName ?? '', arn: p.Arn ?? '' });
+        }
+        marker = page.IsTruncated ? page.Marker : undefined;
+      } while (marker);
+      return refs;
+    },
+
+    async deletePolicy(policyArn) {
+      let versions: PolicyVersion[];
+      try {
+        ({ Versions: versions = [] } = await send<{ Versions?: PolicyVersion[] }>(
+          new ListPolicyVersionsCommand({ PolicyArn: policyArn }),
+        ));
+      } catch (err) {
+        if (gone(err)) return;
+        throw err;
+      }
+      for (const v of versions) {
+        if (!v.IsDefaultVersion && v.VersionId) {
+          await quietly(
+            new DeletePolicyVersionCommand({ PolicyArn: policyArn, VersionId: v.VersionId }),
+          );
+        }
+      }
+      await quietly(new DeletePolicyCommand({ PolicyArn: policyArn }));
+    },
+  };
 }

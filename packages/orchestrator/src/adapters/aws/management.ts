@@ -1,4 +1,11 @@
 import {
+  AcceptPrimaryEmailUpdateCommand,
+  AccountClient,
+  GetPrimaryEmailCommand,
+  GetPrimaryEmailUpdateStatusCommand,
+  StartPrimaryEmailUpdateCommand,
+} from '@aws-sdk/client-account';
+import {
   CloudFormationClient,
   CreateStackInstancesCommand,
   DescribeStackInstanceCommand,
@@ -32,18 +39,22 @@ import {
 import {
   CreateAccountCommand,
   CreateOrganizationalUnitCommand,
+  DescribeAccountCommand,
   DescribeCreateAccountStatusCommand,
   ListAccountsCommand,
   ListCreateAccountStatusCommand,
+  ListDelegatedServicesForAccountCommand,
   ListOrganizationalUnitsForParentCommand,
   ListParentsCommand,
   ListRootsCommand,
   ListTagsForResourceCommand,
   MoveAccountCommand,
   OrganizationsClient,
+  RemoveAccountFromOrganizationCommand,
   TagResourceCommand,
   type Account,
   type CreateAccountStatus,
+  type DelegatedService,
   type OrganizationalUnit,
   type Root,
   type Tag,
@@ -108,6 +119,30 @@ import {
 //     https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-quotas.html
 //   Organizations, the unit (MOTIR-9844) — API_ListParents.html, API_MoveAccount.html
 //   CloudFormation StackSets (MOTIR-9844) — see `./stackSet.ts`
+//   The handover (MOTIR-12130), read 2026-11-23 —
+//     Account Management — https://docs.aws.amazon.com/accounts/latest/reference/API_StartPrimaryEmailUpdate.html,
+//     API_AcceptPrimaryEmailUpdate.html, API_GetPrimaryEmail.html,
+//     API_GetPrimaryEmailUpdateStatus.html, API_GetContactInformation.html
+//     Organizations — API_RemoveAccountFromOrganization.html, API_DescribeAccount.html,
+//     API_ListDelegatedServicesForAccount.html, and the standalone requirements in
+//     https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_remove.html
+//
+// WHAT A STANDALONE ACCOUNT NEEDS, AND WHAT THE MANAGEMENT ACCOUNT CAN SEE OF IT
+// (MOTIR-12130, from the user guide above): a support plan, verified contact
+// information (the phone number), a current payment method, at least FOUR days
+// since the account was CREATED in the Organization (an invited account has no
+// wait), and not being a delegated administrator for any service. From the
+// management account only two are readable with the grants the handover holds:
+// the wait (`DescribeAccount`'s JoinedTimestamp and JoinedMethod) and the
+// delegated-administrator registrations (`ListDelegatedServicesForAccount`). No
+// API reads a member account's payment method or support plan; the Account API's
+// GetContactInformation reads the phone's VerificationStatus but needs a grant
+// the management role does not hold. So `readStandaloneReadiness` reports those
+// three `unknown`, and `removeAccountFromOrganization` — whose refusal names
+// AWS's reason (`ConstraintViolationException`, e.g.
+// MEMBER_ACCOUNT_PAYMENT_INSTRUMENT_REQUIRED, ACCOUNT_CANNOT_LEAVE_WITHOUT_PHONE_VERIFICATION,
+// WAIT_PERIOD_ACTIVE, CANNOT_REMOVE_DELEGATED_ADMINISTRATOR_FROM_ORG) — is the
+// authoritative answer.
 //
 // THE STACKSET HALF (MOTIR-9844): a pool account is built by the pool-account
 // StackSet (motir-infra), not by code. The account is moved into its fleet
@@ -259,7 +294,8 @@ export type AwsManagementService =
   | 'organizations'
   | 'service-quotas'
   | 'iam'
-  | 'cloudformation';
+  | 'cloudformation'
+  | 'account';
 
 /** How the module builds each SDK client. The default is the real client. */
 export type AwsManagementClientFactory = (
@@ -285,6 +321,8 @@ export const createAwsManagementSdkClient: AwsManagementClientFactory = (service
       return new IAMClient(config);
     case 'cloudformation':
       return new CloudFormationClient(config);
+    case 'account':
+      return new AccountClient(config);
   }
 };
 
@@ -402,7 +440,92 @@ export interface AwsManagementApi {
     regionId: string,
     quota: AwsQuotaRef,
   ): Promise<AwsQuotaStatus>;
+  /** Ask AWS to move the member account's primary email to `email`; AWS sends a
+   *  one-time code to that address (MOTIR-12130). Answers AWS's status. The
+   *  address goes only to AWS: it is in no log line and no error. */
+  startPrimaryEmailUpdate(
+    accountId: string,
+    email: string,
+  ): Promise<{ status: AwsPrimaryEmailUpdateStatus }>;
+  /** Accept the update with the one-time code. A wrong or expired code is a
+   *  typed refusal (`code_refused`, AWS's code only), never a throw. */
+  acceptPrimaryEmailUpdate(
+    accountId: string,
+    email: string,
+    code: string,
+  ): Promise<AwsPrimaryEmailAcceptResult>;
+  /** The account's primary email as AWS holds it now. */
+  getPrimaryEmail(accountId: string): Promise<string>;
+  /** The latest primary-email update's status, or null when none was started —
+   *  how a resumed step sees an update already under way. */
+  getPrimaryEmailUpdateStatus(accountId: string): Promise<AwsPrimaryEmailUpdateState | null>;
+  /** Which of AWS's standalone requirements the management account can see as
+   *  met (see the header): the wait and delegated administration are read, the
+   *  rest are `unknown`. */
+  readStandaloneReadiness(accountId: string): Promise<AwsStandaloneReadiness>;
+  /** Remove the account from the Organization. A refusal for an unmet
+   *  requirement answers `not_ready` with AWS's reason and never throws; an
+   *  account already outside the Organization answers `removed`. */
+  removeAccountFromOrganization(accountId: string): Promise<AwsAccountRemovalResult>;
 }
+
+/** AWS's status of a primary-email update. */
+export type AwsPrimaryEmailUpdateStatus = 'PENDING' | 'ACCEPTED' | 'COMPLETED' | 'FAILED';
+
+export const AWS_PRIMARY_EMAIL_UPDATE_STATUSES: readonly AwsPrimaryEmailUpdateStatus[] = [
+  'PENDING',
+  'ACCEPTED',
+  'COMPLETED',
+  'FAILED',
+];
+
+/** The latest primary-email update, as `getPrimaryEmailUpdateStatus` reads it. */
+export interface AwsPrimaryEmailUpdateState {
+  readonly status: AwsPrimaryEmailUpdateStatus;
+  readonly updatedAt: Date | null;
+}
+
+/** What accepting the one-time code did. */
+export type AwsPrimaryEmailAcceptResult =
+  | { readonly outcome: 'accepted'; readonly status: AwsPrimaryEmailUpdateStatus }
+  | { readonly outcome: 'code_refused'; readonly reason: string };
+
+/** The Account API's answers to a wrong, expired or unmatched code: the
+ *  update's input was refused, there is no update to accept, or it moved on. */
+const PRIMARY_EMAIL_CODE_REFUSALS = [
+  'ValidationException',
+  'ResourceNotFoundException',
+  'ConflictException',
+];
+
+/** One standalone requirement, as far as the management account can see it. */
+export type AwsReadinessStatus = 'met' | 'not_met' | 'unknown';
+
+/** AWS's wait before a CREATED account may leave its Organization. */
+export const AWS_STANDALONE_WAIT_MS = 4 * 24 * 60 * 60_000;
+
+export interface AwsStandaloneReadiness {
+  /** False when the account is already outside the Organization. */
+  readonly inOrganization: boolean;
+  readonly waitPeriod: { readonly status: AwsReadinessStatus; readonly eligibleAt: Date | null };
+  readonly delegatedAdministrator: {
+    readonly status: AwsReadinessStatus;
+    /** The service principals the account is a delegated administrator for. */
+    readonly services: readonly string[];
+  };
+  /** Never readable from the management account (see the header). */
+  readonly paymentMethod: 'unknown';
+  readonly supportPlan: 'unknown';
+  readonly contactInformation: 'unknown';
+  /** `false` when a readable requirement is not met; `null` otherwise, because
+   *  three are never readable and only the removal itself can say. */
+  readonly ready: false | null;
+}
+
+/** What `removeAccountFromOrganization` did. */
+export type AwsAccountRemovalResult =
+  | { readonly outcome: 'removed' }
+  | { readonly outcome: 'not_ready'; readonly missing: readonly string[] };
 
 /** One Service Quotas quota, by service and code. */
 export interface AwsQuotaRef {
@@ -486,6 +609,13 @@ function accountOf(account: Account): AwsOrganizationAccount {
     status: account.State ?? account.Status ?? '',
     ...(account.JoinedTimestamp ? { joinedAt: account.JoinedTimestamp } : {}),
   };
+}
+
+/** AWS's primary-email status, or the typed error for one it has not documented. */
+function primaryEmailStatusOf(status: string | undefined): AwsPrimaryEmailUpdateStatus {
+  const known = AWS_PRIMARY_EMAIL_UPDATE_STATUSES.find((s) => s === status);
+  if (!known) throw new AwsManagementApiError('account', `UnknownStatus:${status ?? ''}`, null);
+  return known;
 }
 
 /** The two `RequestStatus` values a request is still open in. */
@@ -591,6 +721,12 @@ export function createAwsManagementApi(
 
   async function organizations(): Promise<AwsSdkClient> {
     return client('organizations', await managementRole());
+  }
+
+  /** The Account Management API on the management session (MOTIR-12130): it
+   *  acts on a member account by `AccountId`, under trusted access. */
+  async function accountApi(): Promise<AwsSdkClient> {
+    return client('account', await managementRole());
   }
 
   async function waitForCreateAccount(requestId: string, name: string) {
@@ -1194,6 +1330,165 @@ export function createAwsManagementApi(
     },
 
     waitForCreateAccount,
+
+    async startPrimaryEmailUpdate(accountId, email) {
+      const { Status } = await call<{ Status?: string }>(
+        'account',
+        await accountApi(),
+        new StartPrimaryEmailUpdateCommand({ AccountId: accountId, PrimaryEmail: email }),
+      );
+      return { status: primaryEmailStatusOf(Status) };
+    },
+
+    async acceptPrimaryEmailUpdate(accountId, email, code) {
+      try {
+        const { Status } = await call<{ Status?: string }>(
+          'account',
+          await accountApi(),
+          new AcceptPrimaryEmailUpdateCommand({
+            AccountId: accountId,
+            PrimaryEmail: email,
+            Otp: code,
+          }),
+        );
+        return { outcome: 'accepted', status: primaryEmailStatusOf(Status) };
+      } catch (err) {
+        if (
+          err instanceof AwsManagementApiError &&
+          PRIMARY_EMAIL_CODE_REFUSALS.includes(err.awsCode)
+        ) {
+          return { outcome: 'code_refused', reason: err.awsCode };
+        }
+        throw err;
+      }
+    },
+
+    async getPrimaryEmail(accountId) {
+      const { PrimaryEmail } = await call<{ PrimaryEmail?: string }>(
+        'account',
+        await accountApi(),
+        new GetPrimaryEmailCommand({ AccountId: accountId }),
+      );
+      return required(PrimaryEmail, 'PrimaryEmail');
+    },
+
+    async getPrimaryEmailUpdateStatus(accountId) {
+      try {
+        const { Status, UpdatedAt } = await call<{ Status?: string; UpdatedAt?: Date }>(
+          'account',
+          await accountApi(),
+          new GetPrimaryEmailUpdateStatusCommand({ AccountId: accountId }),
+        );
+        return {
+          status: primaryEmailStatusOf(Status),
+          updatedAt: UpdatedAt instanceof Date ? UpdatedAt : null,
+        };
+      } catch (err) {
+        if (err instanceof AwsManagementApiError && err.awsCode === 'ResourceNotFoundException') {
+          return null;
+        }
+        throw err;
+      }
+    },
+
+    async readStandaloneReadiness(accountId) {
+      const orgs = await organizations();
+      let account: Account | undefined;
+      try {
+        ({ Account: account } = await call<{ Account?: Account }>(
+          'organizations',
+          orgs,
+          new DescribeAccountCommand({ AccountId: accountId }),
+        ));
+      } catch (err) {
+        if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'AccountNotFoundException') {
+          throw err;
+        }
+      }
+      if (!account) {
+        return {
+          inOrganization: false,
+          waitPeriod: { status: 'unknown', eligibleAt: null },
+          delegatedAdministrator: { status: 'unknown', services: [] },
+          paymentMethod: 'unknown',
+          supportPlan: 'unknown',
+          contactInformation: 'unknown',
+          ready: null,
+        };
+      }
+      // An invited account has no wait; a created one waits four days from when
+      // it joined (its creation). With no time from AWS the wait is unknown.
+      let waitPeriod: AwsStandaloneReadiness['waitPeriod'];
+      if (account.JoinedMethod === 'INVITED') {
+        waitPeriod = { status: 'met', eligibleAt: null };
+      } else if (account.JoinedTimestamp instanceof Date) {
+        const eligibleAt = new Date(account.JoinedTimestamp.getTime() + AWS_STANDALONE_WAIT_MS);
+        waitPeriod = { status: now() >= eligibleAt.getTime() ? 'met' : 'not_met', eligibleAt };
+      } else {
+        waitPeriod = { status: 'unknown', eligibleAt: null };
+      }
+      const services: string[] = [];
+      try {
+        let nextToken: string | undefined;
+        do {
+          const page = await call<{ DelegatedServices?: DelegatedService[]; NextToken?: string }>(
+            'organizations',
+            orgs,
+            new ListDelegatedServicesForAccountCommand({
+              AccountId: accountId,
+              ...(nextToken ? { NextToken: nextToken } : {}),
+            }),
+          );
+          for (const service of page.DelegatedServices ?? []) {
+            if (service.ServicePrincipal) services.push(service.ServicePrincipal);
+          }
+          nextToken = page.NextToken ?? undefined;
+        } while (nextToken);
+      } catch (err) {
+        // AWS's answer for an account registered as no service's delegate.
+        if (
+          !(err instanceof AwsManagementApiError) ||
+          err.awsCode !== 'AccountNotRegisteredException'
+        ) {
+          throw err;
+        }
+      }
+      const delegatedAdministrator = {
+        status: (services.length > 0 ? 'not_met' : 'met') as AwsReadinessStatus,
+        services,
+      };
+      const blocked =
+        waitPeriod.status === 'not_met' || delegatedAdministrator.status === 'not_met';
+      return {
+        inOrganization: true,
+        waitPeriod,
+        delegatedAdministrator,
+        paymentMethod: 'unknown',
+        supportPlan: 'unknown',
+        contactInformation: 'unknown',
+        ready: blocked ? false : null,
+      };
+    },
+
+    async removeAccountFromOrganization(accountId) {
+      const orgs = await organizations();
+      try {
+        await orgs.send(new RemoveAccountFromOrganizationCommand({ AccountId: accountId }));
+        return { outcome: 'removed' };
+      } catch (err) {
+        const code = errorCode(err);
+        // The account is no longer the Organization's: a replayed removal.
+        if (code === 'AccountNotFoundException') return { outcome: 'removed' };
+        if (code === 'ConstraintViolationException') {
+          const reason = (err as { Reason?: unknown }).Reason;
+          return {
+            outcome: 'not_ready',
+            missing: [typeof reason === 'string' && reason ? reason : code],
+          };
+        }
+        throw toApiError('organizations', err);
+      }
+    },
 
     async assumeMemberRole(accountId) {
       return assumeInMember(accountId, AWS_MEMBER_ROLE_NAME, SESSION_NAME);

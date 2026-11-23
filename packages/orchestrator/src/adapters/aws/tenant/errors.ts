@@ -16,14 +16,16 @@ export class AwsTenantApiError extends OrchestratorApiError {
   }
 }
 
-/** The tenant account's deploy role could not be assumed. */
+/** A role in the tenant account — its deploy role unless named, or the member
+ *  access role the handover strips last (MOTIR-12130) — could not be assumed. */
 export class TenantRoleUnavailableError extends Error {
   readonly code = 'AWS_TENANT_ROLE_UNAVAILABLE' as const;
   constructor(
     readonly accountId: string,
     readonly awsCode: string,
+    readonly roleName: string = 'motir-tenant-deploy',
   ) {
-    super(`The deploy role in tenant account ${accountId} could not be assumed (${awsCode}).`);
+    super(`The role ${roleName} in tenant account ${accountId} could not be assumed (${awsCode}).`);
     this.name = 'TenantRoleUnavailableError';
   }
 }

@@ -7,13 +7,15 @@ import {
   sdkTenantEc2,
   sdkTenantEcs,
   sdkTenantElb,
+  sdkTenantIam,
   sdkTenantLambda,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   sdkTenantSsm,
   type TenantSdkClientFactory,
 } from './sdk';
-import { tenantDeploySession } from './session';
+import { tenantDeploySession, tenantMemberSession } from './session';
+import type { TenantIam } from './clients';
 
 // The ASSUMED-ROLE CLIENT FACTORY (MOTIR-10004): every client of a tenant
 // account, built on the account's deploy-role session and nothing else. The
@@ -49,7 +51,31 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     elb: sdkTenantElb(factory('elasticloadbalancing', config)),
     ssm: sdkTenantSsm(factory('ssm', config)),
     ec2: sdkTenantEc2(factory('ec2', config)),
+    // IAM is global: its endpoint answers whatever the region.
+    iam: sdkTenantIam(factory('iam', config)),
   };
+}
+
+export interface TenantMemberIamOptions {
+  readonly management: Pick<AwsManagementApi, 'assumeMemberRole'>;
+  readonly accountId: string;
+  readonly region: string;
+  readonly sdkClientFactory?: TenantSdkClientFactory;
+  readonly now?: () => number;
+}
+
+/** The account's IAM on its MEMBER ACCESS ROLE (MOTIR-12130): the one session
+ *  that can delete `motir-tenant-deploy` and then strip itself, which the deploy
+ *  role can never do (its policy denies it every action on itself). A new call
+ *  is a new session — how the handover tells a role it has closed. */
+export function createTenantMemberIam(options: TenantMemberIamOptions): TenantIam {
+  const factory = options.sdkClientFactory ?? createTenantSdkClient;
+  const credentials = tenantMemberSession({
+    management: options.management,
+    accountId: options.accountId,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  return sdkTenantIam(factory('iam', { region: options.region, credentials }));
 }
 
 /** Builds a tenant account's clients — what the adapter is given, and what a

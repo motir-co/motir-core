@@ -24,8 +24,18 @@ export interface TenantStackWrite {
   readonly tags: Readonly<Record<string, string>>;
 }
 
+/** A stack as `ListStacks` names it (MOTIR-12130). ListStacks carries no tags
+ *  or parameters; a caller that needs them describes the stack. */
+export interface TenantStackSummary {
+  readonly name: string;
+  readonly status: string;
+}
+
 /** The CloudFormation calls the stack runner makes. */
 export interface TenantCloudFormation {
+  /** Every stack in the account that is not deleted, across every page
+   *  (MOTIR-12130): what the handover's preview teardown selects from. */
+  listStacks(): Promise<TenantStackSummary[]>;
   /** The stack, or null when there is none of that name. */
   describeStack(name: string): Promise<TenantStack | null>;
   /** The template the stack was last applied with, as submitted. */
@@ -72,6 +82,64 @@ export interface TenantEc2 {
   managedPrefixListId(name: string): Promise<string | null>;
 }
 
+/** An IAM policy document, as IAM stores it once decoded. */
+export interface TenantPolicyDocument {
+  readonly Version: string;
+  readonly Statement: readonly Readonly<Record<string, unknown>>[];
+}
+
+/** A role as the handover reads it: its name, path and trust policy. */
+export interface TenantIamRole {
+  readonly name: string;
+  readonly arn: string;
+  readonly path: string;
+  readonly trust: TenantPolicyDocument;
+}
+
+/** A customer-managed policy, or a policy attached to a role. */
+export interface TenantIamPolicyRef {
+  readonly name: string;
+  readonly arn: string;
+}
+
+/** The IAM calls the handover makes in a tenant account (MOTIR-12130): IAM is
+ *  global, so the slice is the account's, whatever its region. Every delete
+ *  answers quietly when the thing is already gone. */
+export interface TenantIam {
+  /** The role, or null when there is none of that name. */
+  getRole(name: string): Promise<TenantIamRole | null>;
+  createRole(input: {
+    readonly name: string;
+    /** The role's IAM path, `/` when absent. */
+    readonly path?: string;
+    readonly trust: TenantPolicyDocument;
+    readonly description: string;
+    readonly maxSessionSeconds: number;
+    readonly tags: Readonly<Record<string, string>>;
+  }): Promise<void>;
+  updateAssumeRolePolicy(name: string, trust: TenantPolicyDocument): Promise<void>;
+  /** An inline policy's document, or null when the role has none of that name. */
+  getRolePolicy(role: string, policyName: string): Promise<TenantPolicyDocument | null>;
+  putRolePolicy(role: string, policyName: string, document: TenantPolicyDocument): Promise<void>;
+  deleteRolePolicy(role: string, policyName: string): Promise<void>;
+  listRolePolicies(role: string): Promise<string[]>;
+  listAttachedRolePolicies(role: string): Promise<TenantIamPolicyRef[]>;
+  detachRolePolicy(role: string, policyArn: string): Promise<void>;
+  /** The instance profiles the role sits in: IAM refuses to delete a role that
+   *  is still in one. */
+  listInstanceProfilesForRole(role: string): Promise<string[]>;
+  removeRoleFromInstanceProfile(profile: string, role: string): Promise<void>;
+  deleteInstanceProfile(profile: string): Promise<void>;
+  deleteRole(name: string): Promise<void>;
+  /** Every role in the account, across every page. */
+  listRoles(): Promise<TenantIamRole[]>;
+  /** The customer-managed policies under `pathPrefix`. */
+  listPolicies(pathPrefix: string): Promise<TenantIamPolicyRef[]>;
+  /** Delete a customer-managed policy, its non-default versions first (IAM
+   *  refuses the policy while they exist). */
+  deletePolicy(policyArn: string): Promise<void>;
+}
+
 /** Every client of one tenant account, all under its deploy role. */
 export interface TenantClients {
   readonly accountId: string;
@@ -88,4 +156,6 @@ export interface TenantClients {
   readonly ssm: TenantSsm;
   /** The network's (MOTIR-11846). */
   readonly ec2: TenantEc2;
+  /** The handover's (MOTIR-12130). */
+  readonly iam: TenantIam;
 }
