@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { arrivalLevel } from '@/lib/planning/planArrival';
+import { arrivalLevel, arrivalLevelId } from '@/lib/planning/planArrival';
+import { fullestContainer } from '@/lib/planning/planShape';
 import { planReviewItem } from '../helpers/planReview';
 
 // WHERE A PLAN LANDS — the direct unit (MOTIR-6162's coverage clause).
@@ -302,5 +303,46 @@ describe('arrivalLevel — a plan that also marks finished work outdated (Bug MO
 
   it('a plan of marks alone still opens on the container holding them', () => {
     expect(arrivalLevel(marks(4), 'New')?.id).toBe('wi_old');
+  });
+});
+
+describe('arrivalLevelId — the ONE answer to "which level" (Bug MOTIR-12144)', () => {
+  const filedInto = (i: number) =>
+    planReviewItem({
+      planItemId: `f${i}`,
+      nodeId: `f${i}`,
+      folderId: 'F',
+      folderPath: ['Later'],
+      folderTrail: [{ id: 'F', name: 'Later' }],
+    });
+  const under = planReviewItem({
+    planItemId: 'e',
+    nodeId: 'e',
+    parentNodeId: 'wi_e',
+    parentIdentifier: 'MOTIR-1',
+    parentTitle: 'E',
+  });
+
+  it("names the folder the canvas opens on, where the folder-blind count named the root (the card's reproduction)", () => {
+    const items = [0, 1, 2].map(filedInto).concat(under);
+    // The count the review's size used to read: the folder-filed adds pile up at
+    // the ROOT, which then wins and spells itself `null`.
+    expect(fullestContainer(items)).toBeNull();
+    expect(arrivalLevel(items, 'New')?.id).toBe('folder:F');
+    expect(arrivalLevelId(items)).toBe('folder:F');
+  });
+
+  it('agrees with arrivalLevel on a parented, a folder-filed, a root-only and an empty plan', () => {
+    const root = planReviewItem({ planItemId: 'r', nodeId: 'r' });
+    const shapes = [
+      [under, planReviewItem({ planItemId: 'e2', nodeId: 'e2', parentNodeId: 'wi_e' }), root],
+      [filedInto(0), filedInto(1), under],
+      [root, planReviewItem({ planItemId: 'r2', nodeId: 'r2' })],
+      [],
+    ];
+    expect(shapes.map((items) => arrivalLevelId(items))).toEqual(['wi_e', 'folder:F', null, null]);
+    for (const items of shapes) {
+      expect(arrivalLevelId(items)).toBe(arrivalLevel(items, 'New')?.id ?? null);
+    }
   });
 });
