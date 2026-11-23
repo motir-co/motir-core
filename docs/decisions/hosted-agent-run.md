@@ -20,6 +20,7 @@
 - **AMENDED 2026-10-26 by MOTIR-7656, for Story MOTIR-714 (9.4, hosted runs proven by dogfood) — §6 and NEW §9: the container and motir-core reach the gateway at TWO origins.** A hosted-run container dials the gateway's **run lane** at the public, Motir-owned `https://gateway-run.motir.co`, served by a separate edge app in front of the gateway. motir-core's own server (mint, revoke, status) keeps the private `http://motir-gateway.flycast`. §6's _so the container receives it verbatim_ is struck in place and gains `MOTIR_GATEWAY_RUN_URL`. Fly cross-org private networking is ruled out (§9). Follows the owner's decision while walking MOTIR-7656 (_"narrow public ingress on a Motir-owned hostname"_). **Consumed by** MOTIR-6453 (sets both values on production), MOTIR-6799 (the first real hosted run) and MOTIR-8342 (tenant apps on motir.site, built on the same edge).
 - **AMENDED 2026-11-10 by MOTIR-10882 (hosted runs booted a hosted-agent image weeks behind `main`) — §6: the `MOTIR_HOSTED_AGENT_IMAGE` pin is kept in git and moves with `main`.** `infra/image-pins/motir-hosted-agent-image` is the one place the production digest is written. The image lane opens a pull request that bumps it after every publish, the AWS deploy writes it into the secret before it rolls the services, and the daily health check fails when the pin lags. It is still a digest, and a publish alone still changes nothing production boots. Replaces the manual re-pin cards (MOTIR-7212, MOTIR-7247, MOTIR-6828, MOTIR-7353).
 - **AMENDED 2026-11-06 by MOTIR-10513 (the review agent can log a bug) — §8.3 and NEW §8.7: a review run logs a bug for a defect its verdict cannot carry.** A defect in the code the card delivers stays a finding of the verdict. One the verdict cannot carry — in code the pull requests did not touch, or one that belongs to another card — rides the SAME verdict body as a `bugs` entry, and the server files it as Motir in the project's bug destination, linked `relates_to` the reviewed card. No route is added and the run token's binding is not widened: the review agent still holds no Motir credential, and the one card a filing names is the reviewed one. §8.3's _write nothing else_ gains that one exception; `approval-gates.md` §12.17 states the rule for both review doors.
+- **AMENDED 2026-11-23 by MOTIR-8342 (a hosted app on motir.site can reach the gateway on its tenant-app key) — NEW §9.1: the tenant-app lane.** The server side of a tenant app dials the gateway at a second public, Motir-owned origin, `https://gateway-app.motir.co`, served by its own edge service (`motir-gateway-app`) running the run-lane edge's image with `EDGE_LANE=app`. That edge forwards only the model routes and overwrites `X-Motir-Ingress` with `app-edge`; the gateway serves an `app-edge` request only on a bound `app` key and refuses a stamp value it does not know. §9's run-lane text is not rewritten; §9.1 adds one dated sentence that both edges now run on AWS. _What this does NOT decide_'s tenant-app line is struck in place, and one line names what §9.1 leaves open. **Consumed by** the post-merge verification card beside MOTIR-8342 (it reads the address and route list back against the deployed origin) and MOTIR-8344 (the end-to-end proof).
 - **Supersedes:** this card's own earlier scope, a `motir-ai/docs/hosted-execution.md` that was to choose a container orchestrator and a per-agent `*_BASE_URL` matrix. It was never written; both questions have since been settled elsewhere (see Context).
 
 > Structured **Status → Context → Decision → Consequences**, in the shape the other records here use. Every enumeration below was read on `origin/main` of motir-core `84b69443e`, motir-gateway `00f72c8` and motir-ai `c440da5` (2026-09-26).
@@ -427,6 +428,47 @@ is what it changes for the hosted run.
 
 **What it accepts.** A run-key-gated model route is reachable from the internet. The guard is the run key (short-lived, per run, revoked at run end, lane-bound) together with the edge's route allowlist and rate limits — the same zero-trust pattern by which sandboxed agents reach a provider's public API.
 
+#### 9.1 · The tenant-app lane — AMENDED 2026-11-23 (MOTIR-8342)
+
+§9 built the run-lane edge so a second lane could sit beside it. This records that lane: how the server side of an app Motir hosts on motir.site reaches the gateway on the tenant-app key Motir minted for it. It builds on §9's outcome (MOTIR-7656) and does not restate it. _Where the edges run, as of 2026-11-23:_ §9's Fly wording records where the run edge ran when it was decided; both edges now run on AWS, as Fargate services behind core's public HTTPS listener whose upstream is the gateway's internal origin (MOTIR-9711, MOTIR-9909).
+
+**The address.** A tenant app's server side dials `https://gateway-app.<domain>`, in production `https://gateway-app.motir.co`, a Motir-owned hostname on core's public HTTPS listener. It is served by the `motir-gateway-app` service, which runs the same edge image as the run lane's `motir-gateway-run` with `EDGE_LANE=app`, and is switched by its own `services.appEdge` block in motir-infra (MOTIR-12083).
+
+**The stamp and the rule.** The edge overwrites `X-Motir-Ingress` with `app-edge` on every request it forwards, whatever the caller sent. The gateway then decides by the stamp (motir-gateway `middleware/motir_run_edge.go`, MOTIR-12081):
+
+- `app-edge`: served only on a token whose lane is `app` and which carries a whole app binding (one project and one paying org);
+- `run-edge`: MOTIR-7656's rule, unchanged: a bound per-run key only. An `app` key stays refused on `gateway-run.<domain>`;
+- any other non-empty value: refused;
+- no stamp (motir-core and motir-ai on the internal origin): authenticated as before.
+
+The lane is a property of the credential row, and the stamp can only narrow what a key may do, never grant it a lane (MOTIR-2778, MOTIR-4490).
+
+**The routes.** Forwarded, each on its one method (motir-gateway `edge/lanes/app.conf`, MOTIR-12082):
+
+| Route                                   | Method |
+| --------------------------------------- | ------ |
+| `/v1/chat/completions`                  | `POST` |
+| `/v1/messages`                          | `POST` |
+| `/v1/models`, `/v1/models/<id>`         | `GET`  |
+| `/healthz`, answered by the edge itself | `GET`  |
+
+Any other method on a forwarded route answers 405. Every path off the list answers 404 at the edge and is never forwarded: `/api/status`, every `/api/*` path (the token API and the mint and revoke endpoints), `/dashboard`, the admin console at `/`, `/v1/oneapi/proxy/...`, and the `/<id>` forms of `/v1/chat/completions` and `/v1/messages`. Limits per key and per IP answer 429. Their numbers are targets, not measurements; edge capacity is MOTIR-9667's.
+
+**Why a second service and origin, not a widened run edge.** Each lane can be switched off, scaled and rate-limited on its own. A surge of tenant-app traffic cannot starve hosted runs. A misconfiguration on one origin cannot open the other. And an `app` key stays refused on `gateway-run.<domain>`.
+
+**Why one public HTTPS origin serves every tenant app.** Wherever MOTIR-4527 places a tenant app's server side (Fly, AWS or serverless), it can dial public HTTPS. That is the same reason §9 gives for hosted-run containers, and it means the address does not depend on where the app runs.
+
+**No browser surface.** The key is held server-side by the app. The origin opens no CORS surface and is not meant to be called from a browser.
+
+**TLS and DNS.** HTTPS only, with the host's own certificate in its own stack (`<namePrefix>-gateway-app-certificate`). Plain HTTP is redirected to HTTPS by the public load balancer and never reaches the edge. The certificate's validation record and the `gateway-app.motir.co` record are laid by a person (MOTIR-12084, the manual DNS card beside MOTIR-8342), as `gateway-run.motir.co`'s were.
+
+**What it accepts.** An app-key-gated model route is reachable from the internet. The guard is the app key (bound to one project and one org, revoked with cache eviction by MOTIR-8339) together with the edge's route allowlist and rate limits: the same zero-trust pattern §9 records.
+
+**Rejected:**
+
+- **A second `server` block or route list inside the run-lane service.** The two lanes could no longer be switched off, scaled or limited apart.
+- **A dedicated public listener on the gateway itself.** It would give the private gateway a public address, which MOTIR-7656 ruled out.
+
 ## Consequences
 
 - **Every consumer builds against one id and one vocabulary**, and the story's contract guards (no hosted-only status or event, no cost column on `DispatchRun`) are checkable against this document.
@@ -457,7 +499,8 @@ is what it changes for the hosted run.
 - **A data policy carried by a hosted run.** Today it carries none; adding one is a later decision.
 - **How rates are generated from the catalog.** §7 depends on it; the rate-sync story under AI economics (MOTIR-4329) decides and builds it.
 - **Network-level egress enforcement.** The lock is the credential (egress contract §4).
-- **The tenant-app lane on the run-lane edge.** §9's edge is built so MOTIR-8342 can add its own route list and key lane for motir.site apps; which routes and keys, and on which hostname, is MOTIR-8342's.
+- ~~**The tenant-app lane on the run-lane edge.** §9's edge is built so MOTIR-8342 can add its own route list and key lane for motir.site apps; which routes and keys, and on which hostname, is MOTIR-8342's.~~ _(Struck 2026-11-23, MOTIR-8342: the tenant-app lane IS decided now, as its own edge at its own origin — see §9.1.)_
+- **What §9.1 leaves open for a tenant-app key.** Its per-key quota, expiry and model allowlist (MOTIR-8341); debiting the org (MOTIR-8340); where tenant apps run and how the key and the address reach them (MOTIR-4527); and `*.motir.site` (MOTIR-11284).
 - **Whether Motir consolidates its hosting on one cloud.** §9's Motir-owned hostname keeps that open; it is not decided here.
 - **What a _local_ run's card becomes on failure.** Only hosted runs are decided here.
 - **How a hosted run is re-run automatically after a design is sent back.** That is Story 9.2, which calls the start path this document's §1–§3 describe.
