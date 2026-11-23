@@ -14511,5 +14511,7 @@
   "settings.production.usage.exhausted.bodySuspended": "This app keeps running and sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
   "settings.production.usage.exhausted.bodyCannotSuspend": "This app runs as an AWS container, which can’t be suspended, so it keeps running always on and keeps using credits until the balance is topped up. Motir never stops or deletes a production app for being out of credits.",
   "settings.production.usage.exhausted.topUp": "Top up credits",
-  "settings.production.usage.exhausted.member": "An organisation owner or admin can top up credits."
+  "settings.production.usage.exhausted.member": "An organisation owner or admin can top up credits.",
+  "notifications.summary.productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> is failing its health check in production} other {<s>{repository}</s> crashed in production}}",
+  "notifications.excerpt.productionAppCrashed": "{reason} · {project}"
 }

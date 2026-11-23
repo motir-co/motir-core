@@ -6457,10 +6457,12 @@
       "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet",
       "pageMentioned": "<s>{actor}</s> heeft je vermeld op <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> slaagt in productie niet voor de statuscontrole} other {<s>{repository}</s> is in productie gecrasht}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents."
+      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

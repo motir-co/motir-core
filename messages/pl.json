@@ -6457,10 +6457,12 @@
       "reviewSentBack": "Agent poprosił o zmiany w <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> nie przechodzi kontroli stanu w środowisku produkcyjnym} other {<s>{repository}</s> uległa awarii w środowisku produkcyjnym}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci."
+      "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

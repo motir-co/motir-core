@@ -6457,10 +6457,12 @@
       "reviewSentBack": "エージェントが <s>{key}</s> に変更を求めました",
       "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました",
       "pageMentioned": "<s>{actor}</s> さんが <s>{page}</s> であなたをメンションしました",
-      "pageReplied": "<s>{actor}</s> さんが <s>{page}</s> のスレッドに返信しました"
+      "pageReplied": "<s>{actor}</s> さんが <s>{page}</s> のスレッドに返信しました",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> が本番環境でヘルスチェックに失敗しています} other {<s>{repository}</s> が本番環境でクラッシュしました}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。"
+      "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

@@ -6457,10 +6457,12 @@
       "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mentioned you on <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> is failing its health check in production} other {<s>{repository}</s> crashed in production}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents."
+      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

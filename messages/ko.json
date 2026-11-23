@@ -6457,10 +6457,12 @@
       "reviewSentBack": "에이전트가 <s>{key}</s>에 변경을 요청했습니다",
       "agentHibernatedByAdmin": "<s>{actor}</s> 님이 내 에이전트 <s>{agent}</s>을(를) 최대 절전 모드로 전환했습니다",
       "pageMentioned": "<s>{actor}</s>님이 <s>{page}</s>에서 나를 멘션했습니다",
-      "pageReplied": "<s>{actor}</s>님이 <s>{page}</s>의 스레드에 답글을 남겼습니다"
+      "pageReplied": "<s>{actor}</s>님이 <s>{page}</s>의 스레드에 답글을 남겼습니다",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s>이(가) 프로덕션에서 상태 확인에 실패하고 있습니다} other {<s>{repository}</s>이(가) 프로덕션에서 충돌했습니다}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "조직 관리자가 {time}에 중지했습니다. 파일은 보존되며, 에이전트에서 깨울 수 있습니다."
+      "agentHibernatedByAdmin": "조직 관리자가 {time}에 중지했습니다. 파일은 보존되며, 에이전트에서 깨울 수 있습니다.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {
