@@ -689,6 +689,14 @@ const APP_SERVER_ENV = {
   // The hosting fake's store — a production release's (MOTIR-10040) and a
   // preview's (MOTIR-10098); see its block above.
   MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+  // A production release made HERE, not in the worker: an idle-policy switch
+  // redeploys the serving release from the request (Story MOTIR-9799 ·
+  // MOTIR-12112), reading the manifest at its commit as a merge's release does.
+  // The seam claims only the repositories its control file names, and with
+  // `E2E_TEST_GITHUB_REPOS` on it leaves the installation read to that seam.
+  E2E_TEST_PRODUCTION_RELEASE: '1',
+  MOTIR_PRODUCTION_RELEASE_CONTROL_PATH: process.env['MOTIR_PRODUCTION_RELEASE_CONTROL_PATH']!,
+  MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH: process.env['MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH']!,
   // The capacity fake (MOTIR-9617) — see its block above this config.
   MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
   MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
