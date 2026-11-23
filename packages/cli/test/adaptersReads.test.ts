@@ -365,6 +365,52 @@ describe('toWorkItemRepairClaim — the acceptance Re-run class (MOTIR-6502)', (
   });
 });
 
+describe('toWorkItemRepairClaim — a member handed over for its BASE (Bug MOTIR-12095)', () => {
+  const member = {
+    repo: 'acme/motir-core',
+    number: 131,
+    url: 'https://github.com/acme/motir-core/pull/131',
+    headRef: 'subtask/PROD-7-thing',
+    baseRef: 'main',
+    ci: 'passing' as const,
+    failingChecks: [] as string[],
+    queueExit: null,
+  };
+  const body = (pullRequests: unknown[]) =>
+    ({
+      key: 'PROD-7',
+      title: 'Add the thing',
+      outcome: 'claimed',
+      reason: null,
+      runTargetKey: null,
+      runId: 'run_fix_1',
+      holder: null,
+      startedAt: null,
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      reviewRefusal: null,
+      pullRequests,
+    }) as never;
+
+  it('carries `conflicted` and `outOfDate` through as the server sends them', () => {
+    const claim = toWorkItemRepairClaim(
+      body([
+        { ...member, conflicted: true, outOfDate: false },
+        { ...member, number: 132, conflicted: false, outOfDate: true },
+      ]),
+    );
+    expect(claim.pullRequests.map((pr) => [pr.conflicted, pr.outOfDate])).toEqual([
+      [true, false],
+      [false, true],
+    ]);
+  });
+
+  it('a server older than contract 1.91.0 sends neither — read as handed over for its checks alone', () => {
+    const claim = toWorkItemRepairClaim(body([member]));
+    expect(claim.pullRequests[0]).toMatchObject({ conflicted: false, outOfDate: false });
+  });
+});
+
 describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () => {
   const base = {
     id: 'run-fix',

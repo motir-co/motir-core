@@ -1315,5 +1315,19 @@
  *   `packages/cli/src/client.ts`).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.90.0` after `1.89.0` above.
+ *
+ * - `1.91.0` — Bug MOTIR-12095 adds `conflicted` and `outOfDate` to
+ *   `WorkItemRepairClaim.pullRequests[]` (`POST …/work-items/{key}/repair`, and the MCP
+ *   `claim_work_item_repair` through the same presenter). The repair predicate has handed
+ *   over a pull request that is conflicted with its base, or behind a base that requires
+ *   branches to be up to date, since MOTIR-7491 and Bug MOTIR-10054 — but such a member reads
+ *   `ci: passing`, `failingChecks: []` and `queueExit: null`, so nothing on the wire said why
+ *   it was handed over or that the answer is to merge the base and push.
+ *
+ *   Additive: two new fields on an existing object (§8's allowed list). A client older than
+ *   this version ignores them; the `motir` CLI built with this change reads an absent field
+ *   as `false`.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.91.0` after `1.90.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.90.0';
+export const V1_CONTRACT_VERSION = '1.91.0';

@@ -7,6 +7,7 @@ import {
   queueReasonInWords,
   renderAcceptanceRecordPrompt,
   renderAcceptanceRerunPrompt,
+  renderBaseMergePrompt,
   renderReviewFixPrompt,
   runCiWatchPhase,
   type AcceptanceRerunInput,
@@ -289,7 +290,11 @@ export function renderRepairGaveUp(input: {
       ? `in the merge queue — ${pr.queueExit.failingCheckName ?? queueReasonInWords(pr.queueExit.rawReason)}`
       : pr.failingChecks.length > 0
         ? pr.failingChecks.join(', ')
-        : 'unknown checks';
+        : pr.conflicted
+          ? `it conflicts with ${pr.baseRef ?? 'its base'}`
+          : pr.outOfDate
+            ? `it is out of date with ${pr.baseRef ?? 'its base'}`
+            : 'unknown checks';
     lines.push(`  ${pr.repo}#${pr.number} — failing: ${checks} (${pr.url})`);
   }
   lines.push(
@@ -468,6 +473,10 @@ export function claimFromRun(input: {
       ci: null,
       failingChecks: [],
       queueExit: null,
+      // The run's recorded decision carries no mergeability (Bug MOTIR-12095 leaves the
+      // hosted read as it was; Bug MOTIR-12096 tracks it), so a hosted repair reads none.
+      conflicted: false,
+      outOfDate: false,
     })),
   };
 }
@@ -766,6 +775,37 @@ async function repair(input: {
       }
     }
 
+    // THE BASE-MERGE TURN (Bug MOTIR-12095) — a member handed over because it conflicts
+    // with, or is behind, its base. Its checks are usually green, so without this turn the
+    // CI loop reads green on its first poll and closes a repair that pushed nothing. A
+    // review or re-run turn already merges the base first, so it runs on a `ci` repair only.
+    if (!review && !rerun) {
+      const stale = claim.pullRequests.filter((pr) => pr.conflicted || pr.outOfDate);
+      if (stale.length > 0) {
+        const settled = await runBaseMergeTurn({
+          reporter,
+          key,
+          title: claim.title,
+          stale,
+          checkouts: prepared.checkouts,
+          command: agent.parsed,
+          runAgentFn,
+          git: hosted?.run ?? deps.run ?? execCommand,
+        });
+        if (settled !== 'pushed') {
+          reporter.event({
+            kind: 'card_settled',
+            workItemKey: key,
+            disposition: 'failed',
+            ...(settled === 'nothing_pushed' ? { data: { reason: 'nothing_pushed' } } : {}),
+          });
+          process.exitCode = 1;
+          await close('halted');
+          return;
+        }
+      }
+    }
+
     const ciLogTee = createLegLogTee(reporter, key);
     const watch = await runCiWatchPhase({
       client,
@@ -845,6 +885,56 @@ async function repair(input: {
   }
 }
 
+/**
+ * The base-merge turn (Bug MOTIR-12095): ONE agent turn told to merge each stale member's
+ * base and push. `pushed` when a branch's remote head moved, `nothing_pushed` when none did
+ * (the pull requests still cannot merge, so watching their green checks would only close
+ * the repair on the state it was claimed to clear), `failed` when the agent itself failed.
+ */
+async function runBaseMergeTurn(input: {
+  reporter: ReturnType<typeof createDispatchRunReporter>;
+  key: string;
+  title: string;
+  stale: readonly RepairPullRequest[];
+  checkouts: readonly FixCheckout[];
+  command: ParsedAgentCommand;
+  runAgentFn: NonNullable<FixDeps['runAgentFn']>;
+  git: CommandRunner;
+}): Promise<'pushed' | 'nothing_pushed' | 'failed'> {
+  const { key, stale } = input;
+  info(
+    `${key}: ${stale.map((pr) => `${pr.repo}#${pr.number}`).join(', ')} ` +
+      `${stale.length === 1 ? 'is' : 'are'} behind or conflicting with the base — merging it first.`,
+  );
+  const before = remoteHeads(input.checkouts, input.git);
+  const ran = await runAgentStep(input.runAgentFn, {
+    reporter: input.reporter,
+    key,
+    step: 'base_merge',
+    command: input.command,
+    prompt: renderBaseMergePrompt({
+      key,
+      title: input.title,
+      pullRequests: stale,
+      checkouts: input.checkouts,
+    }),
+    cwd: input.checkouts[0]!.path,
+  });
+  if (!ran.ok) {
+    info(`${key}: the base-merge agent failed — ${ran.detail}. Nothing was pushed by this step.`);
+    return 'failed';
+  }
+  const after = remoteHeads(input.checkouts, input.git);
+  if (after.every((head, i) => head === before[i])) {
+    info(
+      `${key}: the agent pushed nothing — the base is still not merged, and the card stays ` +
+        `To fix. Merge it, or run \`motir fix ${key}\` again.`,
+    );
+    return 'nothing_pushed';
+  }
+  return 'pushed';
+}
+
 /** One agent turn outside the CI loop (the re-run and its closing record, the review
  *  fix), reported into the run as a started / exited pair. */
 async function runAgentStep(
@@ -852,7 +942,7 @@ async function runAgentStep(
   input: {
     reporter: ReturnType<typeof createDispatchRunReporter>;
     key: string;
-    step: 'acceptance_rerun' | 'acceptance_record' | 'review_fix';
+    step: 'acceptance_rerun' | 'acceptance_record' | 'review_fix' | 'base_merge';
     command: ParsedAgentCommand;
     prompt: string;
     cwd: string;
@@ -894,7 +984,7 @@ async function recordReviewFixDiscrepancy(
 function reportAgentExited(
   reporter: ReturnType<typeof createDispatchRunReporter>,
   key: string,
-  step: 'acceptance_rerun' | 'acceptance_record' | 'review_fix' | 'ci_fix',
+  step: 'acceptance_rerun' | 'acceptance_record' | 'review_fix' | 'base_merge' | 'ci_fix',
   result: AgentRunResult,
 ): void {
   reporter.event({

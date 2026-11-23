@@ -763,6 +763,10 @@ export function toWorkItemRepairClaim(
             failingCheckUrl: pr.queueExit.failingCheckUrl,
           }
         : null,
+      // A server older than contract 1.91.0 sends neither (Bug MOTIR-12095): it cannot say,
+      // so the member is read as handed over for its checks alone, as it always was.
+      conflicted: pr.conflicted ?? false,
+      outOfDate: pr.outOfDate ?? false,
     })),
   };
 }
