@@ -55,6 +55,8 @@ export * from './hosting/usage';
 export * from './hosting/shape';
 export * from './hosting/originSecret';
 export * from './hosting/logWindow';
+export * from './hosting/cloudWatchLogs';
+export * from './hosting/lambdaRuntime';
 export * from './adapters/fake/hosting';
 export * from './adapters/fake/hostingStore';
 export * from './adapters/fly/hosting';

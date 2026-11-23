@@ -61,6 +61,7 @@ export * from './lambdaClient';
 export * from './environment';
 export * from './usage';
 export * from './errors';
+export * from './health';
 
 /** The alias the function URL and provisioned concurrency hang off. */
 export const LIVE_ALIAS = 'live';
@@ -389,6 +390,8 @@ export const AWS_FUNCTION_DEPLOY_ACTIONS: readonly string[] = [
   'lambda:GetFunctionConfiguration',
   'cloudwatch:GetMetricData',
   'secretsmanager:PutSecretValue',
+  'lambda:GetProvisionedConcurrencyConfig',
+  'logs:FilterLogEvents',
   // The release stack's resources, through CloudFormation.
   'lambda:CreateFunction',
   'lambda:DeleteFunction',
@@ -399,7 +402,6 @@ export const AWS_FUNCTION_DEPLOY_ACTIONS: readonly string[] = [
   'lambda:CreateAlias',
   'lambda:DeleteAlias',
   'lambda:PutProvisionedConcurrencyConfig',
-  'lambda:GetProvisionedConcurrencyConfig',
   'lambda:DeleteProvisionedConcurrencyConfig',
   'lambda:CreateFunctionUrlConfig',
   'lambda:GetFunctionUrlConfig',

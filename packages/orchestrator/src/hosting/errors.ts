@@ -130,10 +130,6 @@ export class ServerlessRoleReadBackMismatchError extends Error {
   }
 }
 
-/** The reason a real adapter gives while its own card has not built the read
- *  (MOTIR-12099): each target's log and health reads land separately. */
-export const RUNTIME_READ_NOT_BUILT = 'not implemented for this target yet';
-
 /** The target cannot read the release's output — not built for this target yet,
  *  or the provider will not answer. Distinct from an `OrchestratorApiError`, so a
  *  caller can show "logs unavailable from the target" rather than a failure. */

@@ -3,6 +3,7 @@
 // type appears here; `sdk.ts` implements them over the SDK. A later card adds
 // its service to `TenantClients` and to the fake beside it.
 
+import type { CloudWatchFilterInput, CloudWatchLogPage } from '../../../hosting/cloudWatchLogs';
 import type { TenantEcs, TenantElb, TenantSsm } from './container/ecsClient';
 import type { TenantCloudWatch, TenantLambda } from './function/lambdaClient';
 
@@ -72,6 +73,14 @@ export interface TenantEc2 {
   managedPrefixListId(name: string): Promise<string | null>;
 }
 
+/** CloudWatch Logs (MOTIR-12104): a release's own output, read only. Every log
+ *  group is a release stack's resource. */
+export interface TenantLogs {
+  /** One FilterLogEvents page of the group in [startMs, endMs] (both
+   *  inclusive), or null when the group does not exist. */
+  filterLogEvents(group: string, input: CloudWatchFilterInput): Promise<CloudWatchLogPage | null>;
+}
+
 /** Every client of one tenant account, all under its deploy role. */
 export interface TenantClients {
   readonly accountId: string;
@@ -88,4 +97,6 @@ export interface TenantClients {
   readonly ssm: TenantSsm;
   /** The network's (MOTIR-11846). */
   readonly ec2: TenantEc2;
+  /** Both shapes' log reads (MOTIR-12104). */
+  readonly logs: TenantLogs;
 }

@@ -6,7 +6,7 @@ import {
   ReleaseNotFoundError,
   RuntimeHealthUnavailableError,
 } from '../../hosting/errors';
-import { NS_PER_MS, readLogWindowNewestFirst } from '../../hosting/logWindow';
+import { readLogWindowNewestFirst } from '../../hosting/logWindow';
 import type {
   DeployCredential,
   HostingDeployPort,
@@ -39,15 +39,17 @@ import {
   unitOf,
 } from './names';
 import {
+  lastLambdaInvocationBefore,
+  readLambdaRuntimeSignals,
+  type LambdaRuntimeSignal,
+} from '../../hosting/lambdaRuntime';
+import {
   SERVERLESS_HEALTH_WINDOW_MS,
   SERVERLESS_LOG_LIMITS,
   SERVERLESS_RUNTIME_LINES,
-  isLogGroupMissing,
-  lambdaRuntimeSignal,
   logsUnavailable,
   serverlessRuntimeHealth,
   serverlessSliceReader,
-  type LambdaRuntimeSignal,
 } from './logs';
 import { assertServerlessRunnable } from './preflight';
 import { computeSecondsOf, metricPeriodSeconds } from './usage';
@@ -69,10 +71,8 @@ export { SERVERLESS_WARM_INSTANCES } from './idle';
 export {
   SERVERLESS_HEALTH_WINDOW_MS,
   SERVERLESS_LOG_LIMITS,
-  lambdaRuntimeSignal,
   serverlessRuntimeHealth,
   serverlessStreamOf,
-  type LambdaRuntimeSignal,
   type ServerlessRuntimeFacts,
 } from './logs';
 export { parseStartCommand, type ParsedStartCommand } from './startCommand';
@@ -216,56 +216,31 @@ export function createServerlessHostingDeployPort(
 
   /** Lambda's runtime lines in [since, until], read to the end (bounded), as
    *  signals; none when the group does not exist yet. */
-  async function runtimeSignals(
-    group: string,
-    since: Date,
-    until: Date,
-  ): Promise<LambdaRuntimeSignal[]> {
-    const read = serverlessSliceReader(api, group, SERVERLESS_RUNTIME_LINES);
-    try {
-      const slice = await read(
-        BigInt(since.getTime()) * NS_PER_MS,
-        BigInt(until.getTime() + 1) * NS_PER_MS,
-        SERVERLESS_LOG_LIMITS.pagesPerSlice,
-        { requests: SERVERLESS_LOG_LIMITS.pagesPerSlice },
-      );
-      if (!slice.complete) {
-        throw new LogsUnavailableError('serverless', 'too many runtime lines to read');
-      }
-      return slice.lines.flatMap((line) => {
-        const signal = lambdaRuntimeSignal(line.message, new Date(Number(line.atNs / NS_PER_MS)));
-        return signal ? [signal] : [];
-      });
-    } catch (error) {
-      if (isLogGroupMissing(error)) return [];
-      throw error;
-    }
+  /** The runtime signals in [since, until] of the function's group. */
+  function runtimeSignals(group: string, since: Date, until: Date): Promise<LambdaRuntimeSignal[]> {
+    return readLambdaRuntimeSignals(
+      'serverless',
+      serverlessSliceReader(api, group, SERVERLESS_RUNTIME_LINES),
+      since,
+      until,
+      SERVERLESS_LOG_LIMITS,
+    );
   }
 
-  /** The newest finished invocation before `before`, back to the function's
-   *  last change (or a day), or null. */
-  async function lastInvocationBefore(
+  /** The newest finished invocation before `before`, or null. */
+  function lastInvocationBefore(
     group: string,
     before: Date,
     changed: Date | null,
   ): Promise<Date | null> {
-    const dayAgo = before.getTime() - SERVERLESS_LOG_LIMITS.defaultWindowMs;
-    const since = new Date(Math.max(dayAgo, changed?.getTime() ?? dayAgo));
-    if (since >= before) return null;
-    try {
-      const page = await readLogWindowNewestFirst(
-        'aws',
-        group,
-        { since, until: new Date(before.getTime() - 1), filter: 'REPORT RequestId', limit: 1 },
-        before,
-        SERVERLESS_LOG_LIMITS,
-        serverlessSliceReader(api, group, 'REPORT'),
-      );
-      return page.lines[0]?.at ?? null;
-    } catch (error) {
-      if (isLogGroupMissing(error)) return null;
-      throw error;
-    }
+    return lastLambdaInvocationBefore(
+      'aws',
+      group,
+      serverlessSliceReader(api, group, 'REPORT'),
+      before,
+      changed,
+      SERVERLESS_LOG_LIMITS,
+    );
   }
 
   /** Usage first, then the function and everything that is only its. */

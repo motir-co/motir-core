@@ -7,22 +7,21 @@ import {
   LogsUnavailableError,
   OrchestratorApiError,
   ReleaseNotFoundError,
-  RUNTIME_READ_NOT_BUILT,
-  RuntimeHealthUnavailableError,
   createFakeHostingDeployPort,
   fakeHostingPortKey,
   type DeployReleaseInput,
-  type HostingDeployPort,
   type HostingEnvironment,
   type ReleaseHandle,
   type ReleaseLogLine,
 } from '../src/index';
-import { IMAGE, START, awsHarness, type HostingHarness } from './contract/hostingHarnesses';
+import { IMAGE, START } from './contract/hostingHarnesses';
 
 // THE PORT'S RUNTIME READS (Story MOTIR-9799 · MOTIR-12099) — `readLogs` and
 // `readHealth`, held on the fake exactly as a real adapter must answer them,
-// beside `deployPortContract.test.ts`. A real adapter refuses both by
-// name until each target's own card builds the read.
+// beside `deployPortContract.test.ts`. Each real adapter reads both against its
+// provider: Fly in `flyHosting.test.ts` (MOTIR-12102), serverless in
+// `serverlessRuntimeReads.test.ts` (MOTIR-12103), AWS in
+// `awsHostingAdapter.test.ts` (MOTIR-12104).
 
 const PRODUCTION: HostingEnvironment = { kind: 'production' };
 const REPO = 'cmrepo-runtime';
@@ -354,40 +353,5 @@ describe('the runtime reads in the call log and across processes', () => {
     expect((await reader.readHealth(handle)).state).toBe('running');
     reader.appendLogLines(handle.appRef, [line(1, 'first line after the upgrade')]);
     expect((await reader.readLogs(handle, { limit: 1 })).lines).toHaveLength(1);
-  });
-});
-
-describe('the real adapters refuse both reads by name until their own cards build them', () => {
-  // Fly reads both since MOTIR-12102 (`flyHosting.test.ts`), serverless since
-  // MOTIR-12103 (`serverlessRuntimeReads.test.ts`).
-  const REAL: ReadonlyArray<readonly [string, () => HostingHarness]> = [
-    ['aws', () => awsHarness('function')],
-  ];
-
-  it.each(REAL)('%s', async (name, harness) => {
-    const port: HostingDeployPort = harness().port;
-    const handle: ReleaseHandle = {
-      target: port.target,
-      appRef: 'mh-anything',
-      environment: PRODUCTION,
-      releaseId: 'rel-1',
-      providerRef: 'anything',
-    };
-    const logs = await port.readLogs(handle, { limit: 10 }).catch((e: unknown) => e);
-    expect(logs).toBeInstanceOf(LogsUnavailableError);
-    expect(logs).toMatchObject({
-      code: 'HOSTING_LOGS_UNAVAILABLE',
-      target: name,
-      reason: RUNTIME_READ_NOT_BUILT,
-    });
-    const health = await port.readHealth(handle).catch((e: unknown) => e);
-    expect(health).toBeInstanceOf(RuntimeHealthUnavailableError);
-    expect(health).toMatchObject({
-      code: 'HOSTING_RUNTIME_HEALTH_UNAVAILABLE',
-      target: name,
-      reason: RUNTIME_READ_NOT_BUILT,
-      name: 'RuntimeHealthUnavailableError',
-    });
-    expect(RUNTIME_READ_NOT_BUILT).toBe('not implemented for this target yet');
   });
 });
