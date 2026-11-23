@@ -4,11 +4,11 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import type { JobContext } from './defineJob';
 
 // THE INDEX JOB'S REPOSITORY-ROW WRITES (MOTIR-12035) — moved verbatim out of
-// `indexFleetSteps.ts`, because the index handoff (`indexHandoffSteps.ts`,
-// MOTIR-11883) shares them and they outlive the container fleet. Each still
-// never throws and still runs under `withSystemContext`.
+// the deleted `indexFleetSteps.ts` (MOTIR-12036), because the index handoff
+// (`indexHandoffSteps.ts`, MOTIR-11883) uses them and they outlive the container
+// fleet. Each still never throws and still runs under `withSystemContext`.
 
-/** The two jobs that drive {@link runIndexFleetSteps}. */
+/** The two jobs that drive the index handoff. */
 export type IndexFleetJobId = 'system.code-graph-index' | 'system.code-graph-refresh';
 
 /**

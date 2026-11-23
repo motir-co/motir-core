@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
@@ -20,9 +20,7 @@ import {
 import { jobServices } from '@/lib/jobs/services';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
-import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import { codeGraphIndexCatchUpService } from '@/lib/services/codeGraphIndexCatchUpService';
-import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -47,8 +45,8 @@ import { JobTestEngine } from '../helpers/jobs';
 //
 // Both shipped jobs, `system.code-graph-index` and `system.code-graph-refresh`, over
 // a REAL Postgres, with motir-ai and GitHub stubbed at the HTTP boundary
-// (`tests/helpers/indexHandoff.ts`). The container path is pinned by the suites that
-// drive `tests/helpers/fleetIndexJobs.ts`; this one pins what replaced it.
+// (`tests/helpers/indexHandoff.ts`). The container path it replaced was deleted
+// by MOTIR-12036.
 
 const REPO_OWNER = 'moooon';
 const REPO_NAME = 'motir-core';
@@ -219,19 +217,25 @@ describe('system.code-graph-index hands a first_index off and settles on the pub
     expect(indexed).toContain(REPO_REF);
   });
 
-  it('never reaches the container path: no admission, no credential mint, no dispatch', async () => {
-    const admit = vi.spyOn(codeGraphIndexAdmissionService, 'admit');
-    const advance = vi.spyOn(codeGraphIndexDispatchService, 'advanceIndexContainer');
-    const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
-    const mint = vi.spyOn(motirAiClient, 'mintCodeGraphRunCredential');
+  it('the container path is gone: no admission, dispatch or run-credential mint exists to reach (MOTIR-12036)', async () => {
+    for (const file of [
+      'lib/services/codeGraphIndexAdmissionService.ts',
+      'lib/services/codeGraphIndexDispatchService.ts',
+      'lib/jobs/indexFleetSteps.ts',
+    ]) {
+      expect(existsSync(join(process.cwd(), file)), file).toBe(false);
+    }
+    expect(motirAiClient).not.toHaveProperty('mintCodeGraphRunCredential');
+    expect(motirAiClient).not.toHaveProperty('fetchCodeGraphRunVerdict');
+    expect(motirAiClient).not.toHaveProperty('drawIndexAllowance');
 
     const index = await runJob(codeGraphIndex, 'handoff-nofleet-a');
     const refresh = await runJob(codeGraphRefresh, 'handoff-nofleet-b');
 
     expect(index.error).toBeUndefined();
     expect(refresh.error).toBeUndefined();
-    for (const spy of [admit, advance, boot, mint]) expect(spy).not.toHaveBeenCalled();
     expect(handoffWorld.aiPaths).not.toContain('/v1/code-graph/run-credential');
+    expect(handoffWorld.aiPaths).not.toContain('/v1/code-graph/run/verdict');
   });
 
   it('no job definition calls runIndexFleetSteps any more', () => {
@@ -403,7 +407,6 @@ describe('the run settles on the HANDED commit', () => {
         check: async () => null,
         enqueueIndex,
         enqueueRefresh,
-        poolHasRoom: async () => true,
       },
     });
     expect(sweep.outcomes.filter((o) => o.repoRef === REPO_REF)).toEqual([]);

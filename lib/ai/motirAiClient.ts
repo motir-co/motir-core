@@ -720,11 +720,11 @@ export async function debitAgentStorage(
  * ⚠️ Motir does not charge for code indexing. This reads an internal allowance and
  * attributes nothing.
  *
- * ⚠️ TOTAL, like {@link fetchCodeGraphRunVerdict}: every failure — unconfigured,
- * unreachable, a non-2xx, an older motir-ai that does not serve the route, a body
- * that is not a verdict — returns `null`. `null` means "could not ask", and the
- * DISPATCHER decides what that means (it boots: see
- * `codeGraphIndexAllowanceService.askIndexAllowance`). That is also what lets the
+ * ⚠️ TOTAL: every failure — unconfigured, unreachable, a non-2xx, an older
+ * motir-ai that does not serve the route, a body that is not a verdict — returns
+ * `null`. `null` means "could not ask", and the CALLER decides what that means
+ * (`codeGraphIndexAllowanceService.askIndexAllowance`, which the index handoff
+ * asks before handing an index to motir-codegraph). That is also what lets the
  * two repositories' pull requests merge in either order.
  */
 export async function checkIndexAllowance(
@@ -736,36 +736,6 @@ export async function checkIndexAllowance(
       method: 'POST',
       headers: authHeaders(serviceToken),
       body: JSON.stringify({ coreOrganizationId }),
-    });
-    if (!res.ok) return null;
-    return parseIndexAllowanceVerdict(await res.json());
-  } catch {
-    return null;
-  }
-}
-
-/**
- * POST /v1/credits/index-draw — attribute ONE torn-down container's seconds to the
- * organisation's index allowance (MOTIR-4593; motir-ai MOTIR-5284). Idempotent on
- * `idempotencyKey`, so a replayed settle attributes once.
- *
- * ⚠️ Never a charge, and it cannot move the visible balance — motir-ai has no
- * path from this route to the ledger.
- *
- * ⚠️ TOTAL: `null` on every failure, for the reason above. A draw that could not
- * be sent is a gap in internal accounting; it must never fail a teardown.
- */
-export async function drawIndexAllowance(input: {
-  coreOrganizationId: string;
-  containerSeconds: number;
-  idempotencyKey: string;
-}): Promise<IndexAllowanceVerdict | null> {
-  try {
-    const { url, serviceToken } = config();
-    const res = await aiFetch(`${url}/v1/credits/index-draw`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(input),
     });
     if (!res.ok) return null;
     return parseIndexAllowanceVerdict(await res.json());
@@ -1665,128 +1635,6 @@ export async function putConvention(input: PutConventionInput): Promise<RawConve
   return (await res.json()) as RawConvention;
 }
 
-// The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai
-// (MOTIR-1989 / MOTIR-1986). `credential` is OPAQUE to motir-core: motir-ai signs
-// it and motir-ai verifies it, and nothing here parses, inspects or re-signs it.
-//
-// ⚠️ THE RESPONSE DELIBERATELY DOES NOT CARRY `aiProjectId`, and that absence is
-// the contract rather than an omission. motir-core passes the credential straight
-// through to a container; motir-ai resolves the project identity FROM the
-// credential on every container-facing call, so "nothing in a request body can
-// name a project" (`motir-ai/docs/contract.md`). A field here would hand
-// motir-core an internal identity of the closed layer that it has no use for.
-export interface CodeGraphRunCredential {
-  /** The bearer the container presents. Opaque; treat as a secret. */
-  credential: string;
-  /** ISO-8601 — when it stops working. Minutes away, by design. */
-  expiresAt: string;
-  /**
-   * OPTIONAL (MOTIR-3252) — a single-key, GET-only pre-signed URL for the repo's
-   * PREVIOUS code-graph snapshot, which the container syncs against instead of
-   * re-parsing the whole tree.
-   *
-   * **Opaque here, exactly like `credential`.** motir-core does not know the
-   * snapshot key, cannot compute it, and holds no object-storage credential — all
-   * three by decision (`docs/decisions/code-graph-index-fleet.md` §4/§5). motir-ai
-   * mints it because it has the coordination row and the bucket; this side carries
-   * it to the container's environment and never opens it.
-   *
-   * **Absent is the normal answer, not a failure.** A first index has no previous
-   * snapshot, and a `codegraphVersion` bump deliberately withholds it so the run
-   * rebuilds — the re-index the schema promises. Either way the container does a
-   * full build, which is what it did unconditionally before this existed. That is
-   * also what makes the two repos' halves free to merge in any order: an older
-   * motir-ai simply never returns the field.
-   */
-  previousSnapshotUrl?: string;
-}
-
-/**
- * POST /v1/code-graph/run-credential — mint ONE index run's motir-ai credential
- * (MOTIR-1989; motir-ai's half is MOTIR-1986).
- *
- * `serviceAuth`-gated: motir-core is the caller, so this is the ONE call in the
- * flow that carries `MOTIR_AI_SERVICE_TOKEN`. What comes back authorizes exactly
- * two operations (`upload-grant`, `record-pointer`) for exactly one
- * `(project, repo, run)`, for minutes — and the container-facing routes REFUSE the
- * broad service token outright, so a misconfigured dispatch that handed a
- * container the service token fails loudly instead of silently granting it every
- * project.
- *
- * ⚠️ CREDENTIAL SCOPE IS THE ISOLATION BOUNDARY
- * (`docs/decisions/code-graph-index-fleet.md` §4). The fleet org is shared with CI
- * runners that execute customer-authored code, so a container's blast radius is
- * decided entirely by what it is handed. This is the narrow thing it is handed —
- * which is only true while the caller treats a failed mint as FATAL. There is no
- * broader credential to fall back to, and reaching for one would dissolve the
- * decision that made one shared org acceptable.
- *
- * The `(org, workspace, project)` triple find-or-creates the `AiProject`, exactly
- * as a job submit does. A non-2xx maps through the §5 problem+json taxonomy to a
- * typed error; a motir-ai that never answers becomes `MotirAiUnavailableError`
- * under the standard deadline — which since MOTIR-2138 is the only one this
- * boundary has. It is a small JSON round trip, as every method here now is.
- */
-export async function mintCodeGraphRunCredential(input: {
-  coreOrganizationId: string;
-  coreWorkspaceId: string;
-  coreProjectId: string;
-  repoRef: string;
-  /** The dispatching run, carried for attribution; not itself an authority. */
-  runId: string;
-  /** Optional; motir-ai clamps it to [60, 3600]. Omit to take its default. */
-  ttlSeconds?: number;
-}): Promise<CodeGraphRunCredential> {
-  const { url, serviceToken } = config();
-  const res = await aiFetch(`${url}/v1/code-graph/run-credential`, {
-    method: 'POST',
-    headers: authHeaders(serviceToken),
-    body: JSON.stringify({
-      coreOrganizationId: input.coreOrganizationId,
-      coreWorkspaceId: input.coreWorkspaceId,
-      coreProjectId: input.coreProjectId,
-      repoRef: input.repoRef,
-      runId: input.runId,
-      ...(input.ttlSeconds === undefined ? {} : { ttlSeconds: input.ttlSeconds }),
-    }),
-  });
-  if (!res.ok) throw errorFromProblem(await readProblem(res));
-
-  // ⚠️ THE BODY IS VALIDATED, not cast. Everywhere else in this client a cast is
-  // fine: the value lands in a DTO a human reads, and a missing field renders as
-  // blank. Here it lands in a CONTAINER SPEC. A response that parsed but carried
-  // no `credential` would boot a machine with an empty
-  // `MOTIR_INDEX_RUN_CREDENTIAL`, which the container reports as a CONFIG failure
-  // — blaming the dispatch for a defect in the response, one process away from
-  // anything that could see it. So a malformed body fails HERE, before a spec
-  // exists.
-  const body = (await res.json()) as Partial<CodeGraphRunCredential> | null;
-  if (!body || typeof body.credential !== 'string' || body.credential.length === 0) {
-    throw new MotirAiUnavailableError(
-      'motir-ai returned no credential from POST /v1/code-graph/run-credential',
-    );
-  }
-  if (typeof body.expiresAt !== 'string' || body.expiresAt.length === 0) {
-    throw new MotirAiUnavailableError(
-      'motir-ai returned a run credential with no expiry from POST /v1/code-graph/run-credential',
-    );
-  }
-  // The snapshot grant is OPTIONAL and is validated only for shape — a malformed
-  // one is DROPPED rather than fatal, because the run it would have accelerated
-  // still succeeds without it. This is the one field here whose absence is
-  // routine, so it must not learn the fatal treatment of the two above.
-  const previousSnapshotUrl =
-    typeof body.previousSnapshotUrl === 'string' && body.previousSnapshotUrl.length > 0
-      ? body.previousSnapshotUrl
-      : undefined;
-
-  return {
-    credential: body.credential,
-    expiresAt: body.expiresAt,
-    ...(previousSnapshotUrl ? { previousSnapshotUrl } : {}),
-  };
-}
-
 // ── The code-graph INDEX HANDOFF and STATUS (MOTIR-11883 · story MOTIR-11022) ──
 //
 // motir-core no longer boots an indexer container. Its index and refresh jobs hand
@@ -1985,265 +1833,6 @@ export async function readCodeGraphIndexStatus(input: {
   };
 }
 
-/**
- * WHAT THE CONTAINER ITSELF DID on one index run (MOTIR-5058).
- *
- * ⚠️ THIS IS NOT `IndexMode`, AND THE WHOLE CARD IS THAT THEY ARE DIFFERENT
- * FACTS WEARING ONE NAME. `codeGraphIndexService`'s `IndexMode` is derived on
- * THIS side from whether a snapshot was OFFERED — it answers *did we give this
- * run a chance to sync*. This one is the container's own report of what it then
- * DID with that chance. A run handed a pointer that rebuilt anyway is `sync` over
- * there and `build` here, and until this read existed nothing on this side could
- * tell that apart from a run that genuinely synced (MOTIR-5055).
- *
- * The vocabulary is the CONTAINER's (`sync` / `build`), deliberately not
- * re-spelled into `IndexMode`'s (`sync` / `rebuild`). Two words that differ are
- * what stops a later reader assuming the two fields are interchangeable.
- */
-export interface CodeGraphRunVerdict {
-  repoRef: string;
-  runId: string;
-  commitSha: string | null;
-  /** `null` when the container reported no mode — never to be read as `build`. */
-  indexMode: 'sync' | 'build' | null;
-  /** Why a run that WAS offered a snapshot rebuilt anyway. Bounded to 300 chars. */
-  fallbackReason: string | null;
-  /**
-   * WHAT THE RUN COST, as the CONTAINER measured it (MOTIR-5101) — `null` when
-   * motir-ai recorded none.
-   *
-   * ⚠️ THIS IS THE ONLY INSTRUMENT THAT CAN MEASURE WHAT A SYNC SAVES, and the
-   * reason it had to cross the boundary at all is that the obvious local
-   * substitute is wrong. `job_run.duration_ms` is right here, queryable and
-   * plausible — and it spans machine create, image pull, a fixed 15 000 ms
-   * detect cap and teardown. That overhead measured 31 513 ms and 58 738 ms on
-   * two runs eighteen minutes apart, a swing 62% the size of the effect; on
-   * MOTIR-5031's three runs it placed a `sync` and a `rebuild` 0.5% apart while
-   * the container's own `totalMs` resolved the same pair at 93 778 → 50 203 ms.
-   * So the local number does not fail loudly — it reports, stably, that
-   * incremental indexing does nothing.
-   *
-   * ⚠️ AND `null` IS NOT ZERO. Every run recorded before MOTIR-5101 shipped has
-   * a verdict and no timings, which is the whole of the store's history — so
-   * absent must read as *nobody measured this*, never as an instantaneous run.
-   */
-  timings: CodeGraphRunTimings | null;
-  /**
-   * WHY THE RUN FAILED, as motir-ai recorded it (MOTIR-6786 · MOTIR-7129) — `null`
-   * when it recorded no failure, or an older motir-ai that never sends one.
-   *
-   * ⚠️ IT DESCRIBES THE RUN'S LATEST FAILED ATTEMPT, AND A LATER PUBLISH DOES NOT
-   * CLEAR IT: a non-null `indexMode` beside it means the run was re-dispatched and
-   * published in the end. Read the two together.
-   */
-  failure: CodeGraphRunFailure | null;
-}
-
-/**
- * One run's recorded failure (MOTIR-7129). `failureClass` is motir-ai's: the
- * container's exit-code classes (`UPLOAD`, `GRANT`, `BUILD`, …) and motir-ai's own
- * `GRAPH_TOO_LARGE` (MOTIR-7127), the one class that carries the two sizes.
- */
-export interface CodeGraphRunFailure {
-  failureClass: string;
-  message: string;
-  /** Null when the request never got a response. */
-  httpStatus: number | null;
-  /** The graph's uncompressed size, in bytes — only on `GRAPH_TOO_LARGE`. */
-  sizeBytes: number | null;
-  /** The supported maximum it was refused against — only on `GRAPH_TOO_LARGE`. */
-  capBytes: number | null;
-}
-
-/** The class motir-ai records when the upload grant refuses a graph for size (MOTIR-7127). */
-export const GRAPH_TOO_LARGE_FAILURE = 'GRAPH_TOO_LARGE';
-
-/**
- * One run's self-measured cost, as motir-ai stored it (MOTIR-5101).
- *
- * Every field is independently nullable because they arrive independently: the
- * sync counts only exist on a run that synced, and `peakRssMb` only from a
- * container new enough to send it.
- */
-export interface CodeGraphRunTimings {
-  /** The container's own wall clock for the run, excluding the report call. */
-  totalMs: number | null;
-  /** `totalMs` − Σ`phasesMs`: interstitial work, or a phase nobody wrapped. */
-  unaccountedMs: number | null;
-  /** Peak RESIDENT SET in whole MB — not heap; a whole-tree index is mostly off-heap. */
-  peakRssMb: number | null;
-  /** Phase name → wall-clock ms. Bounded by motir-ai at 32 entries, 32-char keys. */
-  phasesMs: Record<string, number> | null;
-  /** The whitelisted `SyncResult` counts — what a sync actually touched. */
-  syncCounts: Record<string, number> | null;
-}
-
-/**
- * GET /v1/code-graph/run/verdict — read back what the container reported for one
- * run (MOTIR-5058; motir-ai's half ships on the same card).
- *
- * ⚠️ **IT NEVER THROWS, AND IT IS THE ONLY METHOD IN THIS FILE THAT DOES NOT.**
- * Everywhere else here a failure is fatal because the caller cannot proceed
- * without the answer. This one is TELEMETRY read at the very end of a settled
- * run: the container has finished, the graph is published, the ledger row is
- * about to be written, and the only thing a throw could achieve is to fail a run
- * that fully succeeded over a diagnostic. So every failure — a non-2xx, a
- * malformed body, a motir-ai that never answers, a deployment that has no such
- * route — returns `null`, and the caller records no container mode.
- *
- * ⚠️ **THAT TOTALITY IS WHAT MAKES MERGE ORDER FREE**, which is the property this
- * card is built around rather than a nicety. An older motir-ai answers this route
- * with a 404 and this function returns `null`, exactly as it does for a run that
- * reported nothing — so motir-core's half may merge and deploy FIRST, alone, and
- * the ledger it writes is byte-identical to today's until the other half lands.
- * It is the same property `previousSnapshotUrl` relies on one function up, and it
- * is why this is a boundary contract rather than a lockstep deploy.
- *
- * ⚠️ **`null` IS NOT `build`.** Four distinct situations produce it — no route,
- * no verdict recorded, a lost write, a call that failed — and none of them is
- * evidence about what the run did. A caller that defaults it manufactures exactly
- * the false confidence this card exists to remove.
- */
-export async function fetchCodeGraphRunVerdict(input: {
-  coreWorkspaceId: string;
-  coreProjectId: string;
-  repoRef: string;
-  /** The SAME `runId` that was sent to `mintCodeGraphRunCredential`. */
-  runId: string;
-}): Promise<CodeGraphRunVerdict | null> {
-  try {
-    const { url, serviceToken } = config();
-    const query = new URLSearchParams({
-      coreWorkspaceId: input.coreWorkspaceId,
-      coreProjectId: input.coreProjectId,
-      repoRef: input.repoRef,
-      runId: input.runId,
-    });
-    const res = await aiFetch(`${url}/v1/code-graph/run/verdict?${query.toString()}`, {
-      method: 'GET',
-      headers: authHeaders(serviceToken),
-    });
-    // A 404 is the OLDER-motir-ai arm and is not an error here; so is any other
-    // non-2xx, for the reason in the doc block.
-    if (!res.ok) return null;
-
-    const body = (await res.json()) as { verdict?: Partial<CodeGraphRunVerdict> | null } | null;
-    const verdict = body?.verdict;
-    // `{ verdict: null }` is the route's own ABSENT answer and arrives here as the
-    // same `null` every other miss does — which is correct: the caller's question
-    // is "do I know what the container did", and all of these answer no.
-    if (!verdict || typeof verdict !== 'object') return null;
-
-    const indexMode =
-      verdict.indexMode === 'sync' || verdict.indexMode === 'build' ? verdict.indexMode : null;
-    const fallbackReason =
-      typeof verdict.fallbackReason === 'string' && verdict.fallbackReason.length > 0
-        ? verdict.fallbackReason
-        : null;
-    const timings = parseRunTimings(verdict.timings);
-    const failure = parseRunFailure(verdict.failure);
-
-    // A body that carries NOTHING tells us nothing — report it as absent rather
-    // than as a verdict whose every field is null, so the caller has one shape to
-    // reason about instead of two.
-    //
-    // ⚠️ THE TIMINGS ARE PART OF THAT TEST SINCE MOTIR-5101, AND OMITTING THEM
-    // HERE WOULD HAVE SILENTLY DISCARDED THE CARD'S OWN DELIVERABLE. A run that
-    // reported its cost but no mode — a container whose `indexMode` was
-    // unrecognised, which motir-ai stores as `null` by design — carries a
-    // perfectly good measurement, and the old two-term test threw the whole
-    // verdict away before anyone could read it.
-    //
-    // ⚠️ AND SO IS THE FAILURE SINCE MOTIR-7129, for the same reason: a failed run
-    // never publishes, so its verdict carries no mode, no reason and no timings —
-    // the three-term test returned `null` for EVERY failed run and the failure
-    // motir-ai has stored since MOTIR-6786 never reached this side. A body with
-    // none of the four is still `null`.
-    if (indexMode === null && fallbackReason === null && timings === null && failure === null) {
-      return null;
-    }
-
-    return {
-      repoRef: typeof verdict.repoRef === 'string' ? verdict.repoRef : input.repoRef,
-      runId: typeof verdict.runId === 'string' ? verdict.runId : input.runId,
-      commitSha: typeof verdict.commitSha === 'string' ? verdict.commitSha : null,
-      indexMode,
-      fallbackReason,
-      timings,
-      failure,
-    };
-  } catch {
-    // Deliberately total. See the doc block: a settled run must not fail on a
-    // telemetry read, and an unreachable motir-ai is indistinguishable from one
-    // that has nothing to report — both mean "no container mode recorded".
-    return null;
-  }
-}
-
-/**
- * The `failure` half of a verdict body, validated field by field (MOTIR-7129).
- *
- * The same discipline as {@link parseRunTimings}: a field of the wrong type becomes
- * `null`, never a coerced value. A failure needs a class and a message to be one at
- * all, so a body missing either is no failure; every other field is kept or
- * nulled on its own. A size must be a finite, non-negative number — the numbers
- * reach a customer-facing row (`GithubRepo.indexRefusedSizeBytes`).
- */
-function parseRunFailure(value: unknown): CodeGraphRunFailure | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-  if (typeof raw['failureClass'] !== 'string' || raw['failureClass'].length === 0) return null;
-  if (typeof raw['message'] !== 'string') return null;
-
-  const size = (v: unknown): number | null =>
-    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
-  const httpStatus = raw['httpStatus'];
-  return {
-    failureClass: raw['failureClass'],
-    message: raw['message'],
-    httpStatus: typeof httpStatus === 'number' && Number.isInteger(httpStatus) ? httpStatus : null,
-    sizeBytes: size(raw['sizeBytes']),
-    capBytes: size(raw['capBytes']),
-  };
-}
-
-/**
- * The `timings` half of a verdict body, validated field by field (MOTIR-5101).
- *
- * ⚠️ NOTHING IS TRUSTED AND NOTHING IS DEFAULTED. This is a body from another
- * service across the open/closed boundary, read at the end of a settled run: a
- * field of the wrong type must become `null`, never a coerced number, because a
- * plausible value here is indistinguishable from a measured one and lands on a
- * durable ledger row. Returns `null` when no field survived, so the caller never
- * has to tell an absent object from an all-null one.
- */
-function parseRunTimings(value: unknown): CodeGraphRunTimings | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-
-  const num = (v: unknown): number | null =>
-    typeof v === 'number' && Number.isFinite(v) ? v : null;
-  const numberMap = (v: unknown): Record<string, number> | null => {
-    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
-    const out: Record<string, number> = {};
-    for (const [key, entry] of Object.entries(v as Record<string, unknown>)) {
-      const n = num(entry);
-      if (n !== null) out[key] = n;
-    }
-    return Object.keys(out).length > 0 ? out : null;
-  };
-
-  const timings: CodeGraphRunTimings = {
-    totalMs: num(raw['totalMs']),
-    unaccountedMs: num(raw['unaccountedMs']),
-    peakRssMb: num(raw['peakRssMb']),
-    phasesMs: numberMap(raw['phasesMs']),
-    syncCounts: numberMap(raw['syncCounts']),
-  };
-
-  return Object.values(timings).some((field) => field !== null) ? timings : null;
-}
-
 /** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
 // ── A hosted agent run's token and credit cost (MOTIR-689) ──────────────────
 
@@ -2379,8 +1968,7 @@ export async function offboardCodeGraph(input: {
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
 
-  // VALIDATED, not cast — the same reasoning as `mintCodeGraphRunCredential`, for
-  // a different consequence. This value decides whether the sweep DELETES its
+  // VALIDATED, not cast: this value decides whether the sweep DELETES its
   // queue row. A response that parsed but carried no counts would read as a
   // successful removal and retire the only record that anything was owed, turning
   // a malformed reply into permanent retention with nothing left to retry.
@@ -2409,10 +1997,9 @@ export async function offboardCodeGraph(input: {
 // the abandoned path failed ~68% of refreshes for three days before anyone
 // connected the symptom to it.
 //
-// Anything that wants a graph built dispatches a CONTAINER: the pre-signed
-// tarball URL is resolved above (`mintCodeGraphRunCredential` +
-// `codeGraphIndexDispatchService` in `lib/jobs/indexFleetSteps.ts`) and the
-// container fetches the repo itself, so the bytes never enter a Vercel function.
+// Anything that wants a graph built hands it to motir-codegraph (the index
+// handoff, `lib/jobs/indexHandoffSteps.ts`; the container fleet that fetched the
+// repo itself was retired by MOTIR-12036), so the bytes never enter this process.
 // This boundary is JSON-only, and every method on it now rides the single
 // `MOTIR_AI_REQUEST_TIMEOUT_MS` deadline. Retiring the motir-ai ROUTE this used
 // to call is MOTIR-2139, in the other repo

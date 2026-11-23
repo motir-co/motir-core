@@ -362,19 +362,6 @@ export const fleetShardAdmissionService = {
     return isInstallOrganization(await organizationRepository.findByIdInTx(job.organizationId, tx));
   },
 
-  /**
-   * Is this job bounded by its own place rather than the shared caps — an own
-   * account (MOTIR-9589) or the install fleet (MOTIR-10794)? The same reads
-   * `chooseInTx` places by, so the exemption and the placement cannot disagree.
-   */
-  async outsideSharedCapsInTx(
-    job: ShardPlacementJob,
-    tx: Prisma.TransactionClient,
-  ): Promise<boolean> {
-    if (await this.installFleetTakesInTx(job, tx)) return true;
-    return this.ownAccountTakesInTx(job, tx);
-  },
-
   /** The `shard_capacity` words for a job no account could take — its own
    *  account's when its org has a live one of the kind (MOTIR-9586). For a boot
    *  whose in-boot move found no account left, outside the admission's lock. */

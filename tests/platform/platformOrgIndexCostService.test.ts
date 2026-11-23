@@ -191,14 +191,24 @@ describe('the three threshold states are told apart (AC 2)', () => {
     });
   });
 
-  it('a full indexer pool is not the org’s pause: the card reads no pause (MOTIR-9451)', async () => {
-    const org = await seedOrg();
-    await adminDb.githubRepo.updateMany({
-      where: { workspaceId: org.workspaceId },
-      data: { indexPausedReason: 'paused_index_pool_full', indexPausedAt: new Date() },
-    });
-    expect((await enabled(org.organizationId)).pause).toBeNull();
-  });
+  // ⚠️ THE CAPACITY PAUSES LEFT WITH THE INDEXER POOL (MOTIR-12036). A row still
+  // recording one is a pause like any other until the next catch-up pass re-hands
+  // it, and its stored reason names why.
+  it.each(['paused_index_pool_full', 'paused_index_no_indexer_account'])(
+    'a leftover %s row reads as the org’s pause, its stored reason naming it',
+    async (stored) => {
+      const org = await seedOrg();
+      const pausedAt = new Date('2026-09-10T08:00:00.000Z');
+      await adminDb.githubRepo.updateMany({
+        where: { workspaceId: org.workspaceId },
+        data: { indexPausedReason: stored, indexPausedAt: pausedAt },
+      });
+      expect((await enabled(org.organizationId)).pause).toEqual({
+        reason: stored.replace(/^paused_index_/, ''),
+        since: pausedAt.toISOString(),
+      });
+    },
+  );
 
   it('the card renders state (b) in the INFO family and the stops in danger — never (b) as a failure', () => {
     const source = readFileSync(

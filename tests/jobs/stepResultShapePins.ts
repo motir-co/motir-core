@@ -56,9 +56,9 @@ export interface StepShapePin {
   /** Where the id is written, repo-relative. A move is a review moment, so it is asserted. */
   readonly file: string;
   /**
-   * Further files that write the SAME id over the SAME call (MOTIR-11883: the index
-   * handoff keeps three of the container path's steps, which stays in the tree,
-   * unreached, until its deletion). Every site is still held to this one shape.
+   * Further files that write the SAME id over the SAME call (MOTIR-11883 used it
+   * while the index handoff and the container path shared three steps, until
+   * MOTIR-12036 deleted the container path). Every site is held to this one shape.
    */
   readonly alsoIn?: readonly string[];
   /** The structural fingerprint of the awaited result. */
@@ -216,36 +216,6 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ gatesRaised: number; held: number; outcome: "clean" | "conflicted" | "failed" | "skipped" | "unknown"; promoted: number; withdrawn: number }',
   },
-  '`index-admit:${subject}`': {
-    file: 'lib/services/codeGraphIndexDispatchService.ts',
-    shape:
-      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight"; requestedAt: string }',
-  },
-  // MOTIR-10600 — ONE admission ask, memoized on its own so the wait between two
-  // asks can be a defer. Its result is the admission verdict plus the instant it
-  // was asked; a replay hands back the refusal (or the grant) the pass got.
-  '`index-admit-try:${subject}:${attempt}`': {
-    file: 'lib/services/codeGraphIndexDispatchService.ts',
-    shape:
-      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted" } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; outcome: "already_held" } | { askedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" }',
-  },
-  '`index-boot:${subject}`': {
-    file: 'lib/services/codeGraphIndexDispatchService.ts',
-    shape:
-      '{ outcome: { billableSeconds: number; containerId: string; coreTimings?: undefined | { phasesMs: { admissionWait?: number | undefined; boot?: number | undefined; pollToDetect?: number | undefined }; totalMs?: number | undefined }; costUsd: string; failureDetail: null | string; indexMode?: "rebuild" | "sync" | undefined; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }; verdict: { detail: string; exitClass: "credential_refused" | "dispatch_malformed" | "exit_unobserved" | "graph_unbuildable" | "indexed" | "never_started" | "out_of_memory" | "pointer_unrecorded" | "repo_unfetchable" | "supervision_timed_out" | "unclassified" | "upload_failed"; exitCode: null | number; indexed: boolean; redispatchable: boolean } } | { detail: string; outcome: "admission_deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workspaceId: string }; bootedAt: string; credentialExpiresAt: string; dispatchId: string; handle: { createdAt: string; id: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; region: string }; repoRef: string; runId: string; shardId?: string | undefined; slotRef: string; syncGranted?: false | true | undefined } }',
-  },
-  '`index-settle:${subject}`': {
-    file: 'lib/services/codeGraphIndexDispatchService.ts',
-    shape:
-      '{ billableSeconds: number; containerId: string; coreTimings?: undefined | { phasesMs: { admissionWait?: number | undefined; boot?: number | undefined; pollToDetect?: number | undefined }; totalMs?: number | undefined }; costUsd: string; failureDetail: null | string; indexMode?: "rebuild" | "sync" | undefined; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }; verdict: { detail: string; exitClass: "credential_refused" | "dispatch_malformed" | "exit_unobserved" | "graph_unbuildable" | "indexed" | "never_started" | "out_of_memory" | "pointer_unrecorded" | "repo_unfetchable" | "supervision_timed_out" | "unclassified" | "upload_failed"; exitCode: null | number; indexed: boolean; redispatchable: boolean } } | { detail: string; outcome: "admission_deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }',
-  },
-  // MOTIR-7130 — whether an `upload_failed` attempt was refused for SIZE. A pure
-  // read (motir-ai's run verdict), memoized because the answer decides whether a
-  // second billed container boots, so a later pass must replay it, not re-ask.
-  '`index-size-refusal:${subject}`': {
-    file: 'lib/services/codeGraphIndexDispatchService.ts',
-    shape: '{ refusedForSize: null } | { refusedForSize: { capBytes: number; sizeBytes: number } }',
-  },
   // A merge starts a production release (MOTIR-10031): one try per wait while
   // another release of the application is in flight.
   '`merge-release-${attempt}`': {
@@ -304,8 +274,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
       '{ bytes: number; counts: { [key: string]: number }; failureReason?: undefined; files: { missing: number; packaged: number }; requestId: string; status: "ready" } | { bytes?: undefined; counts?: undefined; failureReason: string; files?: undefined; requestId: string; status: "failed" }',
   },
   'cancel-offboarding': {
-    file: 'lib/jobs/indexFleetSteps.ts',
-    alsoIn: ['lib/jobs/indexHandoffSteps.ts'],
+    file: 'lib/jobs/indexHandoffSteps.ts',
     shape: '{ cancelled: number }',
   },
   'cascade-to-children': {
@@ -313,10 +282,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ childIds: Array<string>; itemId: string; outcome: "cascaded"; postDatedIds?: Array<string> | undefined; toStatus: string } | { itemId: string; outcome: "access_denied" } | { itemId: string; outcome: "no_matching_status" } | { itemId: string; outcome: "no_open_children" } | { itemId: string; outcome: "post_dated_only"; postDatedIds: Array<string> } | { itemId: string; outcome: "toggle_off" } | { outcome: "not_done" } | { outcome: "unresolvable" }',
   },
-  'catch-up-paused-indexes-v2': {
+  'catch-up-paused-indexes-v3': {
     file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
     shape:
-      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "pool_still_full" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
+      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
   },
   'retry-failed-indexes': {
     file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
@@ -472,8 +441,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape: '{ commitSha: string; handedAt: string; jobId: string }',
   },
   'index-allowance': {
-    file: 'lib/jobs/indexFleetSteps.ts',
-    alsoIn: ['lib/jobs/indexHandoffSteps.ts'],
+    file: 'lib/jobs/indexHandoffSteps.ts',
     shape:
       '{ outcome: null | string; proceed: true } | { outcome: string; proceed: false; reason: `paused_index_${string}` }',
   },
@@ -836,8 +804,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
       '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "plan_generating" | "rested" | "restored" | "session_waiting" | "unattributable"; workItemId: string }>; released: number }',
   },
   'resolve-target-v2': {
-    file: 'lib/jobs/indexFleetSteps.ts',
-    alsoIn: ['lib/jobs/indexHandoffSteps.ts'],
+    file: 'lib/jobs/indexHandoffSteps.ts',
     // `no_commit_beyond_template` added by MOTIR-4589: a repository Motir created
     // that still holds only its seed is not indexed yet. Id KEPT — the change only
     // ADDS a member, so every memo written under the old shape is a valid value of
@@ -926,7 +893,8 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // new shape, and those steps provision or settle containers, so a bumped id
   // would re-execute them — the header's "keep the id" case. The one that GAINED
   // a key rather than a member, `index-admit`'s `census.byWorkload`, is never read
-  // back by `codeGraphIndexDispatchService`, so a replayed memo without it is inert.
+  // back by the index dispatch (deleted since, MOTIR-12036), so a replayed memo
+  // without it was inert.
   'check-instance-idle': {
     file: 'lib/jobs/definitions/agentInstanceIdleCheck.ts',
     shape: '"active" | "backstop" | "idle" | "noop"',
@@ -1062,6 +1030,47 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  '`index-admit:${subject}`': {
+    shape:
+      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight"; requestedAt: string }',
+    supersededBy: 'runIndexHandoffSteps (no step replaces it)',
+    reason:
+      'MOTIR-12036 deleted the indexer fleet, and with it the container path that wrote this step. The id is not reused: the memos are still in `job_step`. Nothing replaced it in place; both index jobs hand off to motir-codegraph through `runIndexHandoffSteps`, whose steps carry ids of their own.',
+  },
+  '`index-admit-try:${subject}:${attempt}`': {
+    shape:
+      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted" } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; outcome: "already_held" } | { askedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" }',
+    supersededBy: 'runIndexHandoffSteps (no step replaces it)',
+    reason:
+      'MOTIR-12036 deleted the indexer fleet, and with it the container path that wrote this step. The id is not reused: the memos are still in `job_step`. Nothing replaced it in place; both index jobs hand off to motir-codegraph through `runIndexHandoffSteps`, whose steps carry ids of their own.',
+  },
+  '`index-boot:${subject}`': {
+    shape:
+      '{ outcome: { billableSeconds: number; containerId: string; coreTimings?: undefined | { phasesMs: { admissionWait?: number | undefined; boot?: number | undefined; pollToDetect?: number | undefined }; totalMs?: number | undefined }; costUsd: string; failureDetail: null | string; indexMode?: "rebuild" | "sync" | undefined; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }; verdict: { detail: string; exitClass: "credential_refused" | "dispatch_malformed" | "exit_unobserved" | "graph_unbuildable" | "indexed" | "never_started" | "out_of_memory" | "pointer_unrecorded" | "repo_unfetchable" | "supervision_timed_out" | "unclassified" | "upload_failed"; exitCode: null | number; indexed: boolean; redispatchable: boolean } } | { detail: string; outcome: "admission_deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workspaceId: string }; bootedAt: string; credentialExpiresAt: string; dispatchId: string; handle: { createdAt: string; id: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; region: string }; repoRef: string; runId: string; shardId?: string | undefined; slotRef: string; syncGranted?: false | true | undefined } }',
+    supersededBy: 'runIndexHandoffSteps (no step replaces it)',
+    reason:
+      'MOTIR-12036 deleted the indexer fleet, and with it the container path that wrote this step. The id is not reused: the memos are still in `job_step`. Nothing replaced it in place; both index jobs hand off to motir-codegraph through `runIndexHandoffSteps`, whose steps carry ids of their own.',
+  },
+  '`index-settle:${subject}`': {
+    shape:
+      '{ billableSeconds: number; containerId: string; coreTimings?: undefined | { phasesMs: { admissionWait?: number | undefined; boot?: number | undefined; pollToDetect?: number | undefined }; totalMs?: number | undefined }; costUsd: string; failureDetail: null | string; indexMode?: "rebuild" | "sync" | undefined; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "aws" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_done_elsewhere" | "job_timed_out" | "provision_failed" | "reaped" | "runner_idle" | "spot_interrupted"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }; verdict: { detail: string; exitClass: "credential_refused" | "dispatch_malformed" | "exit_unobserved" | "graph_unbuildable" | "indexed" | "never_started" | "out_of_memory" | "pointer_unrecorded" | "repo_unfetchable" | "supervision_timed_out" | "unclassified" | "upload_failed"; exitCode: null | number; indexed: boolean; redispatchable: boolean } } | { detail: string; outcome: "admission_deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }',
+    supersededBy: 'runIndexHandoffSteps (no step replaces it)',
+    reason:
+      'MOTIR-12036 deleted the indexer fleet, and with it the container path that wrote this step. The id is not reused: the memos are still in `job_step`. Nothing replaced it in place; both index jobs hand off to motir-codegraph through `runIndexHandoffSteps`, whose steps carry ids of their own.',
+  },
+  '`index-size-refusal:${subject}`': {
+    shape: '{ refusedForSize: null } | { refusedForSize: { capBytes: number; sizeBytes: number } }',
+    supersededBy: 'runIndexHandoffSteps (no step replaces it)',
+    reason:
+      'MOTIR-12036 deleted the indexer fleet, and with it the container path that wrote this step. The id is not reused: the memos are still in `job_step`. Nothing replaced it in place; both index jobs hand off to motir-codegraph through `runIndexHandoffSteps`, whose steps carry ids of their own.',
+  },
+  'catch-up-paused-indexes-v2': {
+    shape:
+      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "pool_still_full" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
+    supersededBy: 'catch-up-paused-indexes-v3',
+    reason:
+      'MOTIR-12036 removed `pool_still_full` from the catch-up sweep’s outcome union: with the indexer pool gone, a row still recording a capacity pause is re-asked of the allowance like any other. A memo written under the old id may carry the removed member; the sweep is an idempotent recompute from live pauses whose enqueues the refresh job’s debounce coalesces, so re-executing it under the new id on a resumed run is safe.',
+  },
   'hosting-tenant-account-reconcile': {
     shape:
       '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; ran: boolean }',
@@ -1316,6 +1325,4 @@ export const FORWARDING_SEAMS: Record<string, string> = {
     "`stepSeam` — adapts `ctx.step` to `RunnerSupervisionSteps` for `ciRunnerBootService`, whose own `steps.run('boot-runner' | 'settle-runner', …)` sites are pinned above.",
   'lib/jobs/definitions/hostedRunSupervise.ts':
     '`ctx.step` adapted to `MemoizingSteps` for `hostedRunService.supervise` (MOTIR-690), whose own `steps.run(hostedRunEndStepId(…))` site is pinned above, and which hands the same seam to `hostedAgentContainerService.advance`, whose boot / settle / charge sites are pinned above.',
-  'lib/jobs/indexFleetSteps.ts':
-    '`stepSeam` — adapts `ctx.step` to `SupervisionSteps` for `codeGraphIndexDispatchService`, whose own `steps.run(`index-admit:` | `index-boot:` | `index-settle:`, …)` sites are pinned above.',
 };

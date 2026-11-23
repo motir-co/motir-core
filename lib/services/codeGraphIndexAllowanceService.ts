@@ -3,7 +3,7 @@ import { indexPauseReasonFor, type IndexPauseReason } from '@/lib/ciFleet/indexA
 
 // THE INDEX ALLOWANCE ASK (MOTIR-12035) — moved verbatim out of
 // `codeGraphIndexDispatchService` so the index handoff (MOTIR-11883) keeps its
-// allowance ask when the container dispatch is deleted (MOTIR-12036).
+// allowance ask now the container dispatch is deleted (MOTIR-12036).
 
 /**
  * The answer to "may this organisation's next index container boot?" — what

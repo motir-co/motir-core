@@ -104,8 +104,7 @@ export async function agentHosterOnPool(): Promise<boolean> {
 wireFleetKindSwitch('hosted_agent', agentRunnerOnPool);
 wireFleetKindSwitch('agent_instance', agentHosterOnPool);
 wireFleetKindSwitch('ci_runner', ciRunnerOnPool);
-// The indexer's reader is wired where its admission lives
-// (`codeGraphIndexAdmissionService`), and wired again here with the SAME reader,
-// so a process that reads every kind's switch without placing an index (the
+// The indexer's reader was also wired where its admission lived (deleted with
+// MOTIR-12036); it is wired here so a process that reads every kind's switch (the
 // Pools read on /admin/monitoring) answers the indexer's switch too (MOTIR-9562).
 wireFleetKindSwitch('code_graph_index', indexFleetOnPool);

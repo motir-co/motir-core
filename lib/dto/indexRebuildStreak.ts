@@ -7,9 +7,9 @@
 // that consumes the verdict, because the boundary is the whole design.
 //
 // motir-core's recorded index mode is derived from ITS OWN GRANT:
-// `codeGraphIndexDispatchService` writes `syncGranted: Boolean(
-// credential.previousSnapshotUrl)` into the `index-boot:<projectId>` memo and
-// reads it back as `'sync' | 'rebuild'`. So the fact in this ledger is
+// the container dispatch (`codeGraphIndexDispatchService`, deleted with
+// MOTIR-12036) wrote `syncGranted: Boolean(credential.previousSnapshotUrl)` into
+// the `index-boot:<projectId>` memo and read it back as `'sync' | 'rebuild'`. So the fact in this ledger is
 // ***was a snapshot OFFERED to the container***.
 //
 // It is NOT what the container DID with it. motir-ai's `runIndex.ts` returns

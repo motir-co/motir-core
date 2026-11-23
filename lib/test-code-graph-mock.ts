@@ -3,25 +3,18 @@ import type { MockAgent } from 'undici';
 
 // Node-only INDEX-WRITER boundary mock for E2E (Story MOTIR-3417 · MOTIR-3564).
 //
-// The index fleet's writer path — `bootIndexContainer` → poll → settle — crosses
-// TWO boundaries before it provisions anything, and neither had a seam in the
-// main Playwright lane:
+// The index writer path crossed two boundaries in the lane: motir-ai's
+// run-credential mint for an index container, and the repo TARBALL resolve. The
+// container fleet and its mint left with MOTIR-12036; the tarball resolve stays:
 //
-//   1. `mintCodeGraphRunCredential` → `POST {MOTIR_AI_URL}/v1/code-graph/run-credential`
 //   2. `resolveRepoTarballUrl` → an installation token minted from the App JWT
 //      (`POST api.github.com/app/installations/{id}/access_tokens`), then
 //      `GET api.github.com/repos/{owner}/{name}/tarball/{ref}` read for its
-//      302 `Location` — `redirect: 'manual'`, the body never touched.
+//      302 `Location` — `redirect: 'manual'`, the body never touched — the
+//      pre-signed source URL the handoff hands to motir-codegraph.
 //
-// The CONTAINER half was already stubbed: `MOTIR_FLEET_ORCHESTRATOR=fake` is set
-// on the lane and `indexFleetConfig()` returns a fake digest under it. These two
-// are what was left, and without them `runIndexFleetSteps` cannot reach
-// `settleIndexContainer` at all — so no spec could assert the ledger contract,
-// the coalescing that feeds it, or a mid-index worker restart.
-//
-// ⚠️ AND SINCE MOTIR-11883 THE TWO JOBS HAND THE INDEX OFF INSTEAD (story
-// MOTIR-11022). `runIndexHandoffSteps` crosses three more boundaries, stubbed here
-// beside the fleet's two so both paths stay drivable in the lane:
+// SINCE MOTIR-11883 THE TWO JOBS HAND THE INDEX OFF (story MOTIR-11022), and
+// `runIndexHandoffSteps` crosses three more boundaries, stubbed here:
 //
 //   3. `resolveRef` → `GET api.github.com/repos/{owner}/{name}/commits/{ref}`, the
 //      live head — answered with {@link e2eHeadSha}, a fixed 40-hex per repository;
@@ -34,7 +27,7 @@ import type { MockAgent } from 'undici';
 //      inside that window forgets the handoff and answers "published", which is
 //      the answer the restarted run needs.
 //
-// `tests/helpers/indexFleet.ts`'s `stubIndexFleet()` does this IN-PROCESS for the
+// `tests/helpers/indexHandoff.ts`'s `stubIndexHandoff()` does this IN-PROCESS for the
 // vitest suites. A Playwright server is a separately-spawned process, so an
 // in-process stub cannot reach it — which is exactly why every other external
 // boundary in this lane has a `lib/test-*-mock.ts`. This is that file for this
@@ -49,7 +42,7 @@ import type { MockAgent } from 'undici';
 // pedantic.**
 //
 // The supervisor is a JOB. It runs in the worker, which is the only process that
-// mints a run credential or resolves a tarball URL; the app server's whole part
+// resolves a tarball URL or hands an index off; the app server's whole part
 // in a refresh is the webhook writing a `job_queue` row, which crosses neither
 // boundary. And putting `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` on the app
 // server would not be merely redundant — `lib/ai/availability.ts` reads exactly
@@ -135,28 +128,6 @@ export const E2E_INDEX_PUBLISH_DELAY_MS = 2_000;
 /** The last handoff per `repoRef`, in this process. */
 const handed = new Map<string, { commit: string; at: number; jobId: string; kind: string }>();
 
-/** The credential the mint returns. Opaque by contract; a test asserts identity, never shape. */
-export const E2E_INDEX_RUN_CREDENTIAL = 'mrc1.e2e.index-run-credential';
-
-/** Set by a test to make the NEXT mint answer without a `credential`. */
-let mintOmitsCredential = false;
-
-/**
- * Arm the malformed-response arm — a 200 whose body carries no `credential`.
- *
- * The mint VALIDATES rather than casts, because the value lands in a container
- * spec and an empty `MOTIR_INDEX_RUN_CREDENTIAL` surfaces as the container
- * blaming the dispatch for a defect in the response. That arm needs a test, and
- * a mock that can only produce the happy path cannot give it one.
- */
-export function armMintWithoutCredential(): void {
-  mintOmitsCredential = true;
-}
-
-export function clearMintFault(): void {
-  mintOmitsCredential = false;
-}
-
 const json = { headers: { 'content-type': 'application/json' } } as const;
 
 /** True when this process is allowed to install the seam at all. */
@@ -171,32 +142,6 @@ export function installCodeGraphBoundaryMock(agent: MockAgent): void {
 
   const aiOrigin = (process.env['MOTIR_AI_URL'] ?? '').replace(/\/+$/, '');
   if (aiOrigin) {
-    agent
-      .get(aiOrigin)
-      .intercept({ path: '/v1/code-graph/run-credential', method: 'POST' })
-      .reply((opts) => {
-        record('POST', '/v1/code-graph/run-credential');
-        // ⚠️ THE EXPIRY IS COMPUTED FROM THE REQUESTED `ttlSeconds`, not fixed
-        // (MOTIR-4923). This mock stands in for motir-ai's mint, and the ONE
-        // thing that mint does with the field is `clampTtlSeconds` — default
-        // fifteen minutes, bounded to [60, 3600]. A fixed ten minutes made the
-        // seam disagree with the service it mocks the moment the dispatch began
-        // deriving the TTL from its own container deadline, and it is the exact
-        // disagreement that cost production two 20-minute index runs: a
-        // credential shorter than the run it authorizes.
-        const expiresAt = new Date(Date.now() + mintTtlSeconds(opts.body) * 1000).toISOString();
-        // ONE return shape, because undici infers the reply type from the first
-        // branch it sees and two literal shapes make it unassignable.
-        const data: Record<string, unknown> = mintOmitsCredential
-          ? // A 200 that PARSES and carries no credential — the shape the
-            // client's validator exists for. Not a 500: a transport failure is a
-            // different arm and already has its own error type.
-            { expiresAt }
-          : { credential: E2E_INDEX_RUN_CREDENTIAL, expiresAt };
-        return { statusCode: 200, data, responseOptions: json };
-      })
-      .persist();
-
     // 4. THE HANDOFF (MOTIR-11883). The body carries the pre-signed source URL, a
     // bearer secret: it is read for the commit and kind and never journalled.
     agent
@@ -342,27 +287,6 @@ export function installCodeGraphBoundaryMock(agent: MockAgent): void {
       };
     })
     .persist();
-}
-
-/**
- * motir-ai's `clampTtlSeconds`, transcribed (`src/codegraph/runCredential.ts`).
- *
- * An absent or unreadable field takes the DEFAULT — fifteen minutes — which is
- * the behaviour that produced MOTIR-4923 in production, so it is the behaviour a
- * caller that forgets the field must meet here too.
- */
-function mintTtlSeconds(body: unknown): number {
-  const raw = typeof body === 'string' ? body : null;
-  let requested: unknown;
-  if (raw) {
-    try {
-      requested = (JSON.parse(raw) as { ttlSeconds?: unknown }).ttlSeconds;
-    } catch {
-      requested = undefined;
-    }
-  }
-  if (typeof requested !== 'number' || !Number.isFinite(requested)) return 15 * 60;
-  return Math.min(60 * 60, Math.max(60, Math.floor(requested)));
 }
 
 function parseBody(body: unknown): Record<string, unknown> {

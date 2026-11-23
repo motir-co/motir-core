@@ -27,7 +27,6 @@ import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
-import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import { agentInstancePlacementService } from '@/lib/services/agentInstancePlacementService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { resetShardFakes } from '@/lib/orchestrator';
@@ -242,14 +241,6 @@ describe('a meta-org job on cloud', () => {
         installFleet: true,
       });
       for (const read of reads) expect(read).not.toHaveBeenCalled();
-      expect(
-        await withSystemContext((tx) =>
-          fleetShardAdmissionService.outsideSharedCapsInTx(
-            { fleetKind: kind, organizationId: meta.organizationId },
-            tx,
-          ),
-        ),
-      ).toBe(true);
     },
   );
 
@@ -278,14 +269,6 @@ describe('a meta-org job on cloud', () => {
     const tenant = await seedOrg();
     const pool = await shared(kind);
     expect(await choose(kind, tenant.organizationId)).toEqual({ shardId: pool.id });
-    expect(
-      await withSystemContext((tx) =>
-        fleetShardAdmissionService.outsideSharedCapsInTx(
-          { fleetKind: kind, organizationId: tenant.organizationId },
-          tx,
-        ),
-      ),
-    ).toBe(false);
   });
 });
 
@@ -333,52 +316,6 @@ describe('with the kinds unset or a kind not listed, placement is unchanged', ()
     vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', '');
     const meta = await seedOrg({ isMeta: true });
     expect(await choose('hosted_agent', meta.organizationId)).toEqual({ shardId: null });
-  });
-});
-
-describe('the index admission', () => {
-  const request = (fx: Fixture, dispatchId: string, repoRef = 'motir-co/motir-core') => ({
-    projectId: fx.projectId,
-    repoRef,
-    dispatchId,
-    workspaceId: fx.workspaceId,
-    organizationId: fx.organizationId,
-    containerTimeoutMs: 600_000,
-  });
-
-  it('admits a meta-org index onto the install fleet, with a slot on no account and outside the global cap', async () => {
-    onPool();
-    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '1');
-    const meta = await seedOrg({ isMeta: true });
-    const tenant = await seedOrg();
-    const pool = await shared('code_graph_index');
-
-    const first = await codeGraphIndexAdmissionService.admit(request(meta, 'd-1'), NOW);
-    expect(first.outcome).toBe('admitted');
-    if (first.outcome !== 'admitted') return;
-    expect(first.admission).toMatchObject({ shardId: null, installFleet: true });
-    expect(first.admission.detail).toContain('on the install fleet');
-    const slot = await adminDb.fleetInFlightSlot.findFirstOrThrow({
-      where: { organizationId: meta.organizationId },
-    });
-    expect(slot.fleetShardId).toBeNull();
-
-    // A replay of the same dispatch is told the same place.
-    const replay = await codeGraphIndexAdmissionService.admit(request(meta, 'd-1'), NOW);
-    expect(replay).toMatchObject({
-      outcome: 'already_held',
-      admission: { shardId: null, installFleet: true },
-    });
-    // Another dispatch of the same repo waits for it.
-    expect((await codeGraphIndexAdmissionService.admit(request(meta, 'd-2'), NOW)).outcome).toBe(
-      'deferred',
-    );
-
-    // The global cap is 1 and the meta org holds one index: a tenant's still
-    // fits, on the pool, because the install fleet's slot is not counted.
-    const other = await codeGraphIndexAdmissionService.admit(request(tenant, 'd-3'), NOW);
-    expect(other).toMatchObject({ outcome: 'admitted', admission: { shardId: pool.id } });
-    expect(other.outcome === 'admitted' && other.admission.installFleet).toBeFalsy();
   });
 });
 

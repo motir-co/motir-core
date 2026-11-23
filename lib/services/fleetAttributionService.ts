@@ -28,7 +28,6 @@ import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlo
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { fleetMachineKillRepository } from '@/lib/repositories/fleetMachineKillRepository';
 import { ciRunnerBootService, FLEET_TIME_BUDGETS } from '@/lib/services/ciRunnerBootService';
-import { indexSlotRef } from '@/lib/services/codeGraphIndexAdmissionService';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
@@ -771,14 +770,13 @@ export const fleetAttributionService = {
           organizationId: usage.organizationId,
         });
       }
+      // An index usage record has no slot to find: index admission, the only
+      // writer of an index slot, left with the container-based indexer
+      // (MOTIR-12036), so such a machine is reported ended below.
       const ref =
-        workload === HOSTED_AGENT
-          ? usage.dispatchRunId
-            ? hostedRunDispatchId(usage.dispatchRunId)
-            : null
-          : usage.projectId && usage.repoFullName
-            ? indexSlotRef(usage.projectId, usage.repoFullName)
-            : null;
+        workload === HOSTED_AGENT && usage.dispatchRunId
+          ? hostedRunDispatchId(usage.dispatchRunId)
+          : null;
       const slot = ref
         ? await withSystemContext((tx) => fleetInFlightSlotRepository.findByRef(workload, ref, tx))
         : null;

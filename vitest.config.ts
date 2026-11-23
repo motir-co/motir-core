@@ -1690,19 +1690,6 @@ export default defineConfig({
         // otherwise, so an unexercised branch in it is the guarantee going
         // missing exactly where it went missing before.
         'lib/services/fleetPreflightService.ts',
-        // Story MOTIR-1981 · MOTIR-1992 — THE INDEX FLEET, joining the gate for
-        // the reason §6 states: this path's whole output is a `job_run` row that
-        // is a PERMANENT claim that a repo has a code graph. Everything
-        // downstream — the enqueue gate, the operator sweep, the onboarding
-        // wizard's Next button — trusts that claim without re-checking it, so an
-        // unexercised branch here is a repo that is silently never indexed (or
-        // silently claimed and never built) with nothing anywhere to say so.
-        // `indexImage.ts` sits with them because the image reference IS the
-        // deliverable a container boots on: MOTIR-1980 shipped a fleet whose
-        // every predicate answered "configured" and which could not pull a
-        // single image.
-        'lib/services/codeGraphIndexDispatchService.ts',
-        'lib/services/codeGraphIndexAdmissionService.ts',
         // Story MOTIR-4335 · MOTIR-4544 — the internal index allowance's vocabulary
         // (MOTIR-4593) and the catch-up sweep (MOTIR-5290). MEASURED first: 100
         // statements / 100 branches / 100 functions / 100 lines apiece, over
@@ -1712,7 +1699,6 @@ export default defineConfig({
         'lib/ciFleet/indexAllowance.ts',
         'lib/services/codeGraphIndexCatchUpService.ts',
         'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
-        'lib/jobs/indexFleetSteps.ts',
         'lib/jobs/definitions/codeGraphIndex.ts',
         'lib/ciFleet/config.ts',
         'lib/ciFleet/limits.ts',
@@ -6617,18 +6603,6 @@ export default defineConfig({
         // Story MOTIR-1916 · MOTIR-1927 — the rest of the fleet (see the
         // include list for why the port ships gated alongside the services).
         'lib/orchestrator/index.ts': { branches: 90, functions: 90, lines: 90 },
-        // Story MOTIR-1981 · MOTIR-1992 — the index fleet (see the include list).
-        'lib/services/codeGraphIndexDispatchService.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'lib/services/codeGraphIndexAdmissionService.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'lib/jobs/indexFleetSteps.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-4335 · MOTIR-4544 (see the include list).
         'lib/ciFleet/indexAllowance.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/codeGraphIndexCatchUpService.ts': { branches: 90, functions: 90, lines: 90 },

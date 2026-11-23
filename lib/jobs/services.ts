@@ -38,7 +38,6 @@ import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
 import { monitorBugEnrichmentService } from '@/lib/services/monitorBugEnrichmentService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { codeGraphIndexAllowanceService } from '@/lib/services/codeGraphIndexAllowanceService';
-import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardSweepService';
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
@@ -143,7 +142,6 @@ export const jobServices = {
   codeGraph: codeGraphIndexService,
   // The index allowance ask (MOTIR-12035) — the handoff's, kept past the fleet.
   codeGraphIndexAllowance: codeGraphIndexAllowanceService,
-  codeGraphIndexDispatch: codeGraphIndexDispatchService,
   codeGraphOffboardSweep: codeGraphOffboardSweepService,
   firstAuditTrigger: firstAuditTriggerService,
   autoPlanCadence: autoPlanCadenceService,

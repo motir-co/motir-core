@@ -301,55 +301,35 @@ describe('the Stopped orgs list (AC 4) — server-paged, filtered, searched, lon
     expect((await enabled()).stopped.counts.all).toBe(0);
   });
 
-  it('a full indexer pool is not a stopped org, and does not move a stopped org’s row (MOTIR-9451)', async () => {
-    await pause((await seedOrg('Pool only')).repoIds[0]!, 'paused_index_pool_full', 6);
-    const both = await seedOrg('Both', 2);
-    await pause(both.repoIds[0]!, 'paused_index_no_credit', 2);
-    // Older, and more behind: it would win both columns if it were counted.
-    await pause(both.repoIds[1]!, 'paused_index_pool_full', 9);
-    await adminDb.githubRepo.update({
-      where: { id: both.repoIds[1]! },
-      data: {
-        indexedHeadSha: GRAPH,
-        defaultBranchHeadSha: HEAD,
-        commitsBehind: 77,
-        commitsBehindBaseSha: GRAPH,
-        commitsBehindHeadSha: HEAD,
-      },
-    });
+  // ⚠️ THE CAPACITY PAUSES LEFT WITH THE INDEXER POOL (MOTIR-12036). They used to
+  // be kept off these reads (MOTIR-9451, MOTIR-10600); a row still recording one
+  // now counts like any other pause until the next catch-up pass re-hands it, and
+  // the row's reason is the stored one.
+  it.each([
+    ['paused_index_pool_full', 'pool_full'],
+    ['paused_index_no_indexer_account', 'no_indexer_account'],
+  ])(
+    'a leftover %s row counts as a stopped org, its reason the stored one',
+    async (stored, reason) => {
+      await pause((await seedOrg('Capacity only')).repoIds[0]!, stored, 6);
+      const both = await seedOrg('Credit and capacity', 2);
+      await pause(both.repoIds[0]!, 'paused_index_no_credit', 2);
+      await pause(both.repoIds[1]!, stored, 9);
 
-    const dto = await enabled();
-    expect(dto.stopped.rows.map((r) => r.organizationName)).toEqual(['Both']);
-    expect(dto.stopped.rows[0]).toMatchObject({
-      reason: 'no_credit',
-      pausedRepos: 1,
-      graphBehind: null,
-    });
-    expect(Date.now() - new Date(dto.stopped.rows[0]!.stoppedSince).getTime()).toBeLessThan(
-      3 * DAY,
-    );
-    expect(dto.stopped.counts.all).toBe(1);
-  });
-
-  it('an indexer pool with NO account is not a stopped org either (MOTIR-10600)', async () => {
-    await pause(
-      (await seedOrg('No account only')).repoIds[0]!,
-      'paused_index_no_indexer_account',
-      6,
-    );
-    const both = await seedOrg('Credit and no account', 2);
-    await pause(both.repoIds[0]!, 'paused_index_no_credit', 2);
-    // Older: it would win the stopped-since column if it were counted.
-    await pause(both.repoIds[1]!, 'paused_index_no_indexer_account', 9);
-
-    const dto = await enabled();
-    expect(dto.stopped.rows.map((r) => r.organizationName)).toEqual(['Credit and no account']);
-    expect(dto.stopped.rows[0]).toMatchObject({ reason: 'no_credit', pausedRepos: 1 });
-    expect(Date.now() - new Date(dto.stopped.rows[0]!.stoppedSince).getTime()).toBeLessThan(
-      3 * DAY,
-    );
-    expect(dto.stopped.counts.all).toBe(1);
-  });
+      const dto = await enabled();
+      expect(dto.stopped.rows.map((r) => r.organizationName).sort()).toEqual(
+        ['Capacity only', 'Credit and capacity'].sort(),
+      );
+      expect(dto.stopped.rows.find((r) => r.organizationName === 'Capacity only')).toMatchObject({
+        reason,
+        pausedRepos: 1,
+      });
+      expect(
+        dto.stopped.rows.find((r) => r.organizationName === 'Credit and capacity'),
+      ).toMatchObject({ pausedRepos: 2 });
+      expect(dto.stopped.counts.all).toBe(2);
+    },
+  );
 });
 
 describe('the ways this section can lie (AC 6)', () => {

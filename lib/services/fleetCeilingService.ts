@@ -36,8 +36,8 @@ import type { PlanCaps } from '@/lib/billing/planCaps';
 //
 // Every container any workload boots on Motir's fleet is admitted here, or by a
 // gate that takes the same lock and calls {@link fleetCeilingService.orgCensus}
-// in-line (CI's `ciRunnerAdmissionService`, indexing's
-// `codeGraphIndexAdmissionService`).
+// in-line (CI's `ciRunnerAdmissionService`; indexing's admission was deleted
+// with the indexer fleet, MOTIR-12036).
 //
 // ── WHAT DECIDES ────────────────────────────────────────────────────────────
 //   * THE PLAN'S FIGURE FOR THE WORKLOAD (MOTIR-9363 · MOTIR-9373; the
@@ -51,7 +51,7 @@ import type { PlanCaps } from '@/lib/billing/planCaps';
 //     Host and `pool_*` 50) over the org's CI runner count alone, by the CI gate
 //     (MOTIR-9375); `Organization.fleetPoolCap`, set by platform staff, overrides
 //     that one figure and nothing else ({@link fleetCeilingService.resolveCiBurstCap}).
-//     Code-graph indexing is held to no plan figure: its own index caps bound it.
+//     Code-graph indexing is held to no plan figure.
 //   * THE ORGANISATION'S POOL (§2, the flat 500) is GONE: no admission reads it
 //     (MOTIR-9375) and the platform monitor shows each workload against its own
 //     plan figure instead (MOTIR-9377), reading the same `capsFor` and
@@ -208,7 +208,7 @@ export function describeFleetCensus(census: FleetInFlightCensus): string {
  * WHICH PLAN FIGURE HOLDS WHICH WORKLOAD (MOTIR-9373; decision MOTIR-9357).
  * Total by construction, like `FLEET_WORKLOADS`: a workload added to the union
  * without an entry here is a compile error. `null` means no plan figure holds it
- * — indexing (Motir charges nobody for it; its index caps bound it) and agent
+ * — indexing (Motir charges nobody for it) and agent
  * instances (their own `guard` reads the plan at create and wake). The CI gate
  * reads the same map, so "which figure holds CI" has one spelling.
  */
@@ -746,9 +746,9 @@ export const fleetCeilingService = {
    * ⚠️ THIS IS NOT THE PATH THAT RECOVERS A LEAKED SLOT, AND IT NEVER WAS
    * (MOTIR-3684). It shipped with no caller anywhere in the repository and stayed
    * that way, so the expiry it exists to enforce was enforced by nothing at all;
-   * the reap that actually runs is inside
-   * `codeGraphIndexAdmissionService.admit`, under the fleet admission lock, on
-   * the one path a starved dispatch is guaranteed to reach. This stays as the
+   * the reap that actually ran was inside the index admission's `admit` (deleted
+   * with MOTIR-12036), under the fleet admission lock, on the one path a starved
+   * dispatch was guaranteed to reach. This stays as the
    * hand-run equivalent for an operator with a table to clear.
    *
    * It used to say the count already ignores expired rows "so this changes no

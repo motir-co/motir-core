@@ -337,9 +337,10 @@ export interface IndexModeRecord {
  * reads straight through.
  *
  * ⚠️ **AND THE CONTAINER HALF IS OPTIONAL BY CONSTRUCTION, NEVER DEFAULTED.**
- * It is read after the run settles, over a route an older motir-ai does not
- * serve, by a client that returns `null` for every failure (`motirAiClient`'s
- * `fetchCodeGraphRunVerdict`). Absent therefore means *nobody told us*, which is
+ * It was read after a container run settled, by a client that returned `null`
+ * for every failure (`fetchCodeGraphRunVerdict`, deleted with the container
+ * fleet by MOTIR-12036); a handed-off index never reports it. Absent therefore
+ * means *nobody told us*, which is
  * not the same as `build` and must never be read as it — a defaulted value here
  * would be indistinguishable from a measured one, which is the precise confusion
  * the second field was added to end.
@@ -719,10 +720,10 @@ export const codeGraphIndexService = {
   // `system.code-graph-refresh` after moving first-index to the container fleet.
   // Production then ran the abandoned path for weeks at a ~68% failure rate:
   // `motir-core`'s whole-tree parse does not fit in 180 s, and its retries
-  // starved every other repo's refresh. Both jobs now build on the fleet
-  // (`lib/jobs/indexFleetSteps.ts` → `codeGraphIndexDispatchService`), so this
-  // file is READS ONLY — the tenant/fan-out resolve above, and the two enqueue
-  // paths below. Anything that wants a graph built dispatches a container.
+  // starved every other repo's refresh. Both jobs now hand the build off
+  // (`lib/jobs/indexHandoffSteps.ts`, which hands the build to motir-codegraph;
+  // the container dispatch was deleted by MOTIR-12036), so this file is READS
+  // ONLY — the tenant/fan-out resolve above, and the two enqueue paths below.
 
   /**
    * The repo-add paths' index trigger (MOTIR-1500, re-gated by MOTIR-1961) —

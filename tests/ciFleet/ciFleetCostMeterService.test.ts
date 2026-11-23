@@ -157,10 +157,10 @@ function usageFor(fx: Fixture, overrides: Partial<ContainerUsage> = {}): Contain
  * One CHECKPOINT on a still-running container, exactly as `buildContainerAccrual`
  * emits it (MOTIR-1995).
  *
- * Defaulted to the INDEX workload rather than CI, because that is the workload that
- * actually reaches this seam today: `codeGraphIndexDispatchService`'s poll is the
- * one supervision loop wired to it, and an index container is the first thing the
- * shared fleet org runs that MOTIR-1924's meter could not see.
+ * Defaulted to the INDEX workload rather than CI, because that was the workload
+ * that reached this seam first: the index container dispatch's poll (deleted with
+ * MOTIR-12036) was the supervision loop wired to it, and an index container was
+ * the first thing the shared fleet org ran that MOTIR-1924's meter could not see.
  */
 function accrualFor(fx: Fixture, overrides: Partial<ContainerAccrual> = {}): ContainerAccrual {
   const accruedSeconds = overrides.accruedSeconds ?? 90;
