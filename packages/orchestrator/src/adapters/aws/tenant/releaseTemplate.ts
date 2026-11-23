@@ -80,3 +80,22 @@ export function previousReleaseNumber(
   const below = valid.filter((n) => n < live);
   return below.length > 0 ? Math.max(...below) : null;
 }
+
+// ── Origin access (MOTIR-12128) ──────────────────────────────────────────────
+
+/** Who a release answers: Motir's edge alone (the origin secret), or anyone. */
+export const ORIGIN_ACCESS_MODES = ['motir_edge', 'open'] as const;
+export type OriginAccess = (typeof ORIGIN_ACCESS_MODES)[number];
+
+/** The release stacks' parameter that selects it. */
+export const ORIGIN_ACCESS_PARAMETER = 'OriginAccess';
+
+/** A release stack's current origin access: `open` only when the stack says so,
+ *  so a new stack, or one applied before the parameter existed, is `motir_edge`.
+ *  The stack runner sends full parameter sets, so every deploy resends this or
+ *  it would close an opened app. */
+export function originAccessOf(
+  parameters: Readonly<Record<string, string>> | null | undefined,
+): OriginAccess {
+  return parameters?.[ORIGIN_ACCESS_PARAMETER] === 'open' ? 'open' : 'motir_edge';
+}

@@ -131,6 +131,30 @@ no apps domain. Every container release in the account shares the one address;
 the secret is what tells them apart. An answer slower than 60 seconds (the
 origin read timeout, matching the load balancer's idle timeout) is a 504.
 
+## Opening a production release (MOTIR-12128)
+
+Every production release can be switched to answer WITHOUT Motir, for an app
+whose repository is taken over, by the stack parameter `OriginAccess`
+(`motir_edge`, the default, or `open`). Nothing else about the stack changes,
+and `OriginSecret` stays, so Motir's edge keeps answering at the same moment.
+The stack runner sends full parameter sets, so every deploy reads the stack's
+current `OriginAccess` and sends it again: a deploy never closes an opened app.
+
+- **Function release:** the front door runs with `MOTIR_FRONT_DOOR_MODE=open`
+  and no `MOTIR_FRONT_DOOR_SECRET`, passes every request to `live` (still
+  removing any `X-Motir-Origin-Secret` header) and keeps its 502 on a failed
+  invoke. The app's address is the existing `FrontDoorUrl`. `FunctionUrl`
+  stays `AWS_IAM`.
+- **Container release:** the secret rule stays; a second rule at
+  `OpenListenerRulePriority` matches `X-Motir-App: <AppRef>`, and the stack
+  gains its own CloudFront distribution on the network's VPC origin
+  (`FrontDoorVpcOriginId`, with `AlbDnsName` as the origin's name) that sets
+  that header as an origin custom header, which CloudFront puts in place of any
+  viewer header of the same name. The app's address is that distribution,
+  output as `OpenUpstreamUrl`. The header is the app's public name, not a
+  secret: no value derived from Motir's origin-secret key is in either open
+  path.
+
 ## Copying the directory
 
 Copy `aws-tenant-stacks/` whole into a repository and apply the templates in

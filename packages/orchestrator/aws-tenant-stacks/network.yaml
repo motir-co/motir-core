@@ -351,3 +351,7 @@ Outputs:
     Value: !GetAtt LoadBalancer.DNSName
   FrontDoorDomainName:
     Value: !GetAtt FrontDoor.DomainName
+  # An open container release's own distribution reaches the load balancer
+  # through this same VPC origin (MOTIR-12128).
+  FrontDoorVpcOriginId:
+    Value: !GetAtt FrontDoorOrigin.Id

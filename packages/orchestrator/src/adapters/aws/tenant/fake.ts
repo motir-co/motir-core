@@ -446,6 +446,7 @@ export function fakeTenantStackOutputs(
         AlbListenerArn: `arn:aws:elasticloadbalancing:${region}:${accountId}:listener/app/motir-tenant/1/2`,
         AlbDnsName: `internal-motir-tenant-1.${region}.elb.amazonaws.com`,
         FrontDoorDomainName: 'd1fake0frontdoor.cloudfront.net',
+        FrontDoorVpcOriginId: 'vo_fake0frontdoor',
       };
     }
     let m = /^motir-database-([a-z0-9]+)$/.exec(name);
@@ -873,6 +874,8 @@ export function createFakeTenantEcs(
 export interface FakeTenantElb extends TenantElb {
   /** Each release's listener rule priority, by app. */
   readonly rules: Map<string, number>;
+  /** Each OPEN release's second rule priority, by app (MOTIR-12128). */
+  readonly openRules: Map<string, number>;
   /** Apps whose targets fail their health check. */
   readonly unhealthy: Set<string>;
   readonly calls: string[];
@@ -883,6 +886,7 @@ export interface FakeTenantElb extends TenantElb {
  *  revision is a target, `initial` while its rollout is in progress. */
 export function createFakeTenantElb(ecs: FakeTenantEcs): FakeTenantElb {
   const rules = new Map<string, number>();
+  const openRules = new Map<string, number>();
   const unhealthy = new Set<string>();
   const calls: string[] = [];
   const counter = faultCounter('elasticloadbalancing');
@@ -895,6 +899,7 @@ export function createFakeTenantElb(ecs: FakeTenantEcs): FakeTenantElb {
   }
   return {
     rules,
+    openRules,
     unhealthy,
     calls,
     failAt: (operation, n, when) => counter.failAt(operation, n, when),
@@ -912,7 +917,7 @@ export function createFakeTenantElb(ecs: FakeTenantEcs): FakeTenantElb {
           );
       }),
     listRulePriorities: (listenerArn) =>
-      call('listRulePriorities', listenerArn, () => [...rules.values()]),
+      call('listRulePriorities', listenerArn, () => [...rules.values(), ...openRules.values()]),
   };
 }
 
@@ -979,6 +984,103 @@ export function createFakeTenantEc2(): FakeTenantEc2 {
   };
 }
 
+// ── The request path (MOTIR-12128) ──────────────────────────────────────────
+
+/** What a request to a fake account's address reached: the app that answered,
+ *  and the headers it was handed; 403 is the front door's or the listener's
+ *  refusal, 404 an address the account does not serve. */
+export interface FakeEdgeAnswer {
+  readonly status: 200 | 403 | 404;
+  readonly appRef: string | null;
+  readonly forwardedHeaders: Readonly<Record<string, string>>;
+}
+
+export interface FakeTenantEdge {
+  /** Send a request to `url` with the viewer's `headers` — a function front
+   *  door, the network's shared distribution, or an open release's own. */
+  request(url: string, headers?: Readonly<Record<string, string>>): FakeEdgeAnswer;
+}
+
+const ORIGIN_SECRET = 'x-motir-origin-secret';
+const APP_HEADER = 'x-motir-app';
+const withoutSlash = (url: string) => url.replace(/\/+$/, '');
+
+/**
+ * The request path of a fake account, as the release stacks build it: a
+ * function's front door admits the stack's `OriginSecret`, or anyone when the
+ * stack is `open`, and strips the header; the network's distribution and an
+ * open release's own forward every header but Host to the load balancer, the
+ * open one setting `X-Motir-App` over any viewer's; the listener forwards to the
+ * lowest-priority rule that matches — a release's secret rule, or its open
+ * rule — and answers 403 when none does.
+ */
+export function createFakeTenantEdge(cloudformation: FakeTenantCloudFormation): FakeTenantEdge {
+  const answer = (
+    status: FakeEdgeAnswer['status'],
+    appRef: string | null = null,
+    forwardedHeaders: Record<string, string> = {},
+  ): FakeEdgeAnswer => ({ status, appRef, forwardedHeaders });
+
+  function releases() {
+    return [...cloudformation.stacks.entries()]
+      .filter(([name]) => name.startsWith('motir-release-'))
+      .map(([, record]) => record);
+  }
+
+  function loadBalancer(headers: Record<string, string>): FakeEdgeAnswer {
+    const rules = releases()
+      .filter((record) => isContainerRelease('motir-release-', record.parameters))
+      .flatMap((record) => {
+        const p = record.parameters;
+        const secret = p['OriginSecret'] ?? '';
+        const own = {
+          priority: Number(p['ListenerRulePriority']),
+          app: p['AppRef']!,
+          matches: secret !== '' && headers[ORIGIN_SECRET] === secret,
+        };
+        if (p['OriginAccess'] !== 'open') return [own];
+        const open = {
+          priority: Number(p['OpenListenerRulePriority']),
+          app: p['AppRef']!,
+          matches: headers[APP_HEADER] === p['AppRef'],
+        };
+        return [own, open];
+      })
+      .sort((a, b) => a.priority - b.priority);
+    const hit = rules.find((rule) => rule.matches);
+    return hit ? answer(200, hit.app, headers) : answer(403);
+  }
+
+  return {
+    request(url, viewer = {}) {
+      const headers = Object.fromEntries(
+        Object.entries(viewer).map(([name, value]) => [name.toLowerCase(), value]),
+      );
+      const { host: _host, ...forwarded } = headers;
+      const target = withoutSlash(url);
+      for (const record of releases()) {
+        const p = record.parameters;
+        const frontDoor = record.outputs['FrontDoorUrl'];
+        if (frontDoor && withoutSlash(frontDoor) === target) {
+          const secret = p['OriginSecret'] ?? '';
+          const admitted =
+            p['OriginAccess'] === 'open' || (secret !== '' && headers[ORIGIN_SECRET] === secret);
+          if (!admitted) return answer(403);
+          const { [ORIGIN_SECRET]: _secret, ...rest } = headers;
+          return answer(200, p['AppRef']!, rest);
+        }
+        const open = record.outputs['OpenUpstreamUrl'];
+        if (open && withoutSlash(open) === target) {
+          return loadBalancer({ ...forwarded, [APP_HEADER]: p['AppRef']! });
+        }
+      }
+      const shared = cloudformation.stacks.get('motir-network')?.outputs['FrontDoorDomainName'];
+      if (shared && `https://${shared}` === target) return loadBalancer(forwarded);
+      return answer(404);
+    },
+  };
+}
+
 /** A container release stack: the release template's parameters. */
 const isContainerRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
   name.startsWith('motir-release-') && 'TaskCpu' in parameters;
@@ -1001,6 +1103,7 @@ export function createFakeTenantClients(
   readonly elb: FakeTenantElb;
   readonly ssm: FakeTenantSsm;
   readonly ec2: FakeTenantEc2;
+  readonly edge: FakeTenantEdge;
 } {
   const accountId = options.accountId ?? '210987654321';
   const region = options.region ?? 'us-east-1';
@@ -1009,32 +1112,43 @@ export function createFakeTenantClients(
   const ecs = createFakeTenantEcs(accountId, region, now);
   const elb = createFakeTenantElb(ecs);
   const templates = fakeTenantStackOutputs(accountId, region);
+  const cloudformation = createFakeTenantCloudFormation({
+    outputs:
+      options.outputs ??
+      ((name, parameters, generation) => {
+        if (isFunctionRelease(name, parameters)) {
+          return lambda.applyReleaseStack(parameters, generation);
+        }
+        if (isContainerRelease(name, parameters)) {
+          const app = parameters['AppRef']!;
+          elb.rules.set(app, Number(parameters['ListenerRulePriority']));
+          const outputs = ecs.applyReleaseStack(parameters, generation);
+          if (parameters['OriginAccess'] !== 'open') {
+            elb.openRules.delete(app);
+            return outputs;
+          }
+          // The open rule and the release's own distribution (MOTIR-12128).
+          elb.openRules.set(app, Number(parameters['OpenListenerRulePriority']));
+          const id = createHash('sha256').update(`${app}:${generation}:open`).digest('hex');
+          return { ...outputs, OpenUpstreamUrl: `https://d${id.slice(0, 13)}.cloudfront.net` };
+        }
+        return templates(name, parameters, generation);
+      }),
+    onDeleted: (name) => {
+      options.onDeleted?.(name);
+      if (!name.startsWith('motir-release-')) return;
+      const appRef = name.slice('motir-release-'.length);
+      lambda.removeFunction(appRef);
+      if (ecs.services.has(appRef)) ecs.removeService(appRef);
+      elb.rules.delete(appRef);
+      elb.openRules.delete(appRef);
+    },
+    now,
+  });
   return {
     accountId,
     region,
-    cloudformation: createFakeTenantCloudFormation({
-      outputs:
-        options.outputs ??
-        ((name, parameters, generation) => {
-          if (isFunctionRelease(name, parameters)) {
-            return lambda.applyReleaseStack(parameters, generation);
-          }
-          if (isContainerRelease(name, parameters)) {
-            elb.rules.set(parameters['AppRef']!, Number(parameters['ListenerRulePriority']));
-            return ecs.applyReleaseStack(parameters, generation);
-          }
-          return templates(name, parameters, generation);
-        }),
-      onDeleted: (name) => {
-        options.onDeleted?.(name);
-        if (!name.startsWith('motir-release-')) return;
-        const appRef = name.slice('motir-release-'.length);
-        lambda.removeFunction(appRef);
-        if (ecs.services.has(appRef)) ecs.removeService(appRef);
-        elb.rules.delete(appRef);
-      },
-      now,
-    }),
+    cloudformation,
     rdsData: createFakeTenantRdsData(),
     secretsManager: createFakeTenantSecretsManager(),
     lambda,
@@ -1043,5 +1157,6 @@ export function createFakeTenantClients(
     elb,
     ssm: createFakeTenantSsm(),
     ec2: createFakeTenantEc2(),
+    edge: createFakeTenantEdge(cloudformation),
   };
 }

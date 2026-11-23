@@ -142,7 +142,7 @@ describe('deployFunctionRelease', () => {
     });
     expect(stack.parameters['ConfigHash']).toMatch(/^[a-f0-9]{64}$/);
     expect(stack.parameters['FrontDoorRevision']).toBe(
-      frontDoorRevision(deriveOriginSecret(KEY, 'mh-cmrepo1'), stack.templateBody),
+      frontDoorRevision(deriveOriginSecret(KEY, 'mh-cmrepo1'), stack.templateBody, 'motir_edge'),
     );
     // The template it applied: an x86_64 image function of 1,769 MB in the VPC,
     // the Web Adapter's port and readiness path from the parameters.
@@ -615,6 +615,36 @@ describe('the front door (MOTIR-10129, to the decision MOTIR-10128)', () => {
     const logged = JSON.stringify([...failed.errors, ...thrown.errors]);
     expect(logged).toContain('TooManyRequestsException');
     expect(logged).not.toContain(SECRET);
+  });
+
+  it('passes every request to live when open, still removing the header (MOTIR-12128)', async () => {
+    const open = { MOTIR_FRONT_DOOR_MODE: 'open', MOTIR_FRONT_DOOR_TARGET: ALIAS };
+    const door = loadFrontDoor(open, ok);
+    const bare = event({});
+    const carrying = event({ 'x-motir-origin-secret': 'whatever-a-viewer-sends' });
+    expect(await door.handler(bare)).toEqual(appAnswer);
+    expect(await door.handler(carrying)).toEqual(appAnswer);
+    expect(door.sent).toHaveLength(2);
+    const forwarded = door.sent.map((s) => JSON.parse(s.Payload) as ReturnType<typeof event>);
+    expect(forwarded[0]).toEqual(bare);
+    expect(forwarded[1]!.headers).not.toHaveProperty('x-motir-origin-secret');
+    expect(forwarded[1]).toEqual({ ...carrying, headers: bare.headers });
+    // Still a 502 when the app fails.
+    const failed = loadFrontDoor(open, async () => ({ FunctionError: 'Unhandled' }));
+    expect(await failed.handler(bare)).toEqual({ ...refused, statusCode: 502 });
+  });
+
+  it('checks the secret under motir_edge, and under any mode that is not exactly open', async () => {
+    for (const mode of ['motir_edge', 'OPEN', 'opened', '']) {
+      const door = loadFrontDoor({ ...env, MOTIR_FRONT_DOOR_MODE: mode }, ok);
+      expect(await door.handler(event({})), mode).toEqual(refused);
+      expect(await door.handler(event({ 'x-motir-origin-secret': SECRET })), mode).toEqual(
+        appAnswer,
+      );
+    }
+    // The open stack's environment holds no secret, so dropping it alone closes.
+    const closed = loadFrontDoor({ MOTIR_FRONT_DOOR_TARGET: ALIAS }, ok);
+    expect(await closed.handler(event({}))).toEqual(refused);
   });
 
   it('is reached at FrontDoorUrl with origin_secret; a stack from before it at FunctionUrl with SigV4', () => {

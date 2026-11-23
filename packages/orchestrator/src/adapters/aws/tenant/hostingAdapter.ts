@@ -7,6 +7,7 @@ import {
   ReleaseNotFoundError,
 } from '../../../hosting/errors';
 import { hostingAppNames, sameEnvironment } from '../../../hosting/names';
+import { deriveOriginSecret } from '../../../hosting/originSecret';
 import { requireReleaseShape } from '../../../hosting/shape';
 import type {
   DeployReleaseInput,
@@ -21,11 +22,14 @@ import type {
 } from '../../../hosting/types';
 import {
   NoPreviousTaskDefinitionError,
+  OPEN_RULE_SEED_SUFFIX,
   containerReleaseNames,
   containerUsageSince,
   deployContainerRelease,
   describeContainerRelease,
   destroyContainerRelease,
+  openParameters,
+  pickRulePriority,
   rollbackContainerRelease,
 } from './container';
 import {
@@ -38,13 +42,14 @@ import type { TenantClientsFactory } from './factory';
 import {
   NoPreviousFunctionVersionError,
   deployFunctionRelease,
+  frontDoorRevision,
   describeFunctionRelease,
   destroyFunctionRelease,
   functionReleaseNames,
   functionUsageSince,
   rollbackFunctionRelease,
 } from './function';
-import { ensureTenantNetwork, type TenantAccountContext } from './network';
+import { ensureTenantNetwork, stackOutput, type TenantAccountContext } from './network';
 import {
   GithubRepositoryIdsMissingError,
   RegistryNotReadyError,
@@ -70,7 +75,13 @@ import {
   toReleaseDescription,
   type ParsedAppRef,
 } from './releaseIds';
-import { TAG_REPOSITORY, createStackRunner, type StackRunnerOptions } from './stackRunner';
+import { ORIGIN_ACCESS_PARAMETER, originAccessOf } from './releaseTemplate';
+import {
+  TAG_ORGANIZATION,
+  TAG_REPOSITORY,
+  createStackRunner,
+  type StackRunnerOptions,
+} from './stackRunner';
 
 // THE AWS ADAPTER on the hosting deploy port (MOTIR-10010), to MOTIR-5769 §4. A
 // thin router: every AWS detail is in the tenant modules below it (the network,
@@ -127,6 +138,36 @@ export interface AwsHostingDeps {
   readonly log?: (line: AwsHostingLogLine) => void;
 }
 
+/** The address an opened production release answers at without Motir's origin
+ *  secret (MOTIR-12128). */
+export interface OpenUpstreamResult {
+  readonly upstreamAddress: string;
+}
+
+/** The AWS deploy port, plus the call that opens one production release. */
+export interface AwsHostingDeployPort extends HostingDeployPort {
+  /**
+   * Switch a PRODUCTION release to answer without Motir's origin secret
+   * (`OriginAccess=open`), keeping the secret path, so Motir's edge answers
+   * too, and return the address it now answers at: a function release's
+   * `FrontDoorUrl`, a container release's own `OpenUpstreamUrl`. Look before
+   * act: a stack already open is not applied again. A preview is refused
+   * (`OrchestratorApiError` 409) and a release with no stack is
+   * `ReleaseNotFoundError`. It records nothing; the caller stores the address.
+   */
+  openUpstream(handle: ReleaseHandle): Promise<OpenUpstreamResult>;
+}
+
+/** The output an open release's address is read from, by shape. */
+const OPEN_UPSTREAM_OUTPUT: Record<ReleaseShape, string> = {
+  function: 'FrontDoorUrl',
+  container: 'OpenUpstreamUrl',
+};
+
+/** A release stack's template declares the open mode — a stack applied before
+ *  MOTIR-12128 does not, and is opened by a deploy first. */
+const DECLARES_ORIGIN_ACCESS = new RegExp(`^  ${ORIGIN_ACCESS_PARAMETER}:\\s*$`, 'm');
+
 /** A release that has not reached a shape module: no AWS call, no state. */
 function zeroUsage(appRef: string, releaseId: string, at: Date): ReleaseUsage {
   return { target: 'aws', appRef, releaseId, since: at, until: at, runningSeconds: 0 };
@@ -151,7 +192,7 @@ function imageOf(artifact: ReleaseArtifact): { digest?: string; tag?: string } {
   return { tag: artifact.ref.slice(artifact.ref.lastIndexOf(':') + 1) };
 }
 
-export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployPort {
+export function createAwsHostingDeployPort(deps: AwsHostingDeps): AwsHostingDeployPort {
   const now = deps.now ?? (() => new Date());
   const log = (step: string, appRef: string, detail?: string) =>
     deps.log?.({ step, appRef, ...(detail ? { detail } : {}) });
@@ -190,10 +231,10 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
     const parsed = parseAwsAppRef(appRef);
     const { stackName } = functionReleaseNames(parsed.repositoryId, parsed.environment);
     const account = await accountOf(parsed.repositoryId);
-    if (!account) return { parsed, account: null, shape: null, stackName };
+    if (!account) return { parsed, account: null, shape: null, stackName, stack: null };
     const stack = await account.runner.describeStack(stackName);
     const shape = stack ? shapeOfReleaseStack(stack.parameters) : null;
-    return { parsed, account, shape, stackName };
+    return { parsed, account, shape, stackName, stack };
   }
 
   function target(account: TenantAccountContext, parsed: ParsedAppRef) {
@@ -492,6 +533,80 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
           state: description.state,
         },
       ];
+    },
+
+    async openUpstream(handle) {
+      const { appRef } = handle;
+      const parsed = parseAwsAppRef(appRef);
+      // A preview answers through Motir's edge alone: refused before any call.
+      if (parsed.environment.kind !== 'production') {
+        throw new OrchestratorApiError(
+          'aws',
+          409,
+          `app ${appRef} is a preview; only production opens`,
+        );
+      }
+      if (!sameEnvironment(parsed.environment, handle.environment)) {
+        throw new OrchestratorApiError('aws', 409, `app ${appRef} is another environment's`);
+      }
+      const { account, shape, stackName, stack } = await locate(appRef);
+      // Unpublished (no ConfigHash yet) is no release to open either.
+      if (!account || !shape || !stack?.parameters['ConfigHash']) {
+        throw new ReleaseNotFoundError(appRef);
+      }
+      const output = OPEN_UPSTREAM_OUTPUT[shape];
+      // Already open and settled: nothing to apply. An open stack still in
+      // progress (a retried call that was cut off) is applied again below with
+      // its own values, which waits for it and changes nothing.
+      const settled = !stack.status.endsWith('_IN_PROGRESS');
+      if (originAccessOf(stack.parameters) === 'open' && settled && stack.outputs[output]) {
+        log('release already open', appRef, shape);
+        return { upstreamAddress: stack.outputs[output] };
+      }
+      // The SAME template the stack runs (its release variables are written
+      // into it), with the stack's own parameters. The origin secret is NoEcho,
+      // so it is derived again rather than read back.
+      const template = await account.clients.cloudformation.getTemplateBody(stackName);
+      if (!DECLARES_ORIGIN_ACCESS.test(template)) {
+        throw new OrchestratorApiError(
+          'aws',
+          409,
+          `app ${appRef} was released before the open mode; deploy it again first`,
+        );
+      }
+      const originSecret = deriveOriginSecret(deps.originSecretKey, appRef);
+      let parameters: Record<string, string> = {
+        ...stack.parameters,
+        OriginSecret: originSecret,
+        [ORIGIN_ACCESS_PARAMETER]: 'open',
+      };
+      if (shape === 'function') {
+        parameters['FrontDoorRevision'] = frontDoorRevision(originSecret, template, 'open');
+      } else {
+        const network = await ensureTenantNetwork(account);
+        // The open rule's priority: the stack's own when it has one, else a
+        // free one, seeded apart from the app's secret rule.
+        const priority =
+          stack.parameters['OpenListenerRulePriority'] ||
+          String(
+            pickRulePriority(
+              `${appRef}${OPEN_RULE_SEED_SUFFIX}`,
+              await account.clients.elb.listRulePriorities(network.albListenerArn),
+            ),
+          );
+        parameters = { ...parameters, ...openParameters('open', priority, network) };
+      }
+      const { outputs } = await account.runner.applyStack({
+        stackName,
+        template,
+        parameters,
+        tags: {
+          [TAG_ORGANIZATION]: account.organizationId,
+          [TAG_REPOSITORY]: parsed.repositoryId,
+        },
+      });
+      log('release opened', appRef, shape);
+      return { upstreamAddress: stackOutput(stackName, outputs, output) };
     },
 
     // The AWS shapes' one-off task run is their adapter story's; until then a
