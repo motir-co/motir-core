@@ -6,7 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { arrivalLevelId } from '@/lib/planning/planArrival';
-import { proposalLevelKey } from '@/lib/planning/planShape';
+import { planTouchedNodeIds, proposalLevelKey } from '@/lib/planning/planShape';
 import { folderIdFromNodeId } from '@/lib/planning/projectCanvasModel';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -657,7 +657,7 @@ async function countArrivalLevel(
   workspaceId: string,
 ): Promise<ArrivalLevelSizes> {
   const committed = await withWorkspaceServiceContext(workspaceId, (tx) =>
-    countCommittedLevelNodes(projectId, arrivalLevelKey, workspaceId, tx),
+    countCommittedLevelNodes(projectId, arrivalLevelKey, workspaceId, tx, items),
   );
   // A proposal's level is the one the canvas draws it on (`proposalLevelKey`): its
   // parent, else the folder it is filed into, else the root. So a root `add` filed
@@ -671,7 +671,13 @@ async function countArrivalLevel(
   // never reaches. The two arms of `defaultPlanView` read different numbers: the
   // legibility arm reads what is drawn, the truncation arm reads what was dropped,
   // and a folder is never dropped.
-  return { size: Math.min(total, TREE_LEVEL_MAX_TAKE) + committed.folders, total };
+  //
+  // ⚠️ AND THE ROOT FOLDS ITS LOOSE CARDS INTO ONE NODE (Bug MOTIR-12162). The
+  // rows the canvas puts behind the "Not in epic" door draw ONE node between them,
+  // so the drawn size swaps them for that one node. The total does not: the capped
+  // read returns those rows ungrouped, and truncation can drop any of them.
+  const drawn = total - committed.grouped + (committed.grouped > 0 ? 1 : 0);
+  return { size: Math.min(drawn, TREE_LEVEL_MAX_TAKE) + committed.folders, total };
 }
 
 /**
@@ -684,51 +690,80 @@ async function countArrivalLevel(
  * - `folder:<id>` — the cards FILED in that folder (always roots, since the CHECK
  *   keeps `parentId` and `folderId` apart). Its child folders are not counted yet
  *   (Bug MOTIR-12161).
- * - the root (`null`) — the UNFILED root cards (`excludeFiled`: a filed card is
- *   drawn behind its folder, not loose) plus one node per root folder. Counting
- *   every root card put a large `Bugs` folder's cards on a root that draws one
- *   folder node for them, and sent the plan to the list.
- * - a work item's id — its children. A work item's children are never folders.
+ * - the root (`null`) — see {@link countRootLevelNodes}.
+ * - a work item's id — its children. A work item's children are never folders,
+ *   and only the root groups, so nothing is folded there either.
  */
 async function countCommittedLevelNodes(
   projectId: string,
   levelKey: string | null,
   workspaceId: string,
   tx: Prisma.TransactionClient,
-): Promise<{ workItems: number; folders: number }> {
+  items: readonly PlanReviewItemDto[],
+): Promise<CommittedLevelNodes> {
+  if (levelKey === null) return countRootLevelNodes(projectId, workspaceId, tx, items);
   const folderId = folderIdFromNodeId(levelKey);
-  if (folderId !== null) {
-    const workItems = await workItemRepository.countProjectTreeLevel(
+  const workItems =
+    folderId !== null
+      ? await workItemRepository.countProjectTreeLevel(
+          projectId,
+          workspaceId,
+          null,
+          null,
+          tx,
+          undefined,
+          { kind: 'folder', folderId },
+        )
+      : await workItemRepository.countSiblingsInWorkspace(projectId, levelKey, workspaceId, tx);
+  return { workItems, folders: 0, grouped: 0 };
+}
+
+/** A level's committed nodes, as {@link countCommittedLevelNodes} counts them. */
+interface CommittedLevelNodes {
+  /** The work items the level read returns (before its cap). */
+  workItems: number;
+  /** The level's folder nodes — read whole, never capped. */
+  folders: number;
+  /** How many of `workItems` the canvas folds into the ONE "Not in epic" node:
+   *  0 when it draws no group. Only the root groups. */
+  grouped: number;
+}
+
+/**
+ * The ROOT's committed nodes, as the plan review canvas draws them.
+ *
+ * - The UNFILED root cards (`excludeFiled`: a filed card is drawn behind its
+ *   folder, not loose) plus one node per root folder (Bug MOTIR-12148). Counting
+ *   every root card put a large `Bugs` folder's cards on a root that draws one
+ *   folder node for them, and sent the plan to the list.
+ * - ⚠️ Of those cards, the ones `buildWorkItemLevel` folds into the ONE "Not in
+ *   epic" node (Bug MOTIR-12162) — with the canvas's own three conjuncts: a root
+ *   (`parentId === null`, which the level is), not an epic (the `others` band),
+ *   and not a row the plan touches (`planTouchedNodeIds`, the SAME set the canvas
+ *   groups by). And with its guard: grouping must leave something on the road, so
+ *   a root whose every card would group draws them all and groups none.
+ */
+async function countRootLevelNodes(
+  projectId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+  items: readonly PlanReviewItemDto[],
+): Promise<CommittedLevelNodes> {
+  const countRoot = (band?: 'others', excludeIds?: readonly string[]) =>
+    workItemRepository.countProjectTreeLevel(
       projectId,
       workspaceId,
       null,
       null,
       tx,
       undefined,
-      { kind: 'folder', folderId },
+      band ? { kind: 'excludeFiled', band } : { kind: 'excludeFiled' },
+      excludeIds,
     );
-    return { workItems, folders: 0 };
-  }
-  if (levelKey !== null) {
-    const workItems = await workItemRepository.countSiblingsInWorkspace(
-      projectId,
-      levelKey,
-      workspaceId,
-      tx,
-    );
-    return { workItems, folders: 0 };
-  }
-  const workItems = await workItemRepository.countProjectTreeLevel(
-    projectId,
-    workspaceId,
-    null,
-    null,
-    tx,
-    undefined,
-    { kind: 'excludeFiled' },
-  );
+  const workItems = await countRoot();
+  const candidates = await countRoot('others', [...planTouchedNodeIds(items)]);
   const folders = await folderRepository.countLevel(projectId, workspaceId, null, tx);
-  return { workItems, folders };
+  return { workItems, folders, grouped: candidates < workItems ? candidates : 0 };
 }
 
 /**

@@ -30,7 +30,7 @@ import {
   folderNodeId,
   workItemCrumbLabel,
 } from '@/lib/planning/projectCanvasModel';
-import { proposalLevelKey } from '@/lib/planning/planShape';
+import { planTouchedNodeIds, proposalLevelKey } from '@/lib/planning/planShape';
 import { folderChangeCounts } from '@/lib/planning/planChangeDiff';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import { currentPeekedProposal } from '@/lib/planning/peekedProposal';
@@ -486,13 +486,9 @@ export function PlanReviewCanvas({
   // open (it is drawn one level down, under the row that just left the level).
   // `op === 'add'` is the whole widening — a `modify` / `remove` already keys by
   // its own target, so pulling ITS parent onto the road would be over-wide.
-  const touchedNodeIds = useMemo(() => {
-    const ids = new Set(items.map((i) => i.nodeId));
-    for (const i of items) {
-      if (i.op === 'add' && i.parentNodeId !== null) ids.add(i.parentNodeId);
-    }
-    return ids;
-  }, [items]);
+  // The review read's arrival-level size counts the group with this SAME set
+  // (Bug MOTIR-12162), which is why it lives in `planShape` and not here.
+  const touchedNodeIds = useMemo(() => planTouchedNodeIds(items), [items]);
 
   // DECISION 4's second half: *"the DETAIL keeps §6 and gains the tile too."* The
   // list-view arm (Part XIII §6) chooses the ARRIVAL VIEW for the arrival level;
