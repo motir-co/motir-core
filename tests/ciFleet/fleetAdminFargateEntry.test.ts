@@ -366,12 +366,11 @@ describe('the fleet-admin bundle in a Fargate-shaped process', () => {
     const onAws = await runBundle(
       bundle,
       ['pool-status'],
-      fargateEnv({ MOTIR_FLEET_CI_RUNNER_PROVIDER: 'aws', MOTIR_INDEX_FLEET_PROVIDER: 'aws' }),
+      fargateEnv({ MOTIR_FLEET_CI_RUNNER_PROVIDER: 'aws' }),
     );
     expect(onAws.stderr).toBe('');
     expect(onAws.code).toBe(0);
     expect(onAws.stdout).toMatch(/^ci_runner: aws {2}growth /m);
-    expect(onAws.stdout).toMatch(/^code_graph_index: aws {2}growth /m);
     expect(onAws.stdout).toContain('  shared accounts (granted vCPU as stored):');
     expect(lastLine(onAws.stdout)).toBe('fleet-admin exit 0');
     assertNoSecret(onAws);
@@ -379,7 +378,7 @@ describe('the fleet-admin bundle in a Fargate-shaped process', () => {
     const onFly = await runBundle(
       bundle,
       ['pool-status', '--kind', 'ci_runner'],
-      fargateEnv({ MOTIR_FLEET_CI_RUNNER_PROVIDER: 'fly', MOTIR_INDEX_FLEET_PROVIDER: '' }),
+      fargateEnv({ MOTIR_FLEET_CI_RUNNER_PROVIDER: 'fly' }),
     );
     expect(onFly.code).toBe(0);
     expect(onFly.stdout).toMatch(/^ci_runner: fly \(no growth\)$/m);

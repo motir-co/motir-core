@@ -218,13 +218,13 @@ describe('checkpoints while the container runs', () => {
 });
 
 describe('the cadence is this workload’s own', () => {
-  it('backs off to a minute, never past it, and never faster than the index loop’s ceiling', () => {
+  it('backs off to a minute, never past it, and never faster than its ceiling’s floor', () => {
     const waits = Array.from({ length: 12 }, (_, i) => hostedAgentPollWaitMs(i + 1));
     expect(waits[0]).toBe(HOSTED_AGENT_FLEET_TIME_BUDGETS.pollIntervalMs);
     expect(Math.max(...waits)).toBe(AGENT_MAX_POLL_INTERVAL_MS);
     expect(waits.at(-1)).toBe(AGENT_MAX_POLL_INTERVAL_MS);
     expect(AGENT_MAX_POLL_INTERVAL_MS).toBeGreaterThanOrEqual(
-      HOSTED_AGENT_FLEET_TIME_BUDGETS.indexLoopMaxPollIntervalMs,
+      HOSTED_AGENT_FLEET_TIME_BUDGETS.pollCeilingFloorMs,
     );
     // A test seam may shorten the ceiling but not lengthen it.
     expect(hostedAgentPollWaitMs(20, { maxPollIntervalMs: 10 * 60_000 })).toBe(

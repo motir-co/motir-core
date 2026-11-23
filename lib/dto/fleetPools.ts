@@ -122,9 +122,9 @@ export interface FleetGrowthEventViewDTO {
 
 // ── `fleet-admin org-accounts` (Story MOTIR-9365 · MOTIR-9588) ───────────────
 
-/** One row of a Host organisation's own account. The merged indexer + agent
- *  hoster account is two of these, with the same state and figures. Ids, names
- *  and numbers only — no credential reference, no email. */
+/** One row of a Host organisation's own account — one per kind the account
+ *  runs (the agent hoster is one `agent_instance` row since MOTIR-12038). Ids,
+ *  names and numbers only — no credential reference, no email. */
 export interface FleetOrgAccountDTO {
   organizationId: string;
   fleetKind: FleetWorkloadKind;

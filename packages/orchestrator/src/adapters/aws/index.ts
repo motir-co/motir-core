@@ -26,18 +26,10 @@ import {
   classifyAwsLaunchError,
   isAwsCapacityCode,
 } from './capacityErrors';
-import { AWS_INDEX_IAM_ROLE } from './management';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildContainerUserData, buildRunnerUserData, encodeUserData } from './userData';
-import {
-  buildIndexUserData,
-  consoleExitCode,
-  consolePullError,
-  consoleShowsPullFailure,
-} from './indexUserData';
 
 export * from './userData';
-export * from './indexUserData';
 export * from './capacityErrors';
 export * from './credentials';
 export * from './management';
@@ -56,7 +48,7 @@ export * from './inventory';
 //
 //   1. AN INSTANCE DOES NOT STOP ON ITS OWN. The AMI powers the VM off when the
 //      runner exits and every runner launch says `InstanceInitiatedShutdownBehavior:
-//      'terminate'` (an index VM's says `stop`, below), so a finished job reads as terminal instead of billing to
+//      'terminate'`, so a finished job reads as terminal instead of billing to
 //      the one-hour timeout.
 //   2. A TERMINATED INSTANCE LINGERS for about an hour in DescribeInstances. It
 //      reads as `exists: false, state: 'destroyed'`, the port's "gone".
@@ -72,17 +64,6 @@ export * from './inventory';
 //
 // ⚠️ SHARD-BLIND AND ENVIRONMENT-BLIND. The composition root reads the account's
 // key and the AMI id and hands this a plain config.
-//
-// AN INDEX VM (MOTIR-9446) is the one launch that is not a runner: a
-// `code_graph_index` spec boots the stock Docker-host AMI (`indexerAmiId`) with a
-// script that pulls the indexer image by digest and runs it (`./indexUserData.ts`
-// names the AMI and why). Same size, same network, same tags and the same
-// launch/zone walk as a runner. Its signals are read from the VM's serial console:
-// a failed pull, reported as `imagePullFailed`, and the indexer's exit code
-// (MOTIR-9449), reported as `exitCode`. They are read LIVE while the VM holds
-// after writing them (MOTIR-10823), and from the posted console once it stopped. Unlike a runner it
-// launches with `InstanceInitiatedShutdownBehavior: 'stop'`, so its power-off
-// leaves it stopped and readable until `teardown` terminates it at settle.
 
 /** The machine class the fleet's one size maps to — 2 vCPU / 8 GiB, x86. */
 export const AWS_DEFAULT_INSTANCE_TYPE = 'm6i.large';
@@ -143,25 +124,6 @@ function reclaimedBySpot(instance: Ec2Instance): boolean {
   );
 }
 
-/**
- * How long a STOPPED index VM whose console carries no marker yet is held
- * non-terminal, measured from its stop (MOTIR-10805). EC2 posts an instance's
- * buffered console output a few minutes AFTER a state transition — 4½ to 7
- * minutes for the six index VMs read on 2026-11-09 — and a live (`Latest`) read
- * of a stopped instance answers empty, so the marker the script wrote before its
- * power-off is not readable at the moment the VM reads `stopped`. A stopped VM
- * bills no compute, so waiting costs only supervision polls. Past the window the
- * VM settles as a stop whose code was not observed.
- */
-export const AWS_INDEX_CONSOLE_GRACE_MS = 10 * 60_000;
-
-/** When this process first saw each index VM `stopped` — the grace clock for a
- *  stop whose `StateTransitionReason` carries no instant (an OS power-off). Kept
- *  at module level because an adapter may be rebuilt per supervision pass; an
- *  entry is dropped once its VM settles. A process restart only re-starts one
- *  window, which supervision's own deadline still bounds. */
-const firstSeenStopped = new Map<string, number>();
-
 /** DescribeInstances / TerminateInstances on an id EC2 does not know. A
  *  terminated instance ages out to `NotFound`; a non-EC2 id is `Malformed`. */
 const GONE_CODES = new Set(['InvalidInstanceID.NotFound', 'InvalidInstanceID.Malformed']);
@@ -177,7 +139,6 @@ const STALE_NETWORK_CODES = new Set([
 /** The machine-name prefix per workload, as the Fly adapter names its machines. */
 const NAME_PREFIXES: Record<ContainerSpec['workload'], string> = {
   ci_runner: 'motir-runner',
-  code_graph_index: 'motir-index',
   hosted_agent: 'motir-agent',
   agent_instance: 'motir-instance',
 };
@@ -194,32 +155,8 @@ export class AwsInstanceSizeError extends Error {
   }
 }
 
-/**
- * The four tags every index VM carries (MOTIR-9450), on its instance, volumes and
- * network interface, so a person in the EC2 console and AWS cost tooling can tell
- * whose index a billed resource is. They are a FINDING aid, never attribution:
- * anyone holding the account's key could write them, so the attribution pass
- * matches a VM by its usage row and slot, and reaps a tagged VM with no record.
- */
-export const AWS_INDEX_TAG_KEYS = {
-  workload: 'motir:workload',
-  org: 'motir:org',
-  project: 'motir:project',
-  repo: 'motir:repo',
-} as const;
-
 /** EC2's limit on a tag value. A longer value is cut to it, never dropped. */
 export const AWS_TAG_VALUE_MAX = 256;
-
-/** An index spec missing what its tags are made of — refused before any call,
- *  so no VM is launched untagged. */
-export class AwsIndexAttributionError extends Error {
-  readonly code = 'AWS_INDEX_ATTRIBUTION_MISSING' as const;
-  constructor(readonly field: 'orgId' | 'projectId' | 'repoFullName') {
-    super(`An index VM cannot launch untagged: the spec has no ${field}.`);
-    this.name = 'AwsIndexAttributionError';
-  }
-}
 
 /** The tag naming the hosted run an instance serves (MOTIR-9422) — what the
  *  reaper reads back to find the run and its paying org from AWS alone. */
@@ -241,9 +178,6 @@ export interface AwsOrchestratorConfig {
   readonly arm64AmiId?: string;
   /** Overrides {@link AWS_DEFAULT_ARM64_INSTANCE_TYPE}. */
   readonly arm64InstanceType?: string;
-  /** The Docker-host AMI an index VM boots (`MOTIR_AWS_INDEXER_AMI_ID`). Unset
-   *  refuses a `code_graph_index` spec before any EC2 call. */
-  readonly indexerAmiId?: string;
   /** Overrides {@link AWS_DEFAULT_INSTANCE_TYPE}. The ON-DEMAND type: every
    *  launch that is not Spot, and a Spot launch's fallback. */
   readonly instanceType?: string;
@@ -265,10 +199,6 @@ export interface AwsOrchestratorConfig {
    *  install fleet's subnets and group, which its infrastructure defines and
    *  passes as values (MOTIR-10794). Each subnet is its own rotation stop. */
   readonly network?: AwsExplicitNetwork;
-  /** The instance profile an INDEX VM boots with, by ARN, in place of the pool
-   *  account's own by name — the install fleet's VM profile (MOTIR-10794). Every
-   *  other workload still boots with none, as on a pool account. */
-  readonly indexInstanceProfileArn?: string;
 }
 
 /** Subnets and a security group given as ids (MOTIR-10794). */
@@ -293,29 +223,6 @@ function tagOf(instance: Ec2Instance, key: string): string | undefined {
   return instance.tags.find((t) => t.key === key)?.value;
 }
 
-/** Whether a console read holds either index marker on a line of its own. */
-function hasIndexMarker(output: string | null): boolean {
-  return consoleExitCode(output) !== null || consoleShowsPullFailure(output);
-}
-
-function isIndexInstance(instance: Ec2Instance): boolean {
-  return tagOf(instance, FLEET_METADATA_KEY) === FLEET_METADATA_VALUES.code_graph_index;
-}
-
-/** The index VM's four tags, or a refusal naming the first field it lacks. */
-function indexTags(spec: ContainerSpec): Ec2Tag[] {
-  for (const field of ['orgId', 'projectId', 'repoFullName'] as const) {
-    if (!spec[field]?.trim()) throw new AwsIndexAttributionError(field);
-  }
-  return [
-    // The workload KIND, as the fleet names it (`motir_fleet` keeps the Fly spelling).
-    { key: AWS_INDEX_TAG_KEYS.workload, value: spec.workload },
-    { key: AWS_INDEX_TAG_KEYS.org, value: spec.orgId },
-    { key: AWS_INDEX_TAG_KEYS.project, value: spec.projectId },
-    { key: AWS_INDEX_TAG_KEYS.repo, value: spec.repoFullName },
-  ];
-}
-
 /**
  * The instant in `StateTransitionReason`, when AWS gives one — its form is
  * `User initiated (2026-10-22 12:00:00 GMT)`.
@@ -338,13 +245,9 @@ function nameFor(spec: ContainerSpec): string {
     : `${prefix}-${spec.projectId}`;
 }
 
-/** Every tag a launch writes, on the instance and its volumes (and an index VM's
- *  network interface) in the SAME call. Each value is cut to EC2's limit. */
-function tagsFor(
-  spec: ContainerSpec,
-  shardTag: string,
-  extraTags: readonly Ec2Tag[] = [],
-): Ec2Tag[] {
+/** Every tag a launch writes, on the instance and its volumes in the SAME call.
+ *  Each value is cut to EC2's limit. */
+function tagsFor(spec: ContainerSpec, shardTag: string): Ec2Tag[] {
   return [
     { key: AWS_SHARD_TAG_KEY, value: shardTag },
     { key: FLEET_METADATA_KEY, value: FLEET_METADATA_VALUES[spec.workload] },
@@ -355,7 +258,6 @@ function tagsFor(
     { key: 'motir_org_id', value: spec.orgId },
     { key: 'motir_project_id', value: spec.projectId },
     { key: 'Name', value: nameFor(spec) },
-    ...extraTags,
   ].map((tag) => ({ key: tag.key, value: tag.value.slice(0, AWS_TAG_VALUE_MAX) }));
 }
 
@@ -377,8 +279,8 @@ interface LaunchMarket {
   readonly market?: 'spot';
 }
 
-/** What one launch sends: the base64 user-data and the tags, and — for a
- *  workload that does not boot the runner AMI — its own image and power-off. */
+/** What one launch sends: the base64 user-data and the tags, and — for an
+ *  arm64 runner — its own image and type. */
 interface LaunchPayload {
   readonly userData: string;
   readonly tags: Ec2Tag[];
@@ -390,14 +292,6 @@ interface LaunchPayload {
    * path can pair an arm64 image with an x86 type or the reverse.
    */
   readonly instanceType?: string;
-  /** Omitted means `terminate`. */
-  readonly shutdownBehavior?: 'terminate' | 'stop';
-  /** Tag the network interface too (an index VM's attribution tags). */
-  readonly tagNetworkInterface?: boolean;
-  /** The instance profile the VM boots with; omitted means none. */
-  readonly instanceProfileName?: string;
-  /** The instance profile by ARN; wins over the name. */
-  readonly instanceProfileArn?: string;
 }
 
 /**
@@ -410,7 +304,7 @@ const LAUNCH_PAYLOADS: Record<
   (
     spec: ContainerSpec,
     shardTag: string,
-    config: Pick<AwsOrchestratorConfig, 'indexerAmiId' | 'arm64AmiId' | 'arm64InstanceType'>,
+    config: Pick<AwsOrchestratorConfig, 'arm64AmiId' | 'arm64InstanceType'>,
   ) => LaunchPayload
 > = {
   ci_runner: (spec, shardTag, { arm64AmiId, arm64InstanceType }) => {
@@ -438,27 +332,6 @@ const LAUNCH_PAYLOADS: Record<
     return {
       userData: encodeUserData(userData),
       tags: hostedAgentTagsFor(spec, shardTag, runId),
-    };
-  },
-  // An index VM (MOTIR-9446) boots the stock Docker-host AMI and runs the pinned
-  // indexer image; it is held stopped until teardown, so describe can read the
-  // exit code first (MOTIR-9449), and carries its four attribution tags on its
-  // instance, volumes and network interface (MOTIR-9450).
-  code_graph_index: (spec, shardTag, { indexerAmiId }) => {
-    const extraTags = indexTags(spec);
-    if (!indexerAmiId) {
-      throw new OrchestratorNotConfiguredError(
-        'this aws account has no indexer AMI (set MOTIR_AWS_INDEXER_AMI_ID)',
-      );
-    }
-    return {
-      userData: encodeUserData(buildIndexUserData(spec)),
-      tags: tagsFor(spec, shardTag, extraTags),
-      imageId: indexerAmiId,
-      shutdownBehavior: 'stop',
-      tagNetworkInterface: true,
-      // Its one AWS permission: pulling the indexer image from ECR (MOTIR-10123).
-      instanceProfileName: AWS_INDEX_IAM_ROLE,
     };
   },
   agent_instance: () => notOnAws('agent_instance'),
@@ -530,15 +403,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function launchInSubnet(
     spec: ContainerSpec,
-    {
-      userData,
-      tags,
-      imageId,
-      shutdownBehavior,
-      tagNetworkInterface,
-      instanceProfileName,
-      instanceProfileArn,
-    }: LaunchPayload,
+    { userData, tags, imageId }: LaunchPayload,
     { subnetId }: { subnetId: string; zone: string },
     securityGroupId: string,
     launch: LaunchMarket,
@@ -554,15 +419,14 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
           securityGroupIds: [securityGroupId],
           userData,
           // IMDSv2 only, one hop: a container on the VM cannot reach the
-          // metadata service, which holds the user-data and so the JIT config —
-          // and, on an index VM, its role's credentials. No KeyName is ever
-          // sent, and an instance profile only on an index VM's launch.
+          // metadata service, which holds the user-data and so the JIT config.
+          // No KeyName and no instance profile is ever sent.
           metadataOptions: {
             httpTokens: 'required',
             httpPutResponseHopLimit: 1,
             httpEndpoint: 'enabled',
           },
-          instanceInitiatedShutdownBehavior: shutdownBehavior ?? 'terminate',
+          instanceInitiatedShutdownBehavior: 'terminate',
           blockDeviceMappings:
             spec.dockerVolumeGb && spec.dockerVolumeGb > 0
               ? [
@@ -575,12 +439,6 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
                 ]
               : [],
           tags,
-          ...(tagNetworkInterface ? { tagNetworkInterface: true } : {}),
-          ...(instanceProfileArn
-            ? { iamInstanceProfileArn: instanceProfileArn }
-            : instanceProfileName
-              ? { iamInstanceProfileName: instanceProfileName }
-              : {}),
           // Only a Spot attempt names a market; on-demand sends none, as ever.
           ...(launch.market ? { market: launch.market } : {}),
         });
@@ -748,88 +606,6 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
     });
   }
 
-  /**
-   * What a stopped index VM reported on its console — the one channel a VM with
-   * no inbound rule and no credentials has: whether its pull failed, and the
-   * indexer's exit code. A pull failure carries no exit code. A console that
-   * cannot be read is "not known" for both, never a pull failure: the run then
-   * ends as a stop whose code was not observed.
-   */
-  /** Log the failed login's or pull's own words, read off the console, so the
-   *  cause outlives the VM (MOTIR-10823). */
-  function reportPullFailure(instance: Ec2Instance, output: string | null): void {
-    console.warn('[awsOrchestrator] an index VM could not pull its image', {
-      instanceId: instance.instanceId,
-      detail: consolePullError(output).join(' | ') || 'no error lines on the console',
-    });
-  }
-
-  /**
-   * A RUNNING index VM's live console, read for a marker (MOTIR-10823). The boot
-   * script holds the VM up after it writes either marker, so a poll inside that
-   * hold reads it here instead of waiting for EC2 to post a stopped VM's console.
-   * Null while no marker is there yet, and on a read that fails: a running VM is
-   * read again on the next poll, and the stopped-VM read below still warns.
-   */
-  async function liveIndexOutcome(
-    instance: Ec2Instance,
-  ): Promise<{ imagePullFailed?: true; exitCode: number | null } | null> {
-    let output: string | null;
-    try {
-      output = await ec2.getConsoleOutput(instance.instanceId, { latest: true });
-    } catch {
-      return null;
-    }
-    if (consoleShowsPullFailure(output)) {
-      reportPullFailure(instance, output);
-      return { imagePullFailed: true, exitCode: null };
-    }
-    const exitCode = consoleExitCode(output);
-    return exitCode === null ? null : { exitCode };
-  }
-
-  async function indexOutcome(
-    instance: Ec2Instance,
-  ): Promise<{ imagePullFailed?: true; exitCode: number | null; markerMissing?: true }> {
-    let output: string | null;
-    try {
-      // The BUFFERED output first: it is what EC2 holds for a stopped instance.
-      // The live read is only a fallback, for a Nitro instance whose buffer has
-      // not been posted yet (MOTIR-10805).
-      output = await ec2.getConsoleOutput(instance.instanceId);
-      if (!hasIndexMarker(output)) {
-        const live = await ec2.getConsoleOutput(instance.instanceId, { latest: true });
-        if (hasIndexMarker(live)) output = live;
-      }
-    } catch (err) {
-      console.warn('[awsOrchestrator] could not read an index VM console', {
-        instanceId: instance.instanceId,
-        detail: err instanceof Ec2ApiError ? err.code : 'unknown',
-      });
-      return { exitCode: null };
-    }
-    if (consoleShowsPullFailure(output)) {
-      reportPullFailure(instance, output);
-      return { imagePullFailed: true, exitCode: null };
-    }
-    const exitCode = consoleExitCode(output);
-    return exitCode === null ? { exitCode, markerMissing: true } : { exitCode };
-  }
-
-  /** Whether a stopped index VM with no marker on its console is still inside
-   *  {@link AWS_INDEX_CONSOLE_GRACE_MS} of its stop. */
-  function withinConsoleGrace(instance: Ec2Instance): boolean {
-    const at = now().getTime();
-    const stoppedAt =
-      transitionTimeOf(instance.stateTransitionReason)?.getTime() ??
-      firstSeenStopped.get(instance.instanceId) ??
-      at;
-    if (!firstSeenStopped.has(instance.instanceId)) {
-      firstSeenStopped.set(instance.instanceId, stoppedAt);
-    }
-    return at - stoppedAt < AWS_INDEX_CONSOLE_GRACE_MS;
-  }
-
   function gone(handle: ContainerHandle): ContainerStatus {
     return {
       handleId: handle.id,
@@ -866,11 +642,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
           `the aws orchestrator boots no arm64 ${spec.workload}`,
         );
       }
-      const base = LAUNCH_PAYLOADS[spec.workload](spec, shardTag, config);
-      const payload =
-        config.indexInstanceProfileArn && base.instanceProfileName
-          ? { ...base, instanceProfileArn: config.indexInstanceProfileArn }
-          : base;
+      const payload = LAUNCH_PAYLOADS[spec.workload](spec, shardTag, config);
 
       // From this call's rotation index around the zones, for every walk below.
       const shard = await shardNetwork();
@@ -896,61 +668,14 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
     async describe(handle: ContainerHandle): Promise<ContainerStatus> {
       const instance = await readInstance(handle.id);
       if (!instance) return gone(handle);
-      const index = isIndexInstance(instance);
-      // A RUNNING index VM that has written a marker is finished: the script is
-      // only holding it up so the marker can be read (MOTIR-10823). It settles
-      // now; teardown terminates it.
-      if (index && instance.state === 'running') {
-        const live = await liveIndexOutcome(instance);
-        if (live) {
-          return {
-            ...live,
-            handleId: handle.id,
-            exists: true,
-            state: instance.state,
-            terminal: true,
-            createdAt: instance.launchTime ?? handle.createdAt,
-            startedAt: startedAtOf(instance),
-            stoppedAt: now(),
-          };
-        }
-      }
-      // An index VM that is still `stopping` has not finished: its console is read
-      // once it reads `stopped`, so the code is never judged missing too early.
-      const terminal =
-        TERMINAL_STATES.has(instance.state) && !(index && instance.state === 'stopping');
-      const stopped = instance.state === 'terminated' || terminal;
-      // A stopped index VM's posted console is read here; a running one was read
-      // live above.
-      const read = stopped && index ? await indexOutcome(instance) : { exitCode: null };
-      const { markerMissing, ...outcome } = read as typeof read & { markerMissing?: true };
+      const terminal = TERMINAL_STATES.has(instance.state);
       // EC2 keeps a terminated instance describable for a while after it ends,
       // and supervision polls far more often than that — so WHY it ended is read
       // here, while it still can be (MOTIR-11728).
       const reclaim = reclaimedBySpot(instance) ? { reclaimed: true } : {};
-      if (instance.state === 'terminated') {
-        firstSeenStopped.delete(instance.instanceId);
-        return { ...gone(handle), ...outcome, ...reclaim };
-      }
-      // A stopped index VM whose console holds no marker YET is not finished
-      // being read: EC2 posts the buffer minutes after the stop (MOTIR-10805).
-      // It stays non-terminal, so supervision polls again, until the marker
-      // arrives or the grace window closes.
-      if (markerMissing && instance.state === 'stopped' && withinConsoleGrace(instance)) {
-        return {
-          exitCode: null,
-          handleId: handle.id,
-          exists: true,
-          state: instance.state,
-          terminal: false,
-          createdAt: instance.launchTime ?? handle.createdAt,
-          startedAt: startedAtOf(instance),
-          stoppedAt: null,
-        };
-      }
-      if (terminal) firstSeenStopped.delete(instance.instanceId);
+      if (instance.state === 'terminated') return { ...gone(handle), ...reclaim };
       return {
-        ...outcome,
+        exitCode: null,
         ...reclaim,
         handleId: handle.id,
         exists: true,

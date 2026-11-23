@@ -2,18 +2,19 @@ import 'server-only';
 
 import { isPrivateNetworkHost } from './containerAiAddress';
 
-// THE THREE FLEET ORIGINS, PREFLIGHTED (Story MOTIR-9714 · MOTIR-10750).
+// THE FLEET ORIGINS, PREFLIGHTED (Story MOTIR-9714 · MOTIR-10750).
 //
-// A fleet machine is handed three Motir addresses: core's public origin
-// (`MOTIR_BASE_URL`), motir-ai's container-facing origin
-// (`MOTIR_AI_CONTAINER_URL`) and the gateway's run-lane origin
-// (`MOTIR_GATEWAY_RUN_URL`). Each has been wrong before — unset for days
-// (MOTIR-4916), a private name the fleet could not resolve (MOTIR-4518) — and
-// each time the machines booted normally and failed late with every check green.
-// The services stack in motir-infra publishes all three as outputs; this
-// preflight checks core's values against what a fleet machine can use.
+// A fleet machine is handed two Motir addresses: core's public origin
+// (`MOTIR_BASE_URL`) and the gateway's run-lane origin (`MOTIR_GATEWAY_RUN_URL`).
+// A third, motir-ai's container-facing origin (`MOTIR_AI_CONTAINER_URL`), went
+// with the index container that was its only reader (MOTIR-12037). Each has been
+// wrong before — unset for days (MOTIR-4916), a private name the fleet could not
+// resolve (MOTIR-4518) — and each time the machines booted normally and failed
+// late with every check green. The services stack in motir-infra publishes both
+// as outputs; this preflight checks core's values against what a fleet machine
+// can use.
 //
-// Per origin, the same discipline `containerAiAddress.ts` applies to motir-ai's:
+// Per origin (the host test is `isPrivateNetworkHost`, in `containerAiAddress.ts`):
 //   · UNSET (or blank)       → `unconfigured`, loud. For MOTIR_BASE_URL the
 //     variable itself is read: `resolveBaseUrl()` falls back to localhost, so
 //     an unset value reads as a good one everywhere else.
@@ -25,19 +26,19 @@ import { isPrivateNetworkHost } from './containerAiAddress';
 
 /** One origin a fleet machine is handed: its key, core's variable and the stack output it equals. */
 export interface FleetOriginSpec {
-  readonly origin: 'core' | 'aiContainer' | 'gatewayRun';
-  readonly variable: 'MOTIR_BASE_URL' | 'MOTIR_AI_CONTAINER_URL' | 'MOTIR_GATEWAY_RUN_URL';
+  readonly origin: 'core' | 'gatewayRun';
+  readonly variable: 'MOTIR_BASE_URL' | 'MOTIR_GATEWAY_RUN_URL';
   /** The motir-infra services stack output the variable must equal (MOTIR-10748). */
-  readonly output: 'CoreOrigin' | 'AiContainerOrigin' | 'GatewayRunOrigin';
+  readonly output: 'CoreOrigin' | 'GatewayRunOrigin';
   /** What the probe asks for: each origin's own unauthenticated health route. */
   readonly healthPath: string;
 }
 
 /**
- * The three origins, the variable core reads each from and the stack output it
- * must equal. Health paths are the ones each service's load balancer already
- * checks: core's readiness route, motir-ai's `/health`, and the run-lane edge's
- * own nginx `/healthz`, which answers without reaching the gateway.
+ * The origins, the variable core reads each from and the stack output it must
+ * equal. Health paths are the ones each service's load balancer already checks:
+ * core's readiness route and the run-lane edge's own nginx `/healthz`, which
+ * answers without reaching the gateway.
  */
 export const FLEET_ORIGINS: readonly FleetOriginSpec[] = [
   {
@@ -45,12 +46,6 @@ export const FLEET_ORIGINS: readonly FleetOriginSpec[] = [
     variable: 'MOTIR_BASE_URL',
     output: 'CoreOrigin',
     healthPath: '/api/health/ready',
-  },
-  {
-    origin: 'aiContainer',
-    variable: 'MOTIR_AI_CONTAINER_URL',
-    output: 'AiContainerOrigin',
-    healthPath: '/health',
   },
   {
     origin: 'gatewayRun',
@@ -78,7 +73,7 @@ export type FleetOriginFailure = Extract<
   { verdict: 'unconfigured' | 'private_address' }
 >;
 
-/** What the preflight concluded about all three origins. */
+/** What the preflight concluded about every origin. */
 export type FleetOriginsVerdict =
   /** Nothing to check — this deployment boots no real fleet machine. */
   | { verdict: 'not_applicable'; detail: string }
@@ -203,9 +198,8 @@ async function readOrigin(
  *
  * `applies` says which origins this deployment hands a machine at all: core's
  * origin only where it runs hosted agents or agent instances (both are handed
- * it), motir-ai's only where it indexes and the gateway's only where it runs
- * hosted agents. An origin left out of it
- * applies. One that does not is read `not_applicable` and never fails.
+ * it), and the gateway's only where it runs hosted agents. An origin left out of
+ * it applies. One that does not is read `not_applicable` and never fails.
  */
 export async function verifyFleetOrigins(args: {
   isConfigured: boolean;

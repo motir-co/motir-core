@@ -34,6 +34,7 @@ import {
   publishedAt,
   SOURCE_URL_SENTINEL,
   stubIndexHandoff,
+  HANDOFF_AI_PATHS,
 } from '../helpers/indexHandoff';
 import { seedIndexWorkspace, type SeededIndexWorkspace } from '../helpers/indexFleet';
 
@@ -151,9 +152,10 @@ afterEach(async () => {
   // No fleet: nothing indexes into the old graph after this story.
   expect(fakeOrchestrator.provisioned, 'no container is provisioned').toEqual([]);
   expect(fakeOrchestrator.specs, 'no container spec is built').toEqual([]);
-  expect(handoffWorld.aiPaths, 'no run credential is minted').not.toContain(
-    '/v1/code-graph/run-credential',
-  );
+  expect(
+    handoffWorld.aiPaths.filter((p) => !HANDOFF_AI_PATHS.includes(p)),
+    'no run credential is minted: motir-ai is asked only the handoff world’s paths',
+  ).toEqual([]);
   // The URL at the commit: every handoff names the URL GitHub minted for ITS commit.
   for (const handoff of handoffWorld.handoffs) {
     expect(handoff['commitSha']).toMatch(/^[0-9a-f]{40}$/);

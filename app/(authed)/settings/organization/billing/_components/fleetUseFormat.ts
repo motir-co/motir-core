@@ -1,4 +1,4 @@
-import type { FleetWorkloadKind } from '@motir/orchestrator';
+import type { FleetUseKind } from '@/lib/billing/fleetUse';
 import type { HostAccountState } from '@/lib/ciFleet/hostAccountState';
 import type { FleetCapacityRequestStatusDTO } from '@/lib/dto/fleetCapacityRequest';
 import type { FleetQuotaRequestStatusDTO } from '@/lib/dto/fleetPools';
@@ -31,9 +31,11 @@ export const FIGURE_KEYS: readonly FleetUseFigureKey[] = [
 
 export type AccountKind = FleetUseHostAccountDTO['accountKind'];
 
-export const FLEET_KIND_KEYS: Record<FleetWorkloadKind, string> = {
+/** Billing's own kinds only (`FLEET_USE_KINDS`). A capacity request or raise is
+ *  never labelled by the kind it named — it may name one billing no longer
+ *  describes — but by the account it sits on. */
+export const FLEET_KIND_KEYS: Record<FleetUseKind, string> = {
   ci_runner: 'kind.ci_runner',
-  code_graph_index: 'kind.code_graph_index',
   hosted_agent: 'kind.hosted_agent',
   agent_instance: 'kind.agent_instance',
 };
@@ -54,19 +56,19 @@ export const ACCOUNT_STATE_KEYS: Record<HostAccountState, string> = {
 export const ACCOUNT_KIND_KEYS: Record<AccountKind, string> = {
   ci_runner: 'accounts.kind.ci_runner',
   hosted_agent: 'accounts.kind.hosted_agent',
-  indexer_and_hoster: 'accounts.kind.indexer_and_hoster',
+  agent_hoster: 'accounts.kind.agent_hoster',
 };
 
 export const ACCOUNT_ROLE_KEYS: Record<AccountKind, string> = {
   ci_runner: 'accounts.role.ci_runner',
   hosted_agent: 'accounts.role.hosted_agent',
-  indexer_and_hoster: 'accounts.role.indexer_and_hoster',
+  agent_hoster: 'accounts.role.agent_hoster',
 };
 
 export const SHARED_FLOOR_KEYS: Record<AccountKind, string> = {
   ci_runner: 'accounts.sharedFloor.ci_runner',
   hosted_agent: 'accounts.sharedFloor.hosted_agent',
-  indexer_and_hoster: 'accounts.sharedFloor.indexer_and_hoster',
+  agent_hoster: 'accounts.sharedFloor.agent_hoster',
 };
 
 export const QUOTA_OUTCOME_KEYS: Record<FleetQuotaRequestStatusDTO, string> = {

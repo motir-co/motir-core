@@ -1794,3 +1794,27 @@ Each count is `git grep -c 'isMeta' <ref> -- <paths>` for that file; the totals 
 **`supervision_timed_out` stops being re-dispatchable.** It was `true` only because nothing read it. The deadline and the poll ceiling are the whole supervision budget, so such a container already cost the most any container may, and a fresh one on the same tree at the same size mostly repeats it — the reasoning `137` already carries. `never_started` stays re-dispatchable: nothing ran, and its boot deadline is minutes.
 
 **Unchanged.** A non-re-dispatchable class (`10`, `30`, `50`, `137`, `null`, unclassified, a timed-out supervision) is final after one container, as before. Every non-`settled` outcome (deferred admission, refused provision, unpullable image, failed teardown) is returned as it stands, from whichever attempt produced it.
+
+## §22 — RETIRED: the index workload has left the container fleet (MOTIR-12041 · Story MOTIR-11026, 2026-11-23)
+
+**Everything above describes the past.** Indexing runs through motir-ai and motir-codegraph since
+Story MOTIR-11022: motir-core's triggers hand motir-ai the source URL they already mint, and no
+container of this record's workload is admitted, booted or billed by motir-core any more. Story
+MOTIR-11026 removed the machinery this record decided, card by card: the admission and dispatch
+services and their two capacity pause reasons (MOTIR-12036), the index container spec, its Fly and
+AWS boot paths, the indexer image pin and AMI setting and the daily indexer checks (MOTIR-12037), the
+merged Host account's second row (MOTIR-12038), the index line on billing for new usage (MOTIR-12039)
+and the admin and settings surfaces' indexer elements (MOTIR-12040).
+
+MOTIR-12041 removed the fleet kind itself. motir-core has three fleet kinds — `ci_runner`,
+`hosted_agent` and `agent_instance` — in `FleetWorkloadKind`, `FLEET_WORKLOADS` and every map over
+them, and the provider switch `MOTIR_INDEX_FLEET_PROVIDER` is gone. Migration
+`20261123180000_retire_code_graph_index_fleet_kind` deleted the kind's remaining rows (in-flight
+slots, capacity requests on its shards, quota requests, growth events, shards and its switch row) and
+tightened the three `fleet_kind` CHECK constraints, so the database refuses the kind.
+
+**What stays, on purpose:** the `index` cost line on past `ci_container_usage` rows (billing history),
+the stored kind on the merged account's past capacity requests (re-pointed onto its `agent_instance`
+row and listed by billing), the merged account's AWS name `host-‹org›-index` (a provisioning replay
+finds the account by it), and the migrations that created the kind. Section numbers stay append-only:
+§0–§21 are cited as they stand, and read as history.

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { checkIndexAllowance, drawIndexAllowance } from '@/lib/ai/motirAiClient';
+import { checkIndexAllowance } from '@/lib/ai/motirAiClient';
 import { parseIndexAllowanceVerdict } from '@/lib/ciFleet/indexAllowance';
 
-// THE INDEX-ALLOWANCE CLIENT CALLS ARE TOTAL (MOTIR-4544 top-up over MOTIR-4593's
-// clients). Every failure — unconfigured, unreachable, a non-2xx, a body that is not
-// a verdict — returns `null`, because `null` is "could not ask" and the dispatcher
-// boots on it. A throw here would stop the fleet on a blip; a verdict invented from
+// THE INDEX-ALLOWANCE CLIENT CALL IS TOTAL (MOTIR-4544 top-up over MOTIR-4593's
+// clients; the per-container draw left with MOTIR-12036). Every failure —
+// unconfigured, unreachable, a non-2xx, a body that is not a verdict — returns
+// `null`, because `null` is "could not ask" and the handoff proceeds on it. A throw here would stop the fleet on a blip; a verdict invented from
 // an error body would stop it or wave it through for the wrong reason.
 //
 // ⚠️ Motir does not charge for code indexing. The allowance is internal.
@@ -17,11 +17,6 @@ const VERDICT = {
   grantedCredits: 400,
   consumedCredits: 410,
   attributedCredits: 12,
-};
-const DRAW = {
-  coreOrganizationId: 'org_1',
-  containerSeconds: 1840,
-  idempotencyKey: 'index-container:fly:m1',
 };
 
 function json(body: unknown, status = 200): Response {
@@ -48,7 +43,6 @@ describe.each([
     '/v1/credits/index-check',
     { coreOrganizationId: 'org_1' },
   ],
-  ['drawIndexAllowance', () => drawIndexAllowance(DRAW), '/v1/credits/index-draw', DRAW],
 ] as const)('%s', (_name, call, path, body) => {
   it('POSTs the body to its route with the service credential, and parses the verdict', async () => {
     const fetchMock = vi.fn(async () => json(VERDICT));

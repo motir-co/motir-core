@@ -37,7 +37,7 @@ import { platformMeterReportService } from '@/lib/services/platformMeterReportSe
 import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
 import { monitorBugEnrichmentService } from '@/lib/services/monitorBugEnrichmentService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
-import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
+import { codeGraphIndexAllowanceService } from '@/lib/services/codeGraphIndexAllowanceService';
 import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardSweepService';
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
@@ -64,7 +64,6 @@ import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileServic
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { hostedAgentImageLagProbeService } from '@/lib/services/hostedAgentImageLagProbeService';
-import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
 import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPreflightService';
 import { credentialExpiryService } from '@/lib/services/credentialExpiryService';
 import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
@@ -142,7 +141,8 @@ export const jobServices = {
   // motir-ai's `author_bug` job, dispatched post-commit.
   monitorBugEnrichment: monitorBugEnrichmentService,
   codeGraph: codeGraphIndexService,
-  codeGraphIndexDispatch: codeGraphIndexDispatchService,
+  // The index allowance ask (MOTIR-12035) — the handoff's, kept past the fleet.
+  codeGraphIndexAllowance: codeGraphIndexAllowanceService,
   codeGraphOffboardSweep: codeGraphOffboardSweepService,
   firstAuditTrigger: firstAuditTriggerService,
   autoPlanCadence: autoPlanCadenceService,
@@ -185,15 +185,12 @@ export const jobServices = {
   // The hosted-agent image lag probe (MOTIR-10882) — a newer `main` build of the
   // hosted-agent image left unpinned for more than a day.
   hostedAgentImageLag: hostedAgentImageLagProbeService,
-  // The rebuild-streak probe (MOTIR-5027) — the daily check's fifth, and the
-  // only one that reads the LEDGER rather than a registry or an address.
-  indexRebuildStreak: indexRebuildStreakService,
-  // The monitor-configuration probe (MOTIR-5831) — the daily check's sixth, and
-  // the only one that asserts something about this process's OWN ENVIRONMENT
+  // The monitor-configuration probe (MOTIR-5831) — the daily check's only one
+  // that asserts something about this process's OWN ENVIRONMENT
   // rather than about a registry, an address or the ledger.
   monitorConfigPreflight: monitorConfigPreflightService,
-  // The credential-expiry probe (MOTIR-1933) — the daily check's seventh, and the
-  // only one that reads a DECLARED date rather than a live system.
+  // The credential-expiry probe (MOTIR-1933) — the daily check's only one that
+  // reads a DECLARED date rather than a live system.
   credentialExpiry: credentialExpiryService,
   // The hosted-run probe (MOTIR-1934) — a metered run in a Motir-owned org that
   // ran on anything but the fleet.

@@ -22,7 +22,7 @@ import { clock, intervals, MIN, setUpHarness, tearDownHarness } from '../agentIn
  * Two organisations, A and B, are seeded from ONE helper so their fleets are
  * structurally identical and any leak is visible: a live hosted run, a CI job in
  * flight and one waiting, the owner's, the admin's and a member's running agent,
- * a member's hibernated agent, an index container, and Motir kills inside and
+ * a member's hibernated agent, and Motir kills inside and
  * outside the 7-day window. Every door of the story — the read, its route, the
  * preview, Stop everything, Cancel, Hibernate, the page's Server Actions, the
  * owner notification and the platform last-org-admin-stop read — is then driven
@@ -274,7 +274,6 @@ async function seedTenant(label: string): Promise<Tenant> {
   const hostedRun = await dispatchRun(t, member.id, 'running');
   await slot(t, 'hosted_agent', hostedRunDispatchId(hostedRun));
   const endedRun = await dispatchRun(t, member.id, 'succeeded');
-  await slot(t, 'code_graph_index', `index-${t.workspaceId}`);
   const l = label.toLowerCase();
   const agents = {
     owner: await agent(t, t.ownerId, `${l}-owner`),
@@ -501,7 +500,6 @@ describe('the read, both ways', () => {
     if (fleet.ciJobs.kind !== 'read') throw new Error('CI not read');
     expect(fleet.ciJobs.rows.map((r) => r.id).sort()).toEqual(Object.values(mine.intents).sort());
     expect(fleet.ciJobs.inFlight).toBe(1);
-    expect(fleet.indexJobs).toEqual({ kind: 'read', running: 1 });
     // Motir's stops: the last 7 days only, newest first, time + kind + completed.
     if (fleet.motirStops.kind !== 'read') throw new Error('kills not read');
     expect(fleet.motirStops.entries).toEqual([
@@ -550,14 +548,13 @@ describe('the preview and Stop everything, both ways', () => {
       ciContainers: 1,
       hostedRuns: 1,
       runningAgents: 3,
-      indexContainers: 1,
     });
     expectNoLeak(preview, theirs);
     expect(await snapshot(theirs)).toBe(before);
   });
 
   it.each(pairs)(
-    'org %s’s Stop everything stops its own work, leaves its index and the other org',
+    'org %s’s Stop everything stops its own work and leaves the other org',
     async (_, pick) => {
       const [mine, theirs] = pick();
       const before = await snapshot(theirs);
@@ -597,12 +594,6 @@ describe('the preview and Stop everything, both ways', () => {
         'org_admin_stop',
         'org_admin_stop',
       ]);
-      // The index container keeps running: Stop everything never stops it.
-      expect(
-        await adminDb.fleetInFlightSlot.count({
-          where: { organizationId: mine.organizationId, workload: 'code_graph_index' },
-        }),
-      ).toBe(1);
       expectNoLeak(result, theirs);
       expect(await snapshot(theirs)).toBe(before);
 

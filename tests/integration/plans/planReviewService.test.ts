@@ -9,6 +9,7 @@ import { PlanNotFoundError } from '@/lib/plans/errors';
 import { arrivalLevel } from '@/lib/planning/planArrival';
 import { ARRIVAL_LEVEL_MAX_NODES, defaultPlanView } from '@/lib/planning/planView';
 import { foldersService } from '@/lib/services/foldersService';
+import { DEFAULT_BUG_FOLDER_NAME } from '@/lib/projects/bugDestination';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -794,8 +795,10 @@ describe('planReviewService.getPlanReview', () => {
     await plansService.markPlanned(plan.id, fx.ctx);
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
-    // `parentId: null` scoped by project — the root level, not every project's.
-    expect(review.arrivalLevelSize).toBe(3);
+    // `parentId: null` scoped by project — the root level, not every project's: the
+    // 2 root epics, the project's own `Bugs` folder node (Bug MOTIR-12148) and the
+    // 1 root add. The folder is drawn but never truncated, so it is not in the total.
+    expect(review.arrivalLevelSize).toBe(4);
     expect(review.arrivalLevelTotal).toBe(3);
   });
 
@@ -884,6 +887,136 @@ describe('planReviewService.getPlanReview', () => {
     expect(defaultPlanView(review)).toBe('canvas');
   });
 
+  it('measures the ROOT a root plan opens on as the canvas draws it — filed cards behind their folder (Bug MOTIR-12148)', async () => {
+    // The card's reproduction: 3 unfiled root epics and a folder holding more
+    // filed cards than the canvas holds; a plan with 3 unfiled root adds and 2 adds
+    // filed into that folder, so the root is the fullest level. The root the canvas
+    // draws is 3 epics + 1 folder node + 3 adds = 7 — not every root card (3 + the
+    // filed ones) plus every root add (5).
+    const fx = await makeWorkItemFixture();
+    for (let i = 0; i < 3; i += 1) await seedChild(fx, 'epic', `Root ${i}`);
+    // The project's own `Bugs` folder — every project is created with one, so it is
+    // the root's only folder here.
+    const bugs = await adminDb.folder.findFirstOrThrow({
+      where: { projectId: fx.projectId, parentFolderId: null, name: DEFAULT_BUG_FOLDER_NAME },
+    });
+    for (let i = 0; i <= ARRIVAL_LEVEL_MAX_NODES; i += 1) {
+      const filed = await seedChild(fx, 'epic', `Filed bug ${i}`);
+      await adminDb.workItem.update({ where: { id: filed.id }, data: { folderId: bugs.id } });
+    }
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Roots' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        ...['One', 'Two', 'Three'].map((title) => ({
+          op: 'add' as const,
+          proposedFields: { title, kind: 'epic' as const },
+        })),
+        ...['Bug A', 'Bug B'].map((title) => ({
+          op: 'add' as const,
+          proposedFields: { title, kind: 'epic' as const },
+          parentRef: `folder:${bugs.id}`,
+        })),
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(arrivalLevel(review.items, 'New')?.id ?? null).toBeNull();
+    expect(review.arrivalLevelSize).toBe(7);
+    // The truncation arm's number: the level READ's work-item rows (3 epics) and the
+    // adds (3). The folder is read whole, so the cap can never drop it.
+    expect(review.arrivalLevelTotal).toBe(6);
+    expect(defaultPlanView(review)).toBe('canvas');
+  });
+
+  it('counts the root\'s loose non-epic cards as the ONE "Not in epic" node the canvas draws (Bug MOTIR-12162)', async () => {
+    // More loose root tasks than the canvas holds. The canvas folds every unfiled,
+    // non-epic root the plan does not touch into one "Not in epic" node — as long as
+    // something stays on the road — so the drawn size swaps them for that one node,
+    // while the total (the capped read's rows, which are not grouped) keeps them.
+    const loose = ARRIVAL_LEVEL_MAX_NODES + 5;
+    const epicAdd = {
+      op: 'add' as const,
+      proposedFields: { title: 'New epic', kind: 'epic' as const },
+    };
+    const shapes: {
+      title: string;
+      epics: number;
+      proposals: (tasks: { id: string }[]) => Parameters<typeof plansService.addProposals>[1];
+      size: number;
+      total: number;
+      view: 'canvas' | 'list';
+    }[] = [
+      // The card's reproduction: 1 epic + the tasks, a plan with 1 root epic add.
+      // Drawn: the epic, the group, the `Bugs` folder and the add.
+      {
+        title: 'Repro',
+        epics: 1,
+        proposals: () => [epicAdd],
+        size: 4,
+        total: loose + 2,
+        view: 'canvas',
+      },
+      // A task the plan MODIFIES stays on the road (the third conjunct): the epic,
+      // that task, the group, `Bugs` and the add.
+      {
+        title: 'Touched',
+        epics: 1,
+        proposals: (tasks) => [
+          epicAdd,
+          { op: 'modify', workItemId: tasks[0]!.id, patch: { title: 'Renamed task' } },
+        ],
+        size: 5,
+        total: loose + 2,
+        view: 'canvas',
+      },
+      // No epic, and a plan touching one task: that task is the road, so the rest
+      // still group — the touched task, the group and `Bugs`.
+      {
+        title: 'No epic, touched',
+        epics: 0,
+        proposals: (tasks) => [
+          { op: 'modify', workItemId: tasks[0]!.id, patch: { title: 'Renamed task' } },
+        ],
+        size: 3,
+        total: loose,
+        view: 'canvas',
+      },
+      // No epic and nothing touched: grouping would take the WHOLE level, so the
+      // canvas groups none and draws every task, `Bugs` and the add.
+      {
+        title: 'All loose',
+        epics: 0,
+        proposals: () => [epicAdd],
+        size: loose + 2,
+        total: loose + 1,
+        view: 'list',
+      },
+    ];
+
+    for (const shape of shapes) {
+      const fx = await makeWorkItemFixture();
+      for (let i = 0; i < shape.epics; i += 1) await seedChild(fx, 'epic', `Epic ${i}`);
+      const tasks: { id: string }[] = [];
+      for (let i = 0; i < loose; i += 1) tasks.push(await seedChild(fx, 'task', `Loose task ${i}`));
+
+      const plan = await plansService.createPlan(fx.projectId, { title: shape.title }, fx.ctx);
+      await plansService.addProposals(plan.id, shape.proposals(tasks), fx.ctx);
+      await plansService.markPlanned(plan.id, fx.ctx);
+      const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+      expect(arrivalLevel(review.items, 'New')?.id ?? null).toBeNull();
+      expect({
+        plan: shape.title,
+        size: review.arrivalLevelSize,
+        total: review.arrivalLevelTotal,
+        view: defaultPlanView(review),
+      }).toEqual({ plan: shape.title, size: shape.size, total: shape.total, view: shape.view });
+    }
+  });
+
   it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
     // Three plans, each over its own copy of one tree (a plan holds its targets, so
     // the plans cannot share one): an epic with 2 children, and a folder holding 1
@@ -900,6 +1033,7 @@ describe('planReviewService.getPlanReview', () => {
       proposals: (t: Tree) => ReturnType<typeof add>[];
       level: (t: Tree) => string | null;
       size: number;
+      total: number;
     }[] = [
       // Under the epic: 2 committed children + 2 adds (the root add is elsewhere).
       {
@@ -907,6 +1041,7 @@ describe('planReviewService.getPlanReview', () => {
         proposals: (t) => [add('A', t.epic), add('B', t.epic), add('C')],
         level: (t) => t.epic,
         size: 4,
+        total: 4,
       },
       // Into the folder: 1 filed card + 2 adds filed there.
       {
@@ -918,10 +1053,20 @@ describe('planReviewService.getPlanReview', () => {
         ],
         level: (t) => `folder:${t.folder}`,
         size: 3,
+        total: 3,
       },
-      // Pure roots, no folder: the project root, counted as it always was — every
-      // root card (the epic and the filed one) + the 2 root adds.
-      { title: 'Roots', proposals: () => [add('G'), add('H')], level: () => null, size: 4 },
+      // Pure roots, no folder: the project root AS THE CANVAS DRAWS IT (Bug
+      // MOTIR-12148) — the 1 unfiled epic, one node per root folder (the project's
+      // own `Bugs` and `Parked`; the filed epic is behind `Parked`, not loose) + the
+      // 2 root adds. Counting every root card instead gives 2 + 2 = 4. The folders are
+      // drawn but never truncated, so the total is the 1 epic + the 2 adds.
+      {
+        title: 'Roots',
+        proposals: () => [add('G'), add('H')],
+        level: () => null,
+        size: 5,
+        total: 3,
+      },
     ];
 
     for (const shape of shapes) {
@@ -945,10 +1090,11 @@ describe('planReviewService.getPlanReview', () => {
         plan: shape.title,
         level: shape.level(tree),
       });
-      expect({ plan: shape.title, size: review.arrivalLevelTotal }).toEqual({
+      expect({
         plan: shape.title,
-        size: shape.size,
-      });
+        size: review.arrivalLevelSize,
+        total: review.arrivalLevelTotal,
+      }).toEqual({ plan: shape.title, size: shape.size, total: shape.total });
     }
   });
 

@@ -53,7 +53,7 @@ import {
 //
 // Jobs enter through the doors their dispatchers call: a hosted run through
 // `fleetCeilingService.reserve`, a CI job through `ciRunnerAdmissionService.admit`,
-// an index run through `codeGraphIndexAdmissionService.admit`. An agent
+// (the index run went with the container indexer, MOTIR-12036). An agent
 // instance is placed by `chooseInTx`, its running count read through the
 // hoster's counter, because creating instance records is the agent hoster
 // story's lifecycle. The plan is motir-ai's subscription read, the one stubbed
@@ -108,8 +108,6 @@ const { fleetShardAdmissionService, OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND } =
   await import('@/lib/services/fleetShardAdmissionService');
 const { fleetCeilingService } = await import('@/lib/services/fleetCeilingService');
 const { ciRunnerAdmissionService } = await import('@/lib/services/ciRunnerAdmissionService');
-const { codeGraphIndexAdmissionService } =
-  await import('@/lib/services/codeGraphIndexAdmissionService');
 const { fleetAttributionService, FLEET_ATTRIBUTION_GRACE_MS } =
   await import('@/lib/services/fleetAttributionService');
 const { fleetShardOrchestratorService } =
@@ -126,12 +124,7 @@ interface Ec2Fake extends Ec2Api {
 }
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
@@ -148,7 +141,6 @@ const SESSION: AwsSessionCredentials = {
 };
 const T0 = new Date('2026-10-26T12:00:00.000Z');
 const MINUTE = 60_000;
-const INDEX_TIMEOUT_MS = 30 * MINUTE;
 
 let github: GithubWorld;
 let organization: FakeOrganization;
@@ -374,32 +366,6 @@ async function ciJob(tenant: Tenant) {
   return { intentId: intent.id, landed };
 }
 
-/** An index run of one repository, through the index gate. */
-async function indexRun(tenant: Tenant) {
-  seq += 1;
-  const request = {
-    projectId: tenant.projectId,
-    repoRef: `acme/repo-${seq}`,
-    dispatchId: `dispatch-${seq}`,
-    workspaceId: tenant.workspaceId,
-    organizationId: tenant.organizationId,
-    containerTimeoutMs: INDEX_TIMEOUT_MS,
-  };
-  const verdict = await codeGraphIndexAdmissionService.admit(request, now);
-  const landed: Landed =
-    verdict.outcome === 'admitted'
-      ? { shardId: verdict.admission.shardId ?? null }
-      : verdict.outcome === 'deferred'
-        ? { deferred: verdict.reason, detail: verdict.detail }
-        : { deferred: verdict.outcome, detail: '' };
-  await check('code_graph_index', tenant.organizationId, landed);
-  const slotRef = verdict.outcome === 'admitted' ? verdict.admission.slotRef : null;
-  return {
-    landed,
-    release: () => slotRef && codeGraphIndexAdmissionService.release(slotRef, request.dispatchId),
-  };
-}
-
 /** An agent instance's placement; a landed one counts as running there. */
 async function agentInstance(tenant: Tenant): Promise<Landed> {
   const placement = await withSystemContext((tx) =>
@@ -503,7 +469,6 @@ beforeAll(async () => {
   const ids: Record<FleetWorkloadKind, string> = {
     ci_runner: '111122224441',
     hosted_agent: '111122224442',
-    code_graph_index: '111122224443',
     agent_instance: '111122224444',
   };
   for (const kind of KINDS) {
@@ -546,29 +511,29 @@ afterAll(async () => {
 // ── the recipe ───────────────────────────────────────────────────────────────
 
 describe('the Host own-accounts recipe, step by step', () => {
-  it('recipe 1 — buying Host creates three accounts as four rows, each raise pending, none in pool-status', async () => {
+  it('recipe 1 — buying Host creates three accounts as three rows, each raise pending, none in pool-status', async () => {
     await setPlan(first.organizationId, HOST_PLAN_KEY);
     await reconcile();
     await statePass();
 
     const rows = await ownRows(first.organizationId);
-    expect(rows.map((r) => r.fleetKind).sort()).toEqual([...KINDS].sort());
+    // The merged account is its one agent_instance row (MOTIR-12038).
+    expect(rows.map((r) => r.fleetKind).sort()).toEqual(
+      ['agent_instance', 'ci_runner', 'hosted_agent'].sort(),
+    );
     expect(rows.every((r) => r.role === 'org_owned')).toBe(true);
     expect(new Set(rows.map((r) => r.awsAccountId)).size).toBe(3);
-    const index = rows.find((r) => r.fleetKind === 'code_graph_index')!;
-    const hoster = rows.find((r) => r.fleetKind === 'agent_instance')!;
-    expect(index.awsAccountId).toBe(hoster.awsAccountId);
     const requests = await ownRequests(first.organizationId);
     expect(requests.map((r) => [r.shard.fleetKind, r.desiredValue, r.closedAt]).sort()).toEqual(
       [
+        ['agent_instance', 120, null],
         ['ci_runner', 200, null],
-        ['code_graph_index', 120, null],
         ['hosted_agent', 32, null],
       ].sort(),
     );
 
     const listing = await fleetAdmin('org-accounts', '--org', first.organizationId);
-    expect(listing).toHaveLength(4);
+    expect(listing).toHaveLength(3);
     expect(listing.every((l) => l.includes(' quota_requested '))).toBe(true);
     for (const kind of KINDS) {
       const status = (await fleetAdmin('pool-status', '--kind', kind)).join('\n');
@@ -693,17 +658,13 @@ describe('the Host own-accounts recipe, step by step', () => {
     await finishHosted([run.ref]);
   });
 
-  it('recipe 7 — the merged account denied keeps indexing and instances shared; granted at 40 it keeps 10 index spots and runs 10 instances', async () => {
-    await answer(first.organizationId, 'code_graph_index', 'DENIED');
+  it('recipe 7 — the merged account denied keeps instances shared; granted at 40 it runs 20 instances', async () => {
+    await answer(first.organizationId, 'agent_instance', 'DENIED');
     await statePass();
-    const index = await row(first.organizationId, 'code_graph_index');
     const hoster = await row(first.organizationId, 'agent_instance');
-    expect([index.grantedAt, index.liveAt, hoster.liveAt]).toEqual([null, null, null]);
+    expect([hoster.grantedAt, hoster.liveAt]).toEqual([null, null]);
     const listing = await fleetAdmin('org-accounts', '--org', first.organizationId);
-    expect(listing.find((l) => l.includes('code_graph_index'))).toContain(' quota_requested ');
-    const sharedIndex = await indexRun(first);
-    expect(sharedIndex.landed).toEqual(on(shared.code_graph_index!));
-    await sharedIndex.release();
+    expect(listing.find((l) => l.includes('agent_instance'))).toContain(' quota_requested ');
     expect(
       await withSystemContext((tx) =>
         fleetShardAdmissionService.chooseInTx(
@@ -716,38 +677,20 @@ describe('the Host own-accounts recipe, step by step', () => {
 
     // The platform admin files again, and AWS grants 40.
     const [raised] = await fleetQuotaRaiseService.fileRaises(
-      { names: [index.name], desiredVcpu: 40, operatorEmail },
+      { names: [hoster.name], desiredVcpu: 40, operatorEmail },
       { management: () => organization, now: () => now },
     );
     expect(raised).toMatchObject({ ok: true });
-    await answer(first.organizationId, 'code_graph_index', 'APPROVED', 40);
+    await answer(first.organizationId, 'agent_instance', 'APPROVED', 40);
     await statePass();
-    const [a, b] = [
-      await row(first.organizationId, 'code_graph_index'),
-      await row(first.organizationId, 'agent_instance'),
-    ];
-    expect([a.state, a.quotaRequestedAt, a.grantedAt, a.liveAt]).toEqual([
-      b.state,
-      b.quotaRequestedAt,
-      b.grantedAt,
-      b.liveAt,
-    ]);
-    expect(a.liveAt).not.toBeNull();
+    const live = await row(first.organizationId, 'agent_instance');
+    expect(live.liveAt).not.toBeNull();
 
-    // No index running: 10 instances and no 11th — the index spots are not lent.
+    // The whole grant is the instances' (MOTIR-12038): 20 and no 21st.
     const placed: Landed[] = [];
-    for (let i = 0; i < 11; i++) placed.push(await agentInstance(first));
-    expect(placed.slice(0, 10)).toEqual(Array(10).fill(on(hoster)));
-    expect(placed[10]).toEqual({ deferred: 'shard_capacity', detail: ownWait('agent_instance') });
-    // And all 10 index spots are still free beside them.
-    const runs = [];
-    for (let i = 0; i < 11; i++) runs.push(await indexRun(first));
-    expect(runs.slice(0, 10).map((r) => r.landed)).toEqual(Array(10).fill(on(index)));
-    expect(runs[10]!.landed).toEqual({
-      deferred: 'pool_full',
-      detail: ownWait('code_graph_index'),
-    });
-    for (const r of runs) await r.release();
+    for (let i = 0; i < 21; i++) placed.push(await agentInstance(first));
+    expect(placed.slice(0, 20)).toEqual(Array(20).fill(on(live)));
+    expect(placed[20]).toEqual({ deferred: 'shard_capacity', detail: ownWait('agent_instance') });
   });
 
   it('recipe 8 — a refused creation for a second Host org: one alert, no row, the shared floor, then the retry after the backoff', async () => {
@@ -823,24 +766,20 @@ describe('the Host own-accounts recipe, step by step', () => {
     ).toHaveLength(1);
   });
 
-  it('recipe 10 — the indexer switched back to Fly: the next index run is on Fly, the other kinds stay on their own accounts', async () => {
-    flySwitch.add('code_graph_index');
-    const run = await indexRun(first);
-    expect(run.landed).toEqual({ shardId: null });
-    await run.release();
-
+  // The recipe's step 10 switched the INDEXER back to Fly; the indexer left with
+  // MOTIR-12036, so what remains of it is the other kinds staying on their own.
+  it('recipe 10 — the other kinds stay on their own accounts', async () => {
     expect((await ciJob(first)).landed).toEqual(on(await row(first.organizationId, 'ci_runner')));
     const hosted = await hostedRun(first);
     expect(hosted.landed).toEqual(on(await row(first.organizationId, 'hosted_agent')));
     await finishHosted([hosted.ref]);
     // Room freed by an instance that ended.
     const hoster = await row(first.organizationId, 'agent_instance');
-    agents.set(hoster.id, 9);
+    agents.set(hoster.id, 19);
     expect(await agentInstance(first)).toEqual(on(hoster));
   });
 
   it('recipe 11 — downgraded to Max: new work is shared at Max, the instance on the hoster still wakes there, nothing is created or closed', async () => {
-    flySwitch.delete('code_graph_index');
     const rowsBefore = await ownRows(first.organizationId);
     const requestsBefore = await adminDb.fleetQuotaRequest.count();
     const accountsBefore = organization.accounts.size;
@@ -853,9 +792,6 @@ describe('the Host own-accounts recipe, step by step', () => {
     expect(run.landed).toEqual(on(shared.hosted_agent!));
     await finishHosted([run.ref]);
     expect((await ciJob(first)).landed).toEqual(on(shared.ci_runner!));
-    const index = await indexRun(first);
-    expect(index.landed).toEqual(on(shared.code_graph_index!));
-    await index.release();
     expect(await agentInstance(first)).toEqual(on(shared.agent_instance!));
 
     // The instance created on the own hoster account wakes there, from its record.

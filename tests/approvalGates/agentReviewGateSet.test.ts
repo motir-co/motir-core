@@ -212,6 +212,68 @@ describe('resolveGateSet — an agent SEND-BACK and its DISMISSAL (MOTIR-10333 �
   });
 });
 
+describe('agentReviewStanding — a GATE-OFF answer is the review at its version (Bug MOTIR-12147)', () => {
+  const at = (
+    recordedAnswer: { subjectVersion: string; verdict: 'pass' | 'changes_requested' } | null,
+    over: Partial<Parameters<typeof agentReviewStanding>[0]> = {},
+  ) =>
+    agentReviewStanding({
+      reviewAgentEnabled: true,
+      prMergeMode: 'manual',
+      workItemId: WORK_ITEM,
+      version: V1,
+      latestAgentReviewGate: null,
+      latestMergeGate: null,
+      recordedAnswer,
+      ...over,
+    });
+
+  it('a recorded pass at the version passes, and a recorded send-back refuses until dismissed there', () => {
+    expect(at({ subjectVersion: V1, verdict: 'pass' })).toBe('passed');
+    expect(at({ subjectVersion: V1, verdict: 'changes_requested' })).toBe('refused');
+    expect(at({ subjectVersion: V1, verdict: 'changes_requested' }, { dismissedVersion: V1 })).toBe(
+      'passed',
+    );
+    expect(at({ subjectVersion: V1, verdict: 'changes_requested' }, { dismissedVersion: V2 })).toBe(
+      'refused',
+    );
+  });
+
+  it('an answer at ANOTHER version, or none, leaves the review owed', () => {
+    expect(at({ subjectVersion: V2, verdict: 'pass' })).toBe('owed');
+    expect(at(null)).toBe('owed');
+  });
+
+  it('a decided gate at the version outranks the record, and an AWAITING one there keeps it owed', () => {
+    expect(
+      at(
+        { subjectVersion: V1, verdict: 'pass' },
+        { latestAgentReviewGate: gate('changes_requested', V1) },
+      ),
+    ).toBe('refused');
+    expect(
+      at({ subjectVersion: V1, verdict: 'pass' }, { latestAgentReviewGate: gate('awaiting', V1) }),
+    ).toBe('owed');
+    // An awaiting review of ANOTHER version does not hold the record off.
+    expect(
+      at({ subjectVersion: V1, verdict: 'pass' }, { latestAgentReviewGate: gate('awaiting', V2) }),
+    ).toBe('passed');
+  });
+
+  it('resolveGateSet asks the merge, not a review, over a version a recorded pass answered', () => {
+    expect(kinds({ recordedReviewAnswer: { subjectVersion: V1, verdict: 'pass' } })).toEqual([
+      ['pull_request_approval', V1],
+    ]);
+    // The switch off is unchanged: the record never stood in front of the merge.
+    expect(
+      kinds({
+        reviewAgentEnabled: false,
+        recordedReviewAnswer: { subjectVersion: V1, verdict: 'pass' },
+      }),
+    ).toEqual([['pull_request_approval', V1]]);
+  });
+});
+
 // BUG MOTIR-11992 (`approval-gates.md` §12.20, reversing §12.2's "a primary question is not
 // delayed"): with the review gate on, no PRIMARY is asked of code before its review has
 // passed. Each primary × each standing, asked of the pure rule.

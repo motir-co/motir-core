@@ -226,9 +226,14 @@ describe('the WRITERS — where each fact comes from', () => {
   it('the INDEX job claims the repository and stamps the head at START', () => {
     // Not at finish. A push landing mid-run then leaves the stored value behind
     // and the repository reads `stale` — the safe direction.
-    const job = readFileSync('lib/jobs/indexFleetSteps.ts', 'utf8');
+    // The row writes live in `indexRepoRow.ts` since the container path left
+    // (MOTIR-12036); the handoff claims and settles through them.
+    const job = readFileSync('lib/jobs/indexRepoRow.ts', 'utf8');
     expect(job).toContain('markIndexStarted');
     expect(job).toContain('markIndexSettled');
+    const handoff = readFileSync('lib/jobs/indexHandoffSteps.ts', 'utf8');
+    expect(handoff).toContain('claimIndexingRepo');
+    expect(handoff).toContain('settleIndexingRepo');
   });
 });
 

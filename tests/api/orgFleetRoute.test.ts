@@ -107,7 +107,6 @@ describe('GET fleet', () => {
       'agentInstances',
       'ciJobs',
       'hostedRuns',
-      'indexJobs',
       'lastStop',
       'motirStops',
       'tiles',

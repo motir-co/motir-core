@@ -10,6 +10,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
 import {
   fleetShardAdmissionService,
+  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
   OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND,
   SHARD_CAPACITY_DETAIL,
 } from '@/lib/services/fleetShardAdmissionService';
@@ -29,12 +30,7 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 const MOTIR_ORG = 'motir-projects';
 const NOW = new Date('2026-10-25T12:00:00.000Z');
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 interface Fixture {
   workspaceId: string;
@@ -297,21 +293,18 @@ describe('a live own account', () => {
     expect(set.map((s) => s.id)).toEqual([mine!.id]);
   });
 
-  it('serves both kinds of the merged account, the hoster row reading the grant filed on the indexer row', async () => {
+  it('serves the merged account from its one agent row, reading the grant filed on it', async () => {
     onPool();
     const host = await seedTenant();
-    const [index, hoster] = await own(host, ['code_graph_index', 'agent_instance'], {
-      granted: 40,
-    });
+    const [hoster] = await own(host, ['agent_instance'], { granted: 40 });
 
-    expect(await choose('code_graph_index', host.organizationId)).toEqual({ shardId: index!.id });
     expect(await choose('agent_instance', host.organizationId)).toEqual({ shardId: hoster!.id });
     expect(hoster!.vcpuQuota).toBeNull();
     const ceiling = await withSystemContext((tx) =>
       fleetShardAdmissionService.ownCeilingInTx(hoster!, tx),
     );
-    // The merged account's split (MOTIR-9589): 40 granted, 10 index spots kept.
-    expect(ceiling).toBe(10);
+    // The whole grant is the agents' (MOTIR-12038): 40 granted, 20 agents.
+    expect(ceiling).toBe(20);
   });
 
   it('is never chosen for another org, nor for a Motir exempt org', async () => {
@@ -385,6 +378,17 @@ describe('a full own account', () => {
         organizationId: host.organizationId,
       }),
     ).toBe(OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND.ci_runner);
+  });
+
+  it('with no live own account, the capacity words are the shared pool’s for each kind', async () => {
+    onPool();
+    const host = await seedTenant();
+    const words = async (fleetKind: FleetWorkloadKind) =>
+      fleetShardAdmissionService.capacityDetail({ fleetKind, organizationId: host.organizationId });
+
+    expect(await words('hosted_agent')).toBe(HOSTED_AGENT_SHARD_CAPACITY_DETAIL);
+    expect(await words('ci_runner')).toBe(SHARD_CAPACITY_DETAIL);
+    expect(await words('agent_instance')).toBe(SHARD_CAPACITY_DETAIL);
   });
 
   it("CI admission tells the org it waits for its own account's capacity", async () => {

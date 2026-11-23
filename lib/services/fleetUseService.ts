@@ -1,7 +1,7 @@
 import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
-import { groupOwnAccounts } from '@/lib/billing/fleetUse';
+import { FLEET_USE_KINDS, groupOwnAccounts, type FleetUseKind } from '@/lib/billing/fleetUse';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
-import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import type { FleetUseDTO, FleetUseHostAccountDTO } from '@/lib/dto/fleetUse';
 import type { OrgPlanFiguresDTO } from '@/lib/dto/orgPlanFigures';
 import { toFleetUseDTO, toFleetUseHostAccountDTO } from '@/lib/mappers/fleetUseMappers';
@@ -32,7 +32,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 
 const LOG = '[fleetUseService]';
 /** The kinds whose Host figure follows the own account's grant (`planCapsService`). */
-const GRANT_FOLLOWING_KINDS: FleetWorkloadKind[] = ['hosted_agent', 'ci_runner'];
+const GRANT_FOLLOWING_KINDS: readonly FleetUseKind[] = ['hosted_agent', 'ci_runner'];
 
 function errorName(err: unknown): string {
   return err instanceof Error ? err.name : 'UnknownError';
@@ -55,9 +55,10 @@ async function readCounts(
   }
 }
 
-async function readSwitches(): Promise<Record<FleetWorkloadKind, boolean>> {
-  const onPool = {} as Record<FleetWorkloadKind, boolean>;
-  for (const kind of FLEET_WORKLOAD_KINDS) onPool[kind] = await fleetKindOnPool(kind);
+/** The pool switch of each kind billing describes. */
+async function readSwitches(): Promise<Record<FleetUseKind, boolean>> {
+  const onPool = {} as Record<FleetUseKind, boolean>;
+  for (const kind of FLEET_USE_KINDS) onPool[kind] = await fleetKindOnPool(kind);
   return onPool;
 }
 
@@ -65,11 +66,11 @@ async function readSwitches(): Promise<Record<FleetWorkloadKind, boolean>> {
  *  predicate, so an org that left Host reads the shared pool. */
 async function ownAccountKinds(
   organizationId: string,
-  onPool: Record<FleetWorkloadKind, boolean>,
+  onPool: Record<FleetUseKind, boolean>,
 ): Promise<Set<FleetWorkloadKind>> {
   const kinds = new Set<FleetWorkloadKind>();
   await withSystemContext(async (tx) => {
-    for (const fleetKind of FLEET_WORKLOAD_KINDS) {
+    for (const fleetKind of FLEET_USE_KINDS) {
       if (!onPool[fleetKind]) continue;
       const own = await fleetShardAdmissionService.ownAccountInTx(
         { fleetKind, organizationId },
@@ -89,15 +90,15 @@ async function ownAccountKinds(
 async function grantedKinds(
   organizationId: string,
   plan: OrgPlanFiguresDTO,
-  onPool: Record<FleetWorkloadKind, boolean>,
+  onPool: Record<FleetUseKind, boolean>,
 ): Promise<Set<FleetWorkloadKind>> {
   const kinds = new Set<FleetWorkloadKind>();
   if (plan.kind !== 'capped' || plan.planKey !== HOST_PLAN_KEY) return kinds;
   try {
     await withSystemContext(async (tx) => {
       for (const row of await fleetShardRepository.listLiveOrgOwned(organizationId, tx)) {
-        const kind = row.fleetKind as FleetWorkloadKind;
-        if (!GRANT_FOLLOWING_KINDS.includes(kind) || !onPool[kind] || !row.awsAccountId) continue;
+        const kind = GRANT_FOLLOWING_KINDS.find((k) => k === row.fleetKind);
+        if (!kind || !onPool[kind] || !row.awsAccountId) continue;
         const granted = await fleetQuotaRequestRepository.maxGrantedForAwsAccountInTx(
           row.awsAccountId,
           tx,

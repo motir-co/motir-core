@@ -2,13 +2,14 @@
 
 import type { ComponentType } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { Folder, Layers, Server, Sparkles } from 'lucide-react';
+import { Layers, Server, Sparkles } from 'lucide-react';
 import { Meter } from '../../billing/_components/BillingClient';
 import type { FleetUseFigureDTO } from '@/lib/dto/fleetUse';
 import type { OrgFleetDTO } from '@/lib/dto/orgFleet';
 import { SectionError } from './FleetSection';
 
-// The four tiles (design panel 2): the platform Fleet card's tile grid carrying
+// The three tiles (design panel 2, less its retired index tile, MOTIR-12040): the
+// platform Fleet card's tile grid carrying
 // the org's OWN Fleet use figures, with Billing & plans' `Meter` under each
 // figure that has one. The page derives no figure. A count that was not read
 // says so in words — never a 0.
@@ -18,11 +19,9 @@ const TILE =
 
 export function FleetTiles({
   tiles,
-  indexJobs,
   onRetry,
 }: {
   tiles: OrgFleetDTO['tiles'];
-  indexJobs: OrgFleetDTO['indexJobs'];
   onRetry: () => void;
 }) {
   const t = useTranslations('settings.organization.fleet.tiles');
@@ -36,7 +35,7 @@ export function FleetTiles({
   const ci = tiles.figures.ciJobsInFlight;
   const waiting = ci.waiting ? ci.waiting.planLimit + ci.waiting.poolFull + ci.waiting.other : null;
   return (
-    <div data-testid="fleet-tiles" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div data-testid="fleet-tiles" className="grid grid-cols-2 gap-3 md:grid-cols-3">
       <FigureTile
         testId="fleet-tile-agent-runs"
         icon={Sparkles}
@@ -58,11 +57,6 @@ export function FleetTiles({
         figure={ci}
         note={waiting === null ? null : t('ciWaiting', { count: waiting })}
       />
-      <div data-testid="fleet-tile-index" className={`${TILE} bg-(--el-surface-soft)`}>
-        <TileLabel icon={Folder} label={t('index')} />
-        <TileValue value={indexJobs.kind === 'read' ? indexJobs.running : null} />
-        <span className="font-sans text-xs text-(--el-text-secondary)">{t('indexNote')}</span>
-      </div>
     </div>
   );
 }

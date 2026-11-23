@@ -5,6 +5,7 @@ import {
   isMarkOnlyProposal,
   planContainerCount,
   planContainers,
+  planTouchedNodeIds,
 } from '@/lib/planning/planShape';
 import { planReviewItem } from '../helpers/planReview';
 
@@ -328,5 +329,28 @@ describe('fullestContainer — mark-only modifies (Bug MOTIR-12097)', () => {
     const roots = addUnder('wi_root', 1).map((item) => ({ ...item, parentNodeId: null }));
 
     expect(fullestContainer([...modifyUnder('wi_b', 4), ...roots])).toBeNull();
+  });
+});
+
+// Bug MOTIR-12162 — the ONE set of rows the plan review canvas keeps on the road at
+// the root, which the review read's arrival-level size now reads too.
+describe('planTouchedNodeIds', () => {
+  it("holds every proposal's node id and a pending add's parent — never a modify's parent", () => {
+    const ids = planTouchedNodeIds([
+      planReviewItem({ planItemId: 'pi_a', nodeId: 'pi_a', op: 'add', parentNodeId: 'wi_task' }),
+      planReviewItem({ planItemId: 'pi_b', nodeId: 'pi_b', op: 'add', parentNodeId: null }),
+      planReviewItem({
+        planItemId: 'pi_m',
+        nodeId: 'wi_mod',
+        op: 'modify',
+        parentNodeId: 'wi_epic',
+      }),
+      planReviewItem({ planItemId: 'pi_r', nodeId: 'wi_gone', op: 'remove', parentNodeId: null }),
+    ]);
+    expect([...ids].sort()).toEqual(['pi_a', 'pi_b', 'wi_gone', 'wi_mod', 'wi_task']);
+  });
+
+  it('is empty for a plan with no proposals', () => {
+    expect(planTouchedNodeIds([]).size).toBe(0);
   });
 });
