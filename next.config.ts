@@ -208,6 +208,20 @@ export const SETTINGS_REDIRECTS = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  // ⚠️ ON A GITHUB-HOSTED CI RUNNER, `next build` DOES NOT TYPE-CHECK — the
+  // `TypeScript` job does (MOTIR-9799). The build's own check starts a second
+  // full `tsc` program (~4.6 GB at `d232a7ab`) while Turbopack still holds the
+  // compile's native memory, and on the hosted runner that sum crossed the box:
+  // every `Next.js build` lane of MOTIR-9799's branch (8 of 8, all three lanes)
+  // died at "Running TypeScript" with "The runner has received a shutdown
+  // signal" and no error named, while `main` — a few dozen files smaller —
+  // still fit. The check is a duplicate there: ci.yml's `typecheck` job runs
+  // `tsc -b` over `tsconfig.app.json`, the program this build reads, and gates
+  // the same pull request. `GITHUB_ACTIONS` is not forwarded into the Docker
+  // image build, so a deploy image and a local `pnpm build` still type-check.
+  typescript: {
+    ignoreBuildErrors: process.env['GITHUB_ACTIONS'] === 'true',
+  },
   async redirects() {
     return [
       ...DOCS_REDIRECTS,
