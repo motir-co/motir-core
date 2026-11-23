@@ -1021,11 +1021,15 @@ describe('planReviewService.getPlanReview', () => {
     expect(defaultPlanView(review)).toBe('canvas');
   });
 
-  it('counts the root\'s loose non-epic cards as the ONE "Not in epic" node the canvas draws (Bug MOTIR-12162)', async () => {
+  describe('counts the root\'s loose non-epic cards as the ONE "Not in epic" node the canvas draws (Bug MOTIR-12162)', () => {
     // More loose root tasks than the canvas holds. The canvas folds every unfiled,
     // non-epic root the plan does not touch into one "Not in epic" node — as long as
     // something stays on the road — so the drawn size swaps them for that one node,
     // while the total (the capped read's rows, which are not grouped) keeps them.
+    //
+    // One test per shape: each seeds its own ARRIVAL_LEVEL_MAX_NODES + 5 cards, and
+    // four shapes in one test came within a second of the 15 s test budget on CI
+    // (14.3 s on #4418) and crossed it on #4424.
     const loose = ARRIVAL_LEVEL_MAX_NODES + 5;
     const epicAdd = {
       op: 'add' as const,
@@ -1086,7 +1090,7 @@ describe('planReviewService.getPlanReview', () => {
       },
     ];
 
-    for (const shape of shapes) {
+    it.each(shapes)('$title', async (shape) => {
       const fx = await makeWorkItemFixture();
       for (let i = 0; i < shape.epics; i += 1) await seedChild(fx, 'epic', `Epic ${i}`);
       const tasks: { id: string }[] = [];
@@ -1103,7 +1107,7 @@ describe('planReviewService.getPlanReview', () => {
         total: review.arrivalLevelTotal,
         view: defaultPlanView(review),
       }).toEqual({ plan: shape.title, size: shape.size, total: shape.total, view: shape.view });
-    }
+    });
   });
 
   it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
