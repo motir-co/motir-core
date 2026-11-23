@@ -8,6 +8,9 @@ import {
   IdlePolicyUnsupportedForTargetError,
   IllegalReleaseTransitionError,
   InvalidIdlePolicyError,
+  InvalidLogCursorError,
+  InvalidLogLimitError,
+  InvalidLogRangeError,
   InvalidReleaseCursorError,
   NoPreviousReleaseError,
   NoProductionApplicationError,
@@ -36,7 +39,9 @@ export type ProductionRouteErrorCode =
   | 'idle_policy_not_permitted'
   | 'HOSTING_IDLE_POLICY_UNSUPPORTED'
   | 'no_application'
-  | 'idle_policy_failed';
+  | 'idle_policy_failed'
+  | 'invalid_log_range'
+  | 'invalid_limit';
 
 export interface ProductionRouteError {
   status: number;
@@ -86,7 +91,7 @@ export function productionRouteError(err: unknown): ProductionRouteError | null 
   if (err instanceof RollbackFailedError) {
     return { status: 502, code: 'rollback_failed', message: 'The rollback did not complete.' };
   }
-  if (err instanceof InvalidReleaseCursorError) {
+  if (err instanceof InvalidReleaseCursorError || err instanceof InvalidLogCursorError) {
     return { status: 400, code: 'invalid_cursor', message: 'Invalid cursor.' };
   }
   // The idle policy (MOTIR-12107).
@@ -116,6 +121,21 @@ export function productionRouteError(err: unknown): ProductionRouteError | null 
       status: 502,
       code: 'idle_policy_failed',
       message: 'The idle policy could not be applied.',
+    };
+  }
+  // The logs read (MOTIR-12105).
+  if (err instanceof InvalidLogRangeError) {
+    return {
+      status: 400,
+      code: 'invalid_log_range',
+      message: '`since` and `until` must be ISO 8601 instants, `until` not before `since`.',
+    };
+  }
+  if (err instanceof InvalidLogLimitError) {
+    return {
+      status: 400,
+      code: 'invalid_limit',
+      message: '`limit` must be a whole number from 1.',
     };
   }
   return null;

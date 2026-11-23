@@ -386,3 +386,34 @@ export class IdlePolicyApplyFailedError extends Error {
     this.name = 'IdlePolicyApplyFailedError';
   }
 }
+
+// ── The production logs read (MOTIR-12105) ────────────────────────────────────
+
+/** A logs query whose `since` / `until` is not an instant, or whose window ends
+ *  before it starts. → 400 */
+export class InvalidLogRangeError extends Error {
+  readonly code = 'INVALID_LOG_RANGE' as const;
+  constructor(readonly field: 'since' | 'until') {
+    super(`Invalid log range: ${field}.`);
+    this.name = 'InvalidLogRangeError';
+  }
+}
+
+/** A logs query whose `limit` is not a whole number from 1. → 400 */
+export class InvalidLogLimitError extends Error {
+  readonly code = 'INVALID_LOG_LIMIT' as const;
+  constructor() {
+    super('Invalid log limit.');
+    this.name = 'InvalidLogLimitError';
+  }
+}
+
+/** A logs cursor the target refused as not one of its own. The provider's words
+ *  are not kept. → 400 */
+export class InvalidLogCursorError extends Error {
+  readonly code = 'INVALID_LOG_CURSOR' as const;
+  constructor() {
+    super('Invalid log cursor.');
+    this.name = 'InvalidLogCursorError';
+  }
+}

@@ -8,6 +8,7 @@ import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import { resolveEnvironment } from '@/lib/environmentConfig/resolveEnvironment';
 import {
   ApplicationNotFoundError,
+  ProductionDatabaseUnreadableError,
   ReleaseDeployFailedError,
   ReleaseInProgressError,
   ReleaseMigrationFailedError,
@@ -330,4 +331,41 @@ async function recordFailedRelease(
   });
 }
 
-export const productionReleaseService = { deployProductionRelease, recordFailedRelease };
+/**
+ * The SECRET entries a production release of the application runs with, read
+ * fresh (MOTIR-12105): every production entry saved as a secret, and the
+ * production database's connection string as the reserved `DATABASE_URL` when
+ * the application has one — the same merge `deployProductionRelease` hands the
+ * port, so a reader masking a release's output masks exactly what it was given.
+ *
+ * It lives here because this service is the one door to the production
+ * database's value (MOTIR-10028); the logs service asks for the secrets, never
+ * for the database. An application with no database adds nothing; a stored
+ * value that will not decrypt is thrown, so a caller fails closed rather than
+ * showing output it could not mask. The values live in memory only.
+ */
+async function productionSecretEnvironment(application: {
+  id: string;
+  workspaceId: string;
+  projectRepositoryId: string;
+}): Promise<ReleaseEnvVar[]> {
+  const resolved = await resolveEnvironment(application.projectRepositoryId, 'production', {
+    workspaceId: application.workspaceId,
+  });
+  let database: { readonly DATABASE_URL: string } | null;
+  try {
+    database = await productionDatabaseService.getProductionDatabaseEnv(application.id);
+  } catch (error) {
+    if (!(error instanceof ProductionDatabaseUnreadableError) || error.reason !== 'absent') {
+      throw error;
+    }
+    database = null;
+  }
+  return mergeProductionEnvironment(resolved, database).filter((entry) => entry.secret);
+}
+
+export const productionReleaseService = {
+  deployProductionRelease,
+  recordFailedRelease,
+  productionSecretEnvironment,
+};

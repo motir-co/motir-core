@@ -77,6 +77,11 @@ const MEASURED = [
   'lib/hosting/idlePolicy.ts',
   'lib/services/hostedIdlePolicyService.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/idle-policy/route.ts',
+  // Story MOTIR-9799 — MOTIR-12105's masked production logs read.
+  'lib/hosting/logMasking.ts',
+  'lib/hosting/productionLogQuery.ts',
+  'lib/services/productionLogsService.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/logs/route.ts',
 ];
 
 /**
@@ -115,6 +120,7 @@ export const SHARED_NOT_FLOORED = [
   'lib/dto/hostedApplications.ts',
   'lib/dto/productionPanel.ts',
   'lib/dto/idlePolicy.ts',
+  'lib/dto/productionLogs.ts',
   // Argv and console around `productionEnablementService`, which IS floored.
   'scripts/backfill-production-enablement.ts',
 ];
@@ -172,6 +178,10 @@ export default defineConfig({
       'tests/hosting/hostedApplicationTeardown.test.ts',
       // MOTIR-12107 — the idle policy's service, and its errors in errors.ts.
       'tests/hosting/hostedIdlePolicyService.test.ts',
+      // MOTIR-12105 — the masked production logs read and its route.
+      'tests/hosting/logMasking.test.ts',
+      'tests/hosting/productionLogsService.test.ts',
+      'tests/api/productionLogsRoute.test.ts',
     ],
     coverage: {
       provider: 'v8',

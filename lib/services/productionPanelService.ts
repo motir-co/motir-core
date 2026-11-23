@@ -41,8 +41,10 @@ export interface ProductionPanelInput {
   limit?: number | null;
 }
 
-/** The repository named by the path, if the actor may see it and Motir hosts it. */
-async function resolveRepository(
+/** The repository named by the path, if the actor may see it and Motir hosts it.
+ *  The one resolution every production route shares — the logs read
+ *  (MOTIR-12105) included — so not found means the same thing on each. */
+export async function resolveRepository(
   projectKey: string,
   projectRepositoryId: string,
   actor: ServiceContext,
