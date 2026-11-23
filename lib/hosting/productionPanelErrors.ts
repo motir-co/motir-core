@@ -7,6 +7,7 @@ import {
   InvalidReleaseCursorError,
   NoPreviousReleaseError,
   ReleaseInProgressError,
+  RepositoryTakenOverError,
   RollbackFailedError,
   RollbackNotPermittedError,
 } from './errors';
@@ -17,13 +18,16 @@ import {
 // never the error's own text: a provider's words never reach a browser.
 //
 // Not found covers an unknown repository, another project's, one the viewer
-// cannot browse and a customer repository alike, so none is distinguishable.
+// cannot browse and a customer repository alike, so none is distinguishable. A
+// TAKEN-OVER repository is not folded into it: it is the organisation's own and
+// the panel shows it, so it answers its own 409 (MOTIR-12127).
 
 export type ProductionRouteErrorCode =
   | 'repository_not_found'
   | 'rollback_not_permitted'
   | 'no_previous_release'
   | 'release_in_progress'
+  | 'repository_taken_over'
   | 'rollback_conflict'
   | 'rollback_failed'
   | 'invalid_cursor';
@@ -50,6 +54,13 @@ export function productionRouteError(err: unknown): ProductionRouteError | null 
     err instanceof ApplicationNotFoundError
   ) {
     return NOT_FOUND;
+  }
+  if (err instanceof RepositoryTakenOverError) {
+    return {
+      status: 409,
+      code: 'repository_taken_over',
+      message: 'This repository has been taken over and is no longer deployed by Motir.',
+    };
   }
   if (err instanceof RollbackNotPermittedError) {
     return {

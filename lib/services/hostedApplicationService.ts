@@ -12,6 +12,7 @@ import {
   IllegalReleaseTransitionError,
   ReleaseNotOfApplicationError,
   RepositoryNotEstablishedError,
+  RepositoryTakenOverError,
 } from '@/lib/hosting/errors';
 import {
   isLegalReleaseTransition,
@@ -116,6 +117,8 @@ function refuseIneligible(row: Parameters<typeof deployEligibilityRefusal>[0] & 
   switch (deployEligibilityRefusal(row)) {
     case 'customer_repository':
       throw new CustomerRepositoryNotDeployableError(row.id);
+    case 'taken_over':
+      throw new RepositoryTakenOverError(row.id);
     case 'not_established':
       throw new RepositoryNotEstablishedError(row.id, row.state);
     case 'no_target':

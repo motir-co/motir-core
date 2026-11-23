@@ -116,7 +116,9 @@ async function handleProductionImageRun(
     );
     if (!repo) return 'unknown_repo' as const;
     if (run.headBranch !== repo.defaultBranch) return 'not_default_branch' as const;
-    const rows = await projectRepoRepository.listByGithubRepoId(repo.id, tx);
+    // The deploy facts, takeover and application state included, so a taken-over
+    // row is filtered out here and no release is enqueued for it (MOTIR-12127).
+    const rows = await projectRepoRepository.listDeployFactsByGithubRepoId(repo.id, tx);
     return rows.filter(isDeployEligible).map((row) => ({
       id: row.id,
       workspaceId: row.workspaceId,

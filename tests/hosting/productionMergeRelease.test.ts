@@ -411,6 +411,26 @@ describe('the runs that produce nothing', () => {
     expect(await queued()).toEqual([]);
   });
 
+  it('enqueues nothing for a switched-on repository that was taken over, or whose application is in grace (MOTIR-12127)', async () => {
+    const fx = await workspace();
+    const moved = await motirRepo(fx);
+    const grace = await motirRepo(fx);
+    await adminDb.projectRepo.update({
+      where: { id: moved.projectRepositoryId },
+      data: { takeoverState: 'done' },
+    });
+    await adminDb.hostedApplication.updateMany({
+      where: { projectRepositoryId: grace.projectRepositoryId },
+      data: { state: 'grace' },
+    });
+
+    for (const repo of [moved, grace]) {
+      expect(await hear(delivery(repo))).toEqual({ outcome: 'ignored', reason: 'not_switched_on' });
+    }
+    expect(await adminDb.hostedRelease.count()).toBe(0);
+    expect(await queued()).toEqual([]);
+  });
+
   it('ignores a Motir repository with no application, or one never switched on', async () => {
     const fx = await workspace();
     const absent = await motirRepo(fx, { enabled: false });

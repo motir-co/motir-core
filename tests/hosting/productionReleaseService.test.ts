@@ -12,6 +12,7 @@ import {
   CustomerRepositoryNotDeployableError,
   HostingManifestMissingError,
   ReleaseInProgressError,
+  RepositoryTakenOverError,
 } from '@/lib/hosting/errors';
 import type { HostingManifest } from '@/lib/hosting/manifest';
 import { getDatabasePort, resetDatabaseFakes } from '@/lib/orchestrator/database';
@@ -336,6 +337,38 @@ describe('deployProductionRelease', () => {
     );
     expect(await adminDb.hostedRelease.count()).toBe(0);
   });
+
+  // MOTIR-12127: the takeover's release freeze. A merge, config and ref release
+  // all call deployProductionRelease, so this one refusal covers all three.
+  it.each([
+    ['moved in a takeover', { takeoverState: 'done' as const }, null],
+    [
+      'failed after the move',
+      { takeoverState: 'failed' as const, takeoverTransferredAt: new Date() },
+      null,
+    ],
+    ['whose application is in grace', {}, 'grace' as const],
+    ['whose application is handed over', {}, 'handed_over' as const],
+  ])(
+    'refuses a repository %s with no port call and no release',
+    async (_label, repoFacts, appState) => {
+      const fx = await workspace();
+      const id = await repo(fx);
+      const app = await hostedApplicationService.ensureApplication(id);
+      await adminDb.projectRepo.update({ where: { id }, data: repoFacts });
+      if (appState)
+        await adminDb.hostedApplication.update({
+          where: { id: app.id },
+          data: { state: appState },
+        });
+
+      await expect(service.deployProductionRelease(release(id), deps())).rejects.toBeInstanceOf(
+        RepositoryTakenOverError,
+      );
+      expect(hosting().calls).toEqual([]);
+      expect(await adminDb.hostedRelease.count()).toBe(0);
+    },
+  );
 
   it('refuses a second release while one is in flight, writing nothing', async () => {
     const fx = await workspace();

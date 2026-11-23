@@ -12,6 +12,7 @@ import {
   InvalidReleaseCursorError,
   NoPreviousReleaseError,
   ReleaseInProgressError,
+  RepositoryTakenOverError,
   RollbackFailedError,
   RollbackNotPermittedError,
 } from '@/lib/hosting/errors';
@@ -330,13 +331,25 @@ describe('productionRouteError', () => {
       [new ProjectNotFoundError('p'), 404, 'repository_not_found'],
       [new RollbackFailedError('a', 'rollback', 503, 'FLY'), 502, 'rollback_failed'],
       [new InvalidReleaseCursorError(), 400, 'invalid_cursor'],
+      [new RepositoryTakenOverError('r'), 409, 'repository_taken_over'],
     ];
     for (const [err, status, code] of cases) {
       expect(productionRouteError(err), code).toMatchObject({ status, code });
     }
-    expect(new Set(cases.filter(([, s]) => s === 409).map(([, , c]) => c)).size).toBe(3);
+    expect(new Set(cases.filter(([, s]) => s === 409).map(([, , c]) => c)).size).toBe(4);
     expect(productionRouteError(new Error('other'))).toBeNull();
     expect(productionRouteErrorResponse(new Error('other'))).toBeNull();
+  });
+
+  it('answers a taken-over repository with its own 409 and a fixed message, not the hidden 404', async () => {
+    const res = productionRouteErrorResponse(new RepositoryTakenOverError('repo-secret-id'))!;
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'repository_taken_over',
+        message: 'This repository has been taken over and is no longer deployed by Motir.',
+      },
+    });
   });
 
   it('answers a fixed message, never the error’s own text', async () => {

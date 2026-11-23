@@ -62,6 +62,14 @@ export function isHostingShape(value: string): value is HostingShape {
 export const HOSTED_APPLICATION_STATES = ['live', 'handing_over', 'grace', 'handed_over'] as const;
 export type HostedApplicationState = (typeof HOSTED_APPLICATION_STATES)[number];
 
+/** The application states a takeover handover owns: nothing Motir runs deploys
+ *  an application in one of them (MOTIR-12127). */
+export const HANDOVER_APPLICATION_STATES = [
+  'handing_over',
+  'grace',
+  'handed_over',
+] as const satisfies readonly HostedApplicationState[];
+
 /** An application database export: an admin's `on_demand` download during the
  *  grace window, or the `final` one the stop takes before deleting the
  *  database. */

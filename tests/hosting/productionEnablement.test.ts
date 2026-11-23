@@ -15,6 +15,7 @@ import {
   HostingTargetMissingError,
   ProductionEnablementFailedError,
   RepositoryNotEstablishedError,
+  RepositoryTakenOverError,
 } from '@/lib/hosting/errors';
 import {
   HOSTING_TARGET_VARIABLE,
@@ -317,6 +318,20 @@ describe('enableProduction', () => {
     expect(await appRow(id)).toBeNull();
   });
 
+  it('refuses a taken-over repository before any call, so no deploy token is minted (MOTIR-12127)', async () => {
+    const fx = await workspace();
+    const id = await motirRepo(fx);
+    await adminDb.projectRepo.update({
+      where: { id },
+      data: { takeoverState: 'failed', takeoverTransferredAt: new Date() },
+    });
+    const minted = fakePort().mintedFor.length;
+    await expect(service.enableProduction(id)).rejects.toBeInstanceOf(RepositoryTakenOverError);
+    expect(calls).toEqual([]);
+    expect(fakePort().mintedFor.length).toBe(minted);
+    expect(await appRow(id)).toBeNull();
+  });
+
   it.each([
     ['manifest_missing', null],
     ['manifest_invalid', '{"schemaVersion": 1}'],
@@ -514,6 +529,27 @@ describe('backfillProductionEnablement', () => {
         outcome: 'already_enabled',
       });
     }
+  });
+
+  it('never walks a taken-over repository, nor one whose application is handed over (MOTIR-12127)', async () => {
+    const fx = await workspace();
+    const ok = await motirRepo(fx, { name: 'ok' });
+    const moved = await motirRepo(fx, { name: 'moved' });
+    const handed = await motirRepo(fx, { name: 'handed' });
+    await adminDb.projectRepo.update({ where: { id: moved }, data: { takeoverState: 'done' } });
+    const app = await hostedApplicationService.ensureApplication(handed);
+    await adminDb.hostedApplication.update({
+      where: { id: app.id },
+      data: { state: 'handed_over' },
+    });
+    const minted = fakePort().mintedFor.length;
+
+    const walked = await service.backfillProductionEnablement();
+    expect(walked.map((e) => e.projectRepositoryId)).toEqual([ok]);
+    expect(fakePort().mintedFor.length).toBe(minted + 1);
+    expect(calls.some((c) => c.path.includes('/moved/') || c.path.includes('/handed/'))).toBe(
+      false,
+    );
   });
 });
 

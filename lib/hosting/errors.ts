@@ -54,6 +54,17 @@ export class CustomerRepositoryNotDeployableError extends Error {
   }
 }
 
+/** The repository has left Motir in a takeover, or its application is being
+ *  handed over, in its grace window or handed over: nothing Motir runs deploys
+ *  it again (Story MOTIR-9800 · MOTIR-12127). → 409 */
+export class RepositoryTakenOverError extends Error {
+  readonly code = 'REPOSITORY_TAKEN_OVER' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Repository ${projectRepositoryId} has been taken over; Motir no longer deploys it.`);
+    this.name = 'RepositoryTakenOverError';
+  }
+}
+
 /** The repository row names no repository that exists yet. → 409 */
 export class RepositoryNotEstablishedError extends Error {
   readonly code = 'REPOSITORY_NOT_ESTABLISHED' as const;

@@ -52,6 +52,9 @@ export type RunProductionRedeployOutcome =
   | { outcome: 'failed_release'; releaseId: string }
   | { outcome: 'skipped_no_live_release' }
   | { outcome: 'skipped_customer_repository' }
+  /** The repository was taken over, or its application is being handed over:
+   *  the release freeze holds, so nothing is deployed and nothing retried. */
+  | { outcome: 'skipped_taken_over' }
   | { outcome: 'deferred_in_progress' }
   | { outcome: 'gave_up_in_progress' };
 
@@ -67,9 +70,9 @@ async function runProductionRedeploy(
   const facts = await withSystemContext((tx) =>
     projectRepoRepository.findDeployFactsInTx(projectRepositoryId, tx),
   );
-  if (facts && deployEligibilityRefusal(facts) === 'customer_repository') {
-    return { outcome: 'skipped_customer_repository' };
-  }
+  const refusal = facts ? deployEligibilityRefusal(facts) : null;
+  if (refusal === 'customer_repository') return { outcome: 'skipped_customer_repository' };
+  if (refusal === 'taken_over') return { outcome: 'skipped_taken_over' };
   // The CURRENT release at the moment the run starts — after the settle delay,
   // so a merge that went live during the burst is the one redeployed.
   const app = await hostedApplicationService.getApplicationForRepositorySystem(projectRepositoryId);

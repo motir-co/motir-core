@@ -9,7 +9,12 @@ import {
   applicationHostForWorkspaceHostname,
   deriveApplicationSlug,
 } from '@/lib/hosting/applicationAddress';
-import { deployEligibilityRefusal, isDeployEligible } from '@/lib/hosting/deployEligibility';
+import {
+  deployEligibilityRefusal,
+  isDeployEligible,
+  type DeployEligibilityFacts,
+  type DeployEligibilityRefusal,
+} from '@/lib/hosting/deployEligibility';
 import {
   HOSTED_RELEASE_CAUSES,
   HOSTED_APPLICATION_EXPORT_KINDS,
@@ -101,10 +106,13 @@ describe('the application handover vocabulary (MOTIR-9800)', () => {
 });
 
 describe('deploy eligibility', () => {
-  const motir = {
+  const motir: DeployEligibilityFacts = {
     seedSource: 'initialised',
-    state: 'created' as const,
-    hostingTarget: 'fly' as const,
+    state: 'created',
+    hostingTarget: 'fly',
+    takeoverState: null,
+    takeoverTransferredAt: null,
+    applicationState: null,
   };
 
   it('admits an established Motir repository with a target', () => {
@@ -115,11 +123,41 @@ describe('deploy eligibility', () => {
   it('refuses a customer repository first, whatever else holds', () => {
     expect(
       deployEligibilityRefusal({
+        ...motir,
         seedSource: 'organization',
         state: 'proposed',
         hostingTarget: null,
+        takeoverState: 'done',
+        applicationState: 'grace',
       }),
     ).toBe('customer_repository');
+  });
+
+  // MOTIR-12127: the takeover's release freeze. Each row is one fact set and the
+  // answer it must get; every other fact is the plain eligible Motir row.
+  it.each<[string, Partial<DeployEligibilityFacts>, DeployEligibilityRefusal | null]>([
+    ['a live application with no takeover', { applicationState: 'live' }, null],
+    ['a takeover requested, not yet moved', { takeoverState: 'requested' }, null],
+    ['a transfer pending', { takeoverState: 'transfer_pending' }, null],
+    ['a takeover that failed before the move', { takeoverState: 'failed' }, null],
+    ['a repository awaiting reinstall', { takeoverState: 'awaiting_reinstall' }, 'taken_over'],
+    ['a takeover done', { takeoverState: 'done' }, 'taken_over'],
+    [
+      'a takeover that failed AFTER the move',
+      { takeoverState: 'failed', takeoverTransferredAt: new Date('2026-11-20T10:00:00Z') },
+      'taken_over',
+    ],
+    ['an application handing over', { applicationState: 'handing_over' }, 'taken_over'],
+    ['an application in grace', { applicationState: 'grace' }, 'taken_over'],
+    ['an application handed over', { applicationState: 'handed_over' }, 'taken_over'],
+    [
+      'a taken-over row that is also not established',
+      { takeoverState: 'done', state: 'proposed', hostingTarget: null },
+      'taken_over',
+    ],
+  ])('%s', (_label, facts, expected) => {
+    expect(deployEligibilityRefusal({ ...motir, ...facts })).toBe(expected);
+    expect(isDeployEligible({ ...motir, ...facts })).toBe(expected === null);
   });
 
   it('refuses a row that is not established', () => {
