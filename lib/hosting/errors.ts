@@ -320,3 +320,69 @@ export class InvalidReleaseCursorError extends Error {
     this.name = 'InvalidReleaseCursorError';
   }
 }
+
+// ── The idle policy (MOTIR-12107) ─────────────────────────────────────────────
+
+/** A request's idle policy is not one the route takes — an unknown mode, or a
+ *  window outside one minute to one day. `field` names which. → 400 */
+export class InvalidIdlePolicyError extends Error {
+  readonly code = 'INVALID_IDLE_POLICY' as const;
+  constructor(readonly field: 'body' | 'mode' | 'idleSeconds') {
+    super(`Invalid idle policy: ${field}.`);
+    this.name = 'InvalidIdlePolicyError';
+  }
+}
+
+/** Changing an application's idle policy needs the project's administration
+ *  permission (MOTIR-12107). → 403 */
+export class IdlePolicyNotPermittedError extends Error {
+  readonly code = 'IDLE_POLICY_NOT_PERMITTED' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(
+      `Changing ${projectRepositoryId}'s idle policy needs the project's administration permission.`,
+    );
+    this.name = 'IdlePolicyNotPermittedError';
+  }
+}
+
+/** The application's target and shape cannot run the asked policy — the deploy
+ *  port's refusal (`HOSTING_IDLE_POLICY_UNSUPPORTED`), carried with the target
+ *  and shape the copy names. Nothing was stored or deployed. → 409 */
+export class IdlePolicyUnsupportedForTargetError extends Error {
+  readonly code = 'HOSTING_IDLE_POLICY_UNSUPPORTED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly target: string,
+    readonly shape: string | null,
+    readonly mode: string,
+  ) {
+    super(
+      `Application ${applicationId} on ${target}${shape ? ` (${shape})` : ''} cannot run the "${mode}" idle policy.`,
+    );
+    this.name = 'IdlePolicyUnsupportedForTargetError';
+  }
+}
+
+/** The repository has no production application yet, so it has no idle policy
+ *  to change: it gets one when production is first switched on. → 409 */
+export class NoProductionApplicationError extends Error {
+  readonly code = 'NO_PRODUCTION_APPLICATION' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Repository ${projectRepositoryId} has no production application yet.`);
+    this.name = 'NoProductionApplicationError';
+  }
+}
+
+/** The redeploy that applies the policy to the serving release failed; that
+ *  release keeps serving with the stored policy, which did not change. The
+ *  failed release row (`releaseId`) carries the step and code. → 502 */
+export class IdlePolicyApplyFailedError extends Error {
+  readonly code = 'IDLE_POLICY_APPLY_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly releaseId: string,
+  ) {
+    super(`Applying the idle policy of ${applicationId} failed (release ${releaseId}).`);
+    this.name = 'IdlePolicyApplyFailedError';
+  }
+}

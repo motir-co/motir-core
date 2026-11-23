@@ -4714,7 +4714,8 @@
         "rollback": "Ripristinato con rollback · {name}",
         "rollbackUnnamed": "Ripristinato con rollback",
         "ref": "Deploy di {ref} · {name}",
-        "refUnnamed": "Deploy di {ref}"
+        "refUnnamed": "Deploy di {ref}",
+        "idlePolicy": "Nuovo deploy · comportamento in inattività modificato"
       },
       "address": {
         "newTab": "(si apre in una nuova finestra)",
@@ -4778,6 +4779,15 @@
         "title": "Repository non trovato",
         "body": "Motir gestisce la produzione solo per i repository che ospita. Scegli uno dei repository di questo progetto.",
         "back": "Torna a Produzione"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Su {target}, un {shape} può solo restare sempre attivo, quindi non può sospendersi quando è inattivo."
+        },
+        "shape": {
+          "function": "function",
+          "container": "container"
+        }
       }
     },
     "workspaceAddress": {

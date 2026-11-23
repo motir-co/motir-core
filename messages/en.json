@@ -4714,7 +4714,8 @@
         "rollback": "Restored by rollback · {name}",
         "rollbackUnnamed": "Restored by rollback",
         "ref": "Deploy of {ref} · {name}",
-        "refUnnamed": "Deploy of {ref}"
+        "refUnnamed": "Deploy of {ref}",
+        "idlePolicy": "Redeploy · idle policy changed"
       },
       "address": {
         "newTab": "(opens in a new tab)",
@@ -4778,6 +4779,15 @@
         "title": "Repository not found",
         "body": "Motir runs production only for the repositories it hosts. Choose one of this project’s repositories.",
         "back": "Back to Production"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "On {target}, a {shape} can only stay always on, so it can’t suspend when idle."
+        },
+        "shape": {
+          "function": "function",
+          "container": "container"
+        }
       }
     },
     "workspaceAddress": {

@@ -2,14 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { OrchestratorApiError } from '../../errors';
 import {
   CustomerRepositoryRefusedError,
-  IdlePolicyUnsupportedError,
   LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
 } from '../../hosting/errors';
 import { hostingAppNames, pushNamespaceName, sameEnvironment } from '../../hosting/names';
-import { requireReleaseShape } from '../../hosting/shape';
+import { assertIdlePolicySupported, requireReleaseShape } from '../../hosting/shape';
 import type {
   DeployReleaseInput,
   HostingDeployPort,
@@ -425,9 +424,7 @@ export function createFakeHostingDeployPort(
   function shapeOf(input: DeployReleaseInput): ReleaseShape | undefined {
     if (target !== 'aws') return undefined;
     const shape = requireReleaseShape(target, input);
-    if (shape === 'container' && input.idle.mode === 'suspend') {
-      throw new IdlePolicyUnsupportedError(target, shape, input.idle.mode);
-    }
+    assertIdlePolicySupported(target, shape, input.idle);
     return shape;
   }
 

@@ -4714,7 +4714,8 @@
         "rollback": "롤백으로 복원 · {name}",
         "rollbackUnnamed": "롤백으로 복원",
         "ref": "{ref} 배포 · {name}",
-        "refUnnamed": "{ref} 배포"
+        "refUnnamed": "{ref} 배포",
+        "idlePolicy": "재배포 · 유휴 시 동작 변경"
       },
       "address": {
         "newTab": "(새 탭에서 열림)",
@@ -4778,6 +4779,15 @@
         "title": "저장소를 찾을 수 없음",
         "body": "Motir는 자신이 호스팅하는 저장소에 대해서만 프로덕션을 운영합니다. 이 프로젝트의 저장소 중 하나를 선택하세요.",
         "back": "프로덕션으로 돌아가기"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "{target}의 {shape}는 항상 실행만 지원하므로 유휴 상태일 때 일시 중지할 수 없습니다."
+        },
+        "shape": {
+          "function": "함수",
+          "container": "컨테이너"
+        }
       }
     },
     "workspaceAddress": {

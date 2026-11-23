@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { HostingTarget, Prisma } from '@/generated/prisma/client';
+import type { HostedIdleMode, HostingTarget, Prisma } from '@/generated/prisma/client';
 import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicationMappers';
 
 // Single-op data access for `hosted_application` — one production home per Motir
@@ -38,6 +38,9 @@ export interface HostedApplicationInsert {
   target: HostingTarget;
   slug: string;
   productionAddress: string | null;
+  /** The idle policy it starts with (MOTIR-12107), as its two columns. */
+  idleMode: HostedIdleMode;
+  idleSeconds: number | null;
 }
 
 /** The teardown read of {@link hostedApplicationRepository.findTeardownByProjectRepository}. */
@@ -165,12 +168,13 @@ export const hostedApplicationRepository = {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       INSERT INTO "hosted_application" (
         "id", "workspace_id", "project_id", "project_repository_id", "target",
-        "slug", "production_address", "created_at", "updated_at"
+        "slug", "production_address", "idle_mode", "idle_seconds", "created_at", "updated_at"
       )
       VALUES (
         ${randomUUID()}, ${input.workspaceId}, ${input.projectId},
         ${input.projectRepositoryId}, ${input.target}::"hosting_target", ${input.slug},
-        ${input.productionAddress}, NOW(), NOW()
+        ${input.productionAddress}, ${input.idleMode}::"hosted_idle_mode", ${input.idleSeconds}::int,
+        NOW(), NOW()
       )
       ON CONFLICT ("project_repository_id") DO NOTHING
       RETURNING "id"
@@ -306,6 +310,28 @@ export const hostedApplicationRepository = {
       where: { id },
       data: { currentReleaseId: null, previousReleaseId: null, productionAppName: null },
     });
+  },
+
+  /** The application's stored idle policy columns (MOTIR-12107), or null when
+   *  no such application exists. */
+  async findIdlePolicy(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ idleMode: HostedIdleMode; idleSeconds: number | null } | null> {
+    return tx.hostedApplication.findUnique({
+      where: { id },
+      select: { idleMode: true, idleSeconds: true },
+    });
+  },
+
+  /** Store the application's idle policy (MOTIR-12107). The caller holds the
+   *  row's lock; the table's CHECK refuses seconds without `suspend`. */
+  async setIdlePolicy(
+    id: string,
+    policy: { idleMode: HostedIdleMode; idleSeconds: number | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.hostedApplication.update({ where: { id }, data: policy });
   },
 
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {

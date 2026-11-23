@@ -4714,7 +4714,8 @@
         "rollback": "ロールバックで復元 · {name}",
         "rollbackUnnamed": "ロールバックで復元",
         "ref": "{ref} のデプロイ · {name}",
-        "refUnnamed": "{ref} のデプロイ"
+        "refUnnamed": "{ref} のデプロイ",
+        "idlePolicy": "再デプロイ · アイドル時の動作の変更"
       },
       "address": {
         "newTab": "(新しいタブで開きます)",
@@ -4778,6 +4779,15 @@
         "title": "リポジトリが見つかりません",
         "body": "Motir が本番を運用するのは、Motir がホストしているリポジトリだけです。このプロジェクトのリポジトリを選んでください。",
         "back": "本番に戻る"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "{target} の {shape} は常時稼働のみ対応のため、アイドル時に一時停止できません。"
+        },
+        "shape": {
+          "function": "関数",
+          "container": "コンテナ"
+        }
       }
     },
     "workspaceAddress": {

@@ -4714,7 +4714,8 @@
         "rollback": "Restaurada por reversão · {name}",
         "rollbackUnnamed": "Restaurada por reversão",
         "ref": "Deploy de {ref} · {name}",
-        "refUnnamed": "Deploy de {ref}"
+        "refUnnamed": "Deploy de {ref}",
+        "idlePolicy": "Novo deploy · comportamento em inatividade alterado"
       },
       "address": {
         "newTab": "(abre em uma nova aba)",
@@ -4778,6 +4779,15 @@
         "title": "Repositório não encontrado",
         "body": "O Motir executa a produção apenas para os repositórios que hospeda. Escolha um dos repositórios deste projeto.",
         "back": "Voltar para Produção"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Em {target}, um {shape} só pode ficar sempre ativo, então não pode ser suspenso quando ocioso."
+        },
+        "shape": {
+          "function": "função",
+          "container": "contêiner"
+        }
       }
     },
     "workspaceAddress": {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { IdlePolicyUnsupportedError } from '../../../../hosting/errors';
+import { assertIdlePolicySupported } from '../../../../hosting/shape';
 import { deriveOriginSecret } from '../../../../hosting/originSecret';
 import type {
   HostingEnvironment,
@@ -271,9 +271,7 @@ async function sweep(
 export async function deployContainerRelease(
   input: DeployContainerReleaseInput,
 ): Promise<ContainerRelease> {
-  if (input.idle.mode !== 'always_on') {
-    throw new IdlePolicyUnsupportedError('aws', 'container', input.idle.mode);
-  }
+  assertIdlePolicySupported('aws', 'container', input.idle);
   const { account, repositoryId, environment } = input;
   const names = containerReleaseNames(repositoryId, environment);
   const { stackName, appRef } = names;

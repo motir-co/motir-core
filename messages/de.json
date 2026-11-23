@@ -4714,7 +4714,8 @@
         "rollback": "Durch Rollback wiederhergestellt · {name}",
         "rollbackUnnamed": "Durch Rollback wiederhergestellt",
         "ref": "Deployment von {ref} · {name}",
-        "refUnnamed": "Deployment von {ref}"
+        "refUnnamed": "Deployment von {ref}",
+        "idlePolicy": "Erneutes Deployment · Leerlaufverhalten geändert"
       },
       "address": {
         "newTab": "(öffnet in einem neuen Tab)",
@@ -4778,6 +4779,15 @@
         "title": "Repository nicht gefunden",
         "body": "Motir betreibt Produktion nur für die Repositorys, die es hostet. Wählen Sie eines der Repositorys dieses Projekts.",
         "back": "Zurück zu Produktion"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Auf {target} kann ein {shape} nur dauerhaft laufen und daher im Leerlauf nicht pausieren."
+        },
+        "shape": {
+          "function": "Function",
+          "container": "Container"
+        }
       }
     },
     "workspaceAddress": {

@@ -4714,7 +4714,8 @@
         "rollback": "由回滚恢复 · {name}",
         "rollbackUnnamed": "由回滚恢复",
         "ref": "部署 {ref} · {name}",
-        "refUnnamed": "部署 {ref}"
+        "refUnnamed": "部署 {ref}",
+        "idlePolicy": "重新部署 · 空闲策略已更改"
       },
       "address": {
         "newTab": "（在新标签页中打开）",
@@ -4778,6 +4779,15 @@
         "title": "未找到代码仓库",
         "body": "Motir 只为其托管的代码仓库运行生产。请选择此项目的代码仓库之一。",
         "back": "返回生产"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "在 {target} 上，{shape} 只能保持常开，因此无法在空闲时暂停。"
+        },
+        "shape": {
+          "function": "函数",
+          "container": "容器"
+        }
       }
     },
     "workspaceAddress": {

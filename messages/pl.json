@@ -4714,7 +4714,8 @@
         "rollback": "Przywrócone przez wycofanie · {name}",
         "rollbackUnnamed": "Przywrócone przez wycofanie",
         "ref": "Wdrożenie {ref} · {name}",
-        "refUnnamed": "Wdrożenie {ref}"
+        "refUnnamed": "Wdrożenie {ref}",
+        "idlePolicy": "Ponowne wdrożenie · zmieniono zachowanie przy bezczynności"
       },
       "address": {
         "newTab": "(otwiera się w nowej karcie)",
@@ -4778,6 +4779,15 @@
         "title": "Nie znaleziono repozytorium",
         "body": "Motir prowadzi produkcję tylko dla repozytoriów, które hostuje. Wybierz jedno z repozytoriów tego projektu.",
         "back": "Wróć do Produkcji"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "W {target} typ {shape} może działać tylko bez przerwy, więc nie może się wstrzymać przy bezczynności."
+        },
+        "shape": {
+          "function": "funkcja",
+          "container": "kontener"
+        }
       }
     },
     "workspaceAddress": {

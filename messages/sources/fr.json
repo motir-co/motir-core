@@ -14388,5 +14388,9 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "settings.production.trigger.idlePolicy": "Redeploy · idle policy changed",
+  "settings.production.idle.refusal.unsupported": "On {target}, a {shape} can only stay always on, so it can’t suspend when idle.",
+  "settings.production.idle.shape.function": "function",
+  "settings.production.idle.shape.container": "container"
 }

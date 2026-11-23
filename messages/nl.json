@@ -4714,7 +4714,8 @@
         "rollback": "Hersteld door terugdraaien · {name}",
         "rollbackUnnamed": "Hersteld door terugdraaien",
         "ref": "Deploy van {ref} · {name}",
-        "refUnnamed": "Deploy van {ref}"
+        "refUnnamed": "Deploy van {ref}",
+        "idlePolicy": "Opnieuw gedeployd · gedrag bij inactiviteit gewijzigd"
       },
       "address": {
         "newTab": "(opent in een nieuw tabblad)",
@@ -4778,6 +4779,15 @@
         "title": "Repository niet gevonden",
         "body": "Motir draait productie alleen voor de repository’s die het host. Kies een van de repository’s van dit project.",
         "back": "Terug naar Productie"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Op {target} kan een {shape} alleen altijd aan blijven, dus kan die niet pauzeren bij inactiviteit."
+        },
+        "shape": {
+          "function": "functie",
+          "container": "container"
+        }
       }
     },
     "workspaceAddress": {
