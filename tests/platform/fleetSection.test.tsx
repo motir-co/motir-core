@@ -340,7 +340,11 @@ describe('organisations card', () => {
           organizationId: 'org_legacy',
           plan: { kind: 'plan_unknown', planKey: 'legacy_tier' },
         }),
-        row({ organizationId: 'org_unread', plan: { kind: 'plan_unknown', planKey: null } }),
+        row({
+          organizationId: 'org_unread',
+          plan: { kind: 'plan_unknown', planKey: null },
+          byWorkload: { ci_runner: 42, hosted_agent: 0, agent_instance: 3 },
+        }),
         row({ organizationId: 'org_over', plan: capped('max', 'Max', [5, 10, 50, 7], 'override') }),
       ]),
       kills: kills([]),
@@ -359,6 +363,12 @@ describe('organisations card', () => {
     expect(cells(legacy!)[1]).toBe(`Plan unknown · legacy_tier${fleet.orgs.plan.unknownNote}`);
     expect(cells(legacy!).slice(2, 5)).toEqual(['42', '6', '3']);
     expect(cells(unread!)[1]).toBe(`Plan unknown${fleet.orgs.plan.unknownNote}`);
+    // A bare count with no figure: a zero recedes to the secondary ink, a count does not.
+    const ink = (r: HTMLElement, i: number) =>
+      r.querySelectorAll('td')[i]!.querySelector('span')!.className;
+    expect(cells(unread!)[3]).toBe('0');
+    expect(ink(unread!, 3)).toBe('text-(--el-text-secondary)');
+    expect(ink(unread!, 2)).toBe('text-(--el-text)');
 
     expect(cells(over!)[2]).toBe(`42 of 7${fleet.orgs.override}`);
     expect(cells(over!)[3]).toBe('6 of 5');
@@ -484,6 +494,17 @@ describe('reconciler kills card', () => {
     expect(rows[1]!.textContent).toContain('Stop failed');
     expect(rows[2]!.getAttribute('data-failed')).toBeNull();
     expect(rows[2]!.querySelector('td')!.getAttribute('data-rail')).toBeNull();
+  });
+
+  it('an action the card has no words for is shown as it was recorded, in a neutral pill', async () => {
+    const root = await render({
+      orgs: orgs([row()]),
+      kills: kills([kill({ id: 'kd', action: 'drained' })]),
+    });
+    const r = card(root, 'fleet-kills')!.querySelector('tbody tr') as HTMLElement;
+    expect(r.textContent).toContain('drained');
+    expect(r.textContent).not.toContain(fleet.kills.action.destroyed);
+    expect(r.getAttribute('data-failed')).toBeNull();
   });
 
   it('read failed: the kills card alone shows its error; the organisations render', async () => {
