@@ -2518,3 +2518,357 @@ Rendered with `renderMock` from a temporary generator (not committed) that impor
 named above, read at `main` @ `3aaa94eb`. Board frames are a fixed 1200px viewport so overflow is the
 same on every reviewer's screen; starting offsets and the live prototype are set by one small inline
 script. Rendered headlessly in Chromium and every panel inspected in both themes.
+
+---
+
+# To plan — a tenth board column for work stopped for re-planning (DATED 2026-11-23) — `board--to-plan-status.mock.html`
+
+**Design system.** Files read: `package.json` (depends on `@motir/design-system`, `workspace:*`) and
+`app/globals.css` (imports `@motir/design-system/theme.css`). **Verdict: on Motir Design**, package
+version 0.24.1, which exports `@motir/design-system/mock`, so the mock is built with `renderMock` at the
+project's own axes (`warm-editorial` · `motir` · `motir`, the root layout's defaults) on a full-width
+board. Every part used is the package's or the product's own; none is missing, so nothing is proposed
+as an addition to the package.
+
+This section draws ONE new default status, **To plan** (key `to_plan`, category `in_progress`), on every
+surface a status shows. A work item at To plan is planned and not started, and its description is out
+of date because a decision it rests on was corrected: a person (or a plan) must rewrite it before anyone
+builds it. A reader must tell at a glance that such a card is **stopped for re-planning, not being
+worked**.
+
+It sits beside § _Approved — the ninth board column_ and § _Implemented — the eighth board column_,
+whose method and shape it follows, and amends neither mock: `approved-column.mock.html` and
+`implemented-column.mock.html` stay records of their moment. The delta mock draws only what is new:
+
+| Panel | What it shows                                                                                                                                                                                                                                                                    |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | The default board, populated: ten columns in order, To plan in slot 6 immediately after Planning, holding a story and a subtask, each wearing the To plan tag; a childless story in To Do wearing the computed To plan slot pill. The row opens scrolled to Planning and To plan |
+| 2     | To plan empty, in the board's own empty-column treatment (header, count `0`, _No work items_), beside Planning holding one card — light and dark                                                                                                                                 |
+| 3     | The item page's status picker open on a To Do item: To plan offered after Planning, its dot in the new hue — light and dark                                                                                                                                                      |
+| 4     | The state tag: To plan · Planning · In Progress · the computed To plan slot pill, at full size and glyph-only — light and dark                                                                                                                                                   |
+| 5     | The list chip: In Progress · Planning · Implemented · Approved · To plan — light and dark                                                                                                                                                                                        |
+| 6     | Every palette in both themes: the ten dots in board order, then the To plan dot, tag and chip beside Planning's and Blocked's                                                                                                                                                    |
+
+## The hue — `--el-status-to-plan`
+
+```css
+--el-status-to-plan: color-mix(in srgb, var(--color-warning) 45%, var(--color-ink));
+```
+
+**Blocked's amber, taken deep toward the ink.** To plan and Blocked make the same claim to a reader,
+_this cannot proceed_, for different reasons: Blocked waits on other work, To plan waits on its own
+rewrite. So To plan is drawn in Blocked's family and pushed well away from it, the way Approved is
+Done's green one ink step deeper. It reads as a deep umber on a light page and a pale sand on a dark
+one, because `--color-ink` flips with the theme.
+
+**One expression for every palette, no per-palette block.** Both inputs are Tier-0 sources every
+palette declares, so each palette re-skins it from its own `--color-warning` and `--color-ink`. That is
+the "source" of every row below. No palette needs an override, so no palette block, and no
+both-themes pairing (the cascade trap the separation suite enforces) is owed.
+
+**Measured, not proposed**, with `tests/theme/statusHueSeparation.test.ts`'s own resolver and metrics
+(`loadTokenLayer` · `declaredIn` · `resolveValue` from `tests/theme/paletteCascade.ts`; `deltaE2000` ·
+`contrast` · `mixSrgb` from `tests/theme/colorMetrics.ts`) against the nine shipped default status hues,
+in all fourteen palettes × both themes:
+
+| Palette   | Theme | Resolved  | Nearest status, ΔE2000 | Contrast on `--el-card` / `--el-surface` / `--el-page-bg` |
+| --------- | ----- | --------- | ---------------------- | --------------------------------------------------------- |
+| motir     | light | `#632b15` | blocked 20.6           | 11.13 / 9.75 / 11.13                                      |
+| motir     | dark  | `#eec1a6` | blocked 16.4           | 11.86 / 10.73 / 11.86                                     |
+| amethyst  | light | `#72370e` | blocked 24.8           | 9.26 / 8.50 / 9.26                                        |
+| amethyst  | dark  | `#e9af87` | blocked 22.1           | 9.99 / 9.07 / 9.99                                        |
+| cobalt    | light | `#602c1f` | blocked 22.2           | 11.19 / 9.96 / 11.19                                      |
+| cobalt    | dark  | `#ebc0a9` | blocked 17.0           | 11.37 / 10.20 / 11.37                                     |
+| evergreen | light | `#5c3713` | blocked 20.5           | 10.44 / 9.31 / 10.44                                      |
+| evergreen | dark  | `#f1c59b` | blocked 15.9           | 11.83 / 10.83 / 11.83                                     |
+| spectrum  | light | `#78341a` | blocked 26.6           | 9.11 / 8.22 / 9.11                                        |
+| spectrum  | dark  | `#f3bfaa` | blocked 16.4           | 11.37 / 10.48 / 11.37                                     |
+| amber     | light | `#5e3416` | in-review 20.0         | 10.61 / 9.73 / 10.61                                      |
+| amber     | dark  | `#f2cfa6` | blocked 14.0           | 13.13 / 10.73 / 13.13                                     |
+| sienna    | light | `#623615` | in-review 18.1         | 9.78 / 9.05 / 9.78                                        |
+| sienna    | dark  | `#f8d09f` | implemented 12.0       | 12.91 / 11.65 / 12.91                                     |
+| garnet    | light | `#5a2f0d` | cancelled 20.5         | 11.37 / 9.89 / 11.37                                      |
+| garnet    | dark  | `#f4d0a6` | blocked 13.9           | 13.26 / 11.95 / 13.26                                     |
+| citrine   | light | `#44362c` | implemented 14.0       | 11.60 / 10.54 / 11.60                                     |
+| citrine   | dark  | `#fae9ad` | blocked 12.3           | 16.43 / 14.21 / 16.43                                     |
+| candy     | light | `#5f3e15` | blocked 19.9           | 9.42 / 8.32 / 9.42                                        |
+| candy     | dark  | `#f6de8e` | blocked 11.9           | 13.90 / 11.88 / 13.90                                     |
+| lagoon    | light | `#5c3f14` | blocked 20.4           | 9.44 / 8.63 / 9.44                                        |
+| lagoon    | dark  | `#f5de8e` | blocked 12.1           | 13.74 / 11.04 / 13.74                                     |
+| olive     | light | `#5d3f0f` | implemented 18.4       | 9.43 / 8.47 / 9.43                                        |
+| olive     | dark  | `#f5de8c` | blocked 11.9           | 14.05 / 11.95 / 14.05                                     |
+| contrast  | light | `#5f3f12` | implemented 16.9       | 9.28 / 8.35 / 9.28                                        |
+| contrast  | dark  | `#f6de8d` | blocked 11.8           | 13.19 / 10.77 / 13.19                                     |
+| midnight  | light | `#5c3f14` | blocked 20.4           | 9.18 / 8.48 / 9.18                                        |
+| midnight  | dark  | `#f5de8e` | blocked 12.1           | 13.17 / 11.91 / 13.17                                     |
+
+**All 28 palette × theme contexts clear the floor of ΔE2000 10**; the global minimum is **11.8**
+(contrast/dark, against Blocked). Contrast is **8.22 – 16.43:1** on card, surface and page, against the
+3:1 bar for a graphical object, so no `KNOWN_SUB_BAR` entry is owed.
+
+**The ratio is the interior of a window, chosen by sweep.** At 40% the worst pair is 10.6 (sienna/dark
+against Implemented); at 35% it falls under the floor (9.4). At 50% the worst pair is 10.3 (contrast/dark
+against Blocked), at 55% 9.0. 45% is the top of that window. A palette change that moves `--color-warning`
+or `--color-ink` must be re-measured, not nudged; the separation suite will do it on the build, because
+the status joins the default workflow and the suite derives its population from it.
+
+The sweep covered every saturated Tier-0 source, each mixed toward ink, charcoal and the background at
+5% steps, and every pair of sources mixed at 10% steps. Only a handful of expressions clear 10 in all
+28 contexts; this one has the largest margin among those whose contrast stays far above 3:1.
+
+### The full distance table
+
+Every default status hue, nearest first, per context — the record behind the "nearest" column above.
+
+| Palette   | Theme | ΔE2000 to each default status                                                                                                                |
+| --------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| motir     | light | blocked 20.6 · implemented 25.8 · cancelled 31.0 · in-review 34.8 · approved 35.5 · todo 39.8 · in-progress 42.2 · done 45.5 · planning 49.4 |
+| motir     | dark  | blocked 16.4 · implemented 18.7 · cancelled 27.2 · approved 30.7 · in-review 31.2 · todo 35.9 · in-progress 36.7 · done 38.3 · planning 38.3 |
+| amethyst  | light | blocked 24.8 · cancelled 27.4 · approved 36.3 · todo 40.8 · implemented 41.3 · in-review 46.3 · in-progress 48.0 · planning 49.7 · done 52.3 |
+| amethyst  | dark  | blocked 22.1 · cancelled 29.1 · approved 32.3 · implemented 35.1 · todo 38.9 · planning 40.5 · done 42.3 · in-review 47.0 · in-progress 48.5 |
+| cobalt    | light | blocked 22.2 · in-review 30.5 · cancelled 33.0 · approved 36.5 · in-progress 39.6 · todo 42.8 · done 47.2 · implemented 48.4 · planning 49.4 |
+| cobalt    | dark  | blocked 17.0 · cancelled 30.7 · approved 32.2 · implemented 35.7 · in-progress 36.1 · in-review 37.2 · planning 38.2 · todo 38.4 · done 38.6 |
+| evergreen | light | blocked 20.5 · in-review 29.3 · cancelled 30.0 · approved 35.9 · done 36.6 · planning 42.2 · todo 43.5 · implemented 44.0 · in-progress 44.6 |
+| evergreen | dark  | blocked 15.9 · cancelled 25.6 · in-review 30.9 · approved 31.0 · done 36.3 · planning 37.0 · implemented 40.1 · todo 40.6 · in-progress 41.7 |
+| spectrum  | light | blocked 26.6 · cancelled 30.2 · implemented 30.9 · approved 38.0 · todo 38.9 · in-review 42.4 · in-progress 45.1 · planning 50.7 · done 53.4 |
+| spectrum  | dark  | blocked 16.4 · implemented 27.9 · cancelled 30.6 · approved 33.9 · in-review 37.0 · in-progress 37.3 · todo 39.5 · planning 40.8 · done 42.3 |
+| amber     | light | in-review 20.0 · blocked 20.3 · implemented 27.5 · cancelled 28.8 · approved 32.6 · todo 39.3 · done 42.3 · in-progress 43.4 · planning 45.0 |
+| amber     | dark  | blocked 14.0 · in-review 17.6 · approved 27.5 · cancelled 31.2 · done 34.4 · planning 34.5 · implemented 37.0 · in-progress 40.3 · todo 42.3 |
+| sienna    | light | in-review 18.1 · implemented 21.2 · blocked 22.8 · cancelled 24.7 · approved 31.3 · todo 33.9 · done 39.5 · in-progress 43.9 · planning 44.9 |
+| sienna    | dark  | implemented 12.0 · blocked 12.7 · in-review 20.4 · approved 25.0 · cancelled 26.7 · done 34.1 · planning 35.8 · todo 38.2 · in-progress 42.2 |
+| garnet    | light | cancelled 20.5 · blocked 21.1 · in-review 24.1 · todo 29.4 · approved 31.9 · implemented 33.5 · done 39.8 · in-progress 44.7 · planning 46.1 |
+| garnet    | dark  | blocked 13.9 · approved 25.9 · cancelled 26.7 · done 33.5 · planning 34.8 · in-review 35.7 · todo 36.0 · implemented 40.9 · in-progress 44.3 |
+| citrine   | light | implemented 14.0 · cancelled 17.0 · approved 22.2 · blocked 29.8 · planning 31.5 · todo 31.8 · in-review 32.4 · done 35.4 · in-progress 41.1 |
+| citrine   | dark  | blocked 12.3 · approved 15.4 · implemented 21.1 · done 24.1 · in-review 32.5 · cancelled 33.6 · planning 43.3 · todo 48.1 · in-progress 54.9 |
+| candy     | light | blocked 19.9 · cancelled 25.8 · approved 26.1 · done 31.1 · implemented 35.3 · todo 36.7 · in-review 41.6 · in-progress 42.2 · planning 47.5 |
+| candy     | dark  | blocked 11.9 · approved 20.4 · done 23.8 · cancelled 30.4 · implemented 37.7 · in-progress 44.1 · todo 44.7 · in-review 51.8 · planning 66.5 |
+| lagoon    | light | blocked 20.4 · implemented 21.2 · approved 25.4 · cancelled 25.6 · done 31.7 · in-review 36.1 · todo 36.6 · planning 37.4 · in-progress 46.7 |
+| lagoon    | dark  | blocked 12.1 · approved 20.4 · done 24.9 · implemented 26.5 · cancelled 28.5 · planning 32.5 · in-review 40.3 · todo 44.5 · in-progress 53.1 |
+| olive     | light | implemented 18.4 · blocked 20.0 · in-review 20.8 · cancelled 22.9 · approved 24.7 · done 31.6 · todo 33.7 · planning 37.8 · in-progress 47.7 |
+| olive     | dark  | blocked 11.9 · implemented 15.2 · in-review 15.4 · approved 20.3 · cancelled 22.8 · done 23.7 · planning 32.5 · todo 39.1 · in-progress 53.4 |
+| contrast  | light | implemented 16.9 · blocked 19.7 · cancelled 22.1 · approved 25.3 · done 31.7 · todo 33.4 · planning 38.2 · in-review 46.2 · in-progress 47.0 |
+| contrast  | dark  | blocked 11.8 · implemented 17.9 · approved 20.3 · done 24.1 · cancelled 24.3 · planning 32.7 · todo 40.2 · in-progress 53.3 · in-review 56.4 |
+| midnight  | light | blocked 20.4 · approved 25.4 · cancelled 25.6 · done 31.6 · in-review 32.1 · planning 34.7 · todo 36.6 · implemented 44.6 · in-progress 46.7 |
+| midnight  | dark  | blocked 12.1 · approved 20.4 · done 24.8 · cancelled 28.5 · planning 30.7 · in-review 32.2 · todo 44.5 · implemented 50.9 · in-progress 53.1 |
+
+## The dot
+
+The dot paints `var(--el-status-to-plan)` at full strength, as every status dot does
+(`statusDotColor`). The status card owes the key entry beside the token:
+
+```ts
+STATUS_KEY_EL.to_plan = '--el-status-to-plan';
+```
+
+Without it the dot falls back to the `in_progress` category, so To plan's option in the status picker
+would wear In Progress's blue — the collapse the Planning, Implemented and Approved entries each exist to
+avoid. Panel 3 draws the picker with the entry in place.
+
+## The state tag — an EIGHTH tint, `--el-tint-clay`, and `CirclePause`
+
+The state tag (canvas card, board card, quick view, item page eyebrow) speaks the flat tint family. All
+seven are held: peach Blocked, sky In Progress, rose Implemented, yellow Planning, lavender In Review,
+sage Approved, mint Done, with `--el-muted` for To Do and Cancelled. Borrowing one re-creates two
+statuses that render as one, and falling back to the category draws sky, In Progress's tag. So To plan
+takes an eighth tint:
+
+```css
+--el-tint-clay: color-mix(in srgb, var(--el-status-to-plan) 30%, var(--color-surface));
+```
+
+**The status hue, quietened to a fill.** It rides the status token, so it moves with it and needs no
+palette block. It is a `color-mix` rather than a `var(--color-tint-*)` alias for the reason
+`--el-tint-sage` gives: a new Tier-0 tint would oblige every palette block to declare it.
+
+Measured against the seven tints and `--el-muted`, and for `--el-text-strong` ink on it:
+
+| Palette   | Theme | Resolved  | Nearest tint, ΔE2000 | `--el-text-strong` on it |
+| --------- | ----- | --------- | -------------------- | ------------------------ |
+| motir     | light | `#c4b5b0` | rose 13.1            | 7.86                     |
+| motir     | dark  | `#584b45` | peach 14.7           | 5.93                     |
+| amethyst  | light | `#cebcaf` | peach 10.7           | 6.68                     |
+| amethyst  | dark  | `#58473b` | peach 9.9            | 7.01                     |
+| cobalt    | light | `#c3b7b7` | rose 12.9            | 7.24                     |
+| cobalt    | dark  | `#544e52` | peach 17.0           | 5.96                     |
+| evergreen | light | `#c2bbae` | peach 13.0           | 7.65                     |
+| evergreen | dark  | `#564f3f` | yellow 13.7          | 6.00                     |
+| spectrum  | light | `#cfb9b8` | rose 11.9            | 7.92                     |
+| spectrum  | dark  | `#5d4a55` | rose 14.6            | 5.87                     |
+| amber     | light | `#c7bbb3` | peach 12.6           | 8.43                     |
+| amber     | dark  | `#5e574f` | yellow 17.7          | 4.87                     |
+| sienna    | light | `#cdb99a` | peach 11.4           | 7.32                     |
+| sienna    | dark  | `#605340` | yellow 14.2          | 5.54                     |
+| garnet    | light | `#c2b5ab` | peach 12.9           | 8.70                     |
+| garnet    | dark  | `#5b5144` | yellow 14.8          | 5.88                     |
+| citrine   | light | `#bfbbb9` | muted 13.3           | 9.04                     |
+| citrine   | dark  | `#5d5949` | sage 15.2            | 5.95                     |
+| candy     | light | `#ceb6b2` | rose 12.2            | 6.31                     |
+| candy     | dark  | `#70534c` | sage 15.8            | 5.11                     |
+| lagoon    | light | `#b7c0b4` | sage 10.9            | 6.38                     |
+| lagoon    | dark  | `#4f6150` | sage 10.0            | 5.17                     |
+| olive     | light | `#c3bcac` | sage 13.0            | 5.81                     |
+| olive     | dark  | `#615a40` | sage 14.9            | 6.00                     |
+| contrast  | light | `#c5bbad` | peach 12.8           | 8.60                     |
+| contrast  | dark  | `#676048` | sage 15.0            | 5.41                     |
+| midnight  | light | `#c4bbb0` | sage 14.0            | 5.91                     |
+| midnight  | dark  | `#615a45` | sage 15.3            | 5.74                     |
+
+**Worst ΔE2000 9.9** (amethyst/dark against peach), against the family's floor of 2 and the family's
+own worst shipped pair of **2.8** (citrine/dark, lavender against sky). **Worst ink contrast 4.87:1**
+(amber/dark), above AA's 4.5. The 30% ratio is the top of its window: 32% separates further (10.8) but
+takes the ink to 4.64; 26% (sage's ratio) leaves clay within 8 of peach in amethyst/dark.
+
+> **This measurement is by hand, and nothing in CI repeats it.** `familyHueSeparation.test.ts` measures
+> priority, label, avatar and selection, not the tint family, as § _Approved_ already records. A palette
+> that moves `--color-warning`, `--color-ink` or `--color-surface` needs this table re-taken.
+
+**The glyph is `CirclePause`.** A ring around a pause: stopped, and not being worked, which is exactly
+what To plan means to a reader. It joins the ramp's `Circle*` vocabulary (`CircleDot` In Progress ·
+`CircleDotDashed` Planning · `CircleEllipsis` Implemented · `CircleCheck` Approved · `CircleDashed`
+To Do) and is neither Planning's `CircleDotDashed` nor the slot pill's `ListPlus`. It is `aria-hidden`;
+the label stays the accessible name, and glyph-only it rides `aria-label` on `role="img"` as every slot
+pill does. Panel 4 draws it at full size and glyph-only.
+
+The status card owes the row:
+
+```ts
+META_BY_KEY.to_plan = {
+  icon: CirclePause,
+  tint: 'bg-(--el-tint-clay)',
+  text: 'text-(--el-text-strong)',
+};
+```
+
+## The list chip — its OWN tone and glyph: yes
+
+**Decision: `StatusPill` gives To plan its own tone and glyph.** Without one, To plan's chip is the
+`in_progress` category's chip, In Progress's sky tint, which tells a reader the work has **started** —
+the opposite of what the status means. Planning and In Review still share that chip (a gap the two
+earlier column sections name and leave), but neither of them makes a false claim about starting; To
+plan would.
+
+- **The tone** is a new `Pill` status tone, `to-plan`, on the documented chip recipe the
+  `implemented` and `approved` tones use:
+  `bg-[color-mix(in_srgb,var(--el-status-to-plan)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent`.
+- **The glyph** is `CirclePause`, `h-3 w-3`, `aria-hidden` — the same mark as the state tag, so the two
+  surfaces tell the same story about the same status.
+- `TONE_BY_STATUS_KEY.to_plan = 'to-plan'` and `GLYPH_BY_STATUS_KEY.to_plan = CirclePause`.
+
+Panel 5 draws it beside In Progress, Planning, Implemented and Approved.
+
+### ⚠️ The chip is told apart by its glyph, not its tint — with a control
+
+At 14% over the surface every status chip compresses into a narrow band. Measured with the same recipe
+over all ten default hues, To plan's chip is nearest Implemented's at **ΔE2000 1.7** (citrine/light).
+The control is the same recipe over the nine shipped hues, whose worst pair is **0.9** (motir/light,
+To Do against Cancelled). To plan's worst pair is about twice the worst pair the recipe already yields.
+So, as for Implemented and Approved, the glyph is the mechanism and not decoration (finding #35); do
+not read the dot's 11.8 as a claim about the chip.
+
+## The column — slot 6, immediately after Planning
+
+The default board's order becomes **To Do · Blocked · In Progress · Implemented · Planning · To plan ·
+In Review · Approved · Done · Cancelled**. To plan goes immediately after Planning, so the two
+re-planning states sit side by side: To plan is the state a plan parks into Planning. It is one insert
+between Planning and In Review; nothing existing moves, and **Implemented keeps slot 4**, the invariant
+the eighth column's section pinned.
+
+**The fold, from the shipped geometry.** A column is `w-72` (288px) in a `gap-4` row, 304px a column,
+beside a 240px rail (56px collapsed), as § _Approved_ measured. Adding a tenth column after slot 4:
+
+| Viewport                    | Content | Fully visible (9 → 10) | Planning (slot 5) | To plan (slot 6) | Scroll distance (9 → 10) |
+| --------------------------- | ------- | ---------------------- | ----------------- | ---------------- | ------------------------ |
+| 1280 × 800                  | 976px   | 3 → 3                  | off-screen        | off-screen       | 1744px → 2048px          |
+| 1366 × 768                  | 1062px  | 3 → 3                  | off-screen        | off-screen       | 1658px → 1962px          |
+| 1440 × 900                  | 1136px  | 3 → 3                  | off-screen        | off-screen       | 1584px → 1888px          |
+| 1512 × 982                  | 1208px  | 4 → 4                  | off-screen        | off-screen       | 1512px → 1816px          |
+| 1920 × 1080                 | 1616px  | 5 → 5                  | **FULL**          | 96px sliver      | 1104px → 1408px          |
+| 1440 × 900 · rail collapsed | 1320px  | 4 → 4                  | 104px sliver      | off-screen       | 1400px → 1704px          |
+
+These figures are derived from that geometry, not re-rendered at each viewport; the nine-column
+figures they extend were measured in Chromium. **What gives: nothing.** The fully visible count is
+unchanged everywhere; the cost is one more column of scroll, 304px. The board's own answers to a long
+board (the rail collapses, the row scrolls and snaps, the board filter narrows it) are unchanged.
+
+The column header, the card, the count badge and the empty state are the shipped `BoardColumn` and
+`BoardCard` unchanged: `--el-surface` column, `--el-border`, `--el-count-bg` / `--el-count-text`,
+`--radius-card`, _No work items_ in the dashed empty well. To plan adds a column, not a column style.
+The board card carries no status chip beyond its state tag, because the column is the status.
+
+## Told apart from the computed "To plan" slot pill
+
+The product already draws a computed pill labelled _To plan_ on a childless story or epic in a To Do
+status: its children have not been laid yet. It is a white chip (`--el-page-bg` fill, `--el-border`
+edge) with a `ListPlus` glyph in `--el-text-secondary`. A work item at the To plan **status** is in the
+`in_progress` category, so the computed pill never applies to it and its slot shows the status tag: the
+two never render on one card. They do render on one board, so they must read apart without the label:
+
+|       | The To plan status tag                | The computed To plan slot pill                                    |
+| ----- | ------------------------------------- | ----------------------------------------------------------------- |
+| Fill  | `--el-tint-clay` (a warm filled chip) | `--el-page-bg` with an `--el-border` edge (a white outlined chip) |
+| Glyph | `CirclePause` (a ring with a pause)   | `ListPlus` (a list with a plus)                                   |
+| Ink   | `--el-text-strong`                    | `--el-text-strong`, glyph `--el-text-secondary`                   |
+
+Filled against outlined, and a ring against a list: the shape of the chip and the shape of the glyph
+both differ, so neither depends on the hue. Panel 1 draws both on one board (To Do column against To
+plan column) and panel 4 side by side, at full size and glyph-only. Neither label changes; whether
+either is relabelled is not this design's call.
+
+## The status picker
+
+`StatusPicker` is a `Combobox` over the legal targets under the project's restricted policy. Panel 3
+draws it open on a To Do item, so its options are To Do's targets in board order: To Do · Blocked ·
+In Progress · Planning · **To plan** · Cancelled. To plan's option row is the shipped row (dot, label,
+`--radius-control`, `--spacing-control-x/y`), its dot in `--el-status-to-plan`. The picker adds an
+option, not a control, and keeps its `role="combobox"` / `role="listbox"` / `role="option"` structure.
+
+## What the build owes, in one place
+
+For the card that adds the status, which waits on this design:
+
+1. `--el-status-to-plan` and `--el-tint-clay` in the Tier-3 base block of
+   `packages/design-system/theme.css`, with the expressions above. No palette block.
+2. `STATUS_KEY_EL.to_plan`, `META_BY_KEY.to_plan`, `TONE_BY_STATUS_KEY.to_plan`,
+   `GLYPH_BY_STATUS_KEY.to_plan`, and the `to-plan` tone on `Pill`.
+3. The column at slot 6 for new and existing default-workflow projects, Implemented still at slot 4.
+4. `design/roadmap/design-notes.md` names the tint family as seven; it owes a one-line note naming the
+   eighth, as it did for sage.
+
+## What this design does NOT specify
+
+- How a work item reaches To plan or leaves it: no comment, no mark, no transition is drawn. The design
+  shows what a work item at To plan looks like, not how it got there.
+- The status's catalogue strings beyond the English label _To plan_, taken as named.
+- Un-collapsing Planning and In Review from In Progress's chip: still nobody's, as before.
+- Renaming either _To plan_ label.
+
+## Token / a11y rules honoured
+
+- **Colour** only through `--el-*`: the two new tokens, each a `color-mix` of Tier-0 sources declared
+  the way the Tier-3 base declares its own (`:root, [data-appearance-scope]`), and the shipped
+  `--el-status-*`, `--el-tint-*`, `--el-surface`, `--el-page-bg`, `--el-border`, `--el-count-*`,
+  `--el-text`, `--el-text-strong` and `--el-text-secondary`. No raw colour appears in the mock's markup;
+  the hex values in this section are measurements of resolved tokens.
+- **Shape** through element-semantic tokens: `--radius-badge` and `--spacing-chip-x(-6)` /
+  `--spacing-chip-y` for the chip and tag, `--radius-card` for the column and the menu,
+  `--radius-control` and `--spacing-control-x/y` for the picker rows, `--radius-input` and
+  `--height-control` for its trigger. `rounded-full` only on the status dot.
+- **Not colour alone** (finding #35): every To plan mark carries its label and the `CirclePause` glyph.
+- **AA**: the tag's `--el-text-strong` ink is at least 4.87:1 on clay; the chip's at least the level
+  the shared 14% recipe gives Implemented and Approved. The board chrome uses `--el-text`,
+  `--el-text-strong` and `--el-text-secondary` only.
+
+## How this asset was produced
+
+Rendered with `renderMock` from a temporary generator (not committed), in two steps. A happy-dom step
+rendered the shipped `BoardColumn` (with `BoardCard`), `StatusPicker` (open), `StatusPill` and the
+`WorkItemStateTags` slot pills through `NextIntlClientProvider` with the `en` catalogue, writing each
+panel's markup out; the To plan rows come from copies of `statusColor.ts`, `canvasStatusMeta.ts` and
+`StatusPill.tsx` with the entries above added, swapped in with `vi.mock`. A node step assembled the
+panels with `renderMock`, the two new tokens passed in its leading CSS. Presentation-only edits to the
+dumped markup, all named: a column's viewport-tall height is a fixed sheet height; the board card's
+`group` hooks are dropped; the portaled listbox sits in its panel (`position: static`); a trailing
+script opens panel 1's row scrolled to Planning and To plan. The measurements came from a third
+temporary step that swept candidate expressions through the separation suite's own resolver.
+Rendered headlessly in Chromium at 1600px and every panel inspected in both themes, read at `main`
+@ `58d9e3c9`.
