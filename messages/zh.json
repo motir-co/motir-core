@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "生产应用崩溃了",
             "desc": "Motir 为你管理的项目托管的应用崩溃了，或未通过健康检查。"
+          },
+          "production_credits_exhausted": {
+            "label": "应用运行期间额度用尽",
+            "desc": "Motir 在生产环境托管组织的应用时，组织的额度余额降到了零以下。"
           }
         },
         "soon": "即将推出",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "智能体要求修改 <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠",
       "pageMentioned": "<s>{actor}</s> 在 <s>{page}</s> 中提到了你",
-      "pageReplied": "<s>{actor}</s> 回复了 <s>{page}</s> 上的一个讨论"
+      "pageReplied": "<s>{actor}</s> 回复了 <s>{page}</s> 上的一个讨论",
+      "productionCreditsExhausted": "{count, plural, other {<s>{apps}</s> 正在生产环境运行，但你组织的额度已低于零}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。"
-    }
+      "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。",
+      "productionCreditsExhausted": "从 {date} 起，常开的应用将在空闲时暂停"
+    },
+    "appsMore": "{count, plural, other {另外 # 个}}"
   },
   "orgAdmin": {
     "menu": {

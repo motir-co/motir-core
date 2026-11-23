@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "프로덕션 앱이 중단되었습니다",
             "desc": "관리하는 프로젝트에서 Motir가 호스팅하는 앱이 중단되었거나 상태 확인에 실패했습니다."
+          },
+          "production_credits_exhausted": {
+            "label": "앱 실행 중 크레딧 소진",
+            "desc": "Motir가 조직의 앱을 프로덕션에서 호스팅하는 동안 조직의 크레딧 잔액이 0 미만이 되었습니다."
           }
         },
         "soon": "곧 제공",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "에이전트가 <s>{key}</s>에 변경을 요청했습니다",
       "agentHibernatedByAdmin": "<s>{actor}</s> 님이 내 에이전트 <s>{agent}</s>을(를) 최대 절전 모드로 전환했습니다",
       "pageMentioned": "<s>{actor}</s>님이 <s>{page}</s>에서 나를 멘션했습니다",
-      "pageReplied": "<s>{actor}</s>님이 <s>{page}</s>의 스레드에 답글을 남겼습니다"
+      "pageReplied": "<s>{actor}</s>님이 <s>{page}</s>의 스레드에 답글을 남겼습니다",
+      "productionCreditsExhausted": "{count, plural, other {<s>{apps}</s>이(가) 프로덕션에서 실행 중인 동안 조직의 크레딧이 0 미만이 되었습니다}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "조직 관리자가 {time}에 중지했습니다. 파일은 보존되며, 에이전트에서 깨울 수 있습니다."
-    }
+      "agentHibernatedByAdmin": "조직 관리자가 {time}에 중지했습니다. 파일은 보존되며, 에이전트에서 깨울 수 있습니다.",
+      "productionCreditsExhausted": "{date}부터 항상 켜짐 앱은 유휴 시 일시 중지됩니다"
+    },
+    "appsMore": "{count, plural, other {외 #개}}"
   },
   "orgAdmin": {
     "menu": {

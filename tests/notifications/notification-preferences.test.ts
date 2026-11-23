@@ -68,6 +68,8 @@ describe('notificationPreferencesService.getMatrix', () => {
       'review_sent_back',
       // MOTIR-12106 — a hosted production app crashed, appended last.
       'production_app_crashed',
+      // MOTIR-12166 — the organisation's credits went below zero while its apps run.
+      'production_credits_exhausted',
     ]);
     // Direct/mention events default ON for both channels — INCLUDING the
     // access-refused row, and its email arm is a decision rather than an

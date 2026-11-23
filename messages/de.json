@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "Eine Produktions-App ist abgestürzt",
             "desc": "Eine App, die Motir für ein von Ihnen verwaltetes Projekt hostet, ist abgestürzt oder hat ihre Zustandsprüfung nicht bestanden."
+          },
+          "production_credits_exhausted": {
+            "label": "Credits aufgebraucht, während Apps live sind",
+            "desc": "Das Credit-Guthaben Ihrer Organisation ist unter null gefallen, während Motir ihre Apps in Produktion hostet."
           }
         },
         "soon": "Demnächst",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "Ein Agent hat Änderungen an <s>{key}</s> angefordert",
       "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt",
       "pageMentioned": "<s>{actor}</s> hat Sie in <s>{page}</s> erwähnt",
-      "pageReplied": "<s>{actor}</s> hat auf <s>{page}</s> in einem Thread geantwortet"
+      "pageReplied": "<s>{actor}</s> hat auf <s>{page}</s> in einem Thread geantwortet",
+      "productionCreditsExhausted": "Die Credits Ihrer Organisation sind unter null, während {count, plural, one {<s>{apps}</s> in Produktion läuft} other {<s>{apps}</s> in Produktion laufen}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Ein Admin der Organisation hat ihn um {time} gestoppt. Seine Dateien bleiben erhalten; wecken Sie ihn unter Agenten auf."
-    }
+      "agentHibernatedByAdmin": "Ein Admin der Organisation hat ihn um {time} gestoppt. Seine Dateien bleiben erhalten; wecken Sie ihn unter Agenten auf.",
+      "productionCreditsExhausted": "Ab {date} pausieren dauerhaft aktive Apps bei Inaktivität"
+    },
+    "appsMore": "{count, plural, one {# weitere} other {# weitere}}"
   },
   "orgAdmin": {
     "menu": {

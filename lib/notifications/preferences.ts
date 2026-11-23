@@ -51,6 +51,10 @@ export const NOTIFICATION_EVENT_TYPE = {
    *  MOTIR-9799 · MOTIR-12106). Actorless; one row per crash event, to each
    *  project administrator. */
   productionAppCrashed: 'production_app_crashed',
+  /** The organisation's credit balance went BELOW ZERO while Motir runs one of
+   *  its production apps (MOTIR-12166 · Decision MOTIR-12100 §9). Actorless; one
+   *  row per transition below zero, to each organisation owner and admin. */
+  productionCreditsExhausted: 'production_credits_exhausted',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -138,6 +142,15 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // user's standing choice for when one ships.
   {
     type: NOTIFICATION_EVENT_TYPE.productionAppCrashed,
+    settable: true,
+    defaults: { email: true, in_app: true },
+  },
+  // APPENDED, for the same reason (MOTIR-12166). The apps keep running below zero,
+  // and the row is the one thing that tells an administrator before the 7-day
+  // switch to suspend when idle. Email defaults on like every row above and has
+  // no producer yet, as the crash row's has none.
+  {
+    type: NOTIFICATION_EVENT_TYPE.productionCreditsExhausted,
     settable: true,
     defaults: { email: true, in_app: true },
   },

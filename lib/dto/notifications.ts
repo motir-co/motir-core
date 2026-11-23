@@ -55,7 +55,8 @@ export type NotificationData =
   | NotificationReviewSentBackData
   | NotificationPageMentionedData
   | NotificationPageRepliedData
-  | NotificationProductionAppCrashedData;
+  | NotificationProductionAppCrashedData
+  | NotificationProductionCreditsExhaustedData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -150,6 +151,27 @@ export interface NotificationProductionAppCrashedData {
   reason: string;
   /** When it happened, ISO-8601. */
   occurredAt: string;
+}
+
+/**
+ * The organisation's credit balance went BELOW ZERO while Motir runs its
+ * production apps (MOTIR-12166 · Decision MOTIR-12100 §9) — written once per
+ * transition below zero, to every owner and admin of the organisation. No actor:
+ * the meter saw it. The apps keep running; `suspendFrom` is when an always-on
+ * app whose target can suspend is switched to suspend when idle, if the balance
+ * is still below zero. The row links to the organisation's billing page.
+ *
+ * ⚠️ NAMES AND TIMES ONLY — never a balance, an amount or a provider id.
+ */
+export interface NotificationProductionCreditsExhaustedData {
+  kind: 'production_credits_exhausted';
+  /** The production apps running when the balance went below zero, by the
+   *  repository the drawer names and its project; at least one. */
+  apps: Array<{ repositoryName: string; projectKey: string }>;
+  /** When the balance was first read below zero, ISO-8601. */
+  exhaustedSince: string;
+  /** `exhaustedSince` plus the 7 days of §9, ISO-8601. */
+  suspendFrom: string;
 }
 
 /**

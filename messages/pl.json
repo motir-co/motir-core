@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "Aplikacja produkcyjna uległa awarii",
             "desc": "Aplikacja hostowana przez Motir dla projektu, którym administrujesz, uległa awarii lub nie przeszła kontroli stanu."
+          },
+          "production_credits_exhausted": {
+            "label": "Kredyty wyczerpane, gdy aplikacje działają",
+            "desc": "Saldo kredytów Twojej organizacji spadło poniżej zera, gdy Motir hostuje jej aplikacje w produkcji."
           }
         },
         "soon": "Wkrótce",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "Agent poprosił o zmiany w <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>",
+      "productionCreditsExhausted": "Kredyty Twojej organizacji spadły poniżej zera, gdy {count, plural, one {w produkcji działa <s>{apps}</s>} few {w produkcji działają <s>{apps}</s>} many {w produkcji działa <s>{apps}</s>} other {w produkcji działa <s>{apps}</s>}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci."
-    }
+      "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci.",
+      "productionCreditsExhausted": "Od {date} aplikacje zawsze włączone będą wstrzymywane przy bezczynności"
+    },
+    "appsMore": "{count, plural, one {# więcej} few {# więcej} many {# więcej} other {# więcej}}"
   },
   "orgAdmin": {
     "menu": {

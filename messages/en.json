@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "A production app crashed",
             "desc": "An app Motir hosts for a project you administer crashed or failed its health check."
+          },
+          "production_credits_exhausted": {
+            "label": "Credits ran out while apps are live",
+            "desc": "Your organization's credit balance went below zero while Motir hosts its apps in production."
           }
         },
         "soon": "Soon",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mentioned you on <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>",
+      "productionCreditsExhausted": "Your organization's credits are below zero while {count, plural, one {<s>{apps}</s> is} other {<s>{apps}</s> are}} live in production"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents."
-    }
+      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents.",
+      "productionCreditsExhausted": "From {date}, always-on apps suspend when idle"
+    },
+    "appsMore": "{count, plural, one {# more} other {# more}}"
   },
   "orgAdmin": {
     "menu": {

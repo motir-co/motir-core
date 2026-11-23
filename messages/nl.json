@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "Een productie-app is gecrasht",
             "desc": "Een app die Motir host voor een project dat je beheert, is gecrasht of heeft de statuscontrole niet doorstaan."
+          },
+          "production_credits_exhausted": {
+            "label": "Credits op terwijl apps live zijn",
+            "desc": "Het creditsaldo van je organisatie is onder nul gezakt terwijl Motir haar apps in productie host."
           }
         },
         "soon": "Binnenkort",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet",
       "pageMentioned": "<s>{actor}</s> heeft je vermeld op <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>",
+      "productionCreditsExhausted": "De credits van je organisatie staan onder nul terwijl {count, plural, one {<s>{apps}</s> in productie draait} other {<s>{apps}</s> in productie draaien}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents."
-    }
+      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents.",
+      "productionCreditsExhausted": "Vanaf {date} pauzeren altijd-aan-apps bij inactiviteit"
+    },
+    "appsMore": "{count, plural, one {nog #} other {nog #}}"
   },
   "orgAdmin": {
     "menu": {

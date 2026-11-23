@@ -97,6 +97,8 @@ const MEASURED = [
   'lib/services/productionUsageService.ts',
   'lib/jobs/definitions/productionUsageAccrual.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/usage/route.ts',
+  // Bug MOTIR-12166 — the administrators are told when the credits go below zero.
+  'lib/services/productionCreditsNotificationService.ts',
 ];
 
 /**

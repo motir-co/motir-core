@@ -35,6 +35,7 @@ import {
   type ProductionUsageSliceInput,
 } from '@/lib/repositories/productionUsageSliceRepository';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
+import { productionCreditsNotificationService } from '@/lib/services/productionCreditsNotificationService';
 import {
   EXHAUSTED_SUSPEND_AFTER_MS,
   productionUsageService,
@@ -70,6 +71,8 @@ import type { ProductionUsageUnit } from '@/generated/prisma/client';
 //     clears it once the balance is zero or above; after 7 days still below zero,
 //     an always-on application whose target can suspend is switched to suspend
 //     when idle through the idle-policy path. Nothing here ever stops an app.
+//     The organisation's transition below zero notifies its owners and admins
+//     once (`productionCreditsNotificationService`, MOTIR-12166).
 //   · STOP RULES (§8). A customer repository is never metered or charged; an
 //     application with no live release is not sliced; an AWS application whose
 //     organisation's tenant account is not `ready` (it has left Motir's
@@ -248,10 +251,24 @@ async function recordBalance(organizationId: string, balance: number, at: Date):
   const byWorkspace = new Map<string, string[]>();
   for (const a of apps)
     byWorkspace.set(a.workspaceId, [...(byWorkspace.get(a.workspaceId) ?? []), a.id]);
+  const changed: string[] = [];
   for (const [workspaceId, ids] of byWorkspace) {
-    await withWorkspaceServiceContext(workspaceId, (tx) =>
-      hostedApplicationRepository.setCreditsExhaustedSince(ids, balance < 0 ? at : null, tx),
+    changed.push(
+      ...(await withWorkspaceServiceContext(workspaceId, (tx) =>
+        hostedApplicationRepository.setCreditsExhaustedSince(ids, balance < 0 ? at : null, tx),
+      )),
     );
+  }
+  // THE ORGANISATION'S TRANSITION below zero — every one of its applications
+  // changed, so none was below zero before — tells its administrators once
+  // (MOTIR-12166). A later pass still below zero changes nothing, and an
+  // application added while below zero changes alone: neither notifies.
+  if (balance < 0 && changed.length > 0 && changed.length === apps.length) {
+    await productionCreditsNotificationService.notifyCreditsExhausted({
+      organizationId,
+      applicationIds: changed,
+      since: at,
+    });
   }
 }
 

@@ -542,6 +542,47 @@ export const hostedApplicationRepository = {
     });
   },
 
+  /**
+   * Of the applications in `ids`, those RUNNING in production — a live current
+   * release, on a repository Motir made — with the names the out-of-credits
+   * notification shows (MOTIR-12166): oldest first. Run under the system context:
+   * an organisation's applications span its workspaces.
+   */
+  async listRunningForCreditsNotice(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      workspaceId: string;
+      projectKey: string;
+      repositoryName: string;
+      seedSource: string;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    const rows = await tx.hostedApplication.findMany({
+      where: {
+        id: { in: [...ids] },
+        currentRelease: { is: { state: 'live', liveAt: { not: null } } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        workspaceId: true,
+        project: { select: { identifier: true } },
+        projectRepository: { select: { name: true, seedSource: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      workspaceId: r.workspaceId,
+      projectKey: r.project.identifier,
+      repositoryName: r.projectRepository.name,
+      seedSource: r.projectRepository.seedSource,
+    }));
+  },
+
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "hosted_application" WHERE "id" = ${id} FOR UPDATE

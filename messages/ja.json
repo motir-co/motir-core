@@ -3216,6 +3216,10 @@
           "production_app_crashed": {
             "label": "本番アプリがクラッシュしました",
             "desc": "あなたが管理するプロジェクトで Motir がホストしているアプリがクラッシュしたか、ヘルスチェックに失敗しました。"
+          },
+          "production_credits_exhausted": {
+            "label": "アプリの稼働中にクレジットが不足しました",
+            "desc": "Motir が組織のアプリを本番でホストしている間に、組織のクレジット残高がマイナスになりました。"
           }
         },
         "soon": "近日提供",
@@ -6310,11 +6314,14 @@
       "reviewSentBack": "エージェントが <s>{key}</s> に変更を求めました",
       "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました",
       "pageMentioned": "<s>{actor}</s> さんが <s>{page}</s> であなたをメンションしました",
-      "pageReplied": "<s>{actor}</s> さんが <s>{page}</s> のスレッドに返信しました"
+      "pageReplied": "<s>{actor}</s> さんが <s>{page}</s> のスレッドに返信しました",
+      "productionCreditsExhausted": "{count, plural, other {<s>{apps}</s> が本番で稼働中に、組織のクレジットがマイナスになりました}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。"
-    }
+      "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。",
+      "productionCreditsExhausted": "{date} から、常時稼働のアプリはアイドル時に一時停止します"
+    },
+    "appsMore": "{count, plural, other {ほか # 件}}"
   },
   "orgAdmin": {
     "menu": {

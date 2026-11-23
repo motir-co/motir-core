@@ -9,6 +9,7 @@ import {
   Bell,
   Bot,
   Check,
+  Coins,
   GitPullRequest,
   MessageSquare,
   Moon,
@@ -69,6 +70,11 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   // MOTIR-10338 — an agent sent the recipient's card back. The same `Bot` glyph, on the
   // To fix hue, because the row reports the refusal the To fix tag stands for.
   review_sent_back: { Icon: Bot, badge: 'bg-(--el-notif-review-sent-back)' },
+  // MOTIR-12166 — the organisation's credits went below zero while its production
+  // apps run (design/hosting/design-notes.md, the credits-exhausted delta). `coins`,
+  // the credits themselves. The warning hue: the apps keep running and nothing is
+  // lost yet, but the administrator has 7 days to act.
+  production_credits_exhausted: { Icon: Coins, badge: 'bg-(--el-notif-credits-exhausted)' },
 };
 
 /** Types whose subject is a PROJECT rather than a work item — no actor, and a
@@ -78,8 +84,12 @@ const ACTORLESS_TYPES = new Set<string>([
   'code_access_refused',
   'review_to_run',
   'review_sent_back',
+  'production_credits_exhausted',
 ]);
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
+
+/** How many app names the credits-exhausted summary spells out before "N more". */
+const CREDITS_APPS_SHOWN = 3;
 
 /** Pick the summary i18n key for a notification's type (+ whether it deep-links). */
 function summaryKey(type: string, hasKey: boolean, kind: NotificationData['kind']): string {
@@ -100,6 +110,8 @@ function summaryKey(type: string, hasKey: boolean, kind: NotificationData['kind'
   // actor-shaped `generic` fallback below.
   if (type === 'review_to_run' && hasKey) return 'summary.reviewToRun';
   if (type === 'review_sent_back' && hasKey) return 'summary.reviewSentBack';
+  // Not about a work item either (MOTIR-12166): checked before `hasKey`.
+  if (kind === 'production_credits_exhausted') return 'summary.productionCreditsExhausted';
   if (!hasKey) return 'summary.genericNoKey';
   switch (type) {
     case 'mentioned':
@@ -153,7 +165,16 @@ export function NotificationRow({
                 ? format.dateTime(new Date(data.hibernatedAt), { timeStyle: 'short' })
                 : '',
             })
-          : null;
+          : data.kind === 'production_credits_exhausted'
+            ? // The 7-day switch, as the day it falls on in the reader's calendar,
+              // FIRST: the excerpt is one truncated line, and the date is what the
+              // administrator acts on.
+              t('excerpt.productionCreditsExhausted', {
+                date: data.suspendFrom
+                  ? format.dateTime(new Date(data.suspendFrom), { month: 'short', day: 'numeric' })
+                  : '',
+              })
+            : null;
   const toStatus = data.kind === 'transitioned' ? data.toStatus : '';
   // ⚠️ NO ACTOR, AND NO FALLBACK NAME. Motir tried something on the user's behalf
   // and GitHub said no, so `actorFallback` would put a FICTIONAL actor into the
@@ -170,14 +191,23 @@ export function NotificationRow({
     ? `/pages/${encodeURIComponent(page.pageId)}?thread=${encodeURIComponent(page.threadRootId)}`
     : data.kind === 'code_access_refused'
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
-      : issueKey
-        ? // A send-back lands on its own activity entry, whose findings open there — on the
-          // All tab, since the default Comments tab does not draw it (MOTIR-10458).
-          data.kind === 'review_sent_back' && data.recordId
-          ? agentVerdictHref(`/items/${issueKey}`, data.recordId)
-          : `/items/${issueKey}`
-        : null;
+      : // Out of credits opens where they are topped up.
+        data.kind === 'production_credits_exhausted'
+        ? '/settings/organization/billing'
+        : issueKey
+          ? // A send-back lands on its own activity entry, whose findings open there — on the
+            // All tab, since the default Comments tab does not draw it (MOTIR-10458).
+            data.kind === 'review_sent_back' && data.recordId
+            ? agentVerdictHref(`/items/${issueKey}`, data.recordId)
+            : `/items/${issueKey}`
+          : null;
   const createdAt = new Date(notification.createdAt);
+  // The apps the credits-exhausted row names: the first few, then "N more".
+  const creditsApps = data.kind === 'production_credits_exhausted' ? data.apps : [];
+  const appNames = creditsApps.slice(0, CREDITS_APPS_SHOWN).map((a) => a.repositoryName);
+  if (creditsApps.length > CREDITS_APPS_SHOWN) {
+    appNames.push(t('appsMore', { count: creditsApps.length - CREDITS_APPS_SHOWN }));
+  }
 
   // Rich summary: actor + key bolded via the <s> tag, greyed one tier on a
   // read row (the design's read treatment).
@@ -202,6 +232,8 @@ export function NotificationRow({
     status: toStatus,
     project: data.kind === 'code_access_refused' ? data.projectName : '',
     agent: data.kind === 'agent_hibernated_by_admin' ? data.agentName : '',
+    apps: format.list(appNames, { type: 'conjunction' }),
+    count: creditsApps.length,
     s: strong,
   });
 

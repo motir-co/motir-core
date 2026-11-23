@@ -468,3 +468,69 @@ describe('NotificationDrawer — the page rows', () => {
     expect(item.querySelector('strong')!.className).not.toContain('truncate');
   });
 });
+
+// MOTIR-12166 — the organisation's credits went below zero while its production apps
+// run (design/hosting/design-notes.md, the credits-exhausted delta): actorless, the
+// `Coins` glyph in the avatar slot, the apps named, the 7-day switch's date in the
+// excerpt, and the organisation's billing page as the destination.
+describe('NotificationDrawer — the credits-exhausted row', () => {
+  const app = (n: number) => ({ repositoryName: `repo-${n}`, projectKey: 'ACME' });
+  const creditsRow = (apps: Array<{ repositoryName: string; projectKey: string }>) => ({
+    id: 'n-credits',
+    type: 'production_credits_exhausted',
+    category: 'direct' as const,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+    actor: null,
+    workItemId: null,
+    data: {
+      kind: 'production_credits_exhausted' as const,
+      apps,
+      exhaustedSince: '2026-11-23T09:00:00.000Z',
+      suspendFrom: '2026-11-30T09:00:00.000Z',
+    },
+  });
+
+  it('names the one app, says what happens on the switch date, and opens billing', async () => {
+    renderDrawer(pageDTO({ notifications: [creditsRow([app(1)])] as never, totalCount: 1 }));
+
+    const row = await screen.findByRole('link', { name: /repo-1/ });
+    expect(row.getAttribute('href')).toBe('/settings/organization/billing');
+    expect(row.textContent).toContain(
+      "Your organization's credits are below zero while repo-1 is live in production",
+    );
+    expect(row.textContent).toContain('From Nov 30, always-on apps suspend when idle');
+    // Actorless: no initial-letter avatar and no fallback actor name.
+    expect(row.textContent).not.toContain(en.notifications.actorFallback);
+  });
+
+  it('lists two apps as one phrase, and more than three as the first three and a count', async () => {
+    renderDrawer(
+      pageDTO({ notifications: [creditsRow([app(1), app(2)])] as never, totalCount: 1 }),
+    );
+    expect((await screen.findByRole('link', { name: /repo-1/ })).textContent).toContain(
+      'repo-1 and repo-2 are live in production',
+    );
+    cleanup();
+
+    renderDrawer(
+      pageDTO({
+        notifications: [creditsRow([app(1), app(2), app(3), app(4), app(5)])] as never,
+        totalCount: 1,
+      }),
+    );
+    const row = await screen.findByRole('link', { name: /repo-1/ });
+    expect(row.textContent).toContain('repo-1, repo-2, repo-3, and 2 more are live in production');
+    expect(row.textContent).not.toContain('repo-4');
+  });
+
+  it('drops the date, never the sentence, from a payload without one', async () => {
+    const row = creditsRow([app(1)]);
+    row.data.suspendFrom = '';
+    renderDrawer(pageDTO({ notifications: [row] as never, totalCount: 1 }));
+
+    expect((await screen.findByRole('link', { name: /repo-1/ })).textContent).toContain(
+      'From , always-on apps suspend when idle',
+    );
+  });
+});

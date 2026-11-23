@@ -5032,6 +5032,12 @@
      --color-destructive, the hue of the To fix tag the send-back puts on the card: the row
      says the card was refused and is now theirs to repair. Its own slot, as above. */
   --el-notif-review-sent-back: var(--color-destructive);
+  /* The organisation's credits went BELOW ZERO while its production apps run
+     (MOTIR-12166, per design/hosting/design-notes.md, the credits-exhausted delta).
+     --color-warning, not danger: the apps keep running and nothing is lost yet, but
+     the administrator has 7 days before always-on apps switch to suspend when idle.
+     Its own slot, as above. */
+  --el-notif-credits-exhausted: var(--color-warning);
   /* The EXECUTOR badge on a Workbench row's assignee avatar (Story MOTIR-2649 ·
      Subtask MOTIR-2653, per design/workbench/design-notes.md §"The agent state"
      — that area was renamed with the surface by MOTIR-4779).
