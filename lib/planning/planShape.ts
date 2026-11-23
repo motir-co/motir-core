@@ -79,7 +79,8 @@ export function planContainers(
  * review's canvas draws folders, so a folder-filed proposal sits on its folder's
  * level and the arrival rule counts it there, with folder crumbs counted in the
  * depth tie-break. Off, the count is the shipped one — by `parentNodeId` — which
- * the review read's arrival-size and the derived default view still read.
+ * the straddle question (`planContainerCount`) still reads. The review read's
+ * arrival-size counts with folders on, through `arrivalLevelId` (Bug MOTIR-12144).
  */
 export interface PlanShapeOptions {
   folders?: boolean;

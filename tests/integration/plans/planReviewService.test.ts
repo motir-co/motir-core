@@ -7,6 +7,8 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { arrivalLevel } from '@/lib/planning/planArrival';
+import { ARRIVAL_LEVEL_MAX_NODES, defaultPlanView } from '@/lib/planning/planView';
+import { foldersService } from '@/lib/services/foldersService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -846,6 +848,108 @@ describe('planReviewService.getPlanReview', () => {
     expect(arrivalLevel(review.items, 'New')?.id).toBe(current.id);
     expect(review.arrivalLevelSize).toBe(4);
     expect(review.arrivalLevelTotal).toBe(4);
+  });
+
+  it('measures the FOLDER a folder-filed plan opens on, not the project root (Bug MOTIR-12144)', async () => {
+    // More root cards than the canvas holds, and a small folder: the plan files its
+    // three adds into the folder, so the canvas opens there and the size must
+    // describe it — 1 filed card + 3 adds — not the root's 37 cards.
+    const fx = await makeWorkItemFixture();
+    for (let i = 0; i <= ARRIVAL_LEVEL_MAX_NODES; i += 1) {
+      await seedChild(fx, 'epic', `Root ${i}`);
+    }
+    const later = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Later' },
+      fx.ctx,
+    );
+    const filed = await seedChild(fx, 'epic', 'Filed for later');
+    await adminDb.workItem.update({ where: { id: filed.id }, data: { folderId: later.id } });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Later ideas' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      ['Idea one', 'Idea two', 'Idea three'].map((title) => ({
+        op: 'add' as const,
+        proposedFields: { title, kind: 'epic' as const },
+        parentRef: `folder:${later.id}`,
+      })),
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(arrivalLevel(review.items, 'New')?.id).toBe(`folder:${later.id}`);
+    expect(review.arrivalLevelSize).toBe(4);
+    expect(review.arrivalLevelTotal).toBe(4);
+    expect(defaultPlanView(review)).toBe('canvas');
+  });
+
+  it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
+    // Three plans, each over its own copy of one tree (a plan holds its targets, so
+    // the plans cannot share one): an epic with 2 children, and a folder holding 1
+    // filed root card. Each plan's size is the committed nodes of the level the
+    // canvas arrives at plus the plan's adds on it.
+    type Tree = { epic: string; folder: string };
+    const add = (title: string, parentRef?: string) => ({
+      op: 'add' as const,
+      proposedFields: { title, kind: 'story' as const },
+      ...(parentRef ? { parentRef } : {}),
+    });
+    const shapes: {
+      title: string;
+      proposals: (t: Tree) => ReturnType<typeof add>[];
+      level: (t: Tree) => string | null;
+      size: number;
+    }[] = [
+      // Under the epic: 2 committed children + 2 adds (the root add is elsewhere).
+      {
+        title: 'Parented',
+        proposals: (t) => [add('A', t.epic), add('B', t.epic), add('C')],
+        level: (t) => t.epic,
+        size: 4,
+      },
+      // Into the folder: 1 filed card + 2 adds filed there.
+      {
+        title: 'Filed',
+        proposals: (t) => [
+          add('D', `folder:${t.folder}`),
+          add('E', `folder:${t.folder}`),
+          add('F', t.epic),
+        ],
+        level: (t) => `folder:${t.folder}`,
+        size: 3,
+      },
+      // Pure roots, no folder: the project root, counted as it always was — every
+      // root card (the epic and the filed one) + the 2 root adds.
+      { title: 'Roots', proposals: () => [add('G'), add('H')], level: () => null, size: 4 },
+    ];
+
+    for (const shape of shapes) {
+      const fx = await makeWorkItemFixture();
+      const epic = await seedChild(fx, 'epic', 'Payments');
+      await seedChild(fx, 'story', 'Refunds', epic.id);
+      await seedChild(fx, 'story', 'Payouts', epic.id);
+      const folder = await foldersService.createFolder(
+        { projectId: fx.projectId, parentFolderId: null, name: 'Parked' },
+        fx.ctx,
+      );
+      const parked = await seedChild(fx, 'epic', 'Parked epic');
+      await adminDb.workItem.update({ where: { id: parked.id }, data: { folderId: folder.id } });
+      const tree = { epic: epic.id, folder: folder.id };
+
+      const plan = await plansService.createPlan(fx.projectId, { title: shape.title }, fx.ctx);
+      await plansService.addProposals(plan.id, shape.proposals(tree), fx.ctx);
+      await plansService.markPlanned(plan.id, fx.ctx);
+      const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+      expect({ plan: shape.title, level: arrivalLevel(review.items, 'New')?.id ?? null }).toEqual({
+        plan: shape.title,
+        level: shape.level(tree),
+      });
+      expect({ plan: shape.title, size: review.arrivalLevelTotal }).toEqual({
+        plan: shape.title,
+        size: shape.size,
+      });
+    }
   });
 
   it('does NOT count the project root for a plan with NO items — it has no arrival level (MOTIR-10739)', async () => {
