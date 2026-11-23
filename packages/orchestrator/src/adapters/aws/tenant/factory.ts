@@ -16,6 +16,7 @@ import {
 } from './sdk';
 import { tenantDeploySession, tenantMemberSession } from './session';
 import type { TenantIam } from './clients';
+import { awsTenantClientsOverride } from '../testOverrides';
 
 // The ASSUMED-ROLE CLIENT FACTORY (MOTIR-10004): every client of a tenant
 // account, built on the account's deploy-role session and nothing else. The
@@ -32,6 +33,9 @@ export interface TenantClientsOptions {
 
 /** One tenant account's clients, all under its deploy role. */
 export function createTenantClients(options: TenantClientsOptions): TenantClients {
+  // An E2E lane's fake, when one is installed (MOTIR-12141) — see `testOverrides.ts`.
+  const override = awsTenantClientsOverride();
+  if (override) return override.clients({ accountId: options.accountId, region: options.region });
   const factory = options.sdkClientFactory ?? createTenantSdkClient;
   const credentials = tenantDeploySession({
     management: options.management,
@@ -69,6 +73,8 @@ export interface TenantMemberIamOptions {
  *  role can never do (its policy denies it every action on itself). A new call
  *  is a new session — how the handover tells a role it has closed. */
 export function createTenantMemberIam(options: TenantMemberIamOptions): TenantIam {
+  const override = awsTenantClientsOverride();
+  if (override) return override.memberIam({ accountId: options.accountId, region: options.region });
   const factory = options.sdkClientFactory ?? createTenantSdkClient;
   const credentials = tenantMemberSession({
     management: options.management,

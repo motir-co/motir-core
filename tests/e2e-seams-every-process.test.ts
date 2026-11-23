@@ -7,8 +7,12 @@ import {
   githubMergeSeamEnv,
   graceWindowSeamEnv,
   productionReleaseSeamEnv,
+  takeoverHandoverSeamEnv,
 } from './e2e/_helpers/job-worker-process';
-import { E2E_OBJECT_STORE_ENV } from './e2e/_helpers/e2e-object-store-env';
+import {
+  E2E_AWS_ORG_ADMIN_ROLE_ARN,
+  E2E_OBJECT_STORE_ENV,
+} from './e2e/_helpers/e2e-object-store-env';
 
 // Guard for Bug MOTIR-5837: EVERY process in the E2E lane fakes the GitHub
 // boundary, and none of them can reach the real api.github.com.
@@ -227,5 +231,53 @@ describe("the worker's grace-window seam travels with its stores (MOTIR-12142)",
     );
     expect(config).toMatch(/path\.resolve\('tests\/e2e\/_fakes\/bin'\)/);
     expect(config).toMatch(/\.\.\.E2E_OBJECT_STORE_ENV/);
+  });
+});
+
+describe("the takeover handover's fake AWS tenant reaches every process (MOTIR-12141)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('mirrors nothing unless the lane sets the tenant store', () => {
+    vi.stubEnv('MOTIR_FAKE_AWS_TENANT_STATE_PATH', '');
+    expect(takeoverHandoverSeamEnv()).toEqual({});
+  });
+
+  it('mirrors the store, a placeholder management role and the fake fleet into the worker', () => {
+    vi.stubEnv('MOTIR_FAKE_AWS_TENANT_STATE_PATH', '/tmp/tenant.json');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
+    expect(takeoverHandoverSeamEnv()).toEqual({
+      MOTIR_FAKE_AWS_TENANT_STATE_PATH: '/tmp/tenant.json',
+      AWS_ORG_ADMIN_ROLE_ARN: E2E_AWS_ORG_ADMIN_ROLE_ARN,
+      MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    });
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::111122223333:role/other');
+    expect(takeoverHandoverSeamEnv()['AWS_ORG_ADMIN_ROLE_ARN']).toBe(
+      'arn:aws:iam::111122223333:role/other',
+    );
+    // A placeholder in the account the fake trusts as Motir's management account.
+    expect(E2E_AWS_ORG_ADMIN_ROLE_ARN).toMatch(/^arn:aws:iam::111122223333:role\//);
+  });
+
+  it('is wired at both worker spawn sites', () => {
+    const helper = codeOf('tests/e2e/_helpers/job-worker-process.ts');
+    expect(helper.match(/\.\.\.takeoverHandoverSeamEnv\(\)/g)).toHaveLength(2);
+  });
+
+  it('is defaulted by the acceptance lane and forwarded, with the placeholder role, to the webServer', () => {
+    const config = codeOf('playwright.acceptance.config.ts');
+    expect(config).toMatch(/process\.env\['MOTIR_FAKE_AWS_TENANT_STATE_PATH'\] \?\?=/);
+    expect(config).toMatch(
+      /process\.env\['AWS_ORG_ADMIN_ROLE_ARN'\] \?\?= E2E_AWS_ORG_ADMIN_ROLE_ARN/,
+    );
+    expect(config).toMatch(
+      /MOTIR_FAKE_AWS_TENANT_STATE_PATH: process\.env\['MOTIR_FAKE_AWS_TENANT_STATE_PATH'\]!/,
+    );
+    expect(config).toMatch(/AWS_ORG_ADMIN_ROLE_ARN: process\.env\['AWS_ORG_ADMIN_ROLE_ARN'\]!/);
+  });
+
+  it('is installed by the one seam table, keyed on the store path', () => {
+    const seams = codeOf('lib/test-mock-seams.ts');
+    expect(seams).toMatch(/flag: 'MOTIR_FAKE_AWS_TENANT_STATE_PATH'/);
+    expect(seams).toMatch(/installFakeAwsTenantSeam\(\)/);
   });
 });

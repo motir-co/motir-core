@@ -13,6 +13,7 @@ import {
   type TenantHandover,
 } from '@motir/orchestrator';
 import { TENANT_ACCOUNT_REGION } from '@/lib/ciFleet/hostingTenantAccounts';
+import { selectedOrchestratorProvider } from './provider';
 
 // The AWS hosting adapter's WIRING (Story MOTIR-9794 · MOTIR-10010), registered
 // as the `aws` target by `./hosting`. Everything is read when the adapter is
@@ -92,6 +93,19 @@ export function createConfiguredAwsHandover(originSecretKey: string): Configured
     // eslint-disable-next-line no-console -- the per-step line; names only
     options: { log: (line) => console.info('[hosting:aws-handover]', line) },
   });
+  // Under the fake orchestrator the `aws` target IS the shared fake hosting
+  // port (`getHostingDeployPort`), so the release a lane deployed is opened
+  // there (MOTIR-12141); the real adapter would address stacks no fake deployed.
+  if (selectedOrchestratorProvider() === 'fake') {
+    return {
+      handover,
+      management,
+      openUpstream: async (handle) => {
+        const { hostingFakeControls } = await import('./hosting');
+        return hostingFakeControls('aws').openUpstream(handle);
+      },
+    };
+  }
   const port = createConfiguredAwsHostingPort(originSecretKey);
   return { handover, management, openUpstream: (handle) => port.openUpstream(handle) };
 }

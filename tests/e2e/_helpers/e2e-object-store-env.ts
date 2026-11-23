@@ -15,3 +15,9 @@ export const E2E_OBJECT_STORE_ENV = {
   MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
   MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
 } as const satisfies Record<string, string>;
+
+/** The management role the acceptance lane names (Story MOTIR-9800 ·
+ *  MOTIR-12141): a placeholder ARN in the account the fake AWS tenant trusts as
+ *  Motir's management account (`FAKE_MANAGEMENT_ACCOUNT_ID`). Never assumed —
+ *  the fake tenant answers every call — and never a credential. */
+export const E2E_AWS_ORG_ADMIN_ROLE_ARN = 'arn:aws:iam::111122223333:role/motir-org-admin';

@@ -3,7 +3,10 @@ import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
 import { E2E_AI_TO_CORE_SERVICE_TOKEN } from './tests/e2e/_helpers/billing-push';
 import { E2E_CORE_CALLBACK_SECRET } from './tests/e2e/_helpers/log-bug-as-ai';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
-import { E2E_OBJECT_STORE_ENV } from './tests/e2e/_helpers/e2e-object-store-env';
+import {
+  E2E_AWS_ORG_ADMIN_ROLE_ARN,
+  E2E_OBJECT_STORE_ENV,
+} from './tests/e2e/_helpers/e2e-object-store-env';
 import { generateKeyPairSync } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -314,6 +317,17 @@ process.env['MOTIR_FAKE_DATABASE_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_BLOB_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-blob.json',
 );
+// Story MOTIR-9800 · MOTIR-12141 — THE TAKEOVER HANDOVER's AWS tenant. The
+// webServer starts the handover and takes the owner's email code, the worker
+// advances its steps, and the spec seeds and reads the account — so the fake
+// tenant (CloudFormation, IAM, Organizations behind the shipped factories,
+// `lib/test-fake-aws-tenant.ts`) is one file all three share. The management
+// role is a placeholder ARN: the factories never reach AWS while the fake is
+// installed, and the handover reads only the account id out of it.
+process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-aws-tenant.json',
+);
+process.env['AWS_ORG_ADMIN_ROLE_ARN'] ??= E2E_AWS_ORG_ADMIN_ROLE_ARN;
 {
   const fakeBin = path.resolve('tests/e2e/_fakes/bin');
   const current = process.env['PATH'] ?? '';
@@ -714,6 +728,9 @@ const APP_SERVER_ENV = {
   MOTIR_FAKE_DATABASE_STATE_PATH: process.env['MOTIR_FAKE_DATABASE_STATE_PATH']!,
   MOTIR_FAKE_BLOB_STATE_PATH: process.env['MOTIR_FAKE_BLOB_STATE_PATH']!,
   PATH: process.env['PATH']!,
+  // The takeover handover's fake AWS tenant (MOTIR-12141) — see its block above.
+  MOTIR_FAKE_AWS_TENANT_STATE_PATH: process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH']!,
+  AWS_ORG_ADMIN_ROLE_ARN: process.env['AWS_ORG_ADMIN_ROLE_ARN']!,
   // The capacity fake (MOTIR-9617) — see its block above this config.
   MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
   MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:

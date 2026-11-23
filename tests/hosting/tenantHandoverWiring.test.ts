@@ -95,6 +95,40 @@ describe('the configured AWS reach', () => {
     expect(typeof reach.openUpstream).toBe('function');
   });
 
+  it('opens through the shared fake hosting port under the fake orchestrator (MOTIR-12141)', async () => {
+    // No forwarder principal: under the fake the real adapter is never built.
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::111122223333:role/motir-org-admin');
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { hostingFakeControls, resetHostingFakes } = await import('@/lib/orchestrator/hosting');
+    resetHostingFakes();
+    const fake = hostingFakeControls('aws');
+    const { appRef } = await fake.ensureApp({
+      repositoryId: 'cmwiring1',
+      environment: { kind: 'production' },
+    });
+    const handle = await fake.deploy({
+      appRef,
+      environment: { kind: 'production' },
+      artifact: { kind: 'image', ref: 'img', digest: 'sha256:1' },
+      runtime: {
+        port: 8080,
+        healthCheck: { path: '/health' },
+        startCommand: '/x',
+        database: { kind: 'none' },
+      },
+      env: [],
+      idle: { mode: 'always_on' },
+      shape: 'function',
+    });
+    const reach = createConfiguredAwsHandover('origin-key');
+    expect(await reach.openUpstream(handle)).toEqual({
+      upstreamAddress: `https://${appRef}.lambda-url.fake.invalid`,
+    });
+    expect(fake.app(appRef)?.openedUpstream).toBe(`https://${appRef}.lambda-url.fake.invalid`);
+    resetHostingFakes();
+  });
+
   it('opens through the adapter, asking for a handing-over account first', async () => {
     vi.stubEnv('MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN', 'arn:aws:iam::1:role/forwarder');
     vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::111122223333:role/motir-org-admin');

@@ -324,6 +324,21 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
       await installFakeAwsSeam();
     },
   },
+  {
+    // Story MOTIR-9800 · MOTIR-12141 — the fake AWS TENANT: the takeover
+    // handover's CloudFormation, IAM and management-account calls answered from
+    // one state file all three lane processes share, behind the SHIPPED
+    // factories (`createAwsManagementApi`, `createTenantClients`,
+    // `createTenantMemberIam`), so the real handover runs against it. Keyed on
+    // the state file's path, like the fake AWS above. Ignores the agent.
+    flag: 'MOTIR_FAKE_AWS_TENANT_STATE_PATH',
+    message: 'fake AWS tenant (file-backed CloudFormation, IAM and Organizations) installed.',
+    active: () => Boolean(process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH']?.trim()),
+    install: async () => {
+      const { installFakeAwsTenantSeam } = await import('@/lib/test-fake-aws-tenant');
+      installFakeAwsTenantSeam();
+    },
+  },
 ];
 
 /** Is `seam` on in THIS process? */

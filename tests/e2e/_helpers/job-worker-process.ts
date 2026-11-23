@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { E2E_OBJECT_STORE_ENV } from './e2e-object-store-env';
+import { E2E_AWS_ORG_ADMIN_ROLE_ARN, E2E_OBJECT_STORE_ENV } from './e2e-object-store-env';
 import {
   E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
@@ -363,6 +363,25 @@ export function graceWindowSeamEnv(): Record<string, string> {
   };
 }
 
+/**
+ * THE TAKEOVER HANDOVER'S FAKE AWS TENANT, MIRRORED INTO THE WORKER (Story
+ * MOTIR-9800 · MOTIR-12141). The handover's steps run as jobs here, while the
+ * webServer starts it and takes the owner's email code, so both reach the one
+ * fake tenant through its state file (`MOTIR_FAKE_AWS_TENANT_STATE_PATH`), and
+ * both name the same placeholder management role, whose account id the
+ * handover strips from every trust. Opt-in by the path: only the acceptance
+ * lane sets it.
+ */
+export function takeoverHandoverSeamEnv(): Record<string, string> {
+  const tenantPath = process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH'];
+  if (!tenantPath) return {};
+  return {
+    MOTIR_FAKE_AWS_TENANT_STATE_PATH: tenantPath,
+    AWS_ORG_ADMIN_ROLE_ARN: process.env['AWS_ORG_ADMIN_ROLE_ARN'] || E2E_AWS_ORG_ADMIN_ROLE_ARN,
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+  };
+}
+
 /** A fresh RSA private key (PKCS#8 PEM) for an App JWT nothing will verify. */
 function generateAppPrivateKey(): string {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -491,6 +510,8 @@ const WEBHOOK_HANDLER_ENV_KEYS: readonly (string | RegExp)[] = [
   'MOTIR_FAKE_HOSTING_STATE_PATH',
   'MOTIR_FAKE_DATABASE_STATE_PATH',
   'MOTIR_FAKE_BLOB_STATE_PATH',
+  'MOTIR_FAKE_AWS_TENANT_STATE_PATH',
+  'AWS_ORG_ADMIN_ROLE_ARN',
 ];
 
 /**
@@ -611,6 +632,8 @@ export async function startJobWorker(): Promise<void> {
       ...productionReleaseSeamEnv(),
       // The grace window's database and object stores — see `graceWindowSeamEnv`.
       ...graceWindowSeamEnv(),
+      // The takeover handover's fake AWS tenant — see `takeoverHandoverSeamEnv`.
+      ...takeoverHandoverSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -742,6 +765,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       ...productionReleaseSeamEnv(),
       // The grace window's database and object stores — see `graceWindowSeamEnv`.
       ...graceWindowSeamEnv(),
+      // The takeover handover's fake AWS tenant — see `takeoverHandoverSeamEnv`.
+      ...takeoverHandoverSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

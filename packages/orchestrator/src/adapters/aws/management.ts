@@ -83,6 +83,7 @@ import {
   type AwsStackInstanceState,
   type AwsStackInstanceTarget,
 } from './stackSet';
+import { awsManagementOverride } from './testOverrides';
 
 // THE AWS MANAGEMENT HALF (Story MOTIR-9270 · MOTIR-9278) — what `fleet-admin
 // add-shard --provider aws` calls to make an account a fleet account: find or
@@ -640,6 +641,9 @@ export function createAwsManagementApi(
   management: AwsManagementCredentials,
   options: AwsManagementOptions = {},
 ): AwsManagementApi {
+  // An E2E lane's fake, when one is installed (MOTIR-12141) — see `testOverrides.ts`.
+  const override = awsManagementOverride();
+  if (override) return override(management);
   const factory = options.clientFactory ?? createAwsManagementSdkClient;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const now = options.now ?? (() => Date.now());
