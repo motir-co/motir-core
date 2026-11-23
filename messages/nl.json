@@ -8553,7 +8553,15 @@
       "unlinkAria": "De koppeling met {target} verwijderen",
       "unlinkConfirmBefore": "De koppeling verwijderen met",
       "unlinkConfirmAfter": "? De pull request op GitHub blijft onaangeroerd — alleen de koppeling verdwijnt.",
-      "unlinkAction": "Koppeling verwijderen"
+      "unlinkAction": "Koppeling verwijderen",
+      "access": {
+        "invited": "Je uitnodiging voor deze repository wacht op GitHub. <link>Uitnodiging accepteren</link>",
+        "invitedNoLink": "Je uitnodiging voor deze repository wacht op GitHub. <link>Naar Codetoegang</link>",
+        "notInvited": "Je hebt nog geen toegang tot de code van deze repository. <link>Naar Codetoegang</link>",
+        "roleCannotEdit": "Je rol in dit project omvat geen codetoegang.",
+        "noGithubPreview": "Motir kent je GitHub-account nog niet, dus je kunt de code niet openen. <tone>Bekijk deze wijziging in de preview hierboven.</tone>",
+        "noGithubNoPreview": "Motir kent je GitHub-account nog niet, dus je kunt de code niet openen. <tone>Er is geen preview beschikbaar voor deze pull request.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "{repo} loskoppelen van de organisatie",

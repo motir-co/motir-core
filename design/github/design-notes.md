@@ -3956,3 +3956,125 @@ token and no new primitive.
   `total`. A review that is already running is no review to run: once _Review with Motir
   agent_ (or the reader's own agent) starts it, the row leaves the tab and the badge drops by
   one, and it comes back only if that run ends with no verdict.
+
+## 35 · The pull-request row PER READER — the code link-out kept or withheld, and the ACCESS LINE under the preview line (MOTIR-12114, 2026-11-23)
+
+**AMENDS § 31** (the preview line, the row's third line) **and § 19** (the row, `PullRequestRow`). The
+delta is **[`github--pr-row-reader-access.mock.html`](./github--pr-row-reader-access.mock.html)**,
+Panels **A1–A9**. No existing mock is edited and no image export ships. Card MOTIR-12114, Story
+MOTIR-4881; the data card is **MOTIR-12115** and the card that builds the row is **MOTIR-12116**.
+Rendered against motir-core `origin/main` @ `f5e937aaa`.
+
+### 35.1 Design system — the verdict
+
+Files read: `package.json` (`"@motir/design-system": "workspace:*"`, installed 0.24.1) and
+`app/globals.css` (`@import '@motir/design-system/theme.css'`). **On Motir Design.** The axes are the
+workspace's applied theme (`app/layout.tsx`); the sheet draws `warm-editorial` / `motir` / `motir`,
+as the area's latest sheets do. The version exports `@motir/design-system/mock`, so the sheet is built
+with **`renderMock`** over the **real shipped components**: `DevelopmentSection` (the peek host),
+`DevelopmentSectionBody`, `PullRequestRow`, `PreviewLine`, `Pill` and the item page's
+`ContentSectionCard`, with the real `messages/en.json`. The only things the generator adds are the
+**access line** and the **withheld link-out**, patched into the real `PullRequestRow` at build time,
+so every untouched pixel is what ships. Nothing is proposed to the package and no product-local
+component is added beyond the line itself (built by MOTIR-12116 in `components/github/`). The mock
+renders with no script.
+
+### 35.2 Access path
+
+None is new. The item page's **Development card**, the **quick-view peek's Development section**
+(any board card, list row or Workbench row that opens an item), and the **approval overlay's
+Development port** (a Workbench _Waiting on you_ row, or the item header's approval marker). A9 draws
+the row on all three.
+
+### 35.3 The two named elements
+
+- **The code link-out** — today's icon-only external link to `LinkedPullRequestDto.url`, labelled
+  `github.development.openOnGithub`. **Drawn exactly as today, or WITHHELD**: not rendered at all —
+  never a disabled, greyed or tooltip-only icon, the same rule the row follows for the read-only
+  peek's absent remove control (§ 19, Q1/Q4). A withheld link-out leaves no placeholder: the pill
+  group and the host's trailing action close up as on a row that never had one (A4–A6). It still
+  points at the stored row's `url`, so a GitLab merge request links to GitLab; nothing here composes
+  a host URL.
+- **The access line** — ONE new line in the row's text column, **directly under the preview line**
+  (`PreviewLine`), the column's fourth child. It is **never a pill**: the pill group's second slot is
+  the conflict → review chip → CI arbitration (§ 23, § 30), untouched in every panel. Structure,
+  mirroring `PreviewLine`: `<div data-testid="pr-row-access" data-access-variant={variant}
+className="mt-0.5 flex min-w-0 items-start gap-1.5 font-sans text-xs">` holding the glyph
+  (`mt-[3px] h-3 w-3 shrink-0 text-(--el-icon-muted)`, `aria-hidden`) and ONE text span (`min-w-0`,
+  `--el-text-identifier`) that wraps like a sentence. At most one inline link.
+
+### 35.4 The rule — total over the reader states
+
+The reader's access is the data card's `readerAccess` (`{ state, reason, invitationUrl } | null`).
+**A non-null `reason` wins over `state`**, and only a reason withholds the link-out.
+
+| the row's repository and the reader                       | code link-out | access line variant (`data-access-variant`) | glyph  | panel |
+| --------------------------------------------------------- | ------------- | ------------------------------------------- | ------ | ----- |
+| Motir-created, `accepted`, reason null                    | shown         | none                                        | —      | A1    |
+| Motir-created, `invited`, reason null                     | shown         | `invited` (or `invitedNoLink`, below)       | `Mail` | A2    |
+| Motir-created, `not_invited`, reason null                 | shown         | `notInvited`                                | `Lock` | A3    |
+| Motir-created, reason `role_cannot_edit` (any state)      | **withheld**  | `roleCannotEdit`                            | `Lock` | A4    |
+| Motir-created, reason `no_github_identity`, preview ready | **withheld**  | `noGithubPreview`                           | `Lock` | A5    |
+| Motir-created, reason `no_github_identity`, otherwise     | **withheld**  | `noGithubNoPreview`                         | `Lock` | A6    |
+| connected repository (`readerAccess: null`)               | shown         | none                                        | —      | A7    |
+| a repository outside the project's set (`null`)           | shown         | none                                        | —      | A7    |
+| the reader's access could not be read (`null`)            | shown         | none — never an error                       | —      | A7    |
+
+"Preview ready" is `preview.state === 'ready'`, the one state with a live link (§ 31). `building`,
+`starting`, `failed`, `closed`, an unknown value and no preview at all are all "otherwise" (A6 draws
+building, failed, closed and none). A4 is drawn on an **accepted** record to show the reason wins.
+`invitedNoLink` covers an `invited` record with no stored `invitationUrl` (GitHub returned none): the
+same sentence, linking the Code access page instead, so the line never carries a dead link.
+
+### 35.5 The copy — `github.development.access.*` (English, shipped by MOTIR-12116 in all eleven catalogues)
+
+Written from the shipped reader-is-self sentence `settings.codeAccess.state.notInvitedSelf` = _Motir
+doesn't know your GitHub account yet_, in the product's nouns (pull request, preview, code access,
+the Code access page's own title).
+
+| key                 | English                                                                                                                               | inline link label → target                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `invited`           | `Your invitation to this repository is waiting on GitHub. <link>Accept the invitation</link>`                                         | **Accept the invitation** → the stored `invitationUrl`, `target="_blank" rel="noopener noreferrer"` |
+| `invitedNoLink`     | `Your invitation to this repository is waiting on GitHub. <link>Go to Code access</link>`                                             | **Go to Code access** → `/settings/project/code-access`                                             |
+| `notInvited`        | `You don't have access to this repository's code yet. <link>Go to Code access</link>`                                                 | **Go to Code access** → `/settings/project/code-access`, where access is given                      |
+| `roleCannotEdit`    | `Your role in this project doesn't include code access.`                                                                              | none                                                                                                |
+| `noGithubPreview`   | `Motir doesn't know your GitHub account yet, so you can't open the code. <tone>Review this change in the preview above.</tone>`       | none — it names the preview line above and does not repeat its link                                 |
+| `noGithubNoPreview` | `Motir doesn't know your GitHub account yet, so you can't open the code. <tone>No preview is available for this pull request.</tone>` | none                                                                                                |
+
+The line speaks to the reader only (second person) and never names another member. `<tone>` is the
+`--el-text-secondary` span, as § 31's failed reason; `<link>` is a tag so each language places it.
+
+### 35.6 Inks and shape — on the row's `--el-surface` fill
+
+The line takes § 31's measured inks, so its contrast is § 31's table: words `--el-text-identifier`
+(≥ 5.11:1 across every palette × theme), the `<tone>` half `--el-text-secondary` (≥ 5.11:1), the
+link `--el-link` with `underline` in `font-sans` (≥ 4.54:1), the glyph `--el-icon-muted`
+(decorative, `aria-hidden`; the words carry the meaning). **`--el-text-muted` and `--el-text-faint`
+are used nowhere** (both fail AA on `--el-surface`). The link takes the shipped focus ring
+(`focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)`) on `--radius-control` corners. No
+new token and no new shape token.
+
+### 35.7 Narrow column and the three hosts
+
+Below a 30rem column (the `@container` on the rows' list) the row's shipped rule drops the pill group
+to its own line under the text column; the access line wraps inside the text column like the preview
+line (A8, 440px). On a withheld row the dropped pill group simply has no link-out after it. **The row
+reads the same on all three hosts** (A9: the quick-view peek at 400px, the item page's Development
+card, the approval overlay's port) because they render the one `DevelopmentSectionBody`; the line
+adds no verb on any host, so the peek's read-only contract holds.
+
+### 35.8 GIVES / TAKES
+
+- **TAKES from MOTIR-12115:** `LinkedPullRequestDto.readerAccess`, non-null only on a Motir-created
+  (`created`, realized) repository of the card's project, for the current reader; `null` for
+  connected, outside the set and unreadable.
+- **GIVES MOTIR-12116:** the variant rule (§ 35.4), the two element names (§ 35.3), the six keys and
+  their English (§ 35.5), the inks (§ 35.6). It ships the copy in all eleven catalogues.
+- **Takes nothing away** from any other card: the preview line (§ 31), the pill group, the awaiting
+  repository row, the Code access page and the plan rail are unchanged.
+
+### 35.9 What this asset does NOT decide
+
+Inviting, re-sending or accepting an invitation; a way to connect GitHub from the row; any
+repository-level access copy outside the pull-request row; a diff view; the design gate's body; and
+the preview's own states. How `readerAccess` is read and batched is MOTIR-12115's.

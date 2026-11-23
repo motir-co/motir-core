@@ -6,7 +6,12 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { projectRepoCollaboratorRepository } from '@/lib/repositories/projectRepoCollaboratorRepository';
 import { repoCollaboratorClient } from '@/lib/github/repoCollaborators';
-import { deriveAccessState, needsCollaboratorInvite } from '@/lib/projectRepos/access';
+import {
+  deriveAccessState,
+  needsCollaboratorInvite,
+  type ProjectRepoAccessColumns,
+} from '@/lib/projectRepos/access';
+import type { LinkedPullRequestReaderAccessDto } from '@/lib/dto/github';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type {
   GrantTeamAccessResultDto,
@@ -238,7 +243,7 @@ export const projectRepoAccessService = {
         invitable: isInvitable(row),
         members: candidates.map<ProjectRepoMemberAccessDto>((c) => {
           const record = byCell.get(`${row.id}:${c.userId}`) ?? null;
-          const state = deriveAccessState(record);
+          const cell = accessCell(record, c);
           return {
             userId: c.userId,
             name: c.name,
@@ -250,22 +255,73 @@ export const projectRepoAccessService = {
             // actually holds access — not which one they have connected today.
             login: record?.githubLogin ?? c.login,
             permission: record?.permission ?? null,
-            state,
-            // Eligibility is checked FIRST: a member their role excludes is
-            // settled, and telling them to connect GitHub would offer an action
-            // that would not help.
-            reason: !c.eligible
-              ? 'role_cannot_edit'
-              : c.login === null
-                ? 'no_github_identity'
-                : null,
-            invitationUrl: state === 'invited' ? (record?.invitationUrl ?? null) : null,
+            state: cell.state,
+            reason: cell.reason,
+            invitationUrl: cell.invitationUrl,
             invitedAt: record?.invitedAt?.toISOString() ?? null,
             acceptedAt: record?.acceptedAt?.toISOString() ?? null,
           };
         }),
       })),
     };
+  },
+
+  /**
+   * The CURRENT READER's access to each of the given repositories that Motir created for
+   * this project (Story MOTIR-4881 · MOTIR-12115; design `design/github/design-notes.md`
+   * § 35) — keyed by lower-cased `owner/name`, for the pull-request row's code link-out
+   * and access line.
+   *
+   * It is {@link listTeamAccess}'s cell for ONE member, computed by the same
+   * {@link accessCell}, so the row and the Code access page cannot disagree. A repository
+   * is answered only when it is the realized repository of an INVITABLE row (`created`,
+   * still present); every other `repoRef` is absent from the map, which the row reads as
+   * *no access fact* and draws as before.
+   *
+   * ⚠️ SHORT-CIRCUITS before any member read. Nearly every pull request is on a
+   * `connected` repository, and those callers pay for the set read only: with no
+   * invitable row matching, it returns an empty map without reading a collaborator
+   * record, a GitHub identity or a role. A reader outside the candidate set gets an empty
+   * map too (every row null), never another member's cell.
+   *
+   * Reads only, like `listTeamAccess`; the set read asserts browse and throws for a
+   * project the reader may not see — the caller decides what an unreadable answer means.
+   */
+  async readReaderAccessForRepos(
+    projectId: string,
+    repoRefs: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<Map<string, LinkedPullRequestReaderAccessDto>> {
+    const wanted = new Set(repoRefs.map((r) => r.toLowerCase()));
+    const out = new Map<string, LinkedPullRequestReaderAccessDto>();
+    if (wanted.size === 0) return out;
+    const rows = await projectRepoSetService.listByProject(projectId, ctx);
+    const matched = rows.filter(
+      (row) => isInvitable(row) && wanted.has(row.realizedRepo!.repoRef.toLowerCase()),
+    );
+    if (matched.length === 0) return out;
+
+    const [reader] = await resolveCandidates(projectId, ctx, ctx.userId);
+    if (!reader) return out;
+    const records = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      (tx) =>
+        projectRepoCollaboratorRepository.listByProjectRepoIds(
+          matched.map((r) => r.id),
+          ctx.workspaceId,
+          tx,
+        ),
+    );
+    const mine = new Map(
+      records.filter((r) => r.userId === reader.userId).map((r) => [r.projectRepoId, r]),
+    );
+    for (const row of matched) {
+      out.set(
+        row.realizedRepo!.repoRef.toLowerCase(),
+        accessCell(mine.get(row.id) ?? null, reader),
+      );
+    }
+    return out;
   },
 
   /**
@@ -494,7 +550,13 @@ async function inviteOne(args: {
  * parallel notion of membership — and the `canEdit` pass on top is what turns
  * "in scope" into "may be handed the code".
  */
-async function resolveCandidates(projectId: string, ctx: ServiceContext): Promise<Candidate[]> {
+async function resolveCandidates(
+  projectId: string,
+  ctx: ServiceContext,
+  /** Narrow to ONE member (MOTIR-12115) — the enumeration still decides whether they are
+   *  in scope, but the identity and can-edit reads then run for that member alone. */
+  onlyUserId?: string,
+): Promise<Candidate[]> {
   // Read directly through the repository leaf: this needs ONE field (the access
   // level that scopes the enumeration), and every caller has already been gated —
   // `listByProject` asserts browse, `grantTeamAccess` asserts edit — so routing it
@@ -506,7 +568,10 @@ async function resolveCandidates(projectId: string, ctx: ServiceContext): Promis
     accessMode: project.accessMode,
     ctx,
   });
-  const userIds = members.map((m) => m.userId);
+  const scoped =
+    onlyUserId === undefined ? members : members.filter((m) => m.userId === onlyUserId);
+  if (scoped.length === 0) return [];
+  const userIds = scoped.map((m) => m.userId);
 
   // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
   // `resolveCanEditForUsers` does throw `ProjectNotFoundError` — but
@@ -520,13 +585,39 @@ async function resolveCandidates(projectId: string, ctx: ServiceContext): Promis
   ]);
   const loginByUser = new Map(identities.map((i) => [i.userId, i.githubLogin]));
 
-  return members.map((m) => ({
+  return scoped.map((m) => ({
     userId: m.userId,
     name: m.name,
     email: m.email,
     eligible: eligibility.get(m.userId) ?? false,
     login: loginByUser.get(m.userId) ?? null,
   }));
+}
+
+/**
+ * ONE MEMBER × ONE REPOSITORY — the cell rule, in one place, so the team matrix and the
+ * pull-request row's reader access (MOTIR-12115) cannot drift.
+ *
+ * Eligibility is checked FIRST: a member their role excludes is settled, and telling
+ * them to connect GitHub would offer an action that would not help. The LIVE connected
+ * login decides `no_github_identity`, never the record's stored login. The state is
+ * kept beside the reason — the two are independent — and the invitation URL is offered
+ * only while the invitation is pending.
+ */
+function accessCell(
+  record: ProjectRepoAccessColumns | null,
+  candidate: Pick<Candidate, 'eligible' | 'login'>,
+): LinkedPullRequestReaderAccessDto {
+  const state = deriveAccessState(record);
+  return {
+    state,
+    reason: !candidate.eligible
+      ? 'role_cannot_edit'
+      : candidate.login === null
+        ? 'no_github_identity'
+        : null,
+    invitationUrl: state === 'invited' ? (record?.invitationUrl ?? null) : null,
+  };
 }
 
 /** A row that CAN hold invitations: Motir made the repository, and the repository

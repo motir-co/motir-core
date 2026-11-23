@@ -31,6 +31,8 @@ import {
 } from './DevelopmentGateFrame';
 import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
 import { PreviewLine } from './PreviewLine';
+import { AccessLine } from './AccessLine';
+import { readerAccessView } from './readerAccessLine';
 import { DecisionDocumentSlot } from './DecisionDocumentSlot';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
@@ -177,6 +179,9 @@ function PullRequestRow({
   const chipKey = githubReviewChipKey(pr.githubReview);
   const StateGlyph = state.icon;
   const PrPillGlyph = state.icon;
+  // The READER's access (Story MOTIR-4881 · MOTIR-12116; design/github § 35): whether the
+  // code link-out is drawn, and the access line under the preview line. Read, never derived.
+  const access = readerAccessView(pr);
   return (
     <li className="mt-2 flex items-center gap-2.5 gap-y-1 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y) @max-[30rem]:flex-wrap">
       <StateGlyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />
@@ -212,6 +217,14 @@ function PullRequestRow({
         {/* The PREVIEW (MOTIR-10099; design/github § 31): the text column's THIRD
             child — nothing when this pull request has no preview. */}
         <PreviewLine preview={pr.preview} />
+        {/* The ACCESS LINE (§ 35.3): the text column's FOURTH child, under the preview line
+            and outside the pill group — nothing when the reader's access needs no word. */}
+        {access.line !== null ? (
+          <AccessLine
+            variant={access.line}
+            invitationUrl={pr.readerAccess?.invitationUrl ?? null}
+          />
+        ) : null}
       </div>
       {/* NARROW (MOTIR-5351, Panel 12n): below a 30rem column the pill group drops to
           its own line under the title, so the title keeps the first line instead
@@ -264,15 +277,21 @@ function PullRequestRow({
           position:absolute, and with no positioned ancestor it escapes the
           shell's overflow container and stretches the ROOT scroller — the
           "empty space past the bottom of the page" bug. */}
-      <a
-        href={pr.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={t('development.openOnGithub')}
-        className="shrink-0 rounded-(--radius-control) p-(--spacing-control-x-4) text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
-      >
-        <ExternalLink className="h-4 w-4" aria-hidden />
-      </a>
+      {/* WITHHELD, not disabled (§ 35.3): when the reader's access rules the code out, the
+          link-out is not rendered at all and the row closes up, as the read-only peek does
+          for its absent remove control. Drawn, it still opens the stored row's `url`, so a
+          GitLab merge request opens on GitLab. */}
+      {access.showLinkOut ? (
+        <a
+          href={pr.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t('development.openOnGithub')}
+          className="shrink-0 rounded-(--radius-control) p-(--spacing-control-x-4) text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
+        >
+          <ExternalLink className="h-4 w-4" aria-hidden />
+        </a>
+      ) : null}
       {action}
     </li>
   );

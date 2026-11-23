@@ -8550,7 +8550,15 @@
       "unlinkAria": "{target} へのリンクを削除",
       "unlinkConfirmBefore": "次へのリンクを削除しますか:",
       "unlinkConfirmAfter": "? GitHub 上のプルリクエストには影響せず、リンクだけが削除されます。",
-      "unlinkAction": "リンクを削除"
+      "unlinkAction": "リンクを削除",
+      "access": {
+        "invited": "このリポジトリへの招待が GitHub で承諾を待っています。<link>招待を承諾</link>",
+        "invitedNoLink": "このリポジトリへの招待が GitHub で承諾を待っています。<link>コードアクセスへ移動</link>",
+        "notInvited": "このリポジトリのコードにはまだアクセスできません。<link>コードアクセスへ移動</link>",
+        "roleCannotEdit": "このプロジェクトでのあなたのロールにはコードアクセスが含まれていません。",
+        "noGithubPreview": "Motir はまだあなたの GitHub アカウントを認識していないため、コードを開けません。<tone>上のプレビューでこの変更を確認してください。</tone>",
+        "noGithubNoPreview": "Motir はまだあなたの GitHub アカウントを認識していないため、コードを開けません。<tone>このプルリクエストに利用できるプレビューはありません。</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "{repo} を組織から切断",
