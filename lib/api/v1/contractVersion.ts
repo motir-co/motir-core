@@ -1325,8 +1325,9 @@
  *   it was handed over or that the answer is to merge the base and push.
  *
  *   Additive: two new fields on an existing object (§8's allowed list). A client older than
- *   this version ignores them; the `motir` CLI built with this change reads an absent field
- *   as `false`.
+ *   this version ignores them (its generated validators allow extra properties); the `motir`
+ *   CLI built with this change requires them, as it requires every field it was generated
+ *   against.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.91.0` after `1.90.0` above.
  */

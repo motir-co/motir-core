@@ -404,11 +404,6 @@ describe('toWorkItemRepairClaim — a member handed over for its BASE (Bug MOTIR
       [false, true],
     ]);
   });
-
-  it('a server older than contract 1.91.0 sends neither — read as handed over for its checks alone', () => {
-    const claim = toWorkItemRepairClaim(body([member]));
-    expect(claim.pullRequests[0]).toMatchObject({ conflicted: false, outOfDate: false });
-  });
 });
 
 describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () => {
