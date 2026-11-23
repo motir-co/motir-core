@@ -12788,6 +12788,7 @@
         "agent_storage": "에이전트 저장 공간",
         "ci": "CI",
         "search": "웹 검색",
+        "hosting_production": "프로덕션 호스팅",
         "indexing": "인덱싱"
       },
       "models": {

@@ -12794,6 +12794,7 @@
         "agent_storage": "Almacenamiento de agentes",
         "ci": "CI",
         "search": "Búsqueda web",
+        "hosting_production": "Alojamiento de producción",
         "indexing": "Indexación"
       },
       "models": {

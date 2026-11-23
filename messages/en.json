@@ -12791,6 +12791,7 @@
         "agent_storage": "Agent storage",
         "ci": "CI",
         "search": "Web search",
+        "hosting_production": "Production hosting",
         "indexing": "Indexing"
       },
       "models": {

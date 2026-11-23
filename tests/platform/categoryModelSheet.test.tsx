@@ -134,13 +134,14 @@ describe('CategoryModelSheet', () => {
     expect(charged.children[2]!.textContent).toBe('126');
   });
 
-  it('below the org, instances, storage and search say they are org-level — never a zero', () => {
+  it('below the org, instances, storage, search and production hosting say they are org-level — never a zero', () => {
     const { container } = renderSheet('project');
     const lines = [...container.querySelectorAll('[data-testid="org-level-line"]')];
     expect(lines.map((l) => l.closest('tr')!.getAttribute('data-category'))).toEqual([
       'agent_instance',
       'agent_storage',
       'search',
+      'hosting_production',
     ]);
     for (const l of lines) expect(l.textContent).toBe('Org-level — not split by project');
     expect(

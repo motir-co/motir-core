@@ -12794,6 +12794,7 @@
         "agent_storage": "Miejsce na dane agentów",
         "ci": "CI",
         "search": "Wyszukiwanie w sieci",
+        "hosting_production": "Hosting produkcyjny",
         "indexing": "Indeksowanie"
       },
       "models": {

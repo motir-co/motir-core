@@ -10097,6 +10097,7 @@
   "platformAdmin.usage.category.agent_storage": "Agent storage",
   "platformAdmin.usage.category.ci": "CI",
   "platformAdmin.usage.category.search": "Web search",
+  "platformAdmin.usage.category.hosting_production": "Production hosting",
   "platformAdmin.usage.category.indexing": "Indexing",
   "platformAdmin.usage.models.title.planning_tokens": "Planning tokens by model",
   "platformAdmin.usage.models.title.agent_tokens": "Agent-run tokens by model",

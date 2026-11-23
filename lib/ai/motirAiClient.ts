@@ -112,7 +112,12 @@ import {
   RUN_MODEL_DEFAULT_KEYS,
   type PlannerModelListReason,
 } from './types';
-import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
+import {
+  withEveryMonthCategory,
+  withEverySpendCategory,
+  type CategoryFigures,
+  type SpendCategory,
+} from '@/lib/platform/spend';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
 // motir-ai reads/proposes only what this user could (contract §4b).
@@ -3828,7 +3833,7 @@ export interface RawPlatformUsage {
 
 /**
  * GET /v1/platform/usage — one entity's spend for `period` (`YYYY-MM` or `all`),
- * all eight categories, the token categories' models and the totals, read from
+ * all nine categories, the token categories' models and the totals, read from
  * motir-ai's pre-aggregated rollup. Read-through: the caller is a
  * `platform*Service` method that has already passed the platform-staff gate.
  */
@@ -3897,7 +3902,12 @@ export async function getPlatformUsageOrgs(query: {
     headers: authHeaders(serviceToken),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
-  return (await res.json()) as RawPlatformUsageOrgs;
+  const body = (await res.json()) as RawPlatformUsageOrgs;
+  return {
+    ...body,
+    items: body.items.map(withEverySpendCategory),
+    estate: withEverySpendCategory(body.estate),
+  };
 }
 
 /** `GET /v1/platform/usage/children` — an entity's children's spend, one keyset page. */
@@ -3940,7 +3950,15 @@ export async function getPlatformUsageChildren(query: {
     headers: authHeaders(serviceToken),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
-  return (await res.json()) as RawPlatformUsageChildren;
+  const body = (await res.json()) as RawPlatformUsageChildren;
+  return {
+    ...body,
+    items: body.items.map(withEverySpendCategory),
+    remainder: body.remainder && {
+      noProject: withEverySpendCategory(body.remainder.noProject),
+      orgLevel: withEverySpendCategory(body.remainder.orgLevel),
+    },
+  };
 }
 
 /** One period's figures in the month series (`/v1/platform/usage/months`). */
@@ -3989,7 +4007,12 @@ export async function getPlatformUsageMonths(query: {
     headers: authHeaders(serviceToken),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
-  return (await res.json()) as RawPlatformUsageMonths;
+  const body = (await res.json()) as RawPlatformUsageMonths;
+  return {
+    ...body,
+    items: body.items.map(withEveryMonthCategory),
+    allTime: withEveryMonthCategory(body.allTime),
+  };
 }
 
 // ── Provider-bill reconciliation (Story MOTIR-11350 · MOTIR-11376) ─────────────
