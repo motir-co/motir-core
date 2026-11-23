@@ -1395,6 +1395,37 @@ jobs:
       - uses: actions/checkout@v6
       - name: Start Postgres
         uses: ./.github/actions/postgres
+      # `pg_dump` and `pg_restore` for the database-export restore test
+      # (tests/hosting/hostedApplicationExportRestore.test.ts, MOTIR-12134), which
+      # FAILS rather than skips without them: a skipped restore test is a green
+      # check over an export nobody restored. PGDG's 18, to match the pg18 server
+      # above — `pg_dump` refuses a server newer than itself, ubuntu-latest's own
+      # client is older, and the fleet runner image carries none. Only the PGDG
+      # source is refreshed (no full `apt-get update` against the Ubuntu mirror,
+      # the MOTIR-9350 failure), each attempt time-boxed and retried.
+      - name: Install the PostgreSQL 18 client
+        shell: bash
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if timeout 180 bash -ec '
+              command -v /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh >/dev/null \
+                || sudo apt-get install -y --no-install-recommends postgresql-common
+              codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+              echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
+                | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+              sudo apt-get update -o Dir::Etc::sourcelist=sources.list.d/pgdg.list \
+                -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+              sudo apt-get install -y --no-install-recommends postgresql-client-18
+            '; then
+              /usr/lib/postgresql/18/bin/pg_dump --version
+              echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+              exit 0
+            fi
+            echo "attempt ${attempt} failed"
+          done
+          echo "::error::could not install postgresql-client-18"
+          exit 1
       - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-test
