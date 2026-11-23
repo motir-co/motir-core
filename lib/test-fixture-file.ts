@@ -53,8 +53,17 @@
 // `tests/build/nft-trace-guard.test.ts` asserts both halves of that, and
 // `ci.yml`'s build job greps its own build output for the warning.
 
-import { appendFileSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 /**
  * Read a fixture file as UTF-8 text. Throws exactly as `readFileSync` does —
@@ -89,4 +98,28 @@ export function replaceFixtureFileSync(path: string, contents: string): void {
   const sibling = `${path}.${process.pid}.tmp`;
   writeFileSync(/* turbopackIgnore: true */ sibling, contents);
   renameSync(/* turbopackIgnore: true */ sibling, /* turbopackIgnore: true */ path);
+}
+
+/** Whether a fixture file exists. */
+export function fixtureFileExistsSync(path: string): boolean {
+  return existsSync(/* turbopackIgnore: true */ path);
+}
+
+/** Read a fixture file's raw bytes — the object store fake's stored objects. */
+export function readFixtureBytesSync(path: string): Buffer {
+  return readFileSync(/* turbopackIgnore: true */ path);
+}
+
+/** Replace a fixture file whole with raw bytes, by the sibling-and-rename of
+ *  `replaceFixtureFileSync`, creating its directory first. */
+export function replaceFixtureBytesSync(path: string, bytes: Uint8Array): void {
+  mkdirSync(/* turbopackIgnore: true */ dirname(path), { recursive: true });
+  const sibling = `${path}.${process.pid}.tmp`;
+  writeFileSync(/* turbopackIgnore: true */ sibling, bytes);
+  renameSync(/* turbopackIgnore: true */ sibling, /* turbopackIgnore: true */ path);
+}
+
+/** Remove a fixture file; an absent one is not an error. */
+export function removeFixtureFileSync(path: string): void {
+  rmSync(/* turbopackIgnore: true */ path, { force: true });
 }

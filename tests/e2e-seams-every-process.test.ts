@@ -3,7 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getGlobalDispatcher, setGlobalDispatcher, type Dispatcher } from 'undici';
 import { E2E_REFUSED_HOSTS, installSharedMockAgent } from '@/lib/test-mock-agent';
-import { githubMergeSeamEnv, productionReleaseSeamEnv } from './e2e/_helpers/job-worker-process';
+import {
+  githubMergeSeamEnv,
+  graceWindowSeamEnv,
+  productionReleaseSeamEnv,
+} from './e2e/_helpers/job-worker-process';
+import { E2E_OBJECT_STORE_ENV } from './e2e/_helpers/e2e-object-store-env';
 
 // Guard for Bug MOTIR-5837: EVERY process in the E2E lane fakes the GitHub
 // boundary, and none of them can reach the real api.github.com.
@@ -174,5 +179,53 @@ describe("the worker's production-release seam travels with its store and key (M
     expect(config).toMatch(
       /MOTIR_FAKE_HOSTING_STATE_PATH: process\.env\['MOTIR_FAKE_HOSTING_STATE_PATH'\]!/,
     );
+  });
+});
+
+describe("the worker's grace-window seam travels with its stores (MOTIR-12142)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('mirrors nothing unless the lane sets the database store', () => {
+    vi.stubEnv('MOTIR_FAKE_DATABASE_STATE_PATH', '');
+    vi.stubEnv('MOTIR_FAKE_BLOB_STATE_PATH', '/tmp/blob.json');
+    expect(graceWindowSeamEnv()).toEqual({});
+  });
+
+  it('mirrors both stores, the blob seam, the fake fleet and the object-store placeholders', () => {
+    vi.stubEnv('MOTIR_FAKE_DATABASE_STATE_PATH', '/tmp/database.json');
+    vi.stubEnv('MOTIR_FAKE_BLOB_STATE_PATH', '/tmp/blob.json');
+    expect(graceWindowSeamEnv()).toEqual({
+      E2E_TEST_BLOB: '1',
+      MOTIR_FLEET_ORCHESTRATOR: 'fake',
+      MOTIR_FAKE_DATABASE_STATE_PATH: '/tmp/database.json',
+      MOTIR_FAKE_BLOB_STATE_PATH: '/tmp/blob.json',
+      ...E2E_OBJECT_STORE_ENV,
+    });
+    // Without a shared blob store the worker's export would be a second,
+    // disagreeing object store — the path is then simply not mirrored.
+    vi.stubEnv('MOTIR_FAKE_BLOB_STATE_PATH', '');
+    expect(graceWindowSeamEnv()).not.toHaveProperty('MOTIR_FAKE_BLOB_STATE_PATH');
+  });
+
+  it('is wired at both worker spawn sites', () => {
+    const helper = codeOf('tests/e2e/_helpers/job-worker-process.ts');
+    expect(helper.match(/\.\.\.graceWindowSeamEnv\(\)/g)).toHaveLength(2);
+  });
+
+  it('is defaulted by the acceptance lane, which shares both stores and the fake pg_dump with its webServer', () => {
+    const config = codeOf('playwright.acceptance.config.ts');
+    // The fake pg_dump reads EXACTLY this path when the variable cannot reach it.
+    expect(config).toMatch(
+      /process\.env\['MOTIR_FAKE_DATABASE_STATE_PATH'\] \?\?= path\.resolve\(\s*'out\/playwright-output-acceptance\/\.fake-database\.json',?\s*\)/,
+    );
+    expect(config).toMatch(/process\.env\['MOTIR_FAKE_BLOB_STATE_PATH'\] \?\?=/);
+    expect(config).toMatch(
+      /MOTIR_FAKE_DATABASE_STATE_PATH: process\.env\['MOTIR_FAKE_DATABASE_STATE_PATH'\]!/,
+    );
+    expect(config).toMatch(
+      /MOTIR_FAKE_BLOB_STATE_PATH: process\.env\['MOTIR_FAKE_BLOB_STATE_PATH'\]!/,
+    );
+    expect(config).toMatch(/path\.resolve\('tests\/e2e\/_fakes\/bin'\)/);
+    expect(config).toMatch(/\.\.\.E2E_OBJECT_STORE_ENV/);
   });
 });

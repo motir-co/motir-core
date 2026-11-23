@@ -63,5 +63,6 @@ export * from './database/types';
 export * from './database/errors';
 export * from './database/env';
 export * from './database/fake';
+export * from './database/fakeStore';
 export { createNeonDatabasePort } from './adapters/neon/database';
 export { neonDatabaseConfig } from './adapters/neon/config';

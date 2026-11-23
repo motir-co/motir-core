@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { E2E_OBJECT_STORE_ENV } from './e2e-object-store-env';
 import {
   E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
@@ -305,7 +306,8 @@ export function embeddingsSeamEnv(): Record<string, string> {
  *   * the environment-configuration key, which seals the production database's
  *     connection string and is otherwise set on the webServer only.
  *
- * The database fake stays in this process's memory: only a release reaches it.
+ * The database fake's store is mirrored by `graceWindowSeamEnv` below, which
+ * the grace window needs and a release shares.
  *
  * Opt-in (`E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM=1`, set by
  * `playwright.acceptance.config.ts`), because only that lane holds the store.
@@ -327,6 +329,37 @@ export function productionReleaseSeamEnv(): Record<string, string> {
     GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
     GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
     GITHUB_STUDIO_APP_PRIVATE_KEY: generateAppPrivateKey(),
+  };
+}
+
+/**
+ * THE GRACE WINDOW'S STORES, MIRRORED INTO THE WORKER (Story MOTIR-9800 · MOTIR-12142).
+ *
+ * The grace-window stop (`hosting.application-grace.stop`) is a JOB: it exports
+ * the application's database to the object store and then deletes the
+ * database, while the webServer exports on demand and deletes on Stop now. So
+ * this process needs:
+ *
+ *   * the database fake's cross-process store (`MOTIR_FAKE_DATABASE_STATE_PATH`),
+ *     so the database the worker deletes is the one the spec watches;
+ *   * the blob mock (`E2E_TEST_BLOB=1`) with its file-backed store
+ *     (`MOTIR_FAKE_BLOB_STATE_PATH`) and the lane's object-store placeholders,
+ *     so the export the worker writes is the one the webServer serves;
+ *   * the fake fleet adapter, which resolves the database port to its fake.
+ *
+ * The fake `pg_dump` arrives on PATH, which the worker inherits from the runner.
+ * Opt-in by the store path: only the acceptance lane sets it.
+ */
+export function graceWindowSeamEnv(): Record<string, string> {
+  const databasePath = process.env['MOTIR_FAKE_DATABASE_STATE_PATH'];
+  if (!databasePath) return {};
+  const blobPath = process.env['MOTIR_FAKE_BLOB_STATE_PATH'];
+  return {
+    E2E_TEST_BLOB: '1',
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    MOTIR_FAKE_DATABASE_STATE_PATH: databasePath,
+    ...(blobPath ? { MOTIR_FAKE_BLOB_STATE_PATH: blobPath } : {}),
+    ...E2E_OBJECT_STORE_ENV,
   };
 }
 
@@ -456,6 +489,8 @@ const WEBHOOK_HANDLER_ENV_KEYS: readonly (string | RegExp)[] = [
   'MOTIR_HOSTING_GATE_SIGNING_KEY',
   'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
   'MOTIR_FAKE_HOSTING_STATE_PATH',
+  'MOTIR_FAKE_DATABASE_STATE_PATH',
+  'MOTIR_FAKE_BLOB_STATE_PATH',
 ];
 
 /**
@@ -574,6 +609,8 @@ export async function startJobWorker(): Promise<void> {
       ...githubPreviewSeamEnv(),
       // A production release's hosting store and GitHub — see `productionReleaseSeamEnv`.
       ...productionReleaseSeamEnv(),
+      // The grace window's database and object stores — see `graceWindowSeamEnv`.
+      ...graceWindowSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -703,6 +740,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       // A preview's GitHub deployment and manifest — see `githubPreviewSeamEnv`.
       ...githubPreviewSeamEnv(),
       ...productionReleaseSeamEnv(),
+      // The grace window's database and object stores — see `graceWindowSeamEnv`.
+      ...graceWindowSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

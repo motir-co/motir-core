@@ -18,9 +18,11 @@
 // on in the worker: the worker inherits the RUNNER's environment, not
 // `webServer.env`, and `job-worker-process.ts` decides which flags it mirrors.
 // That is deliberate — a seam whose fake keeps state IN MEMORY
-// (`E2E_TEST_GITHUB_REPOS`' "created" map, `E2E_TEST_BLOB`'s object store) would
-// be a SECOND, disagreeing fake in a second process. Mirror only a seam whose
-// state lives in its control/journal files.
+// (`E2E_TEST_GITHUB_REPOS`' "created" map, `E2E_TEST_BLOB`'s object store when
+// `MOTIR_FAKE_BLOB_STATE_PATH` is unset) would be a SECOND, disagreeing fake in
+// a second process. Mirror only a seam whose state lives in files: the blob
+// seam qualifies once its store is file-backed, which is how the acceptance
+// lane mirrors it for the grace window (MOTIR-12142, `graceWindowSeamEnv`).
 //
 // The imports inside each `install` stay DYNAMIC: `instrumentation.ts` reaches
 // this module only under `NEXT_RUNTIME === 'nodejs'`, and a production worker

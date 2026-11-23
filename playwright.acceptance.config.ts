@@ -3,6 +3,7 @@ import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
 import { E2E_AI_TO_CORE_SERVICE_TOKEN } from './tests/e2e/_helpers/billing-push';
 import { E2E_CORE_CALLBACK_SECRET } from './tests/e2e/_helpers/log-bug-as-ai';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
+import { E2E_OBJECT_STORE_ENV } from './tests/e2e/_helpers/e2e-object-store-env';
 import { generateKeyPairSync } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -297,6 +298,29 @@ process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-hosting.json',
 );
+// Story MOTIR-9800 · MOTIR-12142 — THE GRACE WINDOW. The worker creates a
+// production database and deletes it at the grace-window stop, the webServer
+// deletes it on Stop now and exports it on demand, and the spec asks whether it
+// still exists — so the database fake's store is one file all three share. The
+// export lands in the object store from the worker AND the webServer, so the
+// blob mock is file-backed here too. The export spawns `pg_dump`, which is the
+// lane's fake (`tests/e2e/_fakes/bin`, prepended to PATH): the export service
+// hands its child only PATH, PGPASSWORD and PGCONNECT_TIMEOUT, so that fake
+// falls back to EXACTLY this database path when the variable does not reach it
+// — keep the two in step.
+process.env['MOTIR_FAKE_DATABASE_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-database.json',
+);
+process.env['MOTIR_FAKE_BLOB_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-blob.json',
+);
+{
+  const fakeBin = path.resolve('tests/e2e/_fakes/bin');
+  const current = process.env['PATH'] ?? '';
+  if (!current.split(path.delimiter).includes(fakeBin)) {
+    process.env['PATH'] = current ? `${fakeBin}${path.delimiter}${current}` : fakeBin;
+  }
+}
 process.env['MOTIR_PRODUCTION_RELEASE_CONTROL_PATH'] ??= path.resolve(
   '/tmp/motir-acceptance-production-release-control.json',
 );
@@ -520,13 +544,9 @@ const APP_SERVER_ENV = {
   // calling itself Claude from example.org) — the hardened transport
   // refuses a local fixture server, so the seam replaces the transport.
   E2E_TEST_CIMD: '1',
-  MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
-  MOTIR_S3_REGION: 'auto',
-  MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
-  MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
-  MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
-  MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-  MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
+  // The placeholders are shared with the job worker (MOTIR-12142), whose
+  // grace-window stop writes an export through the same seam.
+  ...E2E_OBJECT_STORE_ENV,
   // ⚠️ THE DOCS ROW IS CONFIGURATION NOW (MOTIR-4167 / #2530, MOTIR-4257).
   //
   // `lib/docs/links.ts` resolves the rail's Docs row from an operator's
@@ -689,6 +709,11 @@ const APP_SERVER_ENV = {
   // The hosting fake's store — a production release's (MOTIR-10040) and a
   // preview's (MOTIR-10098); see its block above.
   MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+  // The grace window's database and object stores (MOTIR-12142) — see their
+  // block above; PATH carries the fake `pg_dump`.
+  MOTIR_FAKE_DATABASE_STATE_PATH: process.env['MOTIR_FAKE_DATABASE_STATE_PATH']!,
+  MOTIR_FAKE_BLOB_STATE_PATH: process.env['MOTIR_FAKE_BLOB_STATE_PATH']!,
+  PATH: process.env['PATH']!,
   // The capacity fake (MOTIR-9617) — see its block above this config.
   MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
   MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
