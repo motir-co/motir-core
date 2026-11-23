@@ -8553,7 +8553,15 @@
       "unlinkAria": "Usuń powiązanie z {target}",
       "unlinkConfirmBefore": "Usunąć powiązanie z",
       "unlinkConfirmAfter": "? Pull request na GitHubie pozostaje nietknięty — usuwane jest tylko powiązanie.",
-      "unlinkAction": "Usuń powiązanie"
+      "unlinkAction": "Usuń powiązanie",
+      "access": {
+        "invited": "Zaproszenie do tego repozytorium czeka na GitHubie. <link>Przyjmij zaproszenie</link>",
+        "invitedNoLink": "Zaproszenie do tego repozytorium czeka na GitHubie. <link>Przejdź do Dostępu do kodu</link>",
+        "notInvited": "Nie masz jeszcze dostępu do kodu tego repozytorium. <link>Przejdź do Dostępu do kodu</link>",
+        "roleCannotEdit": "Twoja rola w tym projekcie nie obejmuje dostępu do kodu.",
+        "noGithubPreview": "Motir nie zna jeszcze Twojego konta GitHub, więc nie możesz otworzyć kodu. <tone>Sprawdź tę zmianę w podglądzie powyżej.</tone>",
+        "noGithubNoPreview": "Motir nie zna jeszcze Twojego konta GitHub, więc nie możesz otworzyć kodu. <tone>Dla tego pull requesta nie ma dostępnego podglądu.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "Odłącz {repo} od organizacji",
