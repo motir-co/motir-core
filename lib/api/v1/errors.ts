@@ -234,6 +234,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // was already reviewed). Stored with that outcome; nothing decided.
   REVIEW_VERDICT_LATE: 409,
   REVIEW_VERDICT_SECOND: 409,
+  // 409 — the review gate is on and no review is awaiting at the current version yet
+  // (Bug MOTIR-12147). Nothing stored; send the verdict again once the review is asked.
+  REVIEW_NOT_YET_ASKED: 409,
   // 422 — the card is not a run target; the message names the one to review instead.
   REVIEW_TARGET_NOT_RUN_TARGET: 422,
   // 422 — the service's own body guard (findings on a send-back, evidence on `met`, a

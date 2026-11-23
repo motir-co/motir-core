@@ -630,12 +630,21 @@ function placementWord(
   return side.folderPath ? side.folderPath.join(' ▸ ') : `folder:${side.folderId}`;
 }
 
+/** The arrival level's two sizes — see `PlanReviewDto.arrivalLevelSize` / `…Total`. */
+interface ArrivalLevelSizes {
+  /** The nodes the canvas DRAWS: the capped work-item read, the plan's adds, and the
+   *  level's folders, which are read whole and never cut by the cap. */
+  size: number;
+  /** The level's work-item nodes BEFORE the cap — what truncation can drop. */
+  total: number;
+}
+
 /**
  * HOW MANY NODES the plan's arrival level draws (MOTIR-4024, Part XIII §6): the
- * level's committed children plus the plan's own `add`s under the same parent.
- * The plan's `add`s draw a node each and no committed row backs them; a `modify` /
- * `remove` SHARES its node with the committed card it targets, so counting it
- * again would double it.
+ * level's committed nodes plus the plan's own `add`s on the same level. The plan's
+ * `add`s draw a node each and no committed row backs them; a `modify` / `remove`
+ * SHARES its node with the committed card it targets, so counting it again would
+ * double it.
  *
  * Only called for a plan WITH items (MOTIR-10739): for an empty plan
  * `arrivalParentId` is `null` by absence, not because the plan is at the top level,
@@ -646,36 +655,80 @@ async function countArrivalLevel(
   arrivalLevelKey: string | null,
   items: readonly PlanReviewItemDto[],
   workspaceId: string,
-): Promise<number> {
-  // ⚠️ A FOLDER IS A LEVEL (Bug MOTIR-12144; Bug MOTIR-5782). The level may be a
-  // folder's, `folder:<id>`: its committed nodes are the cards FILED in that folder
-  // — always roots, since the CHECK keeps `parentId` and `folderId` apart — counted
-  // with the SAME predicate the canvas's folder-level read uses, and its proposed
-  // nodes are the root `add`s filed there (`proposalLevelKey`). The root and a
-  // parent level keep the shipped count.
-  const folderId = folderIdFromNodeId(arrivalLevelKey);
+): Promise<ArrivalLevelSizes> {
   const committed = await withWorkspaceServiceContext(workspaceId, (tx) =>
-    folderId !== null
-      ? workItemRepository.countProjectTreeLevel(
-          projectId,
-          workspaceId,
-          null,
-          null,
-          tx,
-          undefined,
-          {
-            kind: 'folder',
-            folderId,
-          },
-        )
-      : workItemRepository.countSiblingsInWorkspace(projectId, arrivalLevelKey, workspaceId, tx),
+    countCommittedLevelNodes(projectId, arrivalLevelKey, workspaceId, tx),
   );
+  // A proposal's level is the one the canvas draws it on (`proposalLevelKey`): its
+  // parent, else the folder it is filed into, else the root. So a root `add` filed
+  // into a folder is on that folder's level, never the root's (Bug MOTIR-12148).
   const proposed = items.filter(
-    (i) =>
-      i.op === 'add' &&
-      (folderId !== null ? proposalLevelKey(i) : (i.parentNodeId ?? null)) === arrivalLevelKey,
+    (i) => i.op === 'add' && proposalLevelKey(i) === arrivalLevelKey,
   ).length;
-  return committed + proposed;
+  const total = committed.workItems + proposed;
+  // What the canvas will actually DRAW: the level read is capped, so a level past
+  // the cap draws the cap, not its total — and then its folders, which the cap
+  // never reaches. The two arms of `defaultPlanView` read different numbers: the
+  // legibility arm reads what is drawn, the truncation arm reads what was dropped,
+  // and a folder is never dropped.
+  return { size: Math.min(total, TREE_LEVEL_MAX_TAKE) + committed.folders, total };
+}
+
+/**
+ * The COMMITTED nodes of one canvas level, each counted with the predicate the
+ * canvas's own level read uses (`workItemsService.getProjectRoadmap` with
+ * `folders: true`), so the size describes the level that is drawn.
+ *
+ * ⚠️ A FOLDER IS A LEVEL (Bug MOTIR-12144; Bug MOTIR-5782), and so the ROOT is a
+ * level WITH folders (Bug MOTIR-12148):
+ * - `folder:<id>` — the cards FILED in that folder (always roots, since the CHECK
+ *   keeps `parentId` and `folderId` apart). Its child folders are not counted yet
+ *   (Bug MOTIR-12161).
+ * - the root (`null`) — the UNFILED root cards (`excludeFiled`: a filed card is
+ *   drawn behind its folder, not loose) plus one node per root folder. Counting
+ *   every root card put a large `Bugs` folder's cards on a root that draws one
+ *   folder node for them, and sent the plan to the list.
+ * - a work item's id — its children. A work item's children are never folders.
+ */
+async function countCommittedLevelNodes(
+  projectId: string,
+  levelKey: string | null,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<{ workItems: number; folders: number }> {
+  const folderId = folderIdFromNodeId(levelKey);
+  if (folderId !== null) {
+    const workItems = await workItemRepository.countProjectTreeLevel(
+      projectId,
+      workspaceId,
+      null,
+      null,
+      tx,
+      undefined,
+      { kind: 'folder', folderId },
+    );
+    return { workItems, folders: 0 };
+  }
+  if (levelKey !== null) {
+    const workItems = await workItemRepository.countSiblingsInWorkspace(
+      projectId,
+      levelKey,
+      workspaceId,
+      tx,
+    );
+    return { workItems, folders: 0 };
+  }
+  const workItems = await workItemRepository.countProjectTreeLevel(
+    projectId,
+    workspaceId,
+    null,
+    null,
+    tx,
+    undefined,
+    { kind: 'excludeFiled' },
+  );
+  const folders = await folderRepository.countLevel(projectId, workspaceId, null, tx);
+  return { workItems, folders };
 }
 
 /**
@@ -2344,15 +2397,10 @@ export const planReviewService = {
     // large project's root sent every freshly started plan to the list. Both
     // numbers are 0 for an empty plan, and the root is not read at all.
     const arrivalLevelKey = arrivalLevelId(items);
-    const arrivalLevelTotal =
+    const { size: arrivalLevelSize, total: arrivalLevelTotal } =
       items.length === 0
-        ? 0
+        ? { size: 0, total: 0 }
         : await countArrivalLevel(plan.projectId, arrivalLevelKey, items, ctx.workspaceId);
-    // What the canvas will actually DRAW: the level read is capped, so a level
-    // past the cap draws the cap, not its total. Both numbers are carried because
-    // the two arms of the rule read different ones — the legibility arm reads what
-    // is drawn, the truncation arm reads what was dropped.
-    const arrivalLevelSize = Math.min(arrivalLevelTotal, TREE_LEVEL_MAX_TAKE);
 
     // THE PLAN'S PROGRESS (Story MOTIR-7820 · MOTIR-7825) — the one derivation,
     // built from the items and steps this read already holds. The committed rows

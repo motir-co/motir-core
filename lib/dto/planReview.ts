@@ -1326,8 +1326,9 @@ export interface PlanReviewDto {
 
   /**
    * HOW MANY NODES THE ARRIVAL LEVEL DRAWS (MOTIR-4024, design Part XIII §6) —
-   * the committed siblings the level read will return, plus the plan's own
-   * proposals under that container.
+   * the committed work items the (capped) level read will return, plus the plan's
+   * own proposals on that level, plus the level's FOLDER nodes (the root's folders,
+   * Bug MOTIR-12148), which are read whole and never capped.
    *
    * ⚠️ THE CLIENT CANNOT COMPUTE IT. `defaultPlanView` runs before the canvas has
    * fetched anything, and the answer is about the level's COMMITTED
@@ -1343,6 +1344,8 @@ export interface PlanReviewDto {
   /**
    * The same level's UNTRUNCATED size — what it holds before
    * `TREE_LEVEL_MAX_TAKE` caps the read (MOTIR-4024, Part XIII §6, second arm).
+   * Work items and the plan's adds only: a level's folders are read whole, so the
+   * cap can never drop one, and they are counted in `arrivalLevelSize` alone.
    *
    * The level read sorts key-ASCENDING and discards the HIGHEST keys, which are
    * the most recently created cards — and a `modify` or `remove` targets a
