@@ -41,6 +41,8 @@ export class GatewayRunKeyUnavailableError extends GatewayRunKeyError {}
 //     503 carrying its own JSON refusal (`app_keys_not_configured`). `code` is its own.
 //   - `GatewayAppKeyUnavailableError` — unreachable, timed out, any other 5xx, or
 //     an answer that is not the contract's shape. Retrying may help.
+//   - `GatewayAppKeyInvalidInputError` — the input was refused before anything was
+//     sent: a mint whose quota or model list the gateway would refuse (MOTIR-8341).
 
 export abstract class GatewayAppKeyError extends Error {
   constructor(message: string) {
@@ -63,3 +65,6 @@ export class GatewayAppKeyRefusedError extends GatewayAppKeyError {
 }
 
 export class GatewayAppKeyUnavailableError extends GatewayAppKeyError {}
+
+/** The input was refused before anything was sent (MOTIR-8341). */
+export class GatewayAppKeyInvalidInputError extends GatewayAppKeyError {}

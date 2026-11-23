@@ -780,6 +780,16 @@ const repairPullRequestSchema = z.object({
       failingCheckUrl: z.string().nullable(),
     })
     .nullable(),
+  /** The host reports this pull request CONFLICTED with `baseRef` at its current head
+   *  (MOTIR-5913's stored reading). A member handed over for this alone has green checks
+   *  and no `queueExit`: only a merge of the base, with the conflicts resolved, answers it
+   *  (Bug MOTIR-12095). */
+  conflicted: z.boolean(),
+  /** The host reports this pull request OUT OF DATE with a base branch that requires
+   *  branches to be up to date (`mergeable_state: behind`, Bug MOTIR-10054) at its current
+   *  head. Its checks are green and nothing is wrong with them: merge the base and push
+   *  (Bug MOTIR-12095). */
+  outOfDate: z.boolean(),
 });
 
 /**
@@ -892,6 +902,8 @@ export function presentWorkItemRepairClaim(dto: WorkItemRepairClaimDto): V1WorkI
               failingCheckName: pr.queueExit.failingCheckName,
               failingCheckUrl: pr.queueExit.failingCheckUrl,
             },
+      conflicted: pr.conflicted,
+      outOfDate: pr.outOfDate,
     })),
   };
 }

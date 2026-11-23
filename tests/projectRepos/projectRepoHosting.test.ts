@@ -4,9 +4,20 @@
 // proved against the database, including that a refusal and a repeat write
 // change nothing.
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { HostingSize, HostingTarget, HostingUseCase } from '@/generated/prisma/client';
+import {
+  HostingShape,
+  HostingSize,
+  HostingTarget,
+  HostingUseCase,
+} from '@/generated/prisma/client';
+import type { ReleaseShape } from '@motir/orchestrator';
 import { db } from '@/lib/db';
-import { HOSTING_SIZES, HOSTING_TARGETS, HOSTING_USE_CASES } from '@/lib/hosting/vocabulary';
+import {
+  HOSTING_SHAPES,
+  HOSTING_SIZES,
+  HOSTING_TARGETS,
+  HOSTING_USE_CASES,
+} from '@/lib/hosting/vocabulary';
 import { toProjectRepoDto, type ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import {
   ProjectRepoHostingTargetFixedError,
@@ -43,7 +54,13 @@ async function motirRow() {
 async function stored(id: string) {
   return adminDb.projectRepo.findUniqueOrThrow({
     where: { id },
-    select: { hostingTarget: true, hostingUseCase: true, hostingSize: true, updatedAt: true },
+    select: {
+      hostingTarget: true,
+      hostingUseCase: true,
+      hostingSize: true,
+      hostingShape: true,
+      updatedAt: true,
+    },
   });
 }
 
@@ -52,6 +69,15 @@ describe('the hosting vocabulary', () => {
     expect([...HOSTING_TARGETS].sort()).toEqual(Object.values(HostingTarget).sort());
     expect([...HOSTING_USE_CASES].sort()).toEqual(Object.values(HostingUseCase).sort());
     expect([...HOSTING_SIZES].sort()).toEqual(Object.values(HostingSize).sort());
+    expect([...HOSTING_SHAPES].sort()).toEqual(Object.values(HostingShape).sort());
+  });
+
+  it('names the same shapes the deploy port takes', () => {
+    // A compile-time pin both ways: every recorded shape is a port shape, and
+    // every port shape can be recorded.
+    const toPort: readonly ReleaseShape[] = HOSTING_SHAPES;
+    const fromPort: Record<ReleaseShape, true> = { function: true, container: true };
+    expect([...toPort].sort()).toEqual(Object.keys(fromPort).sort());
   });
 });
 
@@ -101,6 +127,8 @@ describe('projectRepoSetService.setHosting', () => {
     ['target', { ...HOSTING, target: 'heroku' }],
     ['useCase', { ...HOSTING, useCase: 'prototype' }],
     ['size', { ...HOSTING, size: 'xl' }],
+    ['shape', { ...HOSTING, target: 'aws', shape: 'vm' }],
+    ['shape', { ...HOSTING, shape: 'container' }],
   ])('refuses an unknown %s by name', async (field, input) => {
     const { fx, row } = await motirRow();
     const err = await projectRepoSetService
@@ -141,6 +169,45 @@ describe('projectRepoSetService.setHosting', () => {
     );
     expect(dto).toMatchObject({ hostingUseCase: 'planned_product', hostingSize: 'large' });
   });
+
+  // MOTIR-12093 — the AWS shape rides the same decision.
+  it('records an aws shape, and none when the decision names none', async () => {
+    const { fx, row } = await motirRow();
+    expect(row.hostingShape).toBeNull();
+    const unnamed = await projectRepoSetService.setHosting(
+      row.id,
+      { ...HOSTING, target: 'aws' },
+      fx.ctx,
+    );
+    expect(unnamed.hostingShape).toBeNull();
+    expect(await stored(row.id)).toMatchObject({ hostingTarget: 'aws', hostingShape: null });
+
+    const dto = await projectRepoSetService.setHosting(
+      row.id,
+      { ...HOSTING, target: 'aws', shape: 'function' },
+      fx.ctx,
+    );
+    expect(dto.hostingShape).toBe('function');
+    expect(await stored(row.id)).toMatchObject({ hostingShape: 'function' });
+    const [listed] = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
+    expect(listed?.hostingShape).toBe('function');
+  });
+
+  it('revises the shape on aws, and treats the same shape again as no write', async () => {
+    const { fx, row } = await motirRow();
+    const aws = { ...HOSTING, target: 'aws', shape: 'function' } as const;
+    await projectRepoSetService.setHosting(row.id, aws, fx.ctx);
+    const before = await stored(row.id);
+    await projectRepoSetService.setHosting(row.id, aws, fx.ctx);
+    expect((await stored(row.id)).updatedAt).toEqual(before.updatedAt);
+
+    const dto = await projectRepoSetService.setHosting(
+      row.id,
+      { ...aws, shape: 'container' },
+      fx.ctx,
+    );
+    expect(dto.hostingShape).toBe('container');
+  });
 });
 
 describe('toProjectRepoDto hosting fields', () => {
@@ -171,6 +238,7 @@ describe('toProjectRepoDto hosting fields', () => {
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
+    hostingShape: null,
     previewPushNamespace: null,
     previewEnabledAt: null,
     previewCredentialExpiresAt: null,
@@ -186,6 +254,7 @@ describe('toProjectRepoDto hosting fields', () => {
       hostingTarget: null,
       hostingUseCase: null,
       hostingSize: null,
+      hostingShape: null,
     });
   });
 
@@ -196,7 +265,13 @@ describe('toProjectRepoDto hosting fields', () => {
         hostingTarget: 'aws',
         hostingUseCase: 'mvp',
         hostingSize: 'medium',
+        hostingShape: 'container',
       }),
-    ).toMatchObject({ hostingTarget: 'aws', hostingUseCase: 'mvp', hostingSize: 'medium' });
+    ).toMatchObject({
+      hostingTarget: 'aws',
+      hostingUseCase: 'mvp',
+      hostingSize: 'medium',
+      hostingShape: 'container',
+    });
   });
 });

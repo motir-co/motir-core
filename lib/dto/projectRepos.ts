@@ -5,7 +5,12 @@
 // (MOTIR-1782), the derivation (MOTIR-1881) and the dispatch resolver
 // (MOTIR-1783) bind to these.
 
-import type { HostingSize, HostingTarget, HostingUseCase } from '@/lib/hosting/vocabulary';
+import type {
+  HostingShape,
+  HostingSize,
+  HostingTarget,
+  HostingUseCase,
+} from '@/lib/hosting/vocabulary';
 import type { SeedRegistryEntryDto } from '@/lib/dto/seedRegistry';
 
 /** Wire form of the Prisma `ProjectRepoRole` enum (ADR §1.1). */
@@ -375,6 +380,10 @@ export interface ProjectRepoDto {
   hostingTarget: HostingTarget | null;
   hostingUseCase: HostingUseCase | null;
   hostingSize: HostingSize | null;
+  /** The AWS shape (MOTIR-12093) — `function` or `container`. NULL on every
+   *  target but `aws`, and on an `aws` row whose decision has not named one,
+   *  whose production release is then refused by name. */
+  hostingShape: HostingShape | null;
   /** When a delete of this Motir-hosted row STARTED (MOTIR-11981), or null when
    *  none has. A row that still exists with this set is a delete that stopped
    *  part way — the room's "Deletion didn't finish" — since a delete that

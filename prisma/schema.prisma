@@ -11242,6 +11242,13 @@ model ProjectRepo {
   hostingTarget              HostingTarget?            @map("hosting_target")
   hostingUseCase             HostingUseCase?           @map("hosting_use_case")
   hostingSize                HostingSize?              @map("hosting_size")
+  /// The AWS release SHAPE (MOTIR-12093; MOTIR-5769 §4): a Lambda `function` or
+  /// an ECS Fargate `container`. Part of the same hosting decision and written by
+  /// the same `setHosting`, which refuses it on any target but `aws` — the only
+  /// adapter with shapes. An INPUT, never inferred: a production release of an
+  /// `aws` row whose shape is NULL is refused by the port by name
+  /// (`ReleaseShapeRequiredError`) rather than guessed.
+  hostingShape               HostingShape?             @map("hosting_shape")
   /// ── PREVIEWS (Story MOTIR-5766 · MOTIR-5775) ────────────────────────────
   ///
   /// The record that this repository's pull requests can PUSH a preview image:
@@ -13332,6 +13339,16 @@ enum HostingSize {
   large
 
   @@map("hosting_size")
+}
+
+/// Which AWS shape a Motir repo's app takes (MOTIR-12093; MOTIR-5769 §4).
+/// Mirrors `HOSTING_SHAPES` in `lib/hosting/vocabulary.ts` and the orchestrator's
+/// `ReleaseShape`.
+enum HostingShape {
+  function
+  container
+
+  @@map("hosting_shape")
 }
 
 /// A SEED REGISTRY entry (Story MOTIR-704 · MOTIR-708; decision MOTIR-706, page

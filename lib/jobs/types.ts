@@ -431,6 +431,33 @@ export interface CodeGraphRefreshData extends CodeGraphIndexData {
 }
 
 /**
+ * The `system.code-graph-forward` event payload (MOTIR-12055 · story MOTIR-11870) —
+ * ONE thing GitHub reported about a connected repository's branch, to be relayed to
+ * motir-ai and on to motir-codegraph: a pull request's state on its head branch, or
+ * a deleted branch. `coreOrganizationId` and the `owner/name` `repoRef` are what
+ * motir-ai's mapping resolves; nothing else is needed, and nothing else travels.
+ *
+ * SYSTEM-scoped: a forward belongs to an organisation and a repository, and one
+ * repository can be held by projects in more than one workspace, so it carries no
+ * `workspaceId` and is enqueued with `sendSystemEvent` (`enqueueCodeGraphForward`).
+ */
+export type CodeGraphForwardData =
+  | {
+      kind: 'pull_request_state';
+      coreOrganizationId: string;
+      repoRef: string;
+      /** The pull request's HEAD branch name. */
+      ref: string;
+      pullRequestNumber: number;
+      state: 'open' | 'closed' | 'merged';
+      /** Exactly when `state` is `merged`. */
+      mergedAt?: string;
+      /** When GitHub reported it; the service keeps the newest per pull request. */
+      reportedAt: string;
+    }
+  | { kind: 'retire'; coreOrganizationId: string; repoRef: string; ref: string };
+
+/**
  * The `system.ci-runner-boot` event payload (Story MOTIR-1916 · MOTIR-1921) —
  * one per provisioning INTENT to serve with an ephemeral runner.
  *
@@ -824,6 +851,8 @@ export interface JobEventDataMap {
   'system.platform-meter-report': PlatformMeterReportData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;
+  /** One pull-request state or branch delete relayed to motir-codegraph (MOTIR-12055). */
+  'system.code-graph-forward': CodeGraphForwardData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'public-follow/digest': PublicFollowDigestData;
   'account/data-export.requested': DataExportRequestedData;

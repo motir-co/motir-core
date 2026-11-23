@@ -72,6 +72,7 @@ export function seedRow(over: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
     hostingTarget: 'serverless',
     hostingUseCase: 'mvp',
     hostingSize: 'small',
+    hostingShape: null,
     position: 'a0',
     createdAt: AT,
     hostedDeletionStartedAt: null,

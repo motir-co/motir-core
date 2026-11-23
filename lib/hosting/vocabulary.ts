@@ -21,6 +21,18 @@ export type HostingUseCase = (typeof HOSTING_USE_CASES)[number];
 export const HOSTING_SIZES = ['small', 'medium', 'large'] as const;
 export type HostingSize = (typeof HOSTING_SIZES)[number];
 
+/** Which AWS shape the app takes (MOTIR-5769 §4, MOTIR-12093): a Lambda
+ *  `function` for a small app, an ECS Fargate `container` for a long-running
+ *  one. Recorded with the rest of the hosting decision and passed to the deploy
+ *  port as an input — the AWS adapter refuses a release without one, and nothing
+ *  infers it. Only an `aws` row carries one. The orchestrator's `ReleaseShape`
+ *  carries the same values; a test pins the lists together. */
+export const HOSTING_SHAPES = ['function', 'container'] as const;
+export type HostingShape = (typeof HOSTING_SHAPES)[number];
+
+/** The one target whose releases take a shape. */
+export const SHAPED_HOSTING_TARGET = 'aws' satisfies HostingTarget;
+
 export function isHostingTarget(value: string): value is HostingTarget {
   return (HOSTING_TARGETS as readonly string[]).includes(value);
 }
@@ -31,6 +43,10 @@ export function isHostingUseCase(value: string): value is HostingUseCase {
 
 export function isHostingSize(value: string): value is HostingSize {
   return (HOSTING_SIZES as readonly string[]).includes(value);
+}
+
+export function isHostingShape(value: string): value is HostingShape {
+  return (HOSTING_SHAPES as readonly string[]).includes(value);
 }
 
 // ── Production releases (Story MOTIR-9797 · MOTIR-10026) ─────────────────────

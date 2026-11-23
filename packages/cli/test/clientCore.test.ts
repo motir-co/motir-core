@@ -735,6 +735,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
       ci: 'failing',
       failingChecks: ['Vitest'],
       queueExit: null,
+      conflicted: false,
+      outOfDate: false,
     };
     server.scriptV1({
       'POST /api/v1/work-items/{key}/repair': {
@@ -785,6 +787,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
       ci: 'passing',
       failingChecks: [],
       queueExit,
+      conflicted: false,
+      outOfDate: true,
     };
     server.scriptV1({
       'POST /api/v1/work-items/{key}/repair': {

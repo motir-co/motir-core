@@ -1,5 +1,6 @@
 import {
   Prisma,
+  type HostingShape,
   type HostingSize,
   type HostingTarget,
   type HostingUseCase,
@@ -86,6 +87,7 @@ interface JoinedRow {
   hostingTarget: HostingTarget | null;
   hostingUseCase: HostingUseCase | null;
   hostingSize: HostingSize | null;
+  hostingShape: HostingShape | null;
   previewPushNamespace: string | null;
   previewEnabledAt: Date | null;
   previewCredentialExpiresAt: Date | null;
@@ -164,6 +166,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     hostingTarget: r.hostingTarget,
     hostingUseCase: r.hostingUseCase,
     hostingSize: r.hostingSize,
+    hostingShape: r.hostingShape,
     previewPushNamespace: r.previewPushNamespace,
     previewEnabledAt: r.previewEnabledAt,
     previewCredentialExpiresAt: r.previewCredentialExpiresAt,
@@ -368,6 +371,7 @@ export const projectRepoRepository = {
         pr."hosting_target"    AS "hostingTarget",
         pr."hosting_use_case"  AS "hostingUseCase",
         pr."hosting_size"      AS "hostingSize",
+        pr."hosting_shape"     AS "hostingShape",
         pr."preview_push_namespace" AS "previewPushNamespace",
         pr."preview_enabled_at" AS "previewEnabledAt",
         pr."preview_credential_expires_at" AS "previewCredentialExpiresAt",
@@ -1072,10 +1076,11 @@ export const projectRepoRepository = {
   },
 
   /**
-   * Write a row's HOSTING columns — target, use case and size (MOTIR-9808). A
-   * narrow writer, like `setTakeover`, so the three columns move only through
-   * `projectRepoSetService.setHosting`, which owns the set-once rule and keeps
-   * customer rows out.
+   * Write a row's HOSTING columns — target, use case, size (MOTIR-9808) and the
+   * AWS shape (MOTIR-12093). A narrow writer, like `setTakeover`, so the columns
+   * move only through `projectRepoSetService.setHosting`, which owns the
+   * set-once rule, keeps customer rows out and keeps a shape off every target
+   * but `aws`.
    */
   async setHosting(
     id: string,
@@ -1083,6 +1088,7 @@ export const projectRepoRepository = {
       hostingTarget: HostingTarget;
       hostingUseCase: HostingUseCase;
       hostingSize: HostingSize;
+      hostingShape: HostingShape | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ProjectRepo> {
@@ -1183,6 +1189,7 @@ export const projectRepoRepository = {
         state: true,
         hostingTarget: true,
         hostingSize: true,
+        hostingShape: true,
         githubRepo: { select: { owner: true, name: true, defaultBranch: true } },
       },
     });
