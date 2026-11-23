@@ -395,10 +395,10 @@ export const fleetShardProvisioningService = {
    * name (so the member email, and with it the AWS account, is found on replay),
    * the owner, and the slot's raise target. The row stays `provisioning`.
    *
-   * The merged slot is ONE AWS account recorded as two rows: the walk creates it
-   * as the `code_graph_index` row, which carries its one raise; the
-   * `agent_instance` row is then written from that row's AWS location and
-   * credential reference — never a second `CreateAccount`, never a second raise.
+   * Every slot is one row, one AWS account and one raise — the merged slot
+   * included, which is the `agent_instance` row alone since MOTIR-12038. A
+   * replay recomputes the same name, finds the row and the AWS account, and finds
+   * the open raise: it creates nothing.
    *
    * @throws FleetShardProvisioningRefusedError before any external call (a plan
    *   that carries no own accounts, a kind with no primary account to take the
@@ -438,17 +438,12 @@ export const fleetShardProvisioningService = {
         [AWS_REAP_UNTAGGED_OPTION]: 'true',
       },
     };
-    const result = await walk(await preflight(addInput, operator, problems), addInput, {
+    return walk(await preflight(addInput, operator, problems), addInput, {
       role: 'org_owned',
       ownerOrganizationId: input.organizationId,
       raiseTargetVcpu: plan.raiseTargetVcpu,
       raiseDeps: deps.raise,
     });
-    if (!plan.sharedRow) return result;
-    return {
-      ...result,
-      steps: [...result.steps, await writeSharedRow(result.shard, plan.sharedRow)],
-    };
   },
 
   /**
@@ -535,43 +530,6 @@ async function existingSpareProblems(
     }
     return problems;
   });
-}
-
-/** The merged Host account's second row: the same AWS account as `account`
- *  under another fleet kind — looked for first, so a replay writes nothing. */
-async function writeSharedRow(
-  account: FleetShardDTO,
-  row: { name: string; fleetKind: FleetWorkloadKind },
-): Promise<ShardStepReport> {
-  const existing = await fleetShardService.findShardByName(row.name);
-  if (existing) {
-    return {
-      step: 'account_row',
-      outcome: 'already',
-      detail: `${existing.name} is recorded (${existing.state})`,
-    };
-  }
-  const shard = await fleetShardService.createShard({
-    name: row.name,
-    fleetKind: row.fleetKind,
-    provider: account.provider,
-    role: 'org_owned',
-    ownerOrganizationId: account.ownerOrganizationId,
-    state: 'provisioning',
-    githubOrg: account.github.org,
-    githubInstallationId: account.github.installationId,
-    githubAppRole: account.github.appRole,
-    awsAccountId: account.aws?.accountId ?? null,
-    awsRegion: account.aws?.region ?? null,
-    credentialRef: account.credentialRef,
-    limits: account.limits,
-    limitsSource: account.limitsSource,
-  });
-  return {
-    step: 'account_row',
-    outcome: 'done',
-    detail: `wrote ${shard.name} (provisioning) on ${account.name}'s AWS account`,
-  };
 }
 
 /** A spare of `kind` a previous unattended run left before its raise was filed:

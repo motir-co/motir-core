@@ -434,7 +434,7 @@ describe('a Host org’s own accounts', () => {
         ].sort(),
       );
     }
-    expect(accounts[2]!.keptIndexSpots).toBe(10);
+    expect(accounts[2]!.keptIndexSpots).toBeNull();
     expect(accounts[0]!.keptIndexSpots).toBeNull();
     expect(answer.figures.agentRunsInParallel.figureSource).toBe('shared_floor');
     expect(answer.figures.ciJobsInFlight.figureSource).toBe('shared_floor');

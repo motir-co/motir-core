@@ -1,4 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { Client } from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AwsSessionCredentials, Ec2Api, FleetWorkloadKind } from '@motir/orchestrator';
 import { db } from '@/lib/db';
@@ -28,9 +31,11 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { currentWorkerAdminUrl } from '../helpers/parallelDb';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  POOL_DEFINITION,
   buildStacksInto,
   stubPoolDefinitionEnv,
   installAddShardGithub,
@@ -138,6 +143,24 @@ const ownedRequests = (organizationId: string) =>
     where: { shard: { ownerOrganizationId: organizationId } },
     include: { shard: { select: { fleetKind: true } } },
   });
+/** The MOTIR-12038 re-home migration, run as `prisma migrate deploy` runs it. */
+async function runRehomeMigration() {
+  const client = new Client({ connectionString: currentWorkerAdminUrl() });
+  await client.connect();
+  try {
+    await client.query(
+      readFileSync(
+        path.join(
+          process.cwd(),
+          'prisma/migrations/20261123120000_merged_host_account_rehome/migration.sql',
+        ),
+        'utf8',
+      ),
+    );
+  } finally {
+    await client.end();
+  }
+}
 const creates = () => organization.calls.filter((c) => c === 'createOrganizationAccount');
 const emailOf = (organizationId: string, slot: HostAccountSlot) =>
   TEMPLATE.replace(
@@ -202,7 +225,7 @@ afterAll(async () => {
 });
 
 describe('one pass over a Host organisation with no accounts', () => {
-  it('creates three AWS accounts as four org_owned provisioning rows, the merged one twice', async () => {
+  it('creates three AWS accounts as three org_owned provisioning rows, the merged one agent_instance', async () => {
     const org = await seedOrg();
     plans.set(org.id, host());
 
@@ -222,15 +245,17 @@ describe('one pass over a Host organisation with no accounts', () => {
       expect.arrayContaining([
         ['ci_runner', 'org_owned', 'provisioning'],
         ['hosted_agent', 'org_owned', 'provisioning'],
-        ['code_graph_index', 'org_owned', 'provisioning'],
         ['agent_instance', 'org_owned', 'provisioning'],
       ]),
     );
-    expect(rows).toHaveLength(4);
-    const index = rows.find((r) => r.fleetKind === 'code_graph_index')!;
-    const hoster = rows.find((r) => r.fleetKind === 'agent_instance')!;
-    expect(hoster.awsAccountId).toBe(index.awsAccountId);
-    expect(hoster.credentialRef).toBe(index.credentialRef);
+    // MOTIR-12038: one row per account; the merged one keeps its index name.
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.fleetKind)).not.toContain('code_graph_index');
+    const merged = rows.find((r) => r.fleetKind === 'agent_instance')!;
+    expect(merged.name).toBe(
+      hostAccountPlan(org.id, 'merged', hostMonthlyPlanCredits()).account.name,
+    );
+    expect(merged.name).toMatch(/-index$/);
     expect(new Set(rows.map((r) => r.awsAccountId)).size).toBe(3);
   });
 
@@ -242,8 +267,8 @@ describe('one pass over a Host organisation with no accounts', () => {
 
     const requests = await ownedRequests(org.id);
     expect(requests.map((r) => [r.shard.fleetKind, r.desiredValue, r.quotaCode]).sort()).toEqual([
+      ['agent_instance', 120, 'L-1216C47A'],
       ['ci_runner', 200, 'L-1216C47A'],
-      ['code_graph_index', 120, 'L-1216C47A'],
       ['hosted_agent', 32, 'L-1216C47A'],
     ]);
     for (const r of requests) expect(r.awsRequestId).toMatch(/^quota-req-\d+$/);
@@ -283,7 +308,7 @@ describe('the runner role of an own account (MOTIR-9584)', () => {
 
     await hostAccountReconcileService.runReconcile(deps());
 
-    // One role per AWS account: the merged account's two rows share one.
+    // One role per AWS account.
     expect(organization.runnerRoles.size).toBe(3);
     for (const policy of organization.runnerRoles.values()) {
       expect(policy).toContain('TerminateAnyInAccount');
@@ -309,8 +334,88 @@ describe('a replayed pass', () => {
     });
     expect(creates()).toHaveLength(3);
     expect(organization.accounts.size).toBe(3);
-    expect(await ownedRows(org.id)).toHaveLength(4);
+    expect(await ownedRows(org.id)).toHaveLength(3);
     expect(await ownedRequests(org.id)).toHaveLength(3);
+  });
+
+  // MOTIR-12038 — a merged account written the old way (an index row carrying
+  // the raise, and an agent twin), re-homed by the migration, is FOUND by the
+  // next pass: the same name and member email, the same AWS account, the open
+  // raise. It is moved into the agent unit under the hoster runner policy, and
+  // nothing is created or filed a second time.
+  it('after the re-home migration, finds the migrated merged account and creates nothing', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, host());
+    await hostAccountReconcileService.runReconcile(deps());
+    const name = hostAccountPlan(org.id, 'merged', hostMonthlyPlanCredits()).account.name;
+    const fresh = await adminDb.fleetShard.findUniqueOrThrow({ where: { name } });
+    // Rewind it to the old two-row shape: the index row with the raise …
+    await adminDb.fleetShard.update({
+      where: { id: fresh.id },
+      data: { fleetKind: 'code_graph_index' },
+    });
+    await adminDb.fleetQuotaRequest.updateMany({
+      where: { shardId: fresh.id },
+      data: { fleetKind: 'code_graph_index' },
+    });
+    // … and its agent twin, as `writeSharedRow` wrote it, in the index unit.
+    const twin = await adminDb.fleetShard.create({
+      data: {
+        name: name.replace(/-index$/, '-agent-host'),
+        fleetKind: 'agent_instance',
+        provider: 'aws',
+        role: 'org_owned',
+        ownerOrganizationId: org.id,
+        state: 'provisioning',
+        githubOrg: fresh.githubOrg,
+        githubInstallationId: fresh.githubInstallationId,
+        awsAccountId: fresh.awsAccountId,
+        awsRegion: fresh.awsRegion,
+        credentialRef: fresh.credentialRef,
+      },
+    });
+    organization.accountUnits.set(fresh.awsAccountId!, POOL_DEFINITION.unitId('code_graph_index'));
+    const stackOf = () =>
+      [...organization.stackInstances.entries()].find(([key]) =>
+        key.includes(`/${fresh.awsAccountId}/`),
+      )![1];
+    stackOf().unitId = POOL_DEFINITION.unitId('code_graph_index');
+    stackOf().overrides = { ...stackOf().overrides, RunnerPolicy: 'runner' };
+
+    await runRehomeMigration();
+    const replay = await fleetShardProvisioningService.addOrgOwnedShard(
+      { organizationId: org.id, slot: 'merged', planKey: HOST_PLAN_KEY },
+      deps().provisioning,
+    );
+    const outcome = (step: string) => replay.steps.find((s) => s.step === step)?.outcome;
+
+    // The same AWS account and row are found and the open raise is seen …
+    expect(outcome('provider_account')).toBe('already');
+    expect(outcome('account_row')).toBe('already');
+    expect(outcome('quota_raise')).toBe('already');
+    // … and the network step moves it to the agent unit, under the hoster policy.
+    expect(outcome('network')).toBe('done');
+    // After that one move the slot is settled: a further pass does nothing.
+    const again = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+    expect(again.slots.merged).toBe('already');
+    expect(creates()).toHaveLength(3);
+    expect(organization.accounts.size).toBe(3);
+    const rows = await ownedRows(org.id);
+    expect(rows).toHaveLength(3);
+    expect(rows.find((r) => r.name === name)).toMatchObject({
+      id: twin.id,
+      fleetKind: 'agent_instance',
+      awsAccountId: fresh.awsAccountId,
+    });
+    const requests = await ownedRequests(org.id);
+    expect(requests).toHaveLength(3);
+    expect(requests.filter((r) => r.shardId === twin.id)).toHaveLength(1);
+    expect(organization.quotaRequests.size).toBe(3);
+    // The replay moved the account into the agent unit, under the hoster policy.
+    expect(organization.accountUnits.get(fresh.awsAccountId!)).toBe(
+      POOL_DEFINITION.unitId('agent_instance'),
+    );
+    expect(stackOf().overrides['RunnerPolicy']).toBe('hoster');
   });
 });
 
@@ -333,11 +438,11 @@ describe('a pass interrupted part way', () => {
 
     expect(second.slots.ci_runner).toBe('created');
     expect(creates()).toHaveLength(3);
-    expect(await ownedRows(org.id)).toHaveLength(4);
+    expect(await ownedRows(org.id)).toHaveLength(3);
     expect(await ownedRequests(org.id)).toHaveLength(3);
   });
 
-  it('after the merged first row: the next pass writes the second row only', async () => {
+  it('before the merged row: the next pass finds the AWS account and writes its one row', async () => {
     const org = await seedOrg();
     plans.set(org.id, host());
     const create = fleetShardService.createShard.bind(fleetShardService);
@@ -352,13 +457,13 @@ describe('a pass interrupted part way', () => {
 
     const first = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
     expect(first.slots.merged).toBe('failed');
-    expect(await ownedRows(org.id)).toHaveLength(3);
+    expect(await ownedRows(org.id)).toHaveLength(2);
 
     const second = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
 
     expect(second.slots.merged).toBe('created');
     expect(creates()).toHaveLength(3);
-    expect(await ownedRows(org.id)).toHaveLength(4);
+    expect(await ownedRows(org.id)).toHaveLength(3);
     expect(await ownedRequests(org.id)).toHaveLength(3);
   });
 
@@ -370,7 +475,7 @@ describe('a pass interrupted part way', () => {
     const first = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
 
     expect(first.slots.ci_runner).toBe('raise_failed');
-    expect(await ownedRows(org.id)).toHaveLength(4);
+    expect(await ownedRows(org.id)).toHaveLength(3);
     expect(await ownedRequests(org.id)).toHaveLength(2);
 
     const second = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
@@ -381,7 +486,7 @@ describe('a pass interrupted part way', () => {
       merged: 'already',
     });
     expect(creates()).toHaveLength(3);
-    expect(await ownedRows(org.id)).toHaveLength(4);
+    expect(await ownedRows(org.id)).toHaveLength(3);
     expect(await ownedRequests(org.id)).toHaveLength(3);
   });
 });
@@ -508,7 +613,7 @@ describe('a refused CreateAccount', () => {
       deps(new Date(T0.getTime() + REFUSAL_BACKOFF_BASE_MS)),
     );
     expect(after.slots.ci_runner).toBe('created');
-    expect(await ownedRows(refused.id)).toHaveLength(4);
+    expect(await ownedRows(refused.id)).toHaveLength(3);
     const cleared = await adminDb.hostAccountAttempt.findUniqueOrThrow({
       where: { organizationId_slot: { organizationId: refused.id, slot: 'ci_runner' } },
     });
@@ -641,7 +746,7 @@ describe('a larger pool on sale carries the same three accounts, sized to its po
     ['pool_600k', 400, 64, 120],
     ['pool_2400k', 1_600, 256, 120],
   ] as const)(
-    '%s: three accounts, four rows, raises %i / %i / %i',
+    '%s: three accounts, three rows, raises %i / %i / %i',
     async (planKey, ci, agent, merged) => {
       const org = await seedOrg();
       plans.set(org.id, onPlan(planKey));
@@ -657,20 +762,16 @@ describe('a larger pool on sale carries the same three accounts, sized to its po
       ]);
       expect(creates()).toHaveLength(3);
       const rows = await ownedRows(org.id);
-      expect(rows).toHaveLength(4);
+      expect(rows).toHaveLength(3);
       for (const r of rows)
         expect([r.role, r.state, r.ownerOrganizationId]).toEqual([
           'org_owned',
           'provisioning',
           org.id,
         ]);
-      const index = rows.find((r) => r.fleetKind === 'code_graph_index')!;
-      expect(rows.find((r) => r.fleetKind === 'agent_instance')!.awsAccountId).toBe(
-        index.awsAccountId,
-      );
       expect(await raises(org.id)).toEqual([
+        ['agent_instance', merged, 'L-1216C47A'],
         ['ci_runner', ci, 'L-1216C47A'],
-        ['code_graph_index', merged, 'L-1216C47A'],
         ['hosted_agent', agent, 'L-1216C47A'],
       ]);
 
@@ -679,7 +780,7 @@ describe('a larger pool on sale carries the same three accounts, sized to its po
       await adminDb.organization.update({ where: { id: org.id }, data: { aiIncludedSeat: true } });
       await hostAccountReconcileService.runReconcile(deps());
       expect(creates()).toHaveLength(3);
-      expect(await ownedRows(org.id)).toHaveLength(4);
+      expect(await ownedRows(org.id)).toHaveLength(3);
       expect(await ownedRequests(org.id)).toHaveLength(3);
     },
   );
@@ -705,7 +806,7 @@ describe('a larger pool on sale carries the same three accounts, sized to its po
     plans.set(org.id, host());
     await hostAccountReconcileService.runReconcile(deps());
     const before = await ownedRows(org.id);
-    expect(before).toHaveLength(4);
+    expect(before).toHaveLength(3);
 
     plans.set(org.id, onPlan('pool_600k'));
     const waiting = await hostAccountReconcileService.reconcileOrganization(org.id, deps());

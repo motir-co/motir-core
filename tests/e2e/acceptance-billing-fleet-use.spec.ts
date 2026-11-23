@@ -29,7 +29,6 @@ import { holdScheduledJob } from './_helpers/scheduled-job-hold';
 import { signIn, SHELL_PASSWORD } from './_helpers/shell-session';
 import { BILLING_CATALOG, type AiPlanCatalogEntry } from '@/lib/billing/catalog';
 import { capsForPlanKey, type PlanCaps } from '@/lib/billing/planCaps';
-import { MERGED_INDEX_SPOTS } from '@/lib/ciFleet/hostMergedAccountSplit';
 import { CI_RUNNER_PROVISION_SWEEP_CRON } from '@/lib/jobs/definitions/ciRunnerFleet';
 import type { BillingFixtureTier } from '@/lib/test-billing-mock';
 import { assessWatchability } from '../../scripts/upload-acceptance-video.mjs';
@@ -492,9 +491,9 @@ test.describe('Fleet use on Billing & plans', () => {
             perOrg: n(HOST_FLOOR.agentsPerOrg),
           }),
         );
-        await expect(mergedRow).toContainText(
-          icu(copy.accounts.keptSpots, { count: MERGED_INDEX_SPOTS }),
-        );
+        // No index spots are kept on the merged account since MOTIR-12038: the
+        // kept-spots line, whatever its count, does not render.
+        await expect(mergedRow).not.toContainText(copy.accounts.keptSpots.split('}').pop()!.trim());
 
         const runs = figureRow(fleet, 'agentRunsInParallel');
         await expect(runs).toContainText(inUseOf(0, HOST_FLOOR.agentRunsInParallel));

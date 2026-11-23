@@ -310,15 +310,13 @@ export const fleetShardAdmissionService = {
   /**
    * An own account's ceiling (MOTIR-9586): the platform admin's override, else
    * its AWS ACCOUNT's largest granted vCPU ÷ 2 (one job is 2 vCPU), rounded down.
-   * The granted value is read across every row of the account, because the
-   * tracker records it on the row the raise was filed on — the merged account's
-   * indexer row — and the hoster row's own `vcpuQuota` stays null. No known
-   * grant ⇒ no job.
+   * The granted value is read across every row of the AWS account — the
+   * tracker records it on the row the raise was filed on, and an account's rows
+   * share its one quota. No known grant ⇒ no job.
    *
-   * The merged indexer + agent hoster account (MOTIR-9589) shares that one grant
-   * between its two rows: its indexer row takes the split's index cap and its
-   * hoster row the agent cap (`mergedAccountSplit`), so the two kinds together
-   * never exceed the one quota.
+   * The merged account's `agent_instance` row (MOTIR-9589; the account's only
+   * row since MOTIR-12038) takes the whole grant as its agent cap, up to its
+   * account-side ceiling (`mergedAccountSplit`).
    */
   async ownCeilingInTx(
     shard: Pick<FleetShard, 'admissionCeilingOverride' | 'awsAccountId' | 'fleetKind'>,
@@ -330,7 +328,6 @@ export const fleetShardAdmissionService = {
       shard.awsAccountId,
       tx,
     );
-    if (shard.fleetKind === 'code_graph_index') return mergedAccountSplit(granted).indexCap;
     if (shard.fleetKind === 'agent_instance') return mergedAccountSplit(granted).agentCap;
     return shardAdmissionCeiling({ vcpuQuota: granted, machineLimit: null }) ?? 0;
   },

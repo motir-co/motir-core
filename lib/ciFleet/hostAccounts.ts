@@ -8,12 +8,17 @@ import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 // `L-1216C47A` quota at creation. At Host's pool:
 //   * the CI runner account          — `ci_runner`,                  200 vCPU;
 //   * the agent runner account       — `hosted_agent`,                32 vCPU;
-//   * ONE merged account             — `code_graph_index` + `agent_instance`,
-//                                      120 vCPU, recorded as TWO rows naming one
-//                                      AWS account (an account has one quota, so
-//                                      one raise, on the first kind's row).
+//   * the merged account             — `agent_instance`,             120 vCPU.
 // A larger pool scales the first two linearly with its pool; the merged account
 // asks 120 whatever the plan.
+//
+// The merged account once also hosted the container-based indexer, as a second
+// `code_graph_index` row on the same AWS account. That indexer left motir-core
+// (MOTIR-11026), so the account is ONE `agent_instance` row with one raise
+// (MOTIR-12038). It keeps the `index` suffix: that name is the one its AWS member
+// email was derived from, so renaming it would make a replay create a second AWS
+// account instead of finding the existing one. The suffix names the account now,
+// not a fleet kind.
 //
 // Each name is derived from the organisation id ONLY — never the plan — so a pass
 // interrupted after `CreateAccount` recomputes the same name, and with it the
@@ -57,10 +62,9 @@ export interface HostAccountRowPlan {
 
 export interface HostAccountPlan {
   slot: HostAccountSlot;
-  /** The row the AWS account is created for, and its raise recorded against. */
+  /** The row the AWS account is created for, and its raise recorded against —
+   *  every slot's only row. */
   account: HostAccountRowPlan;
-  /** The merged slot's second row: the same AWS account, another fleet kind. */
-  sharedRow: HostAccountRowPlan | null;
   raiseTargetVcpu: number;
 }
 
@@ -90,21 +94,19 @@ export function hostAccountPlan(
       return {
         slot,
         account: { name: hostName(organizationId, 'ci'), fleetKind: 'ci_runner' },
-        sharedRow: null,
         raiseTargetVcpu,
       };
     case 'agent_runner':
       return {
         slot,
         account: { name: hostName(organizationId, 'agent-runner'), fleetKind: 'hosted_agent' },
-        sharedRow: null,
         raiseTargetVcpu,
       };
     case 'merged':
       return {
         slot,
-        account: { name: hostName(organizationId, 'index'), fleetKind: 'code_graph_index' },
-        sharedRow: { name: hostName(organizationId, 'agent-host'), fleetKind: 'agent_instance' },
+        // The `index` suffix is the account's historical name (header comment).
+        account: { name: hostName(organizationId, 'index'), fleetKind: 'agent_instance' },
         raiseTargetVcpu,
       };
   }

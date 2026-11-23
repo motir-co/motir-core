@@ -382,7 +382,7 @@ async function liveHost(): Promise<Tenant> {
   const tenant = await purchase();
   await answer(tenant.organizationId, 'ci_runner', 'APPROVED', 200);
   await answer(tenant.organizationId, 'hosted_agent', 'APPROVED', 32);
-  await answer(tenant.organizationId, 'code_graph_index', 'APPROVED', 120);
+  await answer(tenant.organizationId, 'agent_instance', 'APPROVED', 120);
   await statePass();
   return tenant;
 }
@@ -512,22 +512,21 @@ afterAll(async () => {
 // ── the cases ────────────────────────────────────────────────────────────────
 
 describe('purchase, and a replayed pass', () => {
-  it('creates three accounts as four rows with three raises, and the org stays on the shared floor', async () => {
+  it('creates three accounts as three rows with three raises, and the org stays on the shared floor', async () => {
     const host = await purchase();
 
     const rows = await ownRows(host.organizationId);
-    expect(rows.map((r) => r.fleetKind).sort()).toEqual([...KINDS].sort());
-    expect(rows.every((r) => r.role === 'org_owned')).toBe(true);
-    const merged = rows.filter(
-      (r) => r.fleetKind === 'code_graph_index' || r.fleetKind === 'agent_instance',
+    // The merged account is its one agent_instance row (MOTIR-12038).
+    expect(rows.map((r) => r.fleetKind).sort()).toEqual(
+      ['agent_instance', 'ci_runner', 'hosted_agent'].sort(),
     );
-    expect(merged[0]!.awsAccountId).toBe(merged[1]!.awsAccountId);
+    expect(rows.every((r) => r.role === 'org_owned')).toBe(true);
     expect(new Set(rows.map((r) => r.awsAccountId)).size).toBe(3);
     const requests = await ownRequests(host.organizationId);
     expect(requests.map((r) => [r.shard.fleetKind, r.desiredValue]).sort()).toEqual(
       [
+        ['agent_instance', 120],
         ['ci_runner', 200],
-        ['code_graph_index', 120],
         ['hosted_agent', 32],
       ].sort(),
     );
@@ -599,56 +598,41 @@ describe('an account granted', () => {
     expect(await placed('hosted_agent', host)).toEqual({ shardId: runner.id });
   });
 
-  it('the merged account denied, then granted at 40: one state, 10 index spots kept, 10 agents', async () => {
+  it('the merged account denied, then granted at 40: live, 20 agents, no index spots kept', async () => {
     const host = await purchase();
-    await answer(host.organizationId, 'code_graph_index', 'DENIED');
+    await answer(host.organizationId, 'agent_instance', 'DENIED');
     await statePass();
-    expect((await row(host.organizationId, 'code_graph_index')).grantedAt).toBeNull();
-    expect(await placed('code_graph_index', host, { start: false })).toEqual({
-      shardId: shared.code_graph_index!.id,
-    });
+    expect((await row(host.organizationId, 'agent_instance')).grantedAt).toBeNull();
     expect(await placed('agent_instance', host, { start: false })).toEqual({
       shardId: shared.agent_instance!.id,
     });
 
-    const index = await row(host.organizationId, 'code_graph_index');
+    const hoster = await row(host.organizationId, 'agent_instance');
     const raised = await fleetQuotaRaiseService.fileRaises(
-      { names: [index.name], desiredVcpu: 40, operatorEmail },
+      { names: [hoster.name], desiredVcpu: 40, operatorEmail },
       { management: () => organization, now: () => now },
     );
     expect(raised[0]).toMatchObject({ ok: true });
-    await answer(host.organizationId, 'code_graph_index', 'APPROVED', 40);
+    await answer(host.organizationId, 'agent_instance', 'APPROVED', 40);
     await statePass();
 
-    const [a, b] = (await ownRows(host.organizationId)).filter(
-      (r) => r.fleetKind === 'code_graph_index' || r.fleetKind === 'agent_instance',
-    );
-    expect([a!.quotaRequestedAt, a!.grantedAt, a!.liveAt]).toEqual([
-      b!.quotaRequestedAt,
-      b!.grantedAt,
-      b!.liveAt,
-    ]);
-    expect(a!.liveAt).not.toBeNull();
+    expect((await row(host.organizationId, 'agent_instance')).liveAt).not.toBeNull();
     // Live, the merged account lifts the plan's agents from the floor's 5 / 20 to
     // 10 / 50 (MOTIR-9668); what the grant holds stays the account's own bound.
     const lifted = await caps(host.organizationId);
     expect([lifted.agentsPerUser, lifted.agentsPerOrg]).toEqual([10, 50]);
-    const hoster = await row(host.organizationId, 'agent_instance');
 
-    // No index running: 10 agents and no 11th — the index spots are not lent.
+    // The whole grant is the agents': 20 and no 21st.
     const agentsPlaced: Placement[] = [];
-    for (let i = 0; i < 11; i++) agentsPlaced.push(await placed('agent_instance', host));
-    expect(agentsPlaced.slice(0, 10).every((p) => 'shardId' in p && p.shardId === hoster.id)).toBe(
+    for (let i = 0; i < 21; i++) agentsPlaced.push(await placed('agent_instance', host));
+    expect(agentsPlaced.slice(0, 20).every((p) => 'shardId' in p && p.shardId === hoster.id)).toBe(
       true,
     );
-    expect(agentsPlaced[10]).toEqual(ownFull('agent_instance'));
-    // And all 10 index spots are still there beside them.
-    const indexPlaced: Placement[] = [];
-    for (let i = 0; i < 11; i++) indexPlaced.push(await placed('code_graph_index', host));
-    expect(indexPlaced.slice(0, 10).every((p) => 'shardId' in p && p.shardId === index.id)).toBe(
-      true,
-    );
-    expect(indexPlaced[10]).toEqual(ownFull('code_graph_index'));
+    expect(agentsPlaced[20]).toEqual(ownFull('agent_instance'));
+    // And an index job is the shared pool's: the org has no own index account.
+    expect(await placed('code_graph_index', host, { start: false })).toEqual({
+      shardId: shared.code_graph_index!.id,
+    });
   });
 });
 
@@ -808,11 +792,11 @@ describe('attribution on the own accounts', () => {
     const host = await liveHost();
     const other = await seedTenant();
     const ciRow = await row(host.organizationId, 'ci_runner');
-    const indexRow = await row(host.organizationId, 'code_graph_index');
+    const mergedRow = await row(host.organizationId, 'agent_instance');
     const ciEc2 = new AwsEc2Fake();
     const mergedEc2 = new AwsEc2Fake();
     inventories.byAccount.set(ciRow.awsAccountId!, ciEc2);
-    inventories.byAccount.set(indexRow.awsAccountId!, mergedEc2);
+    inventories.byAccount.set(mergedRow.awsAccountId!, mergedEc2);
     const old = new Date(T0.getTime() - 2 * FLEET_ATTRIBUTION_GRACE_MS);
     const plant = (ec2: Ec2Fake) =>
       ec2.plantInstance({
@@ -1072,7 +1056,8 @@ describe('leaving Host and buying it again', () => {
   it('an unreadable plan defers a job of an org with an own account: neither side', async () => {
     const host = await liveHost();
     await setPlan(host.organizationId, 'unknown');
-    for (const kind of KINDS) {
+    // Every kind the org has an own account of (no index account since MOTIR-12038).
+    for (const kind of KINDS.filter((k) => k !== 'code_graph_index')) {
       const p = await placed(kind, host, { start: false });
       expect(p).toMatchObject({ deferred: 'shard_capacity' });
     }
@@ -1080,14 +1065,14 @@ describe('leaving Host and buying it again', () => {
 });
 
 describe('fleet-admin and secrets', () => {
-  it('org-accounts lists four lines, pool-status shows only shared, and nothing anywhere carries a secret', async () => {
+  it('org-accounts lists three lines, pool-status shows only shared, and nothing anywhere carries a secret', async () => {
     const host = await liveHost();
     const out: string[] = [];
     const io = { out: (l: string) => void out.push(l), err: (l: string) => void out.push(l) };
 
     expect(await runFleetAdmin(['org-accounts', '--org', host.organizationId], io)).toBe(0);
     const listing = out.splice(0);
-    expect(listing).toHaveLength(4);
+    expect(listing).toHaveLength(3);
     expect(listing.every((l) => l.includes(' live ') && l.includes('granted '))).toBe(true);
 
     const pool = {

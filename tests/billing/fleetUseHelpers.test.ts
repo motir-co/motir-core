@@ -163,7 +163,8 @@ describe('groupOwnAccounts', () => {
       vcpuAsked: 120,
       vcpuGranted: null,
       quotaOutcome: 'denied',
-      keptIndexSpots: 10,
+      // Nothing is kept for indexing since MOTIR-12038.
+      keptIndexSpots: null,
     });
   });
 

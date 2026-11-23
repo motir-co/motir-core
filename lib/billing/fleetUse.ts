@@ -1,7 +1,6 @@
 import type { FleetQuotaRequest, FleetShard } from '@/generated/prisma/client';
 import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { stateFromTimes, type HostAccountState } from '@/lib/ciFleet/hostAccountState';
-import { MERGED_INDEX_SPOTS } from '@/lib/ciFleet/hostMergedAccountSplit';
 import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import type { OrgPlanFiguresDTO } from '@/lib/dto/orgPlanFigures';
 import type {
@@ -106,7 +105,9 @@ function groupOne(rows: readonly FleetShard[], requests: readonly FleetQuotaRequ
   return {
     accountKind,
     fleetKinds,
-    // The merged account's raise sits on its indexer row (`hostAccountPlan`).
+    // An account migrated off the retired indexer row (MOTIR-12038) is one
+    // `agent_instance` row; the preference for a `code_graph_index` row is left
+    // for the billing card to retire with `indexer_and_hoster`.
     requestKind: fleetKinds.includes('code_graph_index') ? 'code_graph_index' : fleetKinds[0]!,
     state,
     createdAt: earliest(rows.map((row) => row.createdAt))!.toISOString(),
@@ -116,7 +117,8 @@ function groupOne(rows: readonly FleetShard[], requests: readonly FleetQuotaRequ
     vcpuAsked: maxOf(requests.map((request) => request.desiredValue)),
     vcpuGranted: maxOf(requests.map((request) => request.grantedValue)),
     quotaOutcome: latest?.status ?? null,
-    keptIndexSpots: accountKind === 'indexer_and_hoster' ? MERGED_INDEX_SPOTS : null,
+    // No index spots are kept on any account since MOTIR-12038.
+    keptIndexSpots: null,
   } satisfies OwnAccountGroup;
 }
 

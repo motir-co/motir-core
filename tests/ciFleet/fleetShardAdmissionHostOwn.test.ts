@@ -297,21 +297,18 @@ describe('a live own account', () => {
     expect(set.map((s) => s.id)).toEqual([mine!.id]);
   });
 
-  it('serves both kinds of the merged account, the hoster row reading the grant filed on the indexer row', async () => {
+  it('serves the merged account from its one agent row, reading the grant filed on it', async () => {
     onPool();
     const host = await seedTenant();
-    const [index, hoster] = await own(host, ['code_graph_index', 'agent_instance'], {
-      granted: 40,
-    });
+    const [hoster] = await own(host, ['agent_instance'], { granted: 40 });
 
-    expect(await choose('code_graph_index', host.organizationId)).toEqual({ shardId: index!.id });
     expect(await choose('agent_instance', host.organizationId)).toEqual({ shardId: hoster!.id });
     expect(hoster!.vcpuQuota).toBeNull();
     const ceiling = await withSystemContext((tx) =>
       fleetShardAdmissionService.ownCeilingInTx(hoster!, tx),
     );
-    // The merged account's split (MOTIR-9589): 40 granted, 10 index spots kept.
-    expect(ceiling).toBe(10);
+    // The whole grant is the agents' (MOTIR-12038): 40 granted, 20 agents.
+    expect(ceiling).toBe(20);
   });
 
   it('is never chosen for another org, nor for a Motir exempt org', async () => {
