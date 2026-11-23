@@ -339,6 +339,9 @@ import {
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { endSessionWithin } from '@/lib/services/planSessionEndService';
 import { reconcileInheritedDeliveriesAfterMove } from '@/lib/services/inheritedDeliveryService';
+import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
+import { choiceGateService } from '@/lib/services/choiceGateService';
+import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
 // every planner produces into. A `Plan` bundles proposed `PlanItem` operations
@@ -4349,7 +4352,8 @@ async function materialize(
   // (it cannot nest `workItemsService.createWorkItem`'s own transaction), so this
   // is where that hook belongs. ADD-only + idempotent, so it never duplicates or
   // downgrades the structural `is_blocked_by` edges from Pass 2.
-  for (const { created, prefix, todos } of createdAdds) {
+  for (const entry of createdAdds) {
+    const { created, prefix, todos } = entry;
     let finalRow = created;
     const { body: rewrittenDescription, unresolved } = rewriteIntraPlanRefs(
       created.descriptionMd ?? '',
@@ -4405,6 +4409,9 @@ async function materialize(
       },
       tx,
     );
+    // The row as it now stands, for the passes after this one (MOTIR-12145's
+    // question reads the rewritten body).
+    entry.created = finalRow;
   }
 
   // Every item this pass created — the embedding trigger's first half. Collected
@@ -4434,7 +4441,11 @@ async function materialize(
   // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      const { reparent: moved, rescoped } = await applyModify(
+      const {
+        reparent: moved,
+        rescoped,
+        askedQuestion,
+      } = await applyModify(
         item,
         ctx,
         resolveRef,
@@ -4449,6 +4460,7 @@ async function materialize(
       modifyTargets.set(resolveRef(item.workItemId!), {
         rescopes: rescoped,
         markOnly: isMarkOnlyPatch((item.patch ?? {}) as object),
+        askedQuestion,
       });
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
@@ -4532,6 +4544,22 @@ async function materialize(
   }
   const restingMoves = await restPlanTargets(plan, ctx, tx, modifyTargets);
   restingMoves.push(...(await settleUnparkedModifyTargets(plan, ctx, tx, modifyTargets)));
+  // …and only then is the question a modified choice or decision asks put back
+  // (bug MOTIR-12159): it reads the status and the blockers the two passes above
+  // just settled.
+  restingMoves.push(...(await askModifiedQuestions(plan, ctx, tx, modifyTargets)));
+
+  // THE QUESTIONS A NEW CARD ASKS (bug MOTIR-12145) — after everything else, so
+  // the reconcile reads the bodies Pass 3 rewrote (fed back onto `createdAdds`)
+  // and the edges and statuses every earlier pass settled.
+  restingMoves.push(
+    ...(await askCreatedQuestions(
+      createdAdds.map(({ created }) => created),
+      plan,
+      ctx,
+      tx,
+    )),
+  );
 
   return { touchedWorkItemIds, reparented, restingMoves };
 }
@@ -4697,6 +4725,9 @@ async function sessionHandParkedLocks(
 interface ModifyTargetFacts {
   rescopes: boolean;
   markOnly: boolean;
+  /** Which question the target asked BEFORE the patch (bug MOTIR-12159) — so a
+   *  patch that re-types it off `choice` / a `human` decision withdraws that one. */
+  askedQuestion: AskedQuestion;
   gainsChildren?: boolean;
   settled?: boolean;
 }
@@ -4768,6 +4799,54 @@ async function writePlanDecidedStatus(
 }
 
 /**
+ * ASK EVERY QUESTION A CARD THIS PLAN CREATED OWES (bug MOTIR-12145) —
+ * materialize's last pass.
+ *
+ * `workItemsService.createWorkItem` raises a `type: choice` card's
+ * `decision_choice` gate, and a `human` decision's `decision_confirmation` gate,
+ * at birth: when the body parses and nothing open blocks it. Materialize creates
+ * its cards through the leaf repositories instead (the header comment says why),
+ * so until this pass a card an approve created was asked only by the later
+ * trigger — a blocker entering `done`. One with NO blocker had no later trigger
+ * and was never asked: it sat In Progress with nothing in Waiting on you.
+ *
+ * The raisers decide exactly as they do for `createWorkItem` — the body, the
+ * blockers, a done status — so a choice born `blocked_by` open work still waits
+ * for that work, and a defective body still raises nothing.
+ *
+ * ⚠️ THE WALK TO REVIEW IS WRITTEN HERE, hop by declared hop, rather than through
+ * `workItemsService.applyStatusTransition`, for the reason `restPlanTargets`
+ * gives: that funnel asserts `work_item:edit`, and the approve is gated by
+ * `ai:decide_plan` alone. Each hop is recorded on a revision and returned as a
+ * move, so the approve announces it after the commit like any other status write.
+ */
+async function askCreatedQuestions(
+  created: readonly WorkItem[],
+  plan: Plan,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<RestingMove[]> {
+  const asking = created.filter((row) => row.type === 'choice' || asksTheConfirmQuestion(row));
+  if (asking.length === 0) return [];
+  const statuses = await workflowsRepository.findStatuses(plan.projectId, ctx.workspaceId, tx);
+  const moves: RestingMove[] = [];
+  for (const item of asking) {
+    const reconcile =
+      item.type === 'choice'
+        ? await choiceGateService.reconcile(item, tx)
+        : await decisionConfirmationGateService.reconcile(item, tx);
+    let at: { id: string; status: string } = item;
+    for (const toKey of reconcile.hopsToReview) {
+      // Never null here: every hop is a status of this project's own workflow,
+      // none is the status the card stands at, and `in_review` is not done.
+      moves.push((await writePlanDecidedStatus(at, toKey, statuses, ctx, tx))!);
+      at = { id: item.id, status: toKey };
+    }
+  }
+  return moves;
+}
+
+/**
  * THE RE-SCOPE MOVE FOR EVERY `modify` TARGET THIS PLAN DID NOT PARK (bug
  * MOTIR-10102) — materialize's pass after `restPlanTargets`.
  *
@@ -4824,6 +4903,100 @@ async function settleUnparkedModifyTargets(
     }
     const move = await writePlanDecidedStatus(item, toKey, statuses, ctx, tx);
     if (move) moves.push(move);
+  }
+  return moves;
+}
+
+/** Which person-facing question a card asks by its own fields (bug MOTIR-12159):
+ *  a `type: choice` card the `decision_choice` one, a `human` decision the
+ *  `decision_confirmation` one. A card asks at most one of the two. */
+interface AskedQuestion {
+  choice: boolean;
+  confirm: boolean;
+}
+
+function askedQuestionOf(item: { type: string | null; executor: string | null }): AskedQuestion {
+  return { choice: item.type === 'choice', confirm: asksTheConfirmQuestion(item) };
+}
+
+/**
+ * PUT BACK THE QUESTION EVERY MODIFIED CHOICE OR DECISION ASKS (bug MOTIR-12159) —
+ * materialize's pass after the resting status is settled.
+ *
+ * ⚠️ THIS IS THE REPORTED BUG. A plan that targets a card parks it, and the park
+ * (`in_review → planning`) is a pull-back: it withdraws every awaiting question on
+ * the card (`pulled_back`). The resting pass then gives it `todo` (a rewritten
+ * body is a re-scope, MOTIR-10102) or its old status — and nothing asked the
+ * question again, because `choiceGateService.reconcile` /
+ * `decisionConfirmationGateService.reconcile` were called only by
+ * `workItemsService` (an edit, a create, a blocker reaching done). So an approved
+ * choice sat in To Do with no `decision_choice` gate and nothing in Waiting on
+ * you, whether or not the plan changed its options. A target the plan did NOT park
+ * (a conversation plan's non-anchor) kept its OLD question instead, over options
+ * that no longer exist.
+ *
+ * The rule is the one `updateWorkItem` applies to an edit, run over the card as
+ * the approve leaves it: re-asked at the body's current stamp when it parses and
+ * nothing open blocks it (and walked to review by DECLARED edges, as a create or
+ * an edit walks it), withdrawn when it stopped being a choice or a `human`
+ * decision, left alone when the same stamp is still being asked. Every `modify`
+ * target is reconciled, not only one whose body moved: the park withdrew the
+ * question whatever the patch said.
+ *
+ * ⚠️ A CARD STILL HELD AT `planning` IS SKIPPED. Its status belongs to the hold
+ * (`settleUnparkedModifyTargets` wrote the decision onto the lock), and a raise
+ * would walk it out of `planning` from under that hold.
+ *
+ * ⚠️ THE WALK IS WRITTEN BY HAND, through `writePlanDecidedStatus`, for the reason
+ * `restPlanTargets` states: `applyStatusTransition` asserts `work_item:edit`, and
+ * the approve is gated by `ai:decide_plan` alone. Every hop is a declared edge
+ * (`hopsToReview` walks only those), each lands on a revision, and each is
+ * announced after the commit like any resting move.
+ *
+ * Locks each card in work-item-id order, the one lock order every target path takes.
+ */
+async function askModifiedQuestions(
+  plan: Plan,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+  modifyTargets: ReadonlyMap<string, ModifyTargetFacts>,
+): Promise<RestingMove[]> {
+  // Every target is read: a card that only BECAME a choice or a decision is found
+  // by its new fields, one that stopped being one by `askedQuestion`.
+  const candidates = [...modifyTargets.keys()].sort();
+  const moves: RestingMove[] = [];
+  let statuses: Awaited<ReturnType<typeof workflowsRepository.findStatuses>> | null = null;
+  for (const workItemId of candidates) {
+    const facts = modifyTargets.get(workItemId)!;
+    await workItemRepository.lockById(workItemId, tx);
+    const item = await workItemRepository.findById(workItemId, tx);
+    /* istanbul ignore next -- `applyModify` locked and read this row in the same
+       transaction; the guard narrows the nullable type only */
+    if (!item) continue;
+    const now = askedQuestionOf(item);
+    const choice = now.choice || facts.askedQuestion.choice;
+    const confirm = now.confirm || facts.askedQuestion.confirm;
+    if (!choice && !confirm) continue;
+    if (item.status === PLANNING_STATUS_KEY) {
+      const lock = await planTargetLockRepository.findByWorkItemId(workItemId, tx);
+      if (lock?.statusHeld) continue;
+    }
+    const hops = [
+      ...(choice ? (await choiceGateService.reconcile(item, tx)).hopsToReview : []),
+      ...(confirm ? (await decisionConfirmationGateService.reconcile(item, tx)).hopsToReview : []),
+    ];
+    if (hops.length === 0) continue;
+    statuses ??= await workflowsRepository.findStatuses(plan.projectId, ctx.workspaceId, tx);
+    let at: { id: string; status: string } = item;
+    for (const toKey of hops) {
+      const move = await writePlanDecidedStatus(at, toKey, statuses, ctx, tx);
+      /* istanbul ignore next -- a hop is never the card's own status nor a done
+         one (`hopsToReview` walks from the card's status toward `in_review`); the
+         guard narrows the nullable answer only */
+      if (!move) break;
+      moves.push(move);
+      at = { id: item.id, status: toKey };
+    }
   }
   return moves;
 }
@@ -4945,7 +5118,7 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-): Promise<{ reparent: ReparentMove | null; rescoped: boolean }> {
+): Promise<{ reparent: ReparentMove | null; rescoped: boolean; askedQuestion: AskedQuestion }> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
   if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
@@ -5559,7 +5732,7 @@ async function applyModify(
   // own moves, so this function has no status change left to report
   // (MOTIR-5646). It reports whether the patch RE-SCOPED the card, which the
   // re-scope move decides from (MOTIR-10102).
-  return { reparent, rescoped };
+  return { reparent, rescoped, askedQuestion: askedQuestionOf(current) };
 }
 
 /**

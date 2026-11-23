@@ -254,6 +254,15 @@ export interface GateSetInput {
    */
   dismissedSendBackVersion?: string | null;
   /**
+   * The card's newest GATE-OFF review answer — the `recorded` verdict record (a pass or a
+   * send-back) stored while no review gate was asking — or null (Bug MOTIR-12147). At the
+   * set's CURRENT version it IS the review at that version, so the review is not asked
+   * again there: a gate raised over it could never be decided, because the verdict door
+   * refuses every later verdict at an answered version as SECOND. Optional; absent reads as
+   * none.
+   */
+  recordedReviewAnswer?: RecordedReviewAnswer | null;
+  /**
    * Whether the project has switched DESIGN APPROVAL off (`Project.designApprovalGate`
    * false; Story MOTIR-693 · MOTIR-697), so a design gate is approved by the system at
    * publish and no person is asked (`designEvidenceService.publish`). Read only by the
@@ -509,6 +518,9 @@ export function acceptanceRefusalHoldsMerge(
  *    for it (§12.4). ONE REVIEW PER VERSION — a decided review is never asked again.
  *    A person's DISMISSAL at this version (`dismissedVersion`, §12.15) reads as `passed`:
  *    the review is answered, overruled, and the merge question is asked.
+ *  · A GATE-OFF answer at this version (`recordedAnswer`, Bug MOTIR-12147) — a verdict
+ *    stored as `recorded` while no review gate was asking — reads exactly as a decided
+ *    review gate would: its pass is `passed`, its send-back `refused` until dismissed.
  *  · `owed` — no decided review at this version (none yet, or only a WITHDRAWN one — a red
  *    build and a green again at the same head is reviewed again): ask the review, and not
  *    the merge.
@@ -519,6 +531,13 @@ export function acceptanceRefusalHoldsMerge(
  */
 export type AgentReviewStanding = 'not_required' | 'passed' | 'refused' | 'owed';
 
+/** A gate-off review answer — the version it answered and its verdict (Bug MOTIR-12147). */
+export interface RecordedReviewAnswer {
+  subjectVersion: string;
+  /** The stored verdict word — `pass` or `changes_requested` (the record's column is text). */
+  verdict: string;
+}
+
 export function agentReviewStanding(args: {
   reviewAgentEnabled: boolean;
   prMergeMode: string | null;
@@ -528,6 +547,8 @@ export function agentReviewStanding(args: {
   latestMergeGate: Pick<ExistingGate, 'state' | 'subjectVersion'> | null;
   /** The version of the card's newest dismissal of an agent send-back, or null. */
   dismissedVersion?: string | null;
+  /** The card's newest gate-off review answer, or null (Bug MOTIR-12147). */
+  recordedAnswer?: RecordedReviewAnswer | null;
 }): AgentReviewStanding {
   if (!args.reviewAgentEnabled || args.prMergeMode !== 'manual' || args.version === null) {
     return 'not_required';
@@ -542,6 +563,25 @@ export function agentReviewStanding(args: {
     if (review.state === 'changes_requested' || review.state === 'overturned') {
       return args.dismissedVersion === args.version ? 'passed' : 'refused';
     }
+  }
+  // ⚠️ A GATE-OFF ANSWER AT THIS VERSION IS THE REVIEW AT IT (Bug MOTIR-12147). A verdict
+  // recorded while no review gate was asking — the switch off then, or no question owed at
+  // that moment — answers the version, and the verdict door refuses every later verdict
+  // there as SECOND. So a review gate raised over it (the switch turned on since) could
+  // never be decided by any agent. The record reads as the decided review would: a pass
+  // passes, a send-back refuses until a person dismisses it at the version (§12.15).
+  // A review gate already AWAITING at the version keeps it `owed`: that is a gate raised
+  // over a recorded answer before this rule, and asking the merge beside it would put two
+  // questions on the card. Its way out is what it always was — a person's Continue without
+  // the review, or a push.
+  const recorded = args.recordedAnswer ?? null;
+  const awaitingHere =
+    review?.state === 'awaiting' &&
+    review.subjectId === args.workItemId &&
+    review.subjectVersion === args.version;
+  if (!awaitingHere && recorded && recorded.subjectVersion === args.version) {
+    if (recorded.verdict === 'pass') return 'passed';
+    return args.dismissedVersion === args.version ? 'passed' : 'refused';
   }
   return 'owed';
 }
@@ -647,6 +687,7 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     latestAgentReviewGate: input.latestAgentReviewGate ?? null,
     latestMergeGate: input.latestMergeGate,
     dismissedVersion: input.dismissedSendBackVersion ?? null,
+    recordedAnswer: input.recordedReviewAnswer ?? null,
   });
   // ⚠️ AND IT HOLDS EVERY PRIMARY QUESTION TOO (Bug MOTIR-11992; §12.20, reversing §12.2's
   // *"a primary question is not delayed"*). With the review gate on, no approval is asked of
