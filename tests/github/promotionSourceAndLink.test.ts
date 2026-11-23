@@ -8,6 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { promoteAfterDeliverySetChange } from '@/lib/services/linkPromotionService';
+import { runTransitionStatus } from '@/lib/mcp/tools/transitionStatus';
 import { isPromotableSourceStatus, promoteIfCiAlreadyGreen } from '@/lib/services/ciPromotion';
 import { getGitProvider } from '@/lib/git';
 import type { GitProvider } from '@/lib/git/provider';
@@ -317,35 +318,46 @@ describe('TRIGGER 2 — linking a pull request that is already green', () => {
     expect((await statusMoves(item.id)).at(-1)).toEqual({ from: status, to: 'in_review' });
   });
 
-  it.each(['todo', 'planning'] as const)(
-    'never promotes a card at %s and asks it nothing',
-    async (status) => {
-      const s = await makeScenario(`link-never-${status}@example.com`);
-      const item = await greenThenUnlinked(s, status, 22);
-
-      await link(item.identifier, 22);
-
-      expect(await statusOf(item.id)).toBe(status);
-      expect(await awaitingKinds(item.id)).toEqual([]);
-    },
-  );
-
-  it('never promotes FROM Blocked — the link-time sync moves it to Implemented first, as before', async () => {
-    const s = await makeScenario('link-never-blocked@example.com');
-    const item = await greenThenUnlinked(s, 'blocked', 22);
+  it.each(NEVER)('never promotes a card at %s and asks it nothing', async (status) => {
+    const s = await makeScenario(`link-never-${status}@example.com`);
+    const item = await greenThenUnlinked(s, status, 22);
 
     await link(item.identifier, 22);
 
-    // The shipped link-time sync records an open pull request on a Blocked card by
-    // moving it to Implemented (unchanged here). Blocked is never the promotion's
-    // source: the card reaches In Review only from Implemented, by the rule every
-    // Implemented card follows.
-    const moves = await statusMoves(item.id);
-    expect(moves).not.toContainEqual({ from: 'blocked', to: 'in_review' });
-    expect(moves.slice(-2)).toEqual([
-      { from: 'blocked', to: 'implemented' },
-      { from: 'implemented', to: 'in_review' },
-    ]);
+    // Blocked included: the link-time sync does not lift a person's block, so the card
+    // never reaches Implemented — and so never the latch — on the way (review of #4403).
+    expect(await statusOf(item.id)).toBe(status);
+    // The only status revision is the card's creation: the link moved it nowhere.
+    expect((await statusMoves(item.id)).filter((m) => m.from !== null)).toEqual([]);
+    expect(await awaitingKinds(item.id)).toEqual([]);
+  });
+
+  it('a pull request OPENED or marked ready on a Blocked card leaves it Blocked', async () => {
+    const s = await makeScenario('open-on-blocked@example.com');
+    const item = await card(s, 'blocked while its pull request opens');
+    await setStatus(item.id, 'blocked');
+    await opened(34, true);
+    await link(item.identifier, 34);
+
+    await githubWebhookService.handleEvent('pull_request', {
+      action: 'ready_for_review',
+      installation: { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } },
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      pull_request: {
+        number: 34,
+        state: 'open',
+        merged: false,
+        draft: false,
+        title: 'A change (34)',
+        head: { ref: branchOf(34), sha: SHA },
+        base: { ref: 'main' },
+        user: { id: 4242 },
+      },
+    });
+    await ci(34, 'success');
+
+    expect(await statusOf(item.id)).toBe('blocked');
+    expect(await awaitingKinds(item.id)).toEqual([]);
   });
 
   it('through the PICKER door (by internal id) too', async () => {
@@ -778,6 +790,54 @@ describe('the post-commit promotion is best-effort', () => {
     );
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+});
+
+describe("a run's own `implemented` report after CI already promoted the card (review of #4403)", () => {
+  it('changes nothing: still In Review, the same question, no new revision', async () => {
+    const s = await makeScenario('late-report@example.com');
+    const item = await linkedThenParked(s, 'in_progress', 61);
+    await ci(61, 'success');
+    expect(await statusOf(item.id)).toBe('in_review');
+    const gatesBefore = await adminDb.approvalGate.findMany({
+      where: { workItemId: item.id },
+      select: { id: true, state: true },
+    });
+    const revisions = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
+
+    const result = await runTransitionStatus(
+      { key: item.identifier, status: 'implemented' },
+      s.ctx,
+    );
+
+    expect(result.isError).toBeFalsy();
+    expect(JSON.stringify(result.content)).toContain('no-op');
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(
+      await adminDb.approvalGate.findMany({
+        where: { workItemId: item.id },
+        select: { id: true, state: true },
+      }),
+    ).toEqual(gatesBefore);
+    expect(await adminDb.workItemRevision.count({ where: { workItemId: item.id } })).toBe(
+      revisions,
+    );
+  });
+
+  it('still moves the card back when its set no longer holds it In Review', async () => {
+    const s = await makeScenario('late-report-red@example.com');
+    const item = await linkedThenParked(s, 'in_progress', 62);
+    await ci(62, 'success');
+    expect(await statusOf(item.id)).toBe('in_review');
+    // A member went into conflict under the question: the promotion no longer holds.
+    await adminDb.githubPullRequest.updateMany({
+      where: { number: 62 },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: SHA },
+    });
+
+    await runTransitionStatus({ key: item.identifier, status: 'implemented' }, s.ctx);
+
     expect(await statusOf(item.id)).toBe('implemented');
   });
 });

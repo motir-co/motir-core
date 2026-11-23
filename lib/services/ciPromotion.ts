@@ -613,6 +613,35 @@ export async function promoteIfCiAlreadyGreen(
   return true;
 }
 
+/**
+ * HAS CI ALREADY CARRIED THIS CARD PAST `implemented`, AND DOES ITS SET STILL HOLD IT
+ * THERE? (MOTIR-12094 review.) True while the card is `in_review` or `approved` and every
+ * pull request delivering it is still green and landable, by the same `isPromotable`
+ * every promotion asks.
+ *
+ * Since `in_progress` became a source, CI can promote a run's card BEFORE the run's own
+ * last step — `transition_status implemented` — lands. Applied, that report is a
+ * pull-back (`in_review → implemented` withdraws every awaiting question as
+ * `pulled_back`), and the arrival latch then promotes and asks again: the right end
+ * state, reached through a withdrawn question, an extra revision and, with the review
+ * agent on, a second hosted review. The agent door reads this first and answers the
+ * report as already satisfied. Read-only; never throws past a failed read.
+ */
+export async function isPromotionStillWarranted(
+  workItemId: string,
+  ctx: { workspaceId: string },
+): Promise<boolean> {
+  return withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, ctx.workspaceId);
+    const item = await workItemRepository.findById(workItemId, tx);
+    if (!item || !PROMOTED_STATUSES.includes(item.status)) return false;
+    return isPromotable(item, tx);
+  });
+}
+
+/** Where a promotion leaves a card, and where its approval moves it. */
+const PROMOTED_STATUSES: readonly string[] = ['in_review', 'approved'];
+
 /** `(pull request, commit)` as one key, for "already re-rendered". */
 function feedbackKey(pullRequestId: string, commitSha: string): string {
   return `${pullRequestId}@${commitSha}`;
