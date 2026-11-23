@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { fullestContainer, planContainerCount, planContainers } from '@/lib/planning/planShape';
+import type { PlanItemChangeField } from '@/lib/dto/planReview';
+import {
+  fullestContainer,
+  isMarkOnlyProposal,
+  planContainerCount,
+  planContainers,
+} from '@/lib/planning/planShape';
 import { planReviewItem } from '../helpers/planReview';
 
 // MOTIR-3260 — the pure container-spread module (`design/ai-planning/design-notes.md`
@@ -222,5 +228,105 @@ describe('fullestContainer', () => {
     const roots = [planReviewItem({ planItemId: 'a', nodeId: 'a', parentNodeId: null })];
 
     expect(fullestContainer(roots)).toBeNull();
+  });
+});
+
+// ── Bug MOTIR-12097 — a MARK-ONLY `modify` does not choose where the canvas opens ──
+//
+// A plan that replaces old work marks several FINISHED cards outdated and adds a
+// few new ones elsewhere. Counted alike, the marks out-numbered the adds and the
+// canvas opened on a finished story whose cards are not changing.
+
+/** `n` adds under `parent`. */
+function addUnder(parent: string, n: number) {
+  return Array.from({ length: n }, (_, i) =>
+    planReviewItem({
+      planItemId: `${parent}_add_${i}`,
+      nodeId: `${parent}_add_${i}`,
+      op: 'add',
+      parentNodeId: parent,
+    }),
+  );
+}
+
+/** `n` modifies of committed cards under `parent`, each moving exactly `fields`. */
+function modifyUnder(
+  parent: string,
+  n: number,
+  fields: PlanItemChangeField[] = ['obsolescence', 'obsolescenceNote'],
+) {
+  const base = planReviewItem();
+  return Array.from({ length: n }, (_, i) =>
+    planReviewItem({
+      planItemId: `${parent}_mod_${i}`,
+      nodeId: `wi_${parent}_mod_${i}`,
+      identifier: `MOTIR-${100 + i}`,
+      op: 'modify',
+      parentNodeId: parent,
+      proposal: { ...base.proposal, op: 'modify', changedFields: fields },
+    }),
+  );
+}
+
+describe('isMarkOnlyProposal', () => {
+  it('is true for a modify whose every changed field is a mark field', () => {
+    const markSets: PlanItemChangeField[][] = [
+      ['obsolescence'],
+      ['obsolescence', 'obsolescenceNote'],
+      ['supersedes'],
+      ['supersededBy', 'obsolescence'],
+    ];
+    for (const fields of markSets) {
+      expect(isMarkOnlyProposal(modifyUnder('wi_b', 1, fields)[0]!)).toBe(true);
+    }
+  });
+
+  it('is false for a modify moving anything else, an empty change set, and add / remove', () => {
+    expect(isMarkOnlyProposal(modifyUnder('wi_b', 1, ['obsolescence', 'title'])[0]!)).toBe(false);
+    expect(isMarkOnlyProposal(modifyUnder('wi_b', 1, [])[0]!)).toBe(false);
+    expect(isMarkOnlyProposal(addUnder('wi_a', 1)[0]!)).toBe(false);
+    expect(isMarkOnlyProposal({ ...modifyUnder('wi_b', 1)[0]!, op: 'remove' })).toBe(false);
+  });
+});
+
+describe('fullestContainer — mark-only modifies (Bug MOTIR-12097)', () => {
+  it('3 adds under A beat 4 mark-only modifies under B — the reproduction', () => {
+    const items = [...modifyUnder('wi_b', 4), ...addUnder('wi_a', 3)];
+
+    expect(fullestContainer(items)!.parentNodeId).toBe('wi_a');
+    expect(fullestContainer(items, { folders: true })!.parentNodeId).toBe('wi_a');
+    // The spread itself is unchanged: B still holds more items, and both count.
+    expect(planContainers(items)[0]).toMatchObject({ parentNodeId: 'wi_b', count: 4 });
+    expect(planContainerCount(items)).toBe(2);
+  });
+
+  it('a non-mark modify and a remove are work too', () => {
+    const titled = [...modifyUnder('wi_b', 4), ...modifyUnder('wi_a', 2, ['title'])];
+    expect(fullestContainer(titled)!.parentNodeId).toBe('wi_a');
+
+    const removed = [
+      ...modifyUnder('wi_b', 4),
+      ...modifyUnder('wi_a', 1).map((item) => ({ ...item, op: 'remove' as const })),
+    ];
+    expect(fullestContainer(removed)!.parentNodeId).toBe('wi_a');
+  });
+
+  it('mark-only items still count toward a container that also holds work', () => {
+    // A: 2 adds + 2 marks = 4. C: 3 adds. A wins on its whole count.
+    const items = [...addUnder('wi_a', 2), ...modifyUnder('wi_a', 2), ...addUnder('wi_c', 3)];
+
+    expect(fullestContainer(items)).toMatchObject({ parentNodeId: 'wi_a', count: 4 });
+  });
+
+  it('a plan of nothing but marks opens where it did — on the container with the most', () => {
+    const items = [...modifyUnder('wi_b', 2), ...modifyUnder('wi_d', 3)];
+
+    expect(fullestContainer(items)).toMatchObject({ parentNodeId: 'wi_d', count: 3 });
+  });
+
+  it('work only at the TOP level still opens at the top, however many marks sit below', () => {
+    const roots = addUnder('wi_root', 1).map((item) => ({ ...item, parentNodeId: null }));
+
+    expect(fullestContainer([...modifyUnder('wi_b', 4), ...roots])).toBeNull();
   });
 });

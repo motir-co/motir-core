@@ -250,3 +250,57 @@ describe('a FOLDER is a level', () => {
     expect(arrival?.trail.length).toBeGreaterThan(0);
   });
 });
+
+describe('arrivalLevel — a plan that also marks finished work outdated (Bug MOTIR-12097)', () => {
+  // The dogfooded plan's shape: 3 proposed subtasks under the story it is about,
+  // and 4 mark-only `modify` items on the done subtasks of an older story.
+  const STORY_TRAIL = [{ id: 'wi_story', identifier: 'MOTIR-11023', title: 'The new story' }];
+  const OLD_TRAIL = [{ id: 'wi_old', identifier: 'MOTIR-7093', title: 'The finished story' }];
+
+  function marks(n: number) {
+    const base = planReviewItem();
+    return Array.from({ length: n }, (_, i) =>
+      planReviewItem({
+        planItemId: `pi_mark_${i}`,
+        nodeId: `wi_done_${i}`,
+        identifier: `MOTIR-${7117 + i}`,
+        op: 'modify',
+        parentNodeId: 'wi_old',
+        parentIdentifier: 'MOTIR-7093',
+        parentTitle: 'The finished story',
+        parentTrail: OLD_TRAIL,
+        proposal: {
+          ...base.proposal,
+          op: 'modify',
+          identifier: `MOTIR-${7117 + i}`,
+          changedFields: ['obsolescence', 'obsolescenceNote'],
+        },
+      }),
+    );
+  }
+
+  function adds(n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      planReviewItem({
+        planItemId: `pi_add_${i}`,
+        nodeId: `pi_add_${i}`,
+        op: 'add',
+        parentNodeId: 'wi_story',
+        parentIdentifier: 'MOTIR-11023',
+        parentTitle: 'The new story',
+        parentTrail: STORY_TRAIL,
+      }),
+    );
+  }
+
+  it('opens on the story holding the adds, not the finished story holding more marks', () => {
+    const arrival = arrivalLevel([...marks(4), ...adds(3)], 'New');
+
+    expect(arrival?.id).toBe('wi_story');
+    expect(arrival?.trail.map((c) => c.id)).toEqual(['wi_story']);
+  });
+
+  it('a plan of marks alone still opens on the container holding them', () => {
+    expect(arrivalLevel(marks(4), 'New')?.id).toBe('wi_old');
+  });
+});
