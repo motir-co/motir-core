@@ -254,10 +254,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
       '{ outcome: "build_failed_recorded"; releaseId: string } | { outcome: "deferred_in_progress" } | { outcome: "gave_up_in_progress"; releaseId: string } | { outcome: "ignored" } | { outcome: "released"; releaseId: string; state: string }',
   },
   // A production config change redeploys the live release (MOTIR-10032).
+  // MOTIR-12127 WIDENED it by `skipped_taken_over` (a repository whose takeover
+  // reached its transfer is never redeployed) and kept the id: the step
+  // redeploys, so a new id would redeploy again on a resumed run, and a memo
+  // written before it holds one of the older outcomes, all still in the union.
   '`config-redeploy-${attempt}`': {
     file: 'lib/jobs/definitions/productionConfigRedeploy.ts',
     shape:
-      '{ outcome: "deferred_in_progress" } | { outcome: "failed_release"; releaseId: string } | { outcome: "gave_up_in_progress" } | { outcome: "redeployed"; releaseId: string } | { outcome: "skipped_customer_repository" } | { outcome: "skipped_no_live_release" }',
+      '{ outcome: "deferred_in_progress" } | { outcome: "failed_release"; releaseId: string } | { outcome: "gave_up_in_progress" } | { outcome: "redeployed"; releaseId: string } | { outcome: "skipped_customer_repository" } | { outcome: "skipped_no_live_release" } | { outcome: "skipped_taken_over" }',
   },
   // Every production release posts its GitHub deployment status (MOTIR-10033).
   'post-release-status': {
@@ -645,10 +649,20 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   // Story MOTIR-9792 · MOTIR-9942 — the tenant account reconcile; `-v2` added
   // the ready-account quota re-check (MOTIR-12011).
+  // MOTIR-12126 WIDENED `organizations[].outcome` by `in_handover` (an account
+  // whose handover owns it now, which the pass leaves alone) and kept the id: a
+  // memo written before it holds one of the older outcomes, all still in the
+  // union, and the job only returns it as its run's output.
   'hosting-tenant-account-reconcile-v2': {
     file: 'lib/jobs/definitions/hostingTenantAccountReconcile.ts',
     shape:
-      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; quotaChecks: Array<{ organizationId: string; outcome: "at_target" | "failed" | "raise_filed" | "raise_pending" }>; ran: boolean }',
+      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "in_handover" | "not_requested" | "ready" | "refused" }>; quotaChecks: Array<{ organizationId: string; outcome: "at_target" | "failed" | "raise_filed" | "raise_pending" }>; ran: boolean }',
+  },
+  // MOTIR-12131 — one turn of a tenant account's takeover handover.
+  'advance-tenant-handover': {
+    file: 'lib/jobs/definitions/hostingTenantHandoverAdvance.ts',
+    shape:
+      '{ outcome: "busy"; step: "await_standalone" | "create_deploy_role" | "destroy_previews" | "leave_organization" | "move_email" | "open_upstream" | "remove_access" | "transfer_repositories" } | { outcome: "complete" } | { outcome: "failed"; step: "await_standalone" | "create_deploy_role" | "destroy_previews" | "leave_organization" | "move_email" | "open_upstream" | "remove_access" | "transfer_repositories" } | { outcome: "not_in_handover" } | { outcome: "ran"; status: "done" | "failed" | "pending" | "running" | "waiting_on_you"; step: "await_standalone" | "create_deploy_role" | "destroy_previews" | "leave_organization" | "move_email" | "open_upstream" | "remove_access" | "transfer_repositories" }',
   },
   // Story MOTIR-9365 · MOTIR-9585 — the Host account state pass.
   'host-account-state': {

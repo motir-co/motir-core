@@ -206,6 +206,28 @@ export const repositoryActionsConfigClient = {
     throw await refused(patched);
   },
 
+  /** Delete the ENVIRONMENT secret `name` of `environment` (MOTIR-12131: the
+   *  production push credential, withdrawn before a takeover hands the
+   *  repository over). A 404 — no such secret or no such environment — is
+   *  `'absent'`. */
+  async deleteEnvironmentSecret(
+    coordinates: RepositoryCoordinates,
+    environment: string,
+    name: string,
+  ): Promise<'deleted' | 'absent'> {
+    const token = await tokenFor(coordinates.installationId);
+    const repo =
+      `${GITHUB_API}/repos/${encodeURIComponent(coordinates.owner)}/` +
+      `${encodeURIComponent(coordinates.repo)}`;
+    const res = await request(
+      `${repo}/environments/${encodeURIComponent(environment)}/secrets/${encodeURIComponent(name)}`,
+      { method: 'DELETE', token },
+    );
+    if (res.status === 404) return 'absent';
+    if (res.ok) return 'deleted';
+    throw await refused(res);
+  },
+
   /** Delete the repository variable `name`; a 404 is `'absent'`. */
   async deleteVariable(
     coordinates: RepositoryCoordinates,

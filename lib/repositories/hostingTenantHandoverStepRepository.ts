@@ -19,6 +19,8 @@ export interface HandoverStepResult {
   /** The error's NAME on a failure — never a message, which can carry an
    *  address or an id the organisation gave. */
   lastError?: string | null;
+  /** What a `waiting_on_you` step waits on (MOTIR-12131); cleared otherwise. */
+  missing?: readonly string[];
 }
 
 /** A step's place in the run order. The table's check constraint admits only
@@ -90,9 +92,32 @@ export const hostingTenantHandoverStepRepository = {
       data: {
         status: result.status,
         lastError: result.status === 'failed' ? (result.lastError ?? null) : null,
+        missing: result.status === 'waiting_on_you' ? [...(result.missing ?? [])] : [],
         leaseHolder: null,
         leaseExpiresAt: null,
         completedAt: result.status === 'done' ? new Date() : null,
+      },
+    });
+    return count === 1;
+  },
+
+  /** Move a step nobody holds from one of `from` to `to` — a person's answer
+   *  (the email code, a re-check) or a retry, never a worker's turn
+   *  (MOTIR-12131). A held step is never moved. True when it moved. */
+  async moveUnheld(
+    tenantAccountId: string,
+    step: TenantHandoverStep,
+    from: readonly TenantHandoverStepStatus[],
+    to: { status: TenantHandoverStepStatus; missing?: readonly string[] },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostingTenantHandoverStep.updateMany({
+      where: { tenantAccountId, step, status: { in: [...from] }, leaseHolder: null },
+      data: {
+        status: to.status,
+        lastError: null,
+        missing: to.status === 'waiting_on_you' ? [...(to.missing ?? [])] : [],
+        completedAt: to.status === 'done' ? new Date() : null,
       },
     });
     return count === 1;

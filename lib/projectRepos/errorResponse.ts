@@ -25,6 +25,7 @@ import {
   RepoExistsWithOtherSpecError,
 } from '@/lib/projectRepos/errors';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
+import { SharedTenantAccountError } from '@/lib/hosting/tenantHandoverErrors';
 
 /**
  * Shared typed-error → HTTP mapping for the repository-SET routes (Story
@@ -60,6 +61,14 @@ import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organization
  *     carries `refusal`, so a client can tell the rules apart
  */
 export function mapProjectRepoError(err: unknown): NextResponse | null {
+  // MOTIR-12131: a single takeover of a repository sharing its organisation's
+  // AWS account. 409 with the others named, so the room can say which.
+  if (err instanceof SharedTenantAccountError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, repositories: err.repositories },
+      { status: 409 },
+    );
+  }
   if (err instanceof ProjectNotFoundError || err instanceof ProjectRepoNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }

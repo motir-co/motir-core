@@ -35,6 +35,7 @@ import type {
 } from '@/lib/services/previewLifecycleService';
 import type { MergeReleaseRequestedData } from '@/lib/services/productionMergeReleaseService';
 import type { ReleaseStatusRequestedData } from '@/lib/services/releaseDeploymentStatusService';
+import type { TenantHandoverAdvanceData } from '@/lib/services/tenantAccountHandoverService';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
@@ -927,6 +928,10 @@ export interface JobEventDataMap {
    *  MOTIR-10033): post its GitHub deployment status. Emitted by
    *  `hostedApplicationService` after the change commits; ids only. */
   'hosted-release.status': ReleaseStatusRequestedData;
+  /** One turn of an AWS account's takeover handover (Story MOTIR-9800 ·
+   *  MOTIR-12131): run its next step. Emitted by `tenantAccountHandoverService`
+   *  on a start, an answer, a retry and each finished step; the account id only. */
+  'hosting.tenant-handover.advance': TenantHandoverAdvanceData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;

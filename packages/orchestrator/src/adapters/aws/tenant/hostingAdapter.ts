@@ -120,6 +120,12 @@ export interface AwsHostingDeps {
   /** Make sure the organisation's tenant account is asked for, and say whether
    *  it is ready (`hostingTenantAccountService.ensureForOrganization`). */
   readonly ensureTenantAccount: (organizationId: string) => Promise<AwsTenantAccountAnswer>;
+  /** The organisation's tenant account id while a takeover is handing it over
+   *  (`handing_over`), else null (MOTIR-12131). `openUpstream` reaches the
+   *  account through it, because `ensureTenantAccount` answers a handing-over
+   *  account not ready — on purpose, so nothing else deploys into it. Absent,
+   *  `openUpstream` reaches only a ready account. */
+  readonly handoverAccountOf?: (organizationId: string) => Promise<string | null>;
   /** The organisation a repository row belongs to. */
   readonly organizationOf: (repositoryId: string) => Promise<string>;
   /** Whether the repository is a customer repository (D1), which is never hosted. */
@@ -364,11 +370,14 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): AwsHostingDepl
   }
 
   /** The repository's tenant account, or null while it is not ready. */
-  async function accountOf(repositoryId: string): Promise<TenantAccountContext | null> {
+  async function accountOf(
+    repositoryId: string,
+    reach: 'ready' | 'handover' = 'ready',
+  ): Promise<TenantAccountContext | null> {
     const organizationId = await deps.organizationOf(repositoryId);
-    const answer = await deps.ensureTenantAccount(organizationId);
-    if (!answer.ready || !answer.accountId) return null;
-    const clients = deps.clientsFor({ accountId: answer.accountId, region: deps.region });
+    const accountId = await accountIdOf(organizationId, reach);
+    if (!accountId) return null;
+    const clients = deps.clientsFor({ accountId, region: deps.region });
     return {
       organizationId,
       clients,
@@ -376,12 +385,27 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): AwsHostingDepl
     };
   }
 
+  /** The account id `reach` admits: a ready account's, or — for the handover
+   *  (MOTIR-12131) — a handing-over account's first, else a ready one's. Never
+   *  calls `ensureTenantAccount` for a handing-over account. */
+  async function accountIdOf(
+    organizationId: string,
+    reach: 'ready' | 'handover',
+  ): Promise<string | null> {
+    if (reach === 'handover' && deps.handoverAccountOf) {
+      const handingOver = await deps.handoverAccountOf(organizationId);
+      if (handingOver) return handingOver;
+    }
+    const answer = await deps.ensureTenantAccount(organizationId);
+    return answer.ready && answer.accountId ? answer.accountId : null;
+  }
+
   /** The app's repository and environment, its account, and its release
    *  stack's shape (null when there is no release stack). */
-  async function locate(appRef: string) {
+  async function locate(appRef: string, reach: 'ready' | 'handover' = 'ready') {
     const parsed = parseAwsAppRef(appRef);
     const { stackName } = functionReleaseNames(parsed.repositoryId, parsed.environment);
-    const account = await accountOf(parsed.repositoryId);
+    const account = await accountOf(parsed.repositoryId, reach);
     if (!account) return { parsed, account: null, shape: null, stackName, stack: null };
     const stack = await account.runner.describeStack(stackName);
     const shape = stack ? shapeOfReleaseStack(stack.parameters) : null;
@@ -635,7 +659,9 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): AwsHostingDepl
       if (!sameEnvironment(parsed.environment, handle.environment)) {
         throw new OrchestratorApiError('aws', 409, `app ${appRef} is another environment's`);
       }
-      const { account, shape, stackName, stack } = await locate(appRef);
+      // A handing-over account first: the takeover opens its releases while
+      // the account answers not ready to every other caller (MOTIR-12131).
+      const { account, shape, stackName, stack } = await locate(appRef, 'handover');
       // Unpublished (no ConfigHash yet) is no release to open either.
       if (!account || !shape || !stack?.parameters['ConfigHash']) {
         throw new ReleaseNotFoundError(appRef);

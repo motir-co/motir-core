@@ -12,6 +12,10 @@ import {
 // caller holds a `withSystemContext` transaction.
 
 export const hostingTenantAccountRepository = {
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<HostingTenantAccount | null> {
+    return tx.hostingTenantAccount.findUnique({ where: { id } });
+  },
+
   async findByOrganizationId(
     organizationId: string,
     tx?: Prisma.TransactionClient,
@@ -40,6 +44,7 @@ export const hostingTenantAccountRepository = {
         "state", "refused_count" AS "refusedCount", "last_refused_at" AS "lastRefusedAt",
         "ou_id" AS "ouId", "quotas_checked_at" AS "quotasCheckedAt", "region",
         "handover_owner_email" AS "handoverOwnerEmail", "handover_github_owner" AS "handoverGithubOwner",
+        "handover_started_by_user_id" AS "handoverStartedByUserId",
         "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
     return rows[0]!;
   },
@@ -158,6 +163,42 @@ export const hostingTenantAccountRepository = {
       where: { organizationId },
       data: { handoverOwnerEmail: owner.ownerEmail, handoverGithubOwner: owner.githubOwner },
     });
+  },
+
+  /** Start the takeover handover (MOTIR-12131): only a `ready` account moves to
+   *  `handing_over`, with the owner the administrator named and who started it.
+   *  One conditional statement, so two starts at once leave ONE handover; true
+   *  when this call started it. */
+  async startHandoverInTx(
+    id: string,
+    start: { ownerEmail: string; githubOwner: string; startedByUserId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostingTenantAccount.updateMany({
+      where: { id, state: 'ready' },
+      data: {
+        state: 'handing_over',
+        handoverOwnerEmail: start.ownerEmail,
+        handoverGithubOwner: start.githubOwner,
+        handoverStartedByUserId: start.startedByUserId,
+      },
+    });
+    return count === 1;
+  },
+
+  /** Move the account to `to` only while it is in one of `from`; true when it
+   *  moved (MOTIR-12131). */
+  async setStateIfInTx(
+    id: string,
+    from: readonly HostingTenantAccountState[],
+    to: HostingTenantAccountState,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostingTenantAccount.updateMany({
+      where: { id, state: { in: [...from] } },
+      data: { state: to },
+    });
+    return count === 1;
   },
 
   /** The account exists: no refusal is outstanding. */

@@ -54,6 +54,7 @@ import { awsCostFetch } from './definitions/awsCostFetch';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
 import { hostAccountState } from './definitions/hostAccountState';
 import { hostingTenantAccountReconcile } from './definitions/hostingTenantAccountReconcile';
+import { hostingTenantHandoverAdvance } from './definitions/hostingTenantHandoverAdvance';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
@@ -187,6 +188,7 @@ export const jobDefinitions = [
   awsCostFetch,
   hostAccountState,
   hostingTenantAccountReconcile,
+  hostingTenantHandoverAdvance,
   hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,

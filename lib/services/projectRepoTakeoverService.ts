@@ -8,6 +8,8 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
+import { SharedTenantAccountError } from '@/lib/hosting/tenantHandoverErrors';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -127,6 +129,14 @@ export const projectRepoTakeoverService = {
     // the surface's correct response is MOTIR-1900's connect prompt, not a banner.
     const identity = await githubIdentityService.getIdentityForUser(ctx.userId);
     if (!identity) throw new GithubIdentityRequiredError();
+
+    // MOTIR-12131 — an AWS-target repository shares its organisation's ONE
+    // tenant account with every other one, and the account leaves with all of
+    // them: handed over one at a time, the first would leave the rest deploying
+    // into an account on its way out. So a single takeover is refused, naming
+    // the others, before the claim writes anything — except while the
+    // organisation's handover is itself transferring them (`removing`).
+    await assertNotSharedTenantAccount(rowId);
 
     // ── 1 · CLAIM (locked, no network) ──────────────────────────────────────
     const claimed = await inLockedRow(rowId, ctx, async (row, tx) => {
@@ -477,6 +487,50 @@ export const projectRepoTakeoverService = {
     }
   },
 };
+
+/** The takeover states past the transfer call: the repository is leaving or
+ *  has left, so it no longer shares the account. */
+const PAST_TRANSFER_STATES: readonly ProjectRepoTakeoverState[] = [
+  'transfer_pending',
+  'awaiting_reinstall',
+  'done',
+];
+
+/**
+ * Refuse a single-repository takeover of an AWS-target row while its
+ * organisation's tenant account holds another AWS-target Motir repository
+ * (MOTIR-12131). Lifted while the account is `removing`, the state the
+ * organisation-wide handover's transfer step runs under. Reads only; a row
+ * that is not AWS-targeted, or not found, passes (the claim reports it).
+ */
+async function assertNotSharedTenantAccount(rowId: string): Promise<void> {
+  const others = await withSystemContext(async (tx) => {
+    const facts = await projectRepoRepository.findDeployFactsInTx(rowId, tx);
+    if (facts?.hostingTarget !== 'aws') return [];
+    const identity = await projectRepoRepository.findHostingIdentityInTx(rowId, tx);
+    if (!identity) return [];
+    const account = await hostingTenantAccountRepository.findByOrganizationId(
+      identity.organizationId,
+      tx,
+    );
+    if (account?.state === 'removing') return [];
+    const repos = await projectRepoRepository.listAwsMotirReposByOrganizationInTx(
+      identity.organizationId,
+      tx,
+    );
+    return repos.filter(
+      (repo) =>
+        repo.id !== rowId &&
+        !(repo.takeoverState && PAST_TRANSFER_STATES.includes(repo.takeoverState)),
+    );
+  });
+  if (others.length > 0) {
+    throw new SharedTenantAccountError(
+      rowId,
+      others.map((repo) => repo.name),
+    );
+  }
+}
 
 /**
  * Reject a row that is not Motir's to hand over, distinguishing the two shapes so

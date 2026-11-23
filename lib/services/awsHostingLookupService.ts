@@ -2,6 +2,7 @@ import type { AwsTenantAccountAnswer, GithubRepositoryIds } from '@motir/orchest
 import { githubRepositoryOwnerId } from '@/lib/github/repositoryOwnerId';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -56,6 +57,16 @@ export const awsHostingLookupService = {
     if (!githubRepositoryId) return null;
     const ownerIdOf = deps.ownerIdOf ?? githubRepositoryOwnerId;
     return { githubRepositoryId, githubOwnerId: await ownerIdOf(githubRepositoryId) };
+  },
+
+  /** The organisation's tenant account id while a takeover is handing it over
+   *  (`handing_over`), else null — the one reach that admits it, used only by
+   *  the adapter's `openUpstream` (MOTIR-12131). Never creates a row. */
+  async handoverAccountOf(organizationId: string): Promise<string | null> {
+    const row = await withSystemContext((tx) =>
+      hostingTenantAccountRepository.findByOrganizationId(organizationId, tx),
+    );
+    return row?.state === 'handing_over' && row.awsAccountId ? row.awsAccountId : null;
   },
 
   /** The organisation's tenant account, asked for when there is none. */

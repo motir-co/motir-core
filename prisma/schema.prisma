@@ -483,6 +483,8 @@ model User {
   hostedReleasesRestored           HostedRelease[]                     @relation("HostedReleaseRestoredBy")
   /// Production releases of a ref this user asked for (MOTIR-10103). SetNull on delete.
   hostedReleasesRequested          HostedRelease[]                     @relation("HostedReleaseRequestedBy")
+  /// Tenant-account takeover handovers this user started (MOTIR-12131). SetNull on delete.
+  hostingTenantHandoversStarted    HostingTenantAccount[]              @relation("HostingTenantHandoverStartedBy")
 
   /// Agent review verdicts this user submitted (MOTIR-10333).
   reviewVerdictRecords ReviewVerdictRecord[]
@@ -13103,36 +13105,41 @@ model HostAccountAttempt {
 /// column holds a credential or the member email (`hostingTenantAccountPlan`
 /// derives the email on demand). Platform-only, as `fleet_shard`.
 model HostingTenantAccount {
-  id                  String                      @id @default(cuid())
-  organizationId      String                      @unique @map("organization_id")
-  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                      String                      @id @default(cuid())
+  organizationId          String                      @unique @map("organization_id")
+  organization            Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// Null until the create-or-find step finds or creates the account.
-  awsAccountId        String?                     @map("aws_account_id")
+  awsAccountId            String?                     @map("aws_account_id")
   /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`, then the
   /// takeover handover's `handing_over` | `awaiting_standalone` | `removing` |
   /// `handed_over` (MOTIR-12126) (`HostingTenantAccountState`,
   /// `lib/ciFleet/hostingTenantAccounts.ts`).
-  state               String                      @default("requested")
+  state                   String                      @default("requested")
   /// Consecutive `CreateAccount` refusals — the reconcile's backoff reads it, so
   /// a restart never resets the wait.
-  refusedCount        Int                         @default(0) @map("refused_count")
-  lastRefusedAt       DateTime?                   @map("last_refused_at")
+  refusedCount            Int                         @default(0) @map("refused_count")
+  lastRefusedAt           DateTime?                   @map("last_refused_at")
   /// The `Tenants` organisational unit the account sits under, once known.
-  ouId                String?                     @map("ou_id")
+  ouId                    String?                     @map("ou_id")
   /// When the reconcile last brought a `ready` account's quota targets to target
   /// or a raise (MOTIR-12011); null until the first check, which is then due.
-  quotasCheckedAt     DateTime?                   @map("quotas_checked_at")
-  region              String
+  quotasCheckedAt         DateTime?                   @map("quotas_checked_at")
+  region                  String
   /// The takeover handover (Story MOTIR-9800 · MOTIR-12126): the email address
   /// the administrator names to own the account, and the GitHub owner that
   /// receives its repositories. Typed by a person and kept so a restarted
   /// `move_email` step can resume; no column holds the account's derived member
   /// email, a credential, a payment detail or a root credential. Never on a DTO.
-  handoverOwnerEmail  String?                     @map("handover_owner_email")
-  handoverGithubOwner String?                     @map("handover_github_owner")
-  createdAt           DateTime                    @default(now()) @map("created_at")
-  updatedAt           DateTime                    @updatedAt @map("updated_at")
-  handoverSteps       HostingTenantHandoverStep[]
+  handoverOwnerEmail      String?                     @map("handover_owner_email")
+  handoverGithubOwner     String?                     @map("handover_github_owner")
+  /// The organisation admin who started the handover (MOTIR-12131): its
+  /// repository transfers run as them, with their GitHub identity. Null before a
+  /// handover, or once that user is deleted.
+  handoverStartedByUserId String?                     @map("handover_started_by_user_id")
+  handoverStartedBy       User?                       @relation("HostingTenantHandoverStartedBy", fields: [handoverStartedByUserId], references: [id], onDelete: SetNull)
+  createdAt               DateTime                    @default(now()) @map("created_at")
+  updatedAt               DateTime                    @updatedAt @map("updated_at")
+  handoverSteps           HostingTenantHandoverStep[]
 
   @@map("hosting_tenant_account")
 }
@@ -13152,6 +13159,10 @@ model HostingTenantHandoverStep {
   status          String               @default("pending")
   attempts        Int                  @default(0)
   lastError       String?              @map("last_error")
+  /// What the step waits on the new owner for, while it is `waiting_on_you`
+  /// (MOTIR-12131): AWS's standalone requirements not yet met, or AWS's reason
+  /// for refusing the account's removal. Empty otherwise.
+  missing         String[]             @default([])
   leaseHolder     String?              @map("lease_holder")
   leaseExpiresAt  DateTime?            @map("lease_expires_at")
   startedAt       DateTime?            @map("started_at")

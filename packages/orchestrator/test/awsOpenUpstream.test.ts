@@ -63,7 +63,7 @@ function harness() {
     timeoutMs: 600_000,
     log: (line) => logs.push(line),
   };
-  return { port: createAwsHostingDeployPort(deps), clients, state, logs };
+  return { port: createAwsHostingDeployPort(deps), clients, state, logs, deps };
 }
 type Harness = ReturnType<typeof harness>;
 
@@ -274,6 +274,45 @@ describe('openUpstream refusals', () => {
     );
     h.state.ready = false;
     await expect(h.port.openUpstream(handleOf(APP, 'container'))).rejects.toBeInstanceOf(
+      ReleaseNotFoundError,
+    );
+  });
+});
+
+describe('openUpstream on a handing-over account (MOTIR-12131)', () => {
+  it('reaches the account through handoverAccountOf while ensureTenantAccount answers not ready', async () => {
+    const h = harness();
+    await h.port.deploy(release('function'));
+    // The takeover has moved the account to `handing_over`: every other caller
+    // is told it is not ready, and only the handover reach admits it.
+    h.state.ready = false;
+    const asked: string[] = [];
+    const port = createAwsHostingDeployPort({
+      ...h.deps,
+      handoverAccountOf: async (organizationId) => {
+        asked.push(organizationId);
+        return ACCOUNT;
+      },
+    });
+    const opened = await port.openUpstream(handleOf(APP, 'function'));
+    expect(asked).toEqual([ORG]);
+    expect(opened.upstreamAddress).toBe(
+      h.clients.cloudformation.stacks.get(STACK)!.outputs['FrontDoorUrl'],
+    );
+    expect(params(h)['OriginAccess']).toBe('open');
+    // Nothing else reaches it: a deploy-side read still finds no account.
+    expect(await port.listReleases({ appRef: APP })).toEqual([]);
+  });
+
+  it('falls back to a ready account when no handover holds the organisation', async () => {
+    const h = harness();
+    await h.port.deploy(release('function'));
+    const port = createAwsHostingDeployPort({ ...h.deps, handoverAccountOf: async () => null });
+    await expect(port.openUpstream(handleOf(APP, 'function'))).resolves.toMatchObject({
+      upstreamAddress: expect.any(String),
+    });
+    h.state.ready = false;
+    await expect(port.openUpstream(handleOf(APP, 'function'))).rejects.toBeInstanceOf(
       ReleaseNotFoundError,
     );
   });

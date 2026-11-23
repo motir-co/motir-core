@@ -1312,6 +1312,29 @@ export const projectRepoRepository = {
   },
 
   /**
+   * Every Motir-created repository of the organisation whose hosting target is
+   * `aws` (MOTIR-12131) — the repositories its one tenant AWS account holds,
+   * oldest first, with the takeover state and the realized GitHub repository.
+   * `state: 'created'` is the ownership test, as `assertTransferable`'s. A
+   * platform read across the organisation's workspaces — the caller holds a
+   * `withSystemContext` transaction (`project_repository_system_read`).
+   */
+  async listAwsMotirReposByOrganizationInTx(organizationId: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { hostingTarget: 'aws', state: 'created', workspace: { organizationId } },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        takeoverState: true,
+        githubRepo: { select: { repoId: true, owner: true, name: true, installationId: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * Whether ANY project in ANY of the organisation's workspaces has an
    * established row whose realized repository `hostOwner` owns (MOTIR-8966) —
    * "is this organisation already hosted in that org?". Case-insensitive on the
