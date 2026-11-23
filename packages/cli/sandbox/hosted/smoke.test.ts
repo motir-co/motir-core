@@ -560,6 +560,9 @@ function repairOf(s: Scenario) {
       branch: pr.branch,
       baseRef: 'main',
       headSha: pr.headSha ?? null,
+      // Contract 1.92.0 (Bug MOTIR-12096): the claim's mergeability rides the decision.
+      conflicted: false,
+      outOfDate: false,
     })),
     findings: {
       gate: 'agent_review',
