@@ -15,6 +15,8 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { PlanTargetLockedError, type PlanTargetWaitingCause } from '@/lib/planChange/errors';
 import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -96,6 +98,20 @@ import {
 // 4-layer (CLAUDE.md): this service owns the transactions; `planTargetLockRepository`
 // is a single-op leaf; the status write goes through `workItemsService.applyStatusTransition`
 // (the one validated status path, which this never re-implements).
+//
+// ── EVERY STATUS WRITE HERE IS ANNOUNCED (bug MOTIR-12164) ──────────────────
+// A park (`acquireOne`), a restore (`releaseOne`) and a rest (`restAdoptedTarget`)
+// each write a status revision through `applyStatusTransition`, which leaves
+// `work-item/transitioned` to its caller because the emit can never live inside the
+// transaction. The callers of this service are a dozen transactions owned by other
+// services — the plan append, a decline, an emptying withdraw, a discarded close, a
+// session's open, hand-off and end, and the expiry sweep — so a return value threaded
+// out of each would be a dozen places to forget it, and every one of them did: watchers,
+// automation rules and the parent rollup never saw a card enter or leave Planning.
+// So the one write path below, {@link applyLockStatus}, DEFERS the event to the commit
+// of whatever transaction it runs in (`lib/workspaces/afterCommit.ts`) with
+// `updateStatus`'s payload — the rule the approve's resting moves follow (bug
+// MOTIR-9415) — and a write that rolls back announces nothing.
 
 /**
  * What the lock needs to know about who is asking: the actor plus the project the
@@ -266,6 +282,50 @@ async function waitingCauseOf(
 }
 
 /**
+ * THE ONE STATUS WRITE THIS SERVICE MAKES (bug MOTIR-12164): apply the hop in the
+ * caller's transaction and announce it once that transaction COMMITS, with
+ * `updateStatus`'s `work-item/transitioned` payload. A no-op move applies no transition
+ * and announces nothing; a transaction that rolls back drops the announcement with it.
+ */
+async function applyLockStatus(
+  workItemId: string,
+  toStatusKey: string,
+  actor: ServiceContext,
+  tx: Prisma.TransactionClient,
+  opts: { system?: boolean } = {},
+): Promise<void> {
+  const { transition } = await workItemsService.applyStatusTransition(
+    workItemId,
+    toStatusKey,
+    actor,
+    tx,
+    opts,
+  );
+  if (!transition) return;
+  const deferred = deferUntilCommit(() =>
+    sendEvent('work-item/transitioned', {
+      workspaceId: actor.workspaceId,
+      workItemId,
+      actorId: actor.userId,
+      fromStatusKey: transition.fromStatusKey,
+      toStatusKey: transition.toStatusKey,
+      revisionId: transition.revisionId,
+    }),
+  );
+  // Every caller opens its transaction through a `lib/workspaces/context.ts` helper,
+  // which carries the after-commit scope. A write outside one cannot be announced
+  // safely — emitting now could notify a move that later rolls back — so it is
+  // reported rather than sent early (the same answer `gateSetFor` gives).
+  if (!deferred) {
+    console.warn(
+      '[planTargetLock] a status hop was written outside a transaction scope; ' +
+        'its work-item/transitioned was not sent',
+      { workItemId, ...transition },
+    );
+  }
+}
+
+/**
  * Acquire ONE target inside the caller's transaction. The work item's row lock is
  * already held by the caller, so what this reads cannot move underneath it.
  */
@@ -397,7 +457,7 @@ async function acquireOne(
   }
 
   if (statusHeld) {
-    await workItemsService.applyStatusTransition(item.id, PLANNING_STATUS_KEY, ctx, tx);
+    await applyLockStatus(item.id, PLANNING_STATUS_KEY, ctx, tx);
   }
   return {
     workItemId: item.id,
@@ -440,7 +500,7 @@ async function releaseOne(
       ? restAdoptedTarget(item, actor, tx)
       : 'left_as_is';
   }
-  await workItemsService.applyStatusTransition(lock.workItemId, lock.priorStatus, actor, tx, {
+  await applyLockStatus(lock.workItemId, lock.priorStatus, actor, tx, {
     // The restore is AUTHORITATIVE, not an interactive move: it puts the item
     // back where it was, and `planning → <prior>` may not be an edge the project's
     // graph carries in the restricted policy. Refusing to undo our own change
@@ -560,9 +620,7 @@ async function restAdoptedTarget(
     tx,
   );
   if (!statuses.some((s) => s.key === decision.toKey)) return 'left_as_is';
-  await workItemsService.applyStatusTransition(item.id, decision.toKey, actor, tx, {
-    system: true,
-  });
+  await applyLockStatus(item.id, decision.toKey, actor, tx, { system: true });
   return 'rested';
 }
 
