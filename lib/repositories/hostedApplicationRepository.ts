@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type {
   HostedIdleMode,
   HostedReleaseState,
+  HostingShape,
+  HostingSize,
   HostingTarget,
   Prisma,
 } from '@/generated/prisma/client';
@@ -41,6 +43,31 @@ export interface HostedApplicationProbeTarget {
     id: string;
     state: HostedReleaseState;
     commitSha: string;
+    providerReleaseId: string | null;
+    providerRef: string | null;
+  } | null;
+}
+
+/** What the production usage meter reads of an application (MOTIR-12108). */
+export interface HostedApplicationMeterTarget {
+  id: string;
+  workspaceId: string;
+  organizationId: string;
+  projectId: string;
+  projectRepositoryId: string;
+  target: HostingTarget;
+  idleMode: HostedIdleMode;
+  creditsExhaustedSince: Date | null;
+  databaseProjectId: string | null;
+  seedSource: string;
+  hostingSize: HostingSize | null;
+  hostingShape: HostingShape | null;
+  /** The organisation's enterprise tenant AWS account's state, or null. */
+  tenantAccountState: string | null;
+  currentRelease: {
+    id: string;
+    state: HostedReleaseState;
+    liveAt: Date | null;
     providerReleaseId: string | null;
     providerRef: string | null;
   } | null;
@@ -412,6 +439,107 @@ export const hostedApplicationRepository = {
       repositoryName: projectRepository.name,
       seedSource: projectRepository.seedSource,
     };
+  },
+
+  /**
+   * What the production usage meter reads of one application, its repository,
+   * its organisation's tenant account and its current release (MOTIR-12108), or
+   * null when it is gone. Run under the system context: the meter walks every
+   * workspace's applications.
+   */
+  async findMeterTarget(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationMeterTarget | null> {
+    const row = await tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        projectRepositoryId: true,
+        target: true,
+        idleMode: true,
+        creditsExhaustedSince: true,
+        databaseProjectId: true,
+        workspace: {
+          select: {
+            organizationId: true,
+            organization: { select: { hostingTenantAccount: { select: { state: true } } } },
+          },
+        },
+        projectRepository: {
+          select: { seedSource: true, hostingSize: true, hostingShape: true },
+        },
+        currentRelease: {
+          select: {
+            id: true,
+            state: true,
+            liveAt: true,
+            providerReleaseId: true,
+            providerRef: true,
+          },
+        },
+      },
+    });
+    if (!row) return null;
+    const { workspace, projectRepository, ...rest } = row;
+    return {
+      ...rest,
+      organizationId: workspace.organizationId,
+      tenantAccountState: workspace.organization.hostingTenantAccount?.state ?? null,
+      seedSource: projectRepository.seedSource,
+      hostingSize: projectRepository.hostingSize,
+      hostingShape: projectRepository.hostingShape,
+    };
+  },
+
+  /** The meter's application ids: every application ever released, oldest
+   *  first — one with no current release may still owe a day's charge. */
+  async listMeteredIds(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.hostedApplication.findMany({
+      where: { releases: { some: { liveAt: { not: null } } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /** Record since when the organisation's balance has been below zero on every
+   *  one of its applications in `ids` — set on the transition only, so an
+   *  existing date is kept — or clear it (`since: null`). Returns the ids whose
+   *  value changed. The caller is bound to the applications' workspace. */
+  async setCreditsExhaustedSince(
+    ids: readonly string[],
+    since: Date | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const changing = await tx.hostedApplication.findMany({
+      where: {
+        id: { in: [...ids] },
+        creditsExhaustedSince: since === null ? { not: null } : null,
+      },
+      select: { id: true },
+    });
+    if (changing.length === 0) return [];
+    await tx.hostedApplication.updateMany({
+      where: { id: { in: changing.map((c) => c.id) } },
+      data: { creditsExhaustedSince: since },
+    });
+    return changing.map((c) => c.id);
+  },
+
+  /** The applications of the organisation's workspaces, with their workspace —
+   *  the set a balance reading of that organisation updates. */
+  async listByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.hostedApplication.findMany({
+      where: { workspace: { organizationId } },
+      orderBy: { id: 'asc' },
+      select: { id: true, workspaceId: true },
+    });
   },
 
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {

@@ -3,6 +3,7 @@ import type { HostedApplicationDto } from '@/lib/dto/hostedApplications';
 import type { IdlePolicyDto, IdlePolicyRefusalDto } from '@/lib/dto/idlePolicy';
 import { deployEligibilityRefusal } from '@/lib/hosting/deployEligibility';
 import {
+  AlwaysOnRefusedOutOfCreditsError,
   ApplicationNotFoundError,
   CustomerRepositoryNotDeployableError,
   IdlePolicyApplyFailedError,
@@ -30,6 +31,7 @@ import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseReposit
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
+import { productionUsageService } from '@/lib/services/productionUsageService';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 
@@ -200,29 +202,87 @@ async function setIdlePolicy(
   if (refused) {
     throw new IdlePolicyUnsupportedForTargetError(app.id, app.target, facts.shape, policy.mode);
   }
+  await assertAlwaysOnAffordable(app.id, policy);
 
-  const plan = await storeOrPlan(app, policy);
-  if (plan.kind === 'redeploy') {
-    const release = await productionReleaseService.deployProductionRelease(
-      {
-        projectRepositoryId,
-        commitSha: plan.commitSha,
-        ref: plan.ref,
-        artifactRef: plan.artifactRef,
-        requestedById: actor.userId,
-        cause: 'idle_policy',
-        idle: policy,
-      },
-      deps,
-    );
-    if (release.state !== 'live') {
-      if (release.failureReason === PORT_REFUSED_REASON) {
-        throw new IdlePolicyUnsupportedForTargetError(app.id, app.target, facts.shape, policy.mode);
-      }
-      throw new IdlePolicyApplyFailedError(app.id, release.id);
-    }
-  }
+  await applyPlan(projectRepositoryId, app, policy, actor.userId, deps);
   return readIdlePolicy({ projectRepositoryId, isAdministrator: true });
 }
 
-export const hostedIdlePolicyService = { readIdlePolicy, setIdlePolicy };
+/**
+ * Refuse `always_on` while the organisation is below zero (Decision MOTIR-12100
+ * §9), for an application whose target can suspend. The meter's stored state
+ * says the organisation went below zero; the balance read live confirms it, so
+ * a top-up lifts the refusal at once, and an unreadable balance keeps it.
+ */
+async function assertAlwaysOnAffordable(
+  applicationId: string,
+  policy: HostedIdlePolicy,
+): Promise<void> {
+  if (policy.mode !== 'always_on') return;
+  const meter = await withSystemContext((tx) =>
+    hostedApplicationRepository.findMeterTarget(applicationId, tx),
+  );
+  // Only an application the meter has seen below zero is asked about: the
+  // live read then confirms it, so a top-up lifts the refusal at once.
+  if (!meter?.creditsExhaustedSince || !productionUsageService.canSuspend(meter)) return;
+  const { below } = await productionUsageService.isBelowZero(
+    meter.organizationId,
+    meter.creditsExhaustedSince,
+  );
+  if (below) throw new AlwaysOnRefusedOutOfCreditsError(applicationId);
+}
+
+/** Store the policy, or redeploy the serving release with it. */
+async function applyPlan(
+  projectRepositoryId: string,
+  app: HostedApplicationDto,
+  policy: HostedIdlePolicy,
+  requestedById: string | null,
+  deps: IdlePolicyDeps,
+): Promise<'stored' | 'unchanged' | 'applied'> {
+  const facts = await repositoryFacts(projectRepositoryId);
+  const plan = await storeOrPlan(app, policy);
+  if (plan.kind !== 'redeploy') return plan.kind;
+  const release = await productionReleaseService.deployProductionRelease(
+    {
+      projectRepositoryId,
+      commitSha: plan.commitSha,
+      ref: plan.ref,
+      artifactRef: plan.artifactRef,
+      requestedById,
+      cause: 'idle_policy',
+      idle: policy,
+    },
+    deps,
+  );
+  if (release.state !== 'live') {
+    if (release.failureReason === PORT_REFUSED_REASON) {
+      throw new IdlePolicyUnsupportedForTargetError(app.id, app.target, facts.shape, policy.mode);
+    }
+    throw new IdlePolicyApplyFailedError(app.id, release.id);
+  }
+  return 'applied';
+}
+
+/**
+ * Apply a policy with no person behind it — the production meter's switch of an
+ * always-on application to suspend when idle after 7 days below zero (Decision
+ * MOTIR-12100 §9). The same release path as an administrator's change, so the
+ * serving release is redeployed with no build; the target's own rule refuses a
+ * policy it cannot run before anything is written. Answers what happened.
+ */
+async function applyIdlePolicyAsSystem(
+  projectRepositoryId: string,
+  policy: HostedIdlePolicy,
+  deps: IdlePolicyDeps = {},
+): Promise<'stored' | 'unchanged' | 'applied'> {
+  const facts = await repositoryFacts(projectRepositoryId);
+  const app = await hostedApplicationService.getApplicationForRepositorySystem(projectRepositoryId);
+  if (!app) throw new NoProductionApplicationError(projectRepositoryId);
+  if (idlePolicyRefusal(app.target, facts.shape, policy)) {
+    throw new IdlePolicyUnsupportedForTargetError(app.id, app.target, facts.shape, policy.mode);
+  }
+  return applyPlan(projectRepositoryId, app, policy, null, deps);
+}
+
+export const hostedIdlePolicyService = { readIdlePolicy, setIdlePolicy, applyIdlePolicyAsSystem };

@@ -198,6 +198,15 @@ export const hostedReleaseRepository = {
 
   /** What settling a release's usage reads (MOTIR-10034): the release's own
    *  window and handle columns, and its application's target and repository. */
+  /** The application a release belongs to (MOTIR-12108), or null. */
+  async findApplicationId(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
+    const row = await tx.hostedRelease.findUnique({
+      where: { id },
+      select: { applicationId: true },
+    });
+    return row?.applicationId ?? null;
+  },
+
   async findUsageTarget(
     id: string,
     tx: Prisma.TransactionClient,

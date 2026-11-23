@@ -1,6 +1,7 @@
 import { ProjectRepoNotFoundError } from '@/lib/projectRepos/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
+  AlwaysOnRefusedOutOfCreditsError,
   ApplicationNotFoundError,
   CustomerRepositoryNotDeployableError,
   IdlePolicyApplyFailedError,
@@ -40,6 +41,7 @@ export type ProductionRouteErrorCode =
   | 'HOSTING_IDLE_POLICY_UNSUPPORTED'
   | 'no_application'
   | 'idle_policy_failed'
+  | 'always_on_refused_out_of_credits'
   | 'invalid_log_range'
   | 'invalid_limit';
 
@@ -121,6 +123,14 @@ export function productionRouteError(err: unknown): ProductionRouteError | null 
       status: 502,
       code: 'idle_policy_failed',
       message: 'The idle policy could not be applied.',
+    };
+  }
+  // Decision MOTIR-12100 §9 (MOTIR-12108).
+  if (err instanceof AlwaysOnRefusedOutOfCreditsError) {
+    return {
+      status: 409,
+      code: 'always_on_refused_out_of_credits',
+      message: 'Always on is not available while the organisation is out of credits.',
     };
   }
   // The logs read (MOTIR-12105).

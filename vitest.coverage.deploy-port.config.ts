@@ -89,6 +89,14 @@ const MEASURED = [
   'lib/services/productionHealthService.ts',
   'lib/jobs/definitions/productionHealthProbe.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/health/route.ts',
+  // Story MOTIR-9799 — MOTIR-12108's production usage meter and Usage read.
+  'lib/hosting/productionRates.ts',
+  'lib/hosting/productionUsage.ts',
+  'lib/repositories/productionUsageSliceRepository.ts',
+  'lib/services/productionUsageMeterService.ts',
+  'lib/services/productionUsageService.ts',
+  'lib/jobs/definitions/productionUsageAccrual.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/usage/route.ts',
 ];
 
 /**
@@ -129,6 +137,7 @@ export const SHARED_NOT_FLOORED = [
   'lib/dto/idlePolicy.ts',
   'lib/dto/productionLogs.ts',
   'lib/dto/productionHealth.ts',
+  'lib/dto/productionUsage.ts',
   // Argv and console around `productionEnablementService`, which IS floored.
   'scripts/backfill-production-enablement.ts',
 ];
@@ -194,6 +203,10 @@ export default defineConfig({
       'tests/hosting/healthState.test.ts',
       'tests/services/productionHealthService.test.ts',
       'tests/api/production-health-route.test.ts',
+      // MOTIR-12108 — the production usage meter, its read and its route.
+      'tests/hosting/productionRates.test.ts',
+      'tests/hosting/productionUsageMeter.test.ts',
+      'tests/hosting/productionUsageRead.test.ts',
     ],
     coverage: {
       provider: 'v8',

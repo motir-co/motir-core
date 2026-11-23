@@ -1615,6 +1615,8 @@ model Organization {
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   // Preview usage slices charged to the CI pool (MOTIR-5777). Cascade.
   previewUsages               PreviewUsage[]
+  /// Production hosting usage, charged as `hosting_production` (MOTIR-12108).
+  productionUsageSlices       ProductionUsageSlice[]
   ciPeriodUsages              CiPeriodUsage[]
   ciLiveAccruals              CiLiveAccrual[]
   // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
@@ -1819,6 +1821,7 @@ model Workspace {
   hostedReleases              HostedRelease[]
   hostedApplicationHealths    HostedApplicationHealth[]
   hostedApplicationEvents     HostedApplicationEvent[]
+  productionUsageSlices       ProductionUsageSlice[]
   defaultApplication          HostedApplication?           @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
@@ -13256,21 +13259,28 @@ model HostedApplication {
   /// seeded by its target's shape in `hostedApplicationService`.
   idleMode                HostedIdleMode @default(always_on) @map("idle_mode")
   idleSeconds             Int?           @map("idle_seconds")
+  /// Since when its organisation's credit balance has been BELOW ZERO, as the
+  /// production meter last saw it (MOTIR-12108; Decision MOTIR-12100 §9). Set
+  /// on the transition into exhaustion, cleared once the balance is zero or
+  /// above; the 7-day switch of an `always_on` app to `suspend` counts from it.
+  creditsExhaustedSince   DateTime?      @map("credits_exhausted_since") @db.Timestamptz(3)
   createdAt               DateTime       @default(now()) @map("created_at")
   updatedAt               DateTime       @updatedAt @map("updated_at")
 
-  workspace         Workspace       @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
-  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectRepository ProjectRepo     @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
-  currentRelease    HostedRelease?  @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
-  previousRelease   HostedRelease?  @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
-  releases          HostedRelease[] @relation("HostedApplicationReleases")
-  defaultOf         Workspace?      @relation("WorkspaceDefaultApplication")
+  workspace         Workspace                @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo              @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  currentRelease    HostedRelease?           @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
+  previousRelease   HostedRelease?           @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
+  releases          HostedRelease[]          @relation("HostedApplicationReleases")
+  defaultOf         Workspace?               @relation("WorkspaceDefaultApplication")
   /// The customer domains bound to this application (ADR MOTIR-9521 §1).
-  customDomains     PublicAddress[] @relation("HostedApplicationCustomDomains")
+  customDomains     PublicAddress[]          @relation("HostedApplicationCustomDomains")
   /// Its one health state and its crash events (MOTIR-12106).
   health            HostedApplicationHealth?
   events            HostedApplicationEvent[]
+  /// Its metered production usage (MOTIR-12108).
+  usageSlices       ProductionUsageSlice[]
 
   @@unique([workspaceId, slug])
   @@index([projectId])
@@ -13322,12 +13332,12 @@ model HostedRelease {
   endedAt            DateTime?          @map("ended_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  application HostedApplication  @relation("HostedApplicationReleases", fields: [applicationId], references: [id], onDelete: Cascade)
-  currentOf   HostedApplication? @relation("HostedApplicationCurrentRelease")
-  previousOf  HostedApplication? @relation("HostedApplicationPreviousRelease")
-  restoredBy  User?              @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
-  requestedBy User?              @relation("HostedReleaseRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication        @relation("HostedApplicationReleases", fields: [applicationId], references: [id], onDelete: Cascade)
+  currentOf   HostedApplication?       @relation("HostedApplicationCurrentRelease")
+  previousOf  HostedApplication?       @relation("HostedApplicationPreviousRelease")
+  restoredBy  User?                    @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
+  requestedBy User?                    @relation("HostedReleaseRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   events      HostedApplicationEvent[]
 
   @@index([applicationId, createdAt])
@@ -13428,6 +13438,89 @@ model HostedApplicationEvent {
   @@index([workspaceId])
   @@index([releaseId])
   @@map("hosted_application_event")
+}
+
+/// The units production hosting is priced in (Decision MOTIR-12100 §2). A Fly
+/// running second is priced by the release's size; database compute is CU-hours
+/// on Neon and ACU-hours on Aurora; storage is GB-hours.
+enum ProductionUsageUnit {
+  fly_small_seconds
+  fly_medium_seconds
+  fly_large_seconds
+  lambda_gb_seconds
+  lambda_requests
+  fargate_vcpu_seconds
+  fargate_gb_seconds
+  neon_compute_hours
+  neon_storage_gb_hours
+  aurora_compute_hours
+  aurora_storage_gb_hours
+
+  @@map("production_usage_unit")
+}
+
+/// Where a slice's UTC day stands in the daily `hosting_production` charge.
+enum ProductionUsageChargeState {
+  /// Written, its day not yet charged.
+  pending
+  /// Its day's debit is being asked of motir-ai; the day is closed to new slices.
+  charging
+  charged
+  /// motir-ai refused the debit's content; kept for reconciliation.
+  refused
+  /// motir-ai is not configured (a self-hosted build): never charged.
+  not_charged
+
+  @@map("production_usage_charge_state")
+}
+
+/// ONE accrual slice of a production application's usage (Story MOTIR-9799 ·
+/// MOTIR-12108; Decision MOTIR-12100): one unit over one window, priced at the
+/// decision's derived factor, with Motir's own list-price cost beside it. Written
+/// by the hourly accrual and by the final slice taken before a release is
+/// replaced; charged once per application per UTC day as `hosting_production`.
+model ProductionUsageSlice {
+  id             String                     @id @default(cuid())
+  workspaceId    String                     @map("workspace_id")
+  organizationId String                     @map("organization_id")
+  applicationId  String                     @map("application_id")
+  /// The live release the window was read from; null once that row is gone.
+  releaseId      String?                    @map("release_id")
+  unit           ProductionUsageUnit
+  /// In the unit's own measure.
+  quantity       Decimal                    @db.Decimal(24, 9)
+  /// Linux-equivalent minutes — one credit each, fractional here; the day's sum
+  /// is charged rounded up once (§6).
+  credits        Decimal                    @db.Decimal(20, 9)
+  /// What the slice cost Motir at the decision's list price. Never shown.
+  motirCostUsd   Decimal                    @map("motir_cost_usd") @db.Decimal(24, 12)
+  /// Midnight UTC on the 1st of the month the slice ends in.
+  periodStart    DateTime                   @map("period_start") @db.Timestamptz(3)
+  /// Midnight UTC of the day the slice ends in — the day it is charged with.
+  chargeDay      DateTime                   @map("charge_day") @db.Timestamptz(3)
+  sliceStart     DateTime                   @map("slice_start") @db.Timestamptz(3)
+  sliceEnd       DateTime                   @map("slice_end") @db.Timestamptz(3)
+  /// `<application>:<unit>:<slice end ISO>` — Decision MOTIR-12100 §5's
+  /// (application, unit, slice end), so a replayed window writes nothing.
+  idempotencyKey String                     @unique @map("idempotency_key")
+  chargeState    ProductionUsageChargeState @default(pending) @map("charge_state")
+  chargedAt      DateTime?                  @map("charged_at") @db.Timestamptz(3)
+  chargeAttempts Int                        @default(0) @map("charge_attempts")
+  /// The last refusal or transport failure, a fixed-length summary.
+  chargeDetail   String?                    @map("charge_detail")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  application  HostedApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// The watermark and the period read.
+  @@index([applicationId, sliceEnd])
+  /// The daily charge's pending days.
+  @@index([chargeState, chargeDay])
+  @@index([workspaceId])
+  @@index([organizationId])
+  @@map("production_usage_slice")
 }
 
 /// An application's health state (MOTIR-12106).

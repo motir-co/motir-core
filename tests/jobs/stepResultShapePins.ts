@@ -700,6 +700,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ applications: number; events: number; failures: number; probed: number; skipped: number }',
   },
+  // Story MOTIR-9799 · MOTIR-12108 — the production usage accrual.
+  'production-usage-accrual': {
+    file: 'lib/jobs/definitions/productionUsageAccrual.ts',
+    shape:
+      '{ applications: number; charged: number; failed: number; skipped: number; slices: number; suspended: number }',
+  },
   'preview-settle': {
     file: 'lib/jobs/definitions/previewLifecycle.ts',
     shape: '{ status: "failed" | "ready" | "skipped" }',

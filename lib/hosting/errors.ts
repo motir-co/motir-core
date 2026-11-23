@@ -345,6 +345,17 @@ export class IdlePolicyNotPermittedError extends Error {
   }
 }
 
+/** `always_on` is refused while the organisation's credit balance is below zero
+ *  (Decision MOTIR-12100 §9) — for an application whose target can suspend; one
+ *  that cannot has no other setting to take. A top-up lifts it. → 409 */
+export class AlwaysOnRefusedOutOfCreditsError extends Error {
+  readonly code = 'ALWAYS_ON_REFUSED_OUT_OF_CREDITS' as const;
+  constructor(readonly applicationId: string) {
+    super(`Always on is refused for ${applicationId} while its organisation is out of credits.`);
+    this.name = 'AlwaysOnRefusedOutOfCreditsError';
+  }
+}
+
 /** The application's target and shape cannot run the asked policy — the deploy
  *  port's refusal (`HOSTING_IDLE_POLICY_UNSUPPORTED`), carried with the target
  *  and shape the copy names. Nothing was stored or deployed. → 409 */

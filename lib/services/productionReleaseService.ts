@@ -28,6 +28,7 @@ import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseReposit
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import { productionDatabaseService } from '@/lib/services/productionDatabaseService';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -249,6 +250,8 @@ async function deployProductionRelease(
     )?.currentRelease;
     if (serving?.state === 'live') {
       await hostedReleaseUsageService.settleReleaseUsage(serving.id);
+      // Its last window charged too (MOTIR-12108); never throws.
+      await productionUsageMeterService.accrueOutgoingRelease(serving.id);
     }
 
     // The idle policy (MOTIR-12107): the one asked for, or the application's
