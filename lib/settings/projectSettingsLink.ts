@@ -7,12 +7,12 @@ import { PROJECT_SETTINGS_ROOT } from '@/lib/settings/projectSettingsNav';
 // refused code access, a crashed production app) — may reach a reader whose
 // active project is another one, and opening the active project's room then
 // shows the wrong project or answers 404. So such a link carries the project's
-// key as `?project=<KEY>`, and the settings area layout switches to it — the
-// same switch the project switcher makes, with the same access check — before
-// the room renders.
+// key as `?project=<KEY>`, and the settings area's link gate switches to it —
+// the same switch the project switcher makes, after a browse check — before the
+// room shows.
 //
 // This module is the one spelling of that parameter on both ends: the link side
-// builds hrefs with `projectSettingsHref`, and the layout reads them back with
+// builds hrefs with `projectSettingsHref`, and the gate reads them back with
 // `readProjectSettingsLink`. Pure: no IO, so both ends are testable without a
 // request.
 
@@ -52,18 +52,16 @@ export interface ProjectSettingsLink {
 const BASE = 'https://placeholder.invalid';
 
 /**
- * Read the project a project-settings request names, from the request's path
- * and query as the proxy forwards it (`x-current-path`).
+ * Read the project a project-settings URL names, from its path and query.
  *
  * Returns `null` — "this request names no project, act on the active one" — for
  * a missing path, a path outside the settings area, an absolute or
  * protocol-relative URL, or a missing or blank `project` parameter.
  *
- * ⚠️ The returned `href` becomes a navigation target, and the path it comes from
- * is client-forgeable (`proxy.ts`, `CURRENT_PATH_HEADER`). So it is rebuilt from
- * the PARSED pathname and query, never echoed, and only a same-origin path
- * inside `/settings/project` is ever answered — anything else is `null`, which
- * navigates nowhere.
+ * ⚠️ The returned `href` becomes a navigation target, and the URL it comes from
+ * is the reader's to write. So it is rebuilt from the PARSED pathname and query,
+ * never echoed, and only a same-origin path inside `/settings/project` is ever
+ * answered — anything else is `null`, which navigates nowhere.
  */
 export function readProjectSettingsLink(currentPath: string | null): ProjectSettingsLink | null {
   if (!currentPath || !currentPath.startsWith('/') || currentPath.startsWith('//')) return null;

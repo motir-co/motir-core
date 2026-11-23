@@ -66,6 +66,11 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     card: 'MOTIR-6319',
     reason: 'pins a project with no `project:browse` check',
   },
+  '_project-actions.ts#openProjectLinkAction': {
+    kind: 'self',
+    reason:
+      'the actor’s own active project, switched only to a project `resolveByKey` lets them browse (MOTIR-12169)',
+  },
   '_project-actions.ts#startNewAiProjectAction': {
     kind: 'self',
     reason: 'workspace membership starts a new project',
@@ -324,14 +329,6 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
   // through `listProjects`, which returns only browsable projects; the action's
   // own missing `project:browse` check is MOTIR-6319's to add.
   'app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx': {
-    kind: 'known-gap',
-    card: 'MOTIR-6319',
-  },
-  // A project-settings link's switch (MOTIR-12169) is rendered by the settings
-  // area layout only after `projectsService.resolveByKey` — browse-gated —
-  // found the named project; the action's own missing `project:browse` check
-  // is MOTIR-6319's to add.
-  'app/(authed)/settings/project/_components/ProjectLinkSwitch.tsx': {
     kind: 'known-gap',
     card: 'MOTIR-6319',
   },
