@@ -708,6 +708,12 @@ export interface RepairPullRequest {
    *  null (MOTIR-5719): the queue's reason and its failing check, both check fields
    *  null for a conflict. */
   queueExit: RepairQueueExit | null;
+  /** The host reports it CONFLICTED with `baseRef` at its head (Bug MOTIR-12095, contract
+   *  1.91.0): handed over with green checks, answered only by merging the base. */
+  conflicted: boolean;
+  /** The host reports it OUT OF DATE with a base that requires branches to be up to date
+   *  (`mergeable_state: behind`) — green checks, answered by merging the base and pushing. */
+  outOfDate: boolean;
 }
 
 /** Why the merge queue threw a pull request out, as a repair is told it. */

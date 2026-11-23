@@ -1300,7 +1300,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   claim_work_item_repair: {
     summary:
       'Take the repair lock on a work item with failing pull requests, as `motir fix` does. One fixer at a time.',
-    descriptionFingerprint: 'ce7801d719d9',
+    descriptionFingerprint: 'be4385119bca',
   },
   touch_work_item_repair: {
     summary:

@@ -39,6 +39,8 @@ function pr(over: Partial<RepairPullRequest> = {}): RepairPullRequest {
     ci: 'failing',
     failingChecks: ['Vitest'],
     queueExit: null,
+    conflicted: false,
+    outOfDate: false,
     ...over,
   };
 }
@@ -1084,5 +1086,165 @@ describe('the pure renderers', () => {
       'failing: in the merge queue — it conflicts with work queued ahead of it',
     );
     expect(out).toContain('push a commit to re-run CI');
+  });
+});
+
+// Bug MOTIR-12095 — a pull request handed over for its BASE (conflicted, or behind a base
+// that requires branches to be up to date) has green checks, so the CI loop alone would
+// read green on its first poll and close a repair that pushed nothing.
+describe('motir fix — a pull request behind or conflicting with its base', () => {
+  /** `fakeGit`, plus a remote head per branch that moves after `pushes` reads of it. */
+  function gitWithHeads(opts: { moves: boolean }): CommandRunner {
+    const base = fakeGit();
+    let reads = 0;
+    return (bin, args, cwd) => {
+      if (args[0] === 'rev-parse' && args[1]?.startsWith('refs/remotes/origin/')) {
+        h.git.push({ args, cwd });
+        reads += 1;
+        return ok(opts.moves && reads > 1 ? 'head-after' : 'head-before');
+      }
+      return base(bin, args, cwd);
+    };
+  }
+  const behind = () => pr({ ci: 'passing', failingChecks: [], outOfDate: true });
+
+  it('runs ONE base-merge turn before the CI loop, then watches the new head to green', async () => {
+    const deps = setup({
+      claims: [claim({ pullRequests: [behind()] })],
+      verdicts: [[delivery('running')], [delivery('passing')]],
+      git: gitWithHeads({ moves: true }),
+    });
+
+    await fixCommand('PROD-7', {}, deps);
+
+    expect(h.agents).toHaveLength(1);
+    const prompt = h.agents[0]!.prompt;
+    expect(prompt).toContain(
+      '# Bring the branch up to date with its base — PROD-7 (Add the thing)',
+    );
+    expect(prompt).toContain(
+      '**acme/motir-core#131** is OUT OF DATE with `main`, which requires branches to be up to date',
+    );
+    expect(prompt).toContain('`git fetch origin && git merge origin/main`');
+    expect(h.agents[0]!.cwd).toBe('/work/motir-core-fix-prod-7-131');
+    expect(
+      events()
+        .filter((e) => e.kind === 'agent_started')
+        .map((e) => e.data),
+    ).toEqual([{ step: 'base_merge' }]);
+    expect(h.stderr).toContain('acme/motir-core#131 is behind or conflicting with the base');
+    expect(events().find((e) => e.kind === 'card_settled')?.disposition).toBe('implemented');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'completed' }]);
+  });
+
+  it('names a CONFLICT as a conflict, and runs the same one turn', async () => {
+    const deps = setup({
+      claims: [
+        claim({
+          pullRequests: [
+            pr({ ci: 'passing', failingChecks: [], conflicted: true, baseRef: 'release' }),
+          ],
+        }),
+      ],
+      verdicts: [[delivery('passing')]],
+      git: gitWithHeads({ moves: true }),
+    });
+
+    await fixCommand('PROD-7', {}, deps);
+
+    expect(h.agents).toHaveLength(1);
+    expect(h.agents[0]!.prompt).toContain('**acme/motir-core#131** CONFLICTS with `release`');
+    expect(h.agents[0]!.prompt).toContain('git merge origin/release');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'completed' }]);
+  });
+
+  it('a turn that pushed nothing HALTS — it never closes green on the state it was claimed to clear', async () => {
+    const deps = setup({
+      claims: [claim({ pullRequests: [behind()] })],
+      verdicts: [[delivery('passing')]],
+      git: gitWithHeads({ moves: false }),
+    });
+
+    await fixCommand('PROD-7', {}, deps);
+
+    expect(h.agents).toHaveLength(1);
+    expect(tools()).not.toContain('get_work_item');
+    expect(h.stderr).toContain('the agent pushed nothing — the base is still not merged');
+    expect(events().find((e) => e.kind === 'card_settled')).toMatchObject({
+      disposition: 'failed',
+      data: { reason: 'nothing_pushed' },
+    });
+    expect(process.exitCode).toBe(1);
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
+  });
+
+  it('a base-merge agent that fails HALTS without watching CI', async () => {
+    const deps = setup({
+      claims: [claim({ pullRequests: [behind()] })],
+      verdicts: [[delivery('passing')]],
+      git: gitWithHeads({ moves: true }),
+      agentExit: 2,
+    });
+
+    await fixCommand('PROD-7', {}, deps);
+
+    expect(tools()).not.toContain('get_work_item');
+    expect(h.stderr).toContain('the base-merge agent failed — exit 2');
+    const settled = events().find((e) => e.kind === 'card_settled');
+    expect(settled?.disposition).toBe('failed');
+    expect(settled?.data).toBeUndefined();
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
+  });
+
+  it('a pull request that is only RED takes no base-merge turn (the fix prompt merges the base)', async () => {
+    const deps = setup({
+      claims: [claim()],
+      verdicts: [[delivery('passing')]],
+      git: gitWithHeads({ moves: true }),
+    });
+
+    await fixCommand('PROD-7', {}, deps);
+
+    expect(h.agents).toHaveLength(0);
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'completed' }]);
+  });
+
+  it('a REVIEW repair takes no separate base-merge turn — its own prompt merges the base first', async () => {
+    const deps = setup({
+      claims: [
+        claim({
+          repairClass: 'review',
+          reviewRefusal: {
+            gate: 'agent_review',
+            findingsMd: 'Rename the helper.',
+            reviewerName: 'Review agent',
+            decidedAt: '2026-09-16T10:00:00.000Z',
+          },
+          pullRequests: [behind()],
+        }),
+      ],
+      verdicts: [[delivery('passing')]],
+      git: gitWithHeads({ moves: true }),
+    });
+
+    await fixCommand('PROD-7', {}, deps);
+
+    expect(h.agents).toHaveLength(1);
+    expect(h.agents[0]!.prompt).toContain('# Answer the code review');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'completed' }]);
+  });
+
+  it('a give-up names a green member by its base, never as "unknown checks"', () => {
+    const out = renderRepairGaveUp({
+      key: 'PROD-7',
+      watch: { kind: 'gave_up', attempts: 5, failing: [] },
+      pullRequests: [
+        pr({ ci: 'passing', failingChecks: [], conflicted: true }),
+        pr({ number: 132, ci: 'passing', failingChecks: [], outOfDate: true, baseRef: null }),
+      ],
+    });
+    expect(out).toContain('acme/motir-core#131 — failing: it conflicts with main');
+    expect(out).toContain('acme/motir-core#132 — failing: it is out of date with its base');
+    expect(out).not.toContain('unknown checks');
   });
 });

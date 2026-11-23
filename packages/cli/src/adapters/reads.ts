@@ -763,6 +763,9 @@ export function toWorkItemRepairClaim(
             failingCheckUrl: pr.queueExit.failingCheckUrl,
           }
         : null,
+      // Bug MOTIR-12095 (contract 1.91.0): why a GREEN member was handed over.
+      conflicted: pr.conflicted,
+      outOfDate: pr.outOfDate,
     })),
   };
 }

@@ -1901,8 +1901,17 @@ liveness and its outcome.
 `WorkItemRepairClaim` resource, through the same presenter: `{ key, title,
 outcome, reason, runTargetKey, runId, holder, startedAt, repairClass,
 acceptanceRefusal, pullRequests }`. Each pull request is `{ repo, number, url,
-headRef, baseRef, ci, failingChecks, queueExit }`; fix it on **its own** branch
-(`headRef`).
+headRef, baseRef, ci, failingChecks, queueExit, conflicted, outOfDate }`; fix it on
+**its own** branch (`headRef`).
+
+**A pull request can be handed over with green checks.** `conflicted` is `true`
+when the host reports it conflicting with `baseRef` at its current head, and
+`outOfDate` when it is behind a base that requires branches to be up to date
+(GitHub's `mergeable_state: behind`). Either one is why it was handed over even
+though `ci` reads `passing`, `failingChecks` is empty and `queueExit` is null — and
+the answer to both is the same: **merge `baseRef` into the branch** (a merge, never
+a rebase), resolve any conflicts, and push. The push moves the head, which is what
+the next approval is asked about (Bug MOTIR-12095, contract `1.91.0`).
 
 | `outcome`        | Meaning                                                                                   |
 | ---------------- | ----------------------------------------------------------------------------------------- |
