@@ -1,10 +1,10 @@
 // THE INDEX ALLOWANCE, AS MOTIR-CORE READS IT (MOTIR-4593 · Story MOTIR-4335).
 //
 // motir-ai owns the allowance: the two pools, the rate, the verdict
-// (`motir-ai` MOTIR-4592 / MOTIR-5284, `docs/contract.md` § index-check /
-// index-draw). motir-core owns the container-seconds and the dispatch. This
-// module is the vocabulary between the two: pure, so a test and a job read the
-// same rules.
+// (`motir-ai` MOTIR-4592 / MOTIR-5284, `docs/contract.md` § index-check).
+// motir-core asks it before handing an index off (the per-container draw left
+// with the container fleet, MOTIR-12036). This module is the vocabulary between
+// the two: pure, so a test and a job read the same rules.
 //
 // ⚠️⚠️ MOTIR DOES NOT CHARGE FOR CODE INDEXING. The allowance is internal cost
 // accounting on Motir's own compute. Nothing here reaches a customer surface, and
@@ -29,7 +29,7 @@ export const KNOWN_INDEX_ALLOWANCE_OUTCOMES = [
 
 export type KnownIndexAllowanceOutcome = (typeof KNOWN_INDEX_ALLOWANCE_OUTCOMES)[number];
 
-/** A verdict from `POST /v1/credits/index-check` or `/index-draw`. */
+/** A verdict from `POST /v1/credits/index-check`. */
 export interface IndexAllowanceVerdict {
   /** A known outcome, or a newer `hard_stop_*` / other value motir-ai added. */
   outcome: string;
@@ -43,49 +43,19 @@ export interface IndexAllowanceVerdict {
  *  `hard_stop_no_credit` → `paused_index_no_credit`. */
 export type IndexPauseReason = `paused_index_${string}`;
 
-/** The pause recorded when index admission refuses an organisation with no paid
+/** The pause recorded when an index is refused for an organisation with no paid
  *  AI plan (MOTIR-8235). Not an allowance stop, but the same kind of state: a
  *  repository that is not being indexed for a reason, which the catch-up sweep
  *  re-asks about. */
 export const AI_PLAN_INDEX_PAUSE_REASON: IndexPauseReason = 'paused_index_ai_plan_required';
 
-/** The pause recorded when every account of the indexer pool is full
- *  (MOTIR-9451). NOT an allowance stop: it is a property of Motir's capacity,
- *  not of the organisation, so the catch-up sweep lifts it when the pool has
- *  room rather than by asking the allowance, and the allowance surfaces do not
- *  list it as a stopped organisation. The repository is waiting, not refused. */
-export const INDEX_POOL_FULL_PAUSE_REASON: IndexPauseReason = 'paused_index_pool_full';
-
-/** The pause recorded when the indexer is switched onto its pool and the pool
- *  has NO live account of the kind at all (MOTIR-10600) — nothing to be full.
- *  The same kind of state as {@link INDEX_POOL_FULL_PAUSE_REASON}: Motir's
- *  capacity, not the organisation's stop, lifted by the catch-up sweep once an
- *  account can take the index. Named apart so the row says WHY the pool has no
- *  room: an account nobody has created yet is not a busy fleet. */
-export const INDEX_NO_ACCOUNT_PAUSE_REASON: IndexPauseReason = 'paused_index_no_indexer_account';
-
 /** The pause recorded when motir-codegraph REFUSED the repository as too large to
- *  index (MOTIR-11883) — the service's own `repository_too_large` reason. Neither an
- *  allowance stop nor Motir's capacity: re-asking changes nothing, so the catch-up
+ *  index (MOTIR-11883) — the service's own `repository_too_large` reason. Not an
+ *  allowance stop: re-asking changes nothing, so the catch-up
  *  sweep never re-hands it. A later push or refresh of the repository still hands
  *  off, and lifts the pause when the service accepts the smaller tree. */
 export const INDEX_SIZE_REFUSED_PAUSE_REASON: IndexPauseReason =
   'paused_index_repository_too_large';
-
-/** Every pause that is Motir's indexer CAPACITY rather than the organisation's
- *  allowance or plan — the set the allowance surfaces exclude and the catch-up
- *  sweep lifts by reading the pool. */
-export const INDEX_CAPACITY_PAUSE_REASONS: readonly IndexPauseReason[] = [
-  INDEX_POOL_FULL_PAUSE_REASON,
-  INDEX_NO_ACCOUNT_PAUSE_REASON,
-];
-
-/** Is this recorded pause Motir's indexer capacity (a full pool, or a pool with
- *  no account) rather than an allowance or plan stop? The one comparison — no
- *  caller compares the strings. */
-export function isIndexCapacityPause(reason: string | null | undefined): boolean {
-  return reason != null && (INDEX_CAPACITY_PAUSE_REASONS as readonly string[]).includes(reason);
-}
 
 const HARD_STOP_PREFIX = 'hard_stop_';
 
@@ -128,11 +98,6 @@ export function parseIndexAllowanceVerdict(body: unknown): IndexAllowanceVerdict
     consumedCredits: num(b['consumedCredits']),
     attributedCredits: num(b['attributedCredits']) ?? 0,
   };
-}
-
-/** The draw's idempotency key: ONE draw per container, whatever replays. */
-export function indexDrawKey(containerProvider: string, containerId: string): string {
-  return `index-container:${containerProvider}:${containerId}`;
 }
 
 // ── THE PLATFORM ADMIN'S READS (MOTIR-4595 · motir-ai MOTIR-5340) ────────────────

@@ -259,8 +259,8 @@ describe('WorkItemRoadmap', () => {
       vi.fn(async () => ({ ok: true, json: async () => crossLevel })),
     );
     render(<WorkItemRoadmap projectKey="MOTIR" />);
-    // the blocked node carries the cross-story flag…
-    expect(await screen.findByTestId('cross-blocked-flag')).toBeTruthy();
+    // the blocked node carries the cross-story flag — its blocked TAB (MOTIR-12158)…
+    expect(await screen.findByTestId('blocked-tab')).toBeTruthy();
     // …and the off-level blocker is anchored by a named ghost node.
     expect(screen.getByText('MOTIR-42')).toBeTruthy();
     expect(screen.getByText('in Auth hardening ↗')).toBeTruthy();
@@ -839,7 +839,7 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     });
     render(<WorkItemRoadmap projectKey="MOTIR" />);
     await screen.findByText('Epic one');
-    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
     // The ghost anchor NAMES the grouped blocker rather than showing an anonymous
     // chip — the row was in hand, so its stub is built from it.
     expect(screen.getByText('MOTIR-9')).toBeTruthy();
@@ -863,7 +863,7 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     await screen.findByText('Epic one');
 
     expect(screen.queryByText('MOTIR-9')).toBeNull();
-    expect(screen.queryByTestId('cross-flag')).toBeNull();
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
     // The road is the two epics and the door — nothing else.
     expect(screen.queryByText('A parentless defect')).toBeNull();
     expect(screen.getByTestId('level-group-node')).toBeTruthy();
@@ -894,7 +894,7 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     expect(screen.queryByText('Blocked across stories')).toBeNull();
     expect(screen.queryByText('MOTIR-1')).toBeNull();
     expect(screen.queryByText('MOTIR-2')).toBeNull();
-    expect(screen.queryByTestId('cross-flag')).toBeNull();
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
     // The edge the level DOES own is drawn, between its own two rows.
     expect(screen.getByText('A parentless task')).toBeTruthy();
   });

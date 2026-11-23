@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   FLEET_CONTAINER_SIZE,
-  indexFleetConfig,
+  hostedAgentFleetConfig,
   isOrchestratorConfigured,
 } from '@/lib/orchestrator';
 import type { WorkloadPeriodContainerCost } from '@/lib/repositories/ciContainerPeriodCostRepository';
@@ -20,14 +20,15 @@ import { buildFleetCostReadout } from './fleetCostReadoutQuery';
 // row on the right line?" is answerable against a real fleet before Epic 9 has an
 // agent to put in one.
 //
-// ⚠️ THE STAND-IN IS THE INDEXER IMAGE, BOOTED WITH NONE OF ITS VARIABLES. The
-// index fleet already resolves a digest-pinned, pullable reference for it
-// (`indexFleetConfig`), and its entrypoint validates its four required inputs
-// before doing anything and exits `10` (CONFIG) naming every missing one
-// (`motir-ai` `src/indexer/main.ts`, `src/indexer/exitCodes.ts`). So an empty env
-// is the smallest spec that makes it start, stop within seconds, and touch no
-// repository, credential or control plane — enough to leave a started, stopped,
-// priced `agent` row and nothing else.
+// ⚠️ THE STAND-IN IS THE HOSTED-AGENT IMAGE, BOOTED WITH NONE OF ITS VARIABLES.
+// `hostedAgentFleetConfig` already resolves a digest-pinned, pullable reference
+// for it, and its launcher validates every required input before doing anything
+// and exits `20` (SETUP_FAILED) naming every missing one
+// (`packages/cli/sandbox/hosted/entrypoint.ts`). So an empty env is the smallest
+// spec that makes it start, stop within seconds, and touch no repository,
+// credential or control plane — enough to leave a started, stopped, priced
+// `agent` row and nothing else. (It was the INDEXER image until MOTIR-12037
+// retired the index fleet and `indexFleetConfig` with it.)
 //
 // ⚠️ THE GATE IS THE READOUT'S. Off-cloud the meter records nothing, so this
 // stops before provisioning anything rather than booting a container whose cost
@@ -86,7 +87,7 @@ export async function rehearseHostedAgentMeter(
     };
   }
 
-  const standIn = indexFleetConfig();
+  const standIn = hostedAgentFleetConfig();
   const dispatchId = `agent-meter-rehearsal-${randomUUID()}`;
   const outcome = await hostedAgentContainerService.run(
     {

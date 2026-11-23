@@ -39,12 +39,8 @@ const { truncateAuthTables } = await import('../helpers/db');
 
 const NOW = new Date('2026-10-26T12:00:00.000Z');
 const LATER = new Date(NOW.getTime() + 60 * 60_000);
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'code_graph_index',
-  'hosted_agent',
-  'agent_instance',
-];
+/** Billing's own kinds — the where-it-runs list's rows, in its order. */
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 function subscription(key: string, name = key): RawSubscriptionResponse {
   return {
@@ -201,11 +197,12 @@ async function hostAccount(
   return rows;
 }
 
-/** The three accounts a Host org has right after purchase. */
+/** The three accounts a Host org has right after purchase — the agent hoster
+ *  one `agent_instance` row since the re-home (MOTIR-12038). */
 async function hostAfterPurchase(org: Org) {
   await hostAccount(org, ['ci_runner'], 200);
   await hostAccount(org, ['hosted_agent'], 32);
-  await hostAccount(org, ['code_graph_index', 'agent_instance'], 120);
+  await hostAccount(org, ['agent_instance'], 120);
 }
 
 function wire(on: Partial<Record<FleetWorkloadKind, boolean>>) {
@@ -263,7 +260,6 @@ describe('a Pro org: figures are figuresFor’s, use is countsFor’s', () => {
   it('reads the figures, the use and the waits', async () => {
     for (let i = 0; i < 3; i += 1) await slot(org, 'hosted_agent');
     await waitingRun(org, 'plan_cap');
-    await slot(org, 'code_graph_index');
     await intent(org, 'running');
     await intent(org, 'pending', 'shard_capacity');
     await intent(org, 'pending', 'plan_cap');
@@ -315,8 +311,16 @@ describe('a Pro org: figures are figuresFor’s, use is countsFor’s', () => {
       waiting: null,
       figureSource: 'plan',
     });
-    expect(answer.codeGraphIndex).toEqual({ inUse: 1 });
+    // The answer holds no indexing count (MOTIR-12039).
+    expect(Object.keys(answer).sort()).toEqual([
+      'countsRead',
+      'figures',
+      'hostAccounts',
+      'plan',
+      'whereItRuns',
+    ]);
     expect(answer.hostAccounts).toBeNull();
+    expect(answer.whereItRuns.map((row) => row.fleetKind)).toEqual(KINDS);
     expect(answer.whereItRuns.map((row) => row.provider)).toEqual(KINDS.map(() => 'fly'));
   });
 
@@ -330,7 +334,6 @@ describe('a Pro org: figures are figuresFor’s, use is countsFor’s', () => {
       expect(row.waiting).toBeNull();
       expect(row.figure).not.toBeNull();
     }
-    expect(answer.codeGraphIndex.inUse).toBeNull();
     expect(answer.plan.kind).toBe('limited');
     expect(console.error).toHaveBeenCalledWith(
       "[fleetUseService] could not read the organization's fleet use counts",
@@ -395,7 +398,7 @@ describe('a Host org’s own accounts', () => {
   });
 
   it('right after purchase: three accounts quota requested, on the shared floor', async () => {
-    wire({ ci_runner: true, hosted_agent: true, code_graph_index: true, agent_instance: true });
+    wire({ ci_runner: true, hosted_agent: true, agent_instance: true });
     await hostAfterPurchase(org);
     const answer = await readKept(org);
     const accounts = answer.hostAccounts as Exclude<
@@ -406,7 +409,7 @@ describe('a Host org’s own accounts', () => {
     expect(accounts.map((a) => [a.accountKind, a.fleetKinds, a.vcpuAsked])).toEqual([
       ['ci_runner', ['ci_runner'], 200],
       ['hosted_agent', ['hosted_agent'], 32],
-      ['indexer_and_hoster', ['code_graph_index', 'agent_instance'], 120],
+      ['agent_hoster', ['agent_instance'], 120],
     ]);
     for (const account of accounts) {
       expect(account).toMatchObject({
@@ -422,7 +425,6 @@ describe('a Host org’s own accounts', () => {
           'createdAt',
           'fleetKinds',
           'grantedAt',
-          'keptIndexSpots',
           'liveAt',
           'onSharedFloor',
           'quotaOutcome',
@@ -434,8 +436,7 @@ describe('a Host org’s own accounts', () => {
         ].sort(),
       );
     }
-    expect(accounts[2]!.keptIndexSpots).toBe(10);
-    expect(accounts[0]!.keptIndexSpots).toBeNull();
+    expect(accounts[2]!.requestKind).toBe('agent_instance');
     expect(answer.figures.agentRunsInParallel.figureSource).toBe('shared_floor');
     expect(answer.figures.ciJobsInFlight.figureSource).toBe('shared_floor');
     expect(answer.whereItRuns.map((row) => row.provider)).toEqual(
@@ -479,8 +480,8 @@ describe('a Host org’s own accounts', () => {
   });
 
   it('a denied raise on the merged account: quota_requested, denied, on the floor', async () => {
-    wire({ code_graph_index: true, agent_instance: true });
-    await hostAccount(org, ['code_graph_index', 'agent_instance'], 120, { status: 'denied' });
+    wire({ agent_instance: true });
+    await hostAccount(org, ['agent_instance'], 120, { status: 'denied' });
     const answer = await readKept(org);
     const [merged] = answer.hostAccounts as { onSharedFloor: boolean }[];
     expect(merged).toMatchObject({
@@ -488,11 +489,66 @@ describe('a Host org’s own accounts', () => {
       quotaOutcome: 'denied',
       onSharedFloor: true,
     });
-    for (const kind of ['code_graph_index', 'agent_instance']) {
-      expect(answer.whereItRuns.find((row) => row.fleetKind === kind)!.provider).toBe(
-        'shared_aws_pool',
-      );
-    }
+    expect(answer.whereItRuns.find((row) => row.fleetKind === 'agent_instance')!.provider).toBe(
+      'shared_aws_pool',
+    );
+  });
+
+  it('one own account holding a single agent_instance shard: exactly one agent-hoster account', async () => {
+    wire({ agent_instance: true });
+    await hostAccount(org, ['agent_instance'], 120);
+    const answer = await readKept(org);
+    expect(answer.hostAccounts).toEqual([
+      expect.objectContaining({
+        accountKind: 'agent_hoster',
+        fleetKinds: ['agent_instance'],
+        requestKind: 'agent_instance',
+      }),
+    ]);
+  });
+
+  it('keeps the agent hoster’s past index raise and capacity request on it, by shard', async () => {
+    // The merged account as the re-home (MOTIR-12038) left it: one
+    // `agent_instance` row, its past raise re-pointed there, and a past
+    // capacity request on that row still stored as `code_graph_index`.
+    const [shard] = await hostAccount(org, ['agent_instance'], 120, {
+      granted: 96,
+      status: 'approved',
+    });
+    const past = await adminDb.fleetCapacityRequest.create({
+      data: {
+        organizationId: org.organizationId,
+        shardId: shard!.id,
+        awsAccountId: shard!.awsAccountId!,
+        fleetKind: 'code_graph_index',
+        desiredVcpu: 160,
+        reasonMd: 'More index capacity',
+        status: 'closed',
+        closedNote: null,
+        requestedByUserId: org.owner.id,
+        createdAt: new Date(NOW.getTime() - 86_400_000),
+        closedAt: NOW,
+      },
+    });
+    const answer = await readKept(org);
+    const [hoster] = answer.hostAccounts as Exclude<
+      typeof answer.hostAccounts,
+      null | { kind: 'not_read' }
+    >;
+    expect(hoster).toMatchObject({
+      accountKind: 'agent_hoster',
+      vcpuAsked: 120,
+      vcpuGranted: 96,
+      quotaOutcome: 'approved',
+    });
+    expect(hoster!.capacityRequests).toEqual([
+      expect.objectContaining({
+        id: past.id,
+        fleetKind: 'code_graph_index',
+        desiredVcpu: 160,
+        status: 'closed',
+      }),
+    ]);
   });
 
   it('each account lists its own capacity requests, newest first; the merged one once', async () => {
@@ -515,8 +571,8 @@ describe('a Host org’s own accounts', () => {
     const byKind = Object.fromEntries(accounts.map((a) => [a.accountKind, a.capacityRequests]));
     expect(byKind.ci_runner!.map((r) => r.id)).toEqual([ci.id]);
     expect(byKind.hosted_agent).toEqual([]);
-    expect(byKind.indexer_and_hoster!.map((r) => r.id)).toEqual([merged.id]);
-    expect(byKind.indexer_and_hoster![0]).toMatchObject({
+    expect(byKind.agent_hoster!.map((r) => r.id)).toEqual([merged.id]);
+    expect(byKind.agent_hoster![0]).toMatchObject({
       fleetKind: 'agent_instance',
       desiredVcpu: 240,
       status: 'open',

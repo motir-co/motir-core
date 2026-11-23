@@ -315,7 +315,7 @@ is a real population rather than a pedantic one:
 - A missing sha falls through to `indexed` — deliberately, because treating an absent comparand as a
   difference would flip the whole estate to `stale` on deploy.
 - **`defaultBranchHeadSha` is written by a push webhook and by nothing else.** Not by connect, not by
-  the index run (`lib/jobs/indexFleetSteps.ts` only _reads_ it). So a connected, indexed repository
+  the index handoff (`lib/jobs/indexRepoRow.ts` only _reads_ it; the index run read it the same way before MOTIR-12041 retired it). So a connected, indexed repository
   that receives no push never acquires a head sha at all.
 
 ⚠️ **That makes the overclaim permanent, and pointed at the wrong repositories.** A busy repository

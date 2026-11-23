@@ -343,15 +343,16 @@ describe('the To plan state and its precedence', () => {
     expect(screen.getByTestId('to-plan-pill')).toBeTruthy();
   });
 
-  it('blocked elsewhere wins the frame; the To plan pill keeps the slot as its glyph', () => {
+  it('blocked elsewhere wins the frame; the To plan pill keeps the slot in words (MOTIR-12158)', () => {
     const { container } = render(<WorkItemNode item={story} crossBlocked />);
     const card = frame(container);
     expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
     expect(card.className).toContain('border-(--el-danger)');
+    // Blocked rides the top-edge TAB now (design MOTIR-12157 § "The tag row"), so
+    // it no longer triggers the give-way rule: the pill keeps its words.
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
     const pill = screen.getByTestId('to-plan-pill');
-    expect(pill.getAttribute('role')).toBe('img');
-    expect(pill.getAttribute('aria-label')).toBe('To plan');
-    expect(pill.textContent).toBe('');
+    expect(pill.textContent).toBe('To plan');
   });
 
   it('You are here wins the frame; the To plan pill keeps the slot (MOTIR-10630)', () => {
@@ -605,7 +606,10 @@ describe('the tag row and the give-way rule', () => {
   });
 
   it('the blocked flag shows the short label; its full sentence rides title and aria-label', () => {
-    render(<WorkItemNode item={leaf} crossBlocked />);
+    // On a here card the flag stays in the tag row (the here tab keeps the edge);
+    // on every other card it is the top-edge TAB (MOTIR-12158). Both forms show
+    // the short label and carry the sentence as their name.
+    render(<WorkItemNode item={leaf} here crossBlocked />);
     const flag = screen.getByTestId('cross-blocked-flag');
     expect(flag.textContent).toBe('blocked');
     expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
@@ -614,6 +618,16 @@ describe('the tag row and the give-way rule', () => {
     // The visible label is aria-hidden, so the sentence must be a name a screen
     // reader reads: `aria-label` on a generic span is prohibited, on role=img it is not.
     expect(screen.getByRole('img', { name: 'blocked elsewhere' })).toBe(flag);
+    cleanup();
+
+    render(<WorkItemNode item={leaf} crossBlocked />);
+    const tab = screen.getByTestId('blocked-tab');
+    expect(tab.textContent).toBe('blocked');
+    expect(tab.getAttribute('title')).toBe('blocked elsewhere');
+    expect(tab.className).toContain('px-(--spacing-chip-x-6)');
+    expect(screen.getByRole('img', { name: 'blocked elsewhere' })).toBe(tab);
+    // A blocked card that is not here leaves the row free: no give-way.
+    expect(document.querySelector('[data-status="todo"]')!.getAttribute('role')).toBeNull();
   });
 
   it('the right cluster is rendered only when it holds something', () => {

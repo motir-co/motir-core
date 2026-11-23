@@ -241,15 +241,14 @@ describe('provision — the two single-use guarantees are in the request body', 
     });
   });
 
-  it('an INDEX container is neither named nor tagged as a CI runner', async () => {
-    // The card's reason for existing: an index container has no GitHub job at
-    // all, so before this it could only have been booted by inventing a job id —
-    // which would have named it `motir-runner-<a lie>` and tagged it `ci-runner`
-    // in the Fly console and to the reaper.
+  it('a jobless container is neither named nor tagged as a CI runner', async () => {
+    // A hosted-agent container has no GitHub job at all, so it must not be booted
+    // by inventing a job id — which would name it `motir-runner-<a lie>` and tag
+    // it `ci-runner` in the Fly console and to the reaper.
     handler = () => json(200, machine());
     await flyOrchestrator.provision({
       ...SPEC,
-      workload: 'code_graph_index',
+      workload: 'hosted_agent',
       workflowJobId: null,
     });
     const body = calls[0]!.body!;
@@ -258,8 +257,8 @@ describe('provision — the two single-use guarantees are in the request body', 
       string
     >;
     expect(body['name']).not.toMatch(/^motir-runner-/);
-    expect(body['name']).toMatch(/^motir-index-/);
-    expect(metadata['motir_fleet']).toBe('code-graph-index');
+    expect(body['name']).toMatch(/^motir-agent-/);
+    expect(metadata['motir_fleet']).toBe('hosted-agent');
     expect(metadata['motir_fleet']).not.toBe('ci-runner');
     // An empty `motir_intent_id` reads as an intent that could NOT be resolved,
     // which is a different and worse claim than "this workload has none".
@@ -273,28 +272,28 @@ describe('provision — the two single-use guarantees are in the request body', 
     handler = () => json(200, machine());
     await flyOrchestrator.provision({
       ...SPEC,
-      workload: 'code_graph_index',
+      workload: 'hosted_agent',
       workflowJobId: null,
       repoFullName: 'acme/--My__Repo--',
     });
-    expect(calls[0]!.body!['name']).toMatch(/^motir-index-my-repo-[0-9a-f]{8}$/);
+    expect(calls[0]!.body!['name']).toMatch(/^motir-agent-my-repo-[0-9a-f]{8}$/);
 
     calls.length = 0;
     const started = performance.now();
     await flyOrchestrator.provision({
       ...SPEC,
-      workload: 'code_graph_index',
+      workload: 'hosted_agent',
       workflowJobId: null,
       repoFullName: `acme/a${'-'.repeat(100_000)}!`,
     });
     expect(performance.now() - started).toBeLessThan(1_000);
-    expect(calls[0]!.body!['name']).toMatch(/^motir-index-a-[0-9a-f]{8}$/);
+    expect(calls[0]!.body!['name']).toMatch(/^motir-agent-a-[0-9a-f]{8}$/);
   });
 
   it("a jobless container's name is stable, and DIFFERENT per repo in one project", async () => {
     // A Fly machine name is unique within the app, and a Motir project spans
     // several repositories — so a name built from the project alone would
-    // collide the moment two of its repos indexed at once. Determinism is the
+    // collide the moment two of its repos ran at once. Determinism is the
     // other half: the same unit of work must always produce the same name, or an
     // orphan in the console stops being traceable to what it served.
     const nameFor = async (spec: Parameters<typeof flyOrchestrator.provision>[0]) => {
@@ -303,7 +302,7 @@ describe('provision — the two single-use guarantees are in the request body', 
       await flyOrchestrator.provision(spec);
       return calls[0]!.body!['name'] as string;
     };
-    const base = { ...SPEC, workload: 'code_graph_index' as const, workflowJobId: null };
+    const base = { ...SPEC, workload: 'hosted_agent' as const, workflowJobId: null };
     const first = await nameFor(base);
     expect(await nameFor(base)).toBe(first);
     expect(await nameFor({ ...base, repoFullName: 'motir-projects/acme-api' })).not.toBe(first);
@@ -642,7 +641,7 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
   it('sweeps EVERY registered workload, not just the runners (MOTIR-2025)', async () => {
     // ⚠️ THE FAILURE THIS CLOSES. The sweep used to match one hardcoded tag
     // value, so the instant the fleet had a second workload it would have walked
-    // straight past a leaked index or agent container — which bills exactly like
+    // straight past a leaked agent or instance container — which bills exactly like
     // a runner does, in an org `ci-runner-fleet.md` §9 records has neither a
     // spending cap nor a billing alert underneath it.
     const old = '2026-08-02T09:00:00.000Z';
@@ -650,7 +649,7 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
       if (call.method === 'GET') {
         return json(200, [
           machine({ id: 'runner', createdAt: old, metadata: { motir_fleet: 'ci-runner' } }),
-          machine({ id: 'index', createdAt: old, metadata: { motir_fleet: 'code-graph-index' } }),
+          machine({ id: 'instance', createdAt: old, metadata: { motir_fleet: 'agent-instance' } }),
           machine({ id: 'agent', createdAt: old, metadata: { motir_fleet: 'hosted-agent' } }),
           machine({ id: 'stranger', createdAt: old, metadata: { motir_fleet: 'something-else' } }),
         ]);
@@ -660,7 +659,7 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
 
     const usages = await flyOrchestrator.reap(OLDER_THAN, resolveAll);
 
-    expect(usages.map((u) => u.handleId).sort()).toEqual(['agent', 'index', 'runner']);
+    expect(usages.map((u) => u.handleId).sort()).toEqual(['agent', 'instance', 'runner']);
     // The stranger is still NOT ours to destroy: recognising more workloads must
     // not widen the sweep to the whole Fly organisation.
     expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toHaveLength(3);

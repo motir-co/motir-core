@@ -81,7 +81,7 @@ let seq = 0;
 
 async function slot(
   fx: Fixture,
-  workload: 'hosted_agent' | 'code_graph_index' | 'agent_instance',
+  workload: 'hosted_agent' | 'agent_instance',
   ref?: string,
 ): Promise<string> {
   seq += 1;
@@ -193,14 +193,13 @@ afterAll(async () => {
 });
 
 describe('in flight, by admission’s own statements', () => {
-  it('agent runs, CI and indexing equal orgCensus for the same org at the same now', async () => {
+  it('agent runs and CI equal orgCensus for the same org at the same now, and no indexing count is read', async () => {
     const fx = await seedTenant();
     await slot(fx, 'hosted_agent');
     await slot(fx, 'hosted_agent');
     await intent(fx, 'running');
     await intent(fx, 'running');
     await intent(fx, 'provisioning');
-    await slot(fx, 'code_graph_index');
 
     const counts = await countsFor(fx);
     const census = await withSystemContext((tx) =>
@@ -208,15 +207,16 @@ describe('in flight, by admission’s own statements', () => {
     );
     expect(counts.agentRuns.inFlight).toBe(2);
     expect(counts.ciJobs.inFlight).toBe(3);
-    expect(counts.codeGraphIndex.inFlight).toBe(1);
-    expect([
-      counts.agentRuns.inFlight,
-      counts.ciJobs.inFlight,
-      counts.codeGraphIndex.inFlight,
-    ]).toEqual([
+    expect([counts.agentRuns.inFlight, counts.ciJobs.inFlight]).toEqual([
       census.byWorkload.hosted_agent,
       census.byWorkload.ci_runner,
-      census.byWorkload.code_graph_index,
+    ]);
+    // The indexer left motir-core (MOTIR-12039): billing counts no indexing.
+    expect(Object.keys(counts).sort()).toEqual([
+      'agentRuns',
+      'agentsLive',
+      'agentsPerUser',
+      'ciJobs',
     ]);
   });
 
@@ -343,7 +343,6 @@ describe('isolation and failure', () => {
 
     const before = await countsFor(a, 1);
     await slot(b, 'hosted_agent');
-    await slot(b, 'code_graph_index');
     await intent(b, 'running');
     await intent(b, 'pending', 'shard_capacity');
     await hostedRun(b, ['plan_cap']);
@@ -354,7 +353,6 @@ describe('isolation and failure', () => {
       ciJobs: { inFlight: 1, waiting: { planLimit: 0, poolFull: 1, other: 0 } },
       agentsLive: { inFlight: 1, waiting: null },
       agentsPerUser: { membersAtFigure: 1, waiting: null },
-      codeGraphIndex: { inFlight: 1 },
     });
   });
 

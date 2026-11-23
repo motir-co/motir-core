@@ -189,7 +189,7 @@ interface Tenant {
   repos: string[];
 }
 
-/** 2 runs, 2 CI containers, 1 hosted run, 2 running agents, 1 index container. */
+/** 2 runs, 2 CI containers, 1 hosted run, 2 running agents. */
 async function seedBusy(t: WorkItemFixture, label: string): Promise<Tenant> {
   const repos = [`${label}-web`, `${label}-api`];
   for (const repo of repos) await seedHostedRepo(t, repo);
@@ -209,7 +209,6 @@ async function seedBusy(t: WorkItemFixture, label: string): Promise<Tenant> {
   });
   const hostedRun = run.id;
   await seedSlot(t, 'hosted_agent', hostedRunDispatchId(hostedRun));
-  await seedSlot(t, 'code_graph_index', `index-${t.workspaceId}`);
   const instances = [
     await runningInstance(t, `${label}-a`),
     await runningInstance(t, `${label}-b`),
@@ -352,7 +351,6 @@ describe('previewStopEverything', () => {
       ciContainers: 2,
       hostedRuns: 1,
       runningAgents: 2,
-      indexContainers: 1,
     });
     await expectNoLeak(preview, mine);
   });
@@ -372,27 +370,27 @@ describe('previewStopEverything', () => {
       ciContainers: 2,
       hostedRuns: null,
       runningAgents: null,
-      indexContainers: 1,
     });
   });
 
-  it('every count of the five can fail alone to null', async () => {
+  it('every count of the four can fail alone to null', async () => {
     const { ciRunnerProvisioningIntentRepository } =
       await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
-    const { fleetCeilingService } = await import('@/lib/services/fleetCeilingService');
     vi.spyOn(
       ciRunnerProvisioningIntentRepository,
       'countInFlightForOrganization',
     ).mockRejectedValue('down');
-    vi.spyOn(fleetCeilingService, 'orgCensus').mockRejectedValue(new Error('down'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const preview = await orgFleetStopService.previewStopEverything(actor(fx), clock.now());
-    expect(preview).toMatchObject({ ciContainers: null, indexContainers: null, ciRuns: 2 });
+    expect(preview).toMatchObject({ ciContainers: null, ciRuns: 2 });
+    expect(Object.keys(preview).sort()).toEqual(
+      ['ciContainers', 'ciRuns', 'hostedRuns', 'runningAgents'].sort(),
+    );
   });
 });
 
 describe('stopEverything', () => {
-  it('stops CI, then hosted runs, then agents — org_admin_stop everywhere, index left running', async () => {
+  it('stops CI, then hosted runs, then agents — org_admin_stop everywhere', async () => {
     const admin = await addOrgMember(fx, 'admin', 'Ada Admin');
     const result = await orgFleetStopService.stopEverything(actor(fx, admin.id), () => clock.now());
     expect(result).toEqual({
@@ -418,12 +416,6 @@ describe('stopEverything', () => {
     for (const id of a.instances) expect((await instanceRow(id)).state).toBe('hibernated');
     const closed = (await intervals()).filter((i) => a.instances.includes(i.agentInstanceId));
     expect(closed.map((i) => i.endReason)).toEqual(['org_admin_stop', 'org_admin_stop']);
-    // The index container is untouched.
-    expect(
-      await adminDb.fleetInFlightSlot.count({
-        where: { organizationId: a.organizationId, workload: 'code_graph_index' },
-      }),
-    ).toBe(1);
     await expectNoLeak(result, a);
   });
 

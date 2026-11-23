@@ -88,9 +88,10 @@ export type MonitorConfigVerdict =
       blindSpot: string;
     };
 
-/** The boundary this probe cannot see, carried on every arm (the
- *  `IndexRebuildStreakError` discipline: the sentence saying what was NOT
- *  measured travels with the one saying what was). */
+/** The boundary this probe cannot see, carried on every arm (the sentence saying
+ *  what was NOT measured travels with the one saying what was — the discipline
+ *  MOTIR-5027's rebuild-streak probe set, retired with the index fleet in
+ *  MOTIR-12037). */
 export const MONITOR_CONFIG_BLIND_SPOT =
   'This probe reads NAME PRESENCE on the running process and infers opt-in from ' +
   'PARTIAL configuration, so a provider that lost EVERY declared name at once reads ' +

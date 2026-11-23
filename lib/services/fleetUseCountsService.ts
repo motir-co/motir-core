@@ -14,7 +14,7 @@ import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 // into waits its own plan limit causes and waits a full pool causes.
 //
 // ⚠️ ADMISSION'S OWN STATEMENTS, never look-alikes. The in-flight counts are
-// `fleetCeilingService.orgCensus` (agent runs, CI, indexing) and the org figure's
+// `fleetCeilingService.orgCensus` (agent runs, CI) and the org figure's
 // create guard, `countLiveOrAdmitting` — the org's live agents, running or
 // hibernating, plus the creates holding a slot (MOTIR-9954) —
 // so the page and the gates cannot disagree. The waits are read from the reason
@@ -46,8 +46,6 @@ export interface FleetUseCounts {
   agentsLive: { inFlight: number; waiting: null };
   /** Null when the plan sets no per-person figure (or could not be read). */
   agentsPerUser: { membersAtFigure: number | null; waiting: null };
-  /** Held to no plan figure. */
-  codeGraphIndex: { inFlight: number };
 }
 
 type WaitingBucket = keyof FleetWaitingCounts;
@@ -158,7 +156,6 @@ export const fleetUseCountsService = {
         },
         agentsLive: { inFlight: agentsLive, waiting: null },
         agentsPerUser: { membersAtFigure, waiting: null },
-        codeGraphIndex: { inFlight: census.byWorkload.code_graph_index },
       };
     });
   },

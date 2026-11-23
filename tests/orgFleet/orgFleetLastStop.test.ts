@@ -176,7 +176,7 @@ interface Tenant {
   repos: string[];
 }
 
-/** 2 runs, 2 CI containers, 1 hosted run, 2 running agents, 1 index container. */
+/** 2 runs, 2 CI containers, 1 hosted run, 2 running agents. */
 async function seedBusy(t: WorkItemFixture, label: string): Promise<Tenant> {
   const repos = [`${label}-web`, `${label}-api`];
   for (const repo of repos) await seedHostedRepo(t, repo);
@@ -196,7 +196,6 @@ async function seedBusy(t: WorkItemFixture, label: string): Promise<Tenant> {
   });
   const hostedRun = run.id;
   await seedSlot(t, 'hosted_agent', hostedRunDispatchId(hostedRun));
-  await seedSlot(t, 'code_graph_index', `index-${t.workspaceId}`);
   const instances = [
     await runningInstance(t, `${label}-a`),
     await runningInstance(t, `${label}-b`),

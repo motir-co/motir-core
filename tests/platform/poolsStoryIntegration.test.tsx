@@ -463,7 +463,6 @@ describe('every kind renders on its own', () => {
     expect(dto.blocks.map((b) => [b.fleetKind, b.provider])).toEqual([
       ['ci_runner', 'aws'],
       ['hosted_agent', 'unavailable'],
-      ['code_graph_index', 'fly'],
       ['agent_instance', 'fly'],
     ]);
 
@@ -474,7 +473,7 @@ describe('every kind renders on its own', () => {
     expect(broken.textContent).not.toContain(p.provider.aws);
     expect(broken.textContent).not.toContain(p.provider.fly);
 
-    const fly = block(root, 'code_graph_index');
+    const fly = block(root, 'agent_instance');
     expect(fly.getAttribute('data-state')).toBe('fly');
     expect(fly.textContent).toContain(p.provider.fly);
     expect(fly.querySelector('[data-element="pool-total"]')).toBeNull();

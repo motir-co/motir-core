@@ -1,9 +1,10 @@
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
-import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import {
+  FLEET_USE_KINDS,
   figureSourceFor,
   providerFor,
   type FleetUseFigureKey,
+  type FleetUseKind,
   type OwnAccountGroup,
 } from '@/lib/billing/fleetUse';
 import type { FleetCapacityRequestDTO } from '@/lib/dto/fleetCapacityRequest';
@@ -26,7 +27,7 @@ export interface FleetUseFacts {
   plan: OrgPlanFiguresDTO;
   /** Null when the counts could not be read. */
   counts: FleetUseCounts | null;
-  onPool: Readonly<Record<FleetWorkloadKind, boolean>>;
+  onPool: Readonly<Record<FleetUseKind, boolean>>;
   /** Kinds admission would place on the org's own live account. */
   ownAccountKinds: ReadonlySet<FleetWorkloadKind>;
   /** Kinds whose Host figure is granted vCPU ÷ 2. */
@@ -91,7 +92,12 @@ function toFigure(facts: FleetUseFacts, key: FleetUseFigureKey): FleetUseFigureD
   };
 }
 
-/** One account's DTO: its group, the floor answer and its own requests. */
+/**
+ * One account's DTO: its group, the floor answer and its own requests. A request
+ * is the account's when it sits on one of the account's rows — by SHARD, never by
+ * kind: a past request keeps the kind it named (it may be one billing no longer
+ * describes), and the account it was made on is still where it belongs.
+ */
 export function toFleetUseHostAccountDTO(
   group: OwnAccountGroup,
   sharedFloorKinds: readonly FleetWorkloadKind[],
@@ -110,9 +116,8 @@ export function toFleetUseHostAccountDTO(
     vcpuGranted: group.vcpuGranted,
     quotaOutcome: group.quotaOutcome,
     onSharedFloor: group.fleetKinds.some((kind) => sharedFloorKinds.includes(kind)),
-    keptIndexSpots: group.keptIndexSpots,
     capacityRequests: requests
-      .filter((request) => group.fleetKinds.includes(request.fleetKind))
+      .filter((request) => group.shardIds.has(request.shardId))
       .map(toOrgFleetCapacityRequestDTO),
   };
 }
@@ -127,8 +132,7 @@ export function toFleetUseDTO(facts: FleetUseFacts): FleetUseDTO {
       agentsPerPerson: toFigure(facts, 'agentsPerPerson'),
       ciJobsInFlight: toFigure(facts, 'ciJobsInFlight'),
     },
-    codeGraphIndex: { inUse: facts.counts?.codeGraphIndex.inFlight ?? null },
-    whereItRuns: FLEET_WORKLOAD_KINDS.map((fleetKind) => ({
+    whereItRuns: FLEET_USE_KINDS.map((fleetKind) => ({
       fleetKind,
       provider: providerFor(fleetKind, facts.onPool[fleetKind], facts.ownAccountKinds),
     })),

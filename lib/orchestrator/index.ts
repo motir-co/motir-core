@@ -22,15 +22,11 @@ import {
   OrchestratorCapacityError,
   type FakeCapacityOperation,
   flyFleetConfig,
-  flyIndexerImage,
   flyOrchestrator,
   flyPersistentOrchestrator,
   isFlyFleetConfigured,
   isFlyInstancesConfigured,
-  isFlyIndexerImageConfigured,
-  INDEXER_IMAGE_ENV_VAR,
   OrchestratorNotConfiguredError,
-  parseImageReference,
   probeImagePull,
   type AwsManagementApi,
   type ContainerOrchestrator,
@@ -63,12 +59,6 @@ import {
   shardHeldShared,
 } from '@/lib/orchestrator/shardFakeJournal';
 import { selectedOrchestratorProvider } from './provider';
-import {
-  createEcrRegistryCredentialReader,
-  parseEcrRegistryHost,
-  type EcrRegistryCredentialReader,
-} from '@/lib/awsServices/ecrRegistryCredential';
-import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 // Also WIRES the CI runner's switch on import, so the CI gate below reads the same
 // reader admission does in every process that loads this module (MOTIR-10625).
 import { agentRunnerOnPool } from '@/lib/ciFleet/fleetKindSwitches';
@@ -201,7 +191,8 @@ export function isOrchestratorConfigured(): boolean {
 
 // ── The CI RUNNER workload's configuration (MOTIR-10625) ─────────────────────
 //
-// The CI twin of `isIndexFleetConfigured()` below (MOTIR-10568). With
+// The CI twin of the indexer's old configuration check (MOTIR-10568, deleted
+// with the indexer's boot path in MOTIR-12037). With
 // `MOTIR_FLEET_CI_RUNNER_PROVIDER=aws` a CI job boots on a `ci_runner` pool
 // account, whose orchestrator is built from the account row and the deployment's
 // AWS values (`awsOrchestratorForShard`): the management credential the runner
@@ -270,17 +261,6 @@ function installFleetCiMissingConfig(): string[] {
 export async function isCiFleetConfigured(): Promise<boolean> {
   return (await ciFleetMissingConfig()).length === 0;
 }
-
-// ── The INDEX workload's configuration (MOTIR-1981 · MOTIR-1989) ─────────────
-//
-// The index fleet needs everything the CI fleet needs (an orchestrator that can
-// boot a machine) PLUS its own digest-pinned image, which is a different image
-// with its own release lane. The two accessors below are the index workload's
-// twin of `getOrchestrator()` / `isOrchestratorConfigured()`, and they live here
-// — the composition root — for the reason that function does: this is the one
-// file outside `adapters/fly/` permitted to name the adapter, so the CONFIG
-// stays Fly-shaped in exactly one place and every consumer above sees a
-// provider-neutral `{ image, region }`.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ONE ORCHESTRATOR PER FLEET ACCOUNT (Story MOTIR-8953 · MOTIR-8964)
@@ -505,11 +485,6 @@ export function setArm64RunnerAmiOverrideForTests(reader: Arm64RunnerAmiOverride
   else delete (globalThis as Arm64RunnerAmiOverrideHolder)[ARM64_RUNNER_AMI_OVERRIDE_KEY];
 }
 
-/** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
- *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
- *  boots runners and refuses an index spec as not configured. */
-export const AWS_INDEXER_AMI_ENV_VAR = 'MOTIR_AWS_INDEXER_AMI_ID';
-
 /**
  * THE ACCEPTANCE LANE'S EC2 (MOTIR-9429): a factory `lib/test-fake-aws.ts`
  * installs when `MOTIR_FAKE_AWS_STATE_PATH` is set, so the lane's three processes
@@ -558,7 +533,7 @@ function onFakeAws(shard: FleetShardDTO): boolean {
  * `<credentialRef>_*` variable is read; the SDK asks the provider again before
  * the session lapses. `extra` names variables only
  * the caller needs (the AMI, for a launch); every missing one is named at once,
- * as `indexFleetConfig` does.
+ * as `hostedAgentFleetConfig` does.
  */
 function awsShardClient(
   shard: FleetShardDTO,
@@ -649,7 +624,6 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
     arm64AmiId: readArm64RunnerAmiId() ?? undefined,
-    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
     spotInstanceTypes: async () => (await ciSpotSettingReader.read()).instanceTypes,
   });
 }
@@ -786,7 +760,7 @@ function installFleetPseudoShard(region: string): FleetShardDTO {
   return {
     id: INSTALL_FLEET_SHARD_ID,
     name: INSTALL_FLEET_TAG,
-    fleetKind: 'code_graph_index',
+    fleetKind: 'ci_runner',
     provider: 'aws',
     role: 'primary',
     state: 'active',
@@ -841,7 +815,7 @@ function installFleetOnPlainFake(): boolean {
   return selectedOrchestratorProvider() === 'fake' && awsEc2Override() === null;
 }
 
-/** The install fleet's orchestrator (a CI runner, an index or an agent run). */
+/** The install fleet's orchestrator (a CI runner or an agent run). */
 export function installFleetOrchestrator(): ContainerOrchestrator {
   if (installFleetOnPlainFake()) return fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
   const { ec2, config } = installFleetEc2();
@@ -852,11 +826,7 @@ export function installFleetOrchestrator(): ContainerOrchestrator {
     shardTag: INSTALL_FLEET_TAG,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
     arm64AmiId: readArm64RunnerAmiId() ?? undefined,
-    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
     network: { subnetIds: config.subnetIds, securityGroupId: config.securityGroupId },
-    // The VM profile grants only the indexer's ECR pull: an index VM takes it,
-    // an agent run boots with none, as on a pool account (MOTIR-10793).
-    indexInstanceProfileArn: config.instanceProfileArn,
   });
 }
 
@@ -955,10 +925,9 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
  * Fly ORGANISATION inventory already walks every Fly app, and a second listing
  * would judge each machine twice.
  *
- * An AWS account of the INDEXER pool lists every instance it has (MOTIR-9450),
- * with that account's own key, so an index VM no record owns is reaped there. A
- * CI-runner AWS account has none: its runners are swept by the adapter's
- * tag-scoped reaper, and its key may only terminate shard-tagged instances. With
+ * An AWS account lists every instance it has (MOTIR-9426), with that account's
+ * own key, so a VM no record owns is judged there; a CI-runner account's key may
+ * still only terminate shard-tagged instances. With
  * the fake orchestrator selected nothing reads EC2.
  */
 export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
@@ -1031,97 +1000,14 @@ export function fleetRunnerRegion(): string {
   return process.env['FLY_FLEET_REGION']?.trim() || 'iad';
 }
 
-/** What an index container needs from this deployment's configuration. Neutral:
- *  no Fly type, no token, no app name — a second adapter fills the same shape. */
-export interface IndexFleetConfig {
-  /** The digest-pinned indexer image. On Fly, the `registry.fly.io` reference. */
+/** What a fleet container needs from this deployment's configuration: its image
+ *  and region. Neutral: no Fly type, no token, no app name — a second adapter
+ *  fills the same shape. The hosted agent's {@link hostedAgentFleetConfig} is its
+ *  one user. */
+export interface FleetContainerConfig {
+  /** The digest-pinned image. On Fly, the `registry.fly.io` reference. */
   readonly image: string;
   readonly region: string;
-}
-
-/**
- * Is this deployment wired to run INDEX containers? Never throws.
- *
- * True on the `fake` adapter — which is what the test suites select — for the
- * same reason `isOrchestratorConfigured()` is: the fake boots no real machine, so
- * there is no image to pull and nothing to configure. Requiring a real image
- * there would put a production-only variable in front of every test that drives
- * the port, and the usual response to that is a placeholder in the test env,
- * which is the same placeholder that would then work in production.
- */
-export function isIndexFleetConfigured(): boolean {
-  if (selectedOrchestratorProvider() === 'fake') return true;
-  // On its pool, an index boots on an AWS account, not the Fly fleet: only the
-  // image is this deployment's to set (see `indexFleetConfig`).
-  if (indexFleetOnPool()) return isFlyIndexerImageConfigured();
-  return isFlyFleetConfigured() && isFlyIndexerImageConfigured();
-}
-
-/**
- * The index workload's configuration, or the typed not-configured error naming
- * EVERY missing variable at once.
- *
- * ⚠️ ALL OF THEM, NOT THE FIRST. A misconfigured deployment discovers its gaps
- * one boot at a time otherwise, and every one of those boots is a billed machine
- * and a dead-lettered run. `flyFleetConfig()` already collects its three; this
- * adds the image to the same message.
- *
- * ⚠️ AND IT THROWS RATHER THAN NO-OPPING. `docs/decisions/code-graph-index-fleet.md`
- * §5's hard constraint is the ledger: one `job_run` per repo, `succeeded`, with
- * one `output.repoRef`. A path that quietly returned "nothing to do" when
- * unconfigured would still let the job record that row — telling the enqueue gate
- * (`listSucceededCodeGraphIndexRepoRefs`) and the onboarding wizard's per-repo
- * rows that a repo is indexed when nothing ever ran. Unconfigured must be
- * LOUD; {@link isIndexFleetConfigured} is what keeps a self-hosted deploy out of
- * this path, and it is not a licence to be silent once inside it.
- *
- * ⚠️ IT ALSO REQUIRES `MOTIR_RUNNER_IMAGE`, WHICH INDEXING DOES NOT USE — stated
- * rather than hidden. The index workload shares the fleet's Fly ORG, APP and
- * TOKEN with CI (§3: one shared `motir-fleet` org), and those three arrive
- * through `flyFleetConfig()`, which also demands the CI runner's image. Reading
- * the app and token here instead would put a SECOND copy of two env-var names in
- * the codebase, which `lib/ciFleet/config.ts` records the cost of: "two literals
- * that agree today are not one constant." No deployment is affected — the cloud
- * sets both, and a self-hosted one sets neither — so the coupling is accepted and
- * named. Splitting the accessor belongs with the second adapter, alongside the
- * `defaultSpecDefaults()` the port boundary's own guard already anticipates.
- *
- * ⚠️ BUT ONLY WHEN THE INDEX IS PLACED ON FLY. With `MOTIR_INDEX_FLEET_PROVIDER=aws`
- * the index boots on an indexer-pool account (MOTIR-9445), whose orchestrator,
- * credential and region come from the account row — none of the Fly fleet's
- * variables is read on that path. Requiring them anyway failed every index job
- * terminally on a deployment with no Fly fleet ("set FLY_FLEET_APP") before
- * admission could defer it with `pool_full`. So on the pool only the image is
- * required, and the region is a placeholder the admitted account's own region
- * replaces.
- */
-export function indexFleetConfig(): IndexFleetConfig {
-  if (selectedOrchestratorProvider() === 'fake') {
-    // The fake adapter boots nothing, so this reference is never pulled. It is
-    // still a well-formed DIGEST rather than a tag, so a test asserting "the spec
-    // is digest-pinned" exercises the real shape.
-    return { image: 'motir/indexer@sha256:fake', region: 'iad' };
-  }
-  const missing: string[] = [];
-  let region = 'iad';
-  if (!indexFleetOnPool()) {
-    try {
-      region = flyFleetConfig().region;
-    } catch (err) {
-      // Merge the fleet's own list of missing variables with this one's, and say
-      // `set …` once: read the refusal's `detail`, never its rendered message
-      // (MOTIR-6571). `flyFleetConfig` throws nothing but this refusal.
-      missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
-    }
-  }
-  const image = flyIndexerImage();
-  if (!image) missing.push(INDEXER_IMAGE_ENV_VAR);
-  // `|| !image` is what narrows the type; `missing.length` alone cannot, and a
-  // cast here would be a cast that outlives the reason for it.
-  if (missing.length > 0 || !image) {
-    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
-  }
-  return { image, region };
 }
 
 /** The env var holding the hosted-agent image (`hosted-agent-run.md` §6). */
@@ -1207,8 +1093,8 @@ export function hostedAgentImage(provider: OrchestratorProvider): string {
 /**
  * The hosted-agent workload's configuration on the FLY fleet (MOTIR-690): the
  * fleet's region and {@link hostedAgentImage}'s image — or the typed
- * not-configured error naming every missing variable at once, like
- * {@link indexFleetConfig}. The digest rule lives in `hostedAgentImage` alone.
+ * not-configured error naming every missing variable at once. The digest rule
+ * lives in `hostedAgentImage` alone.
  *
  * ⚠️ BUT ONLY WHEN HOSTED RUNS ARE PLACED ON FLY. With
  * `MOTIR_FLEET_AGENT_RUNNER_PROVIDER=aws` a run boots on an agent-runner pool
@@ -1216,11 +1102,11 @@ export function hostedAgentImage(provider: OrchestratorProvider): string {
  * from the admitted account — none of the Fly fleet's variables is read on that
  * path. Requiring them anyway refused every Run hosted on a deployment with no
  * Fly fleet ("set FLY_FLEET_APP", a 503 the browser shows as "isn't available
- * right now") — MOTIR-10626, the defect `indexFleetConfig` already had fixed. So
+ * right now") — MOTIR-10626, the defect the indexer's config had already fixed. So
  * on the pool only the image is required, judged as an AWS VM pulls it, and the
  * region is a placeholder the admitted account's own region replaces.
  */
-export function hostedAgentFleetConfig(): IndexFleetConfig {
+export function hostedAgentFleetConfig(): FleetContainerConfig {
   if (selectedOrchestratorProvider() === 'fake') {
     return { image: FAKE_HOSTED_AGENT_IMAGE, region: 'iad' };
   }
@@ -1254,9 +1140,10 @@ export function hostedAgentFleetConfig(): IndexFleetConfig {
  * `system.daily-health-check`.
  *
  * ⚠️ IT DESCRIBES ONE IMAGE, AND THAT IS DELIBERATE (MOTIR-2030). `reference` is
- * a single string, so the fleet's SECOND pull path gets its own verdict rather
- * than widening this one. See {@link verifyIndexFleetBootable} for why a
- * per-path verdict is the honest shape.
+ * a single string, so each further pull path (the hosted agent's,
+ * {@link verifyHostedAgentImagePullable}) gets its own verdict rather than
+ * widening this one: the paths fail independently, and the operator surface is a
+ * message that must name the one image that failed.
  */
 export type FleetBootableVerdict =
   /** The registry served the manifest to the caller that will boot it —
@@ -1366,65 +1253,6 @@ const FLY_REGISTRY_HOST = 'registry.fly.io';
 const flyRegistryCredential: RegistryCredentialResolver = (registry) =>
   registry === FLY_REGISTRY_HOST ? { username: 'x', password: flyFleetConfig().token } : null;
 
-/** The message of a thrown value, for an operator-facing detail. */
-function failureText(err: unknown): string {
-  if (err instanceof Error) {
-    return err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message;
-  }
-  return String(err);
-}
-
-/**
- * The credential resolver for the INDEXER image — the Fly org credential for
- * `registry.fly.io`, and, since the AWS deployment's indexer moved to ECR
- * (MOTIR-10123), an ECR-issued one for that image's ECR registry (MOTIR-11277).
- *
- * ⚠️ THE ECR CREDENTIAL IS FETCHED UP FRONT, NOT INSIDE THE RESOLVER. A
- * {@link RegistryCredentialResolver} is synchronous and `probeImagePull` reads a
- * resolver's throw as "no credential" — which would fold a refused
- * `ecr:GetAuthorizationToken` into the same `unauthenticatable` sentence this
- * card exists to retire, and lose the cause. Fetched here, a failure becomes
- * its OWN `indeterminate` answer that names it: a token ECR would not issue says
- * nothing about the image, so it is never `unpullable`.
- *
- * ⚠️ IT IS THE SAME LOGIN THE PULL USES. The index VM runs
- * `aws ecr get-login-password | docker login --username AWS` before its pull
- * (`indexUserData.ts`), so probing with an ECR token asks the question the boot
- * asks: will this registry serve this digest to a caller ECR itself
- * authenticated? An intact digest is `bootable`; one the repository does not
- * hold is a 404, `unpullable`.
- */
-async function indexerRegistryCredential(
-  image: string,
-  ecr: EcrRegistryCredentialReader | undefined,
-): Promise<
-  { ok: true; resolve: RegistryCredentialResolver } | { ok: false; verdict: FleetBootableVerdict }
-> {
-  const registry = parseImageReference(image)?.registry;
-  const ecrRegistry = registry ? parseEcrRegistryHost(registry) : null;
-  if (!ecrRegistry) return { ok: true, resolve: flyRegistryCredential };
-  try {
-    const credential = await (ecr ?? createEcrRegistryCredentialReader()).credentialFor(
-      ecrRegistry,
-    );
-    // The probe consults a resolver only for the image's OWN registry host, and
-    // that host is `ecrRegistry.host` by construction — so the resolver needs no
-    // second arm, and has nothing to hand any other registry.
-    return { ok: true, resolve: () => credential };
-  } catch (err) {
-    return {
-      ok: false,
-      verdict: {
-        verdict: 'indeterminate',
-        reference: image,
-        detail:
-          `could not obtain an ECR authorization token for ${ecrRegistry.host} with this ` +
-          `deployment's AWS role (${failureText(err)}) — the image was not probed`,
-      },
-    };
-  }
-}
-
 /**
  * One pull path's probe, mapped onto the verdict's three non-trivial arms.
  *
@@ -1454,82 +1282,8 @@ async function probeToVerdict(
 }
 
 /**
- * CAN THIS DEPLOYMENT BOOT AN INDEX CONTAINER? — the INDEXER image's own
- * preflight (MOTIR-2030), and the twin of {@link verifyFleetBootable}.
- *
- * ⚠️ A SECOND PULL PATH NEEDS A SECOND PREFLIGHT, AND THE ADR SAYS SO IN THOSE
- * WORDS. `docs/decisions/fleet-image-pull.md` §5 lists three constraints on the
- * indexer's mirror and the third is this one verbatim: *"It is a second pull
- * path. The fleet then has two, and each needs §6's preflight independently."*
- * Before MOTIR-1989 there was one image and `verifyFleetBootable()` covered the
- * fleet; after it there are two, with two registries, two release lanes and two
- * failure modes — and the indexer's was probed by nothing.
- *
- * ⚠️ AND IT IS THE PATH MORE LIKELY TO GO MISSING. §5's second constraint:
- * `registry.fly.io` garbage-collects UNREFERENCED images ("we clean old ones up
- * after a few days"), and the reading that a live Machine's image is immune is
- * precisely the wrong shape for a fleet whose machines are ephemeral by design —
- * between jobs, nothing references it. Fly publishes no retention SLA, so this
- * cannot be reasoned away; §6 names the preflight as "what turns a GC'd image
- * into a loud failure instead of an outage."
- *
- * ⚠️ WHY A SEPARATE FUNCTION RATHER THAN A WIDER VERDICT.
- * {@link FleetBootableVerdict} is single-image by construction, and the two paths
- * genuinely fail independently: the CI runner can be perfectly pullable on a
- * deployment whose indexer image was collected last night. One verdict covering
- * both would have to pick which reference to name, and the operator surface is a
- * MESSAGE — naming the wrong image is worse than naming none.
- *
- * ⚠️ TWO REGISTRIES, TWO CREDENTIALS (MOTIR-11277). The Fly deployment mirrors
- * the indexer into `registry.fly.io` and probes it with the fleet's org token;
- * the AWS deployment pins a digest in core's own ECR repository (MOTIR-10123)
- * and probes it with an ECR authorization token minted by this task's AWS role
- * — see {@link indexerRegistryCredential}. `ecr` is the seam a test hands a
- * fake ECR through; production passes nothing and reads the SDK's default
- * credential chain.
- *
- * NEVER THROWS, for the reason its twin does not: the caller is a health check.
- */
-export async function verifyIndexFleetBootable(
-  ecr?: EcrRegistryCredentialReader,
-): Promise<FleetBootableVerdict> {
-  if (selectedOrchestratorProvider() === 'fake') {
-    return {
-      verdict: 'not_applicable',
-      detail: 'the fake orchestrator is selected; no image is pulled',
-    };
-  }
-  let image: string;
-  try {
-    // ⚠️ THE ACCESSOR, NOT THE PREDICATE — the same choice, for the same reason,
-    // its twin makes over `isFlyFleetConfigured()`: `indexFleetConfig()` is what
-    // would actually be used to boot an index container, so consulting it here
-    // leaves no way for the preflight and the boot to disagree about what
-    // "configured" means. It also folds BOTH not-applicable shapes into one
-    // branch — no fleet at all, and a fleet with no indexer image.
-    image = indexFleetConfig().image;
-  } catch {
-    // ⚠️ `not_applicable`, NEVER `unpullable`. A deployment that runs CI but has
-    // not wired `MOTIR_INDEXER_IMAGE` is a deployment that does not INDEX — not a
-    // broken one — and reporting it as a registry refusal would fail a daily
-    // health check over a feature nobody enabled. That is the false alarm that
-    // teaches an operator to ignore the row, which is how the next MOTIR-1980
-    // gets missed. `isIndexFleetConfigured()` is what keeps such a deployment out
-    // of the index path; this is the preflight agreeing with it.
-    return {
-      verdict: 'not_applicable',
-      detail: 'this deployment is not configured to run index containers',
-    };
-  }
-
-  const credential = await indexerRegistryCredential(image, ecr);
-  if (!credential.ok) return credential.verdict;
-  return probeToVerdict(image, credential.resolve);
-}
-
-/**
  * CAN AN AGENT-RUNNER VM PULL THE HOSTED-AGENT IMAGE? — the third pull path's
- * preflight (MOTIR-9420), the twin of {@link verifyIndexFleetBootable}.
+ * preflight (MOTIR-9420), the twin of {@link verifyFleetBootable}.
  *
  * ⚠️ IT PASSES NO CREDENTIAL, ON PURPOSE. It asks the question an agent-runner
  * VM will ask: that VM has no instance profile and no Fly org credential, so its

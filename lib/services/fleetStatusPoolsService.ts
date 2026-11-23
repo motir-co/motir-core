@@ -60,7 +60,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * (`FLEET_WORKLOADS`): a live `fleet_in_flight_slot` of the kind on NO account
  * (`fleet_shard_id` null — the pseudo-account id is never stored, MOTIR-10858)
  * held by the install's own org (the meta org on cloud, any org with cloud off),
- * the same pair `codeGraphIndexAdmissionService` exempts from the shared caps.
+ * the same pair the shared caps exempt.
  * The CI runner writes no slot: its count is the org's in-flight intents carrying
  * the install-fleet flag (MOTIR-11232).
  * For the agent hoster those slots are the AWAKE instances; the hibernated ones

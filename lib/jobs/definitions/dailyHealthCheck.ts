@@ -1,9 +1,7 @@
 import { defineJob } from '../defineJob';
 import type { ScheduleHealthReportDTO } from '@/lib/dto/jobSchedules';
 import type { FleetBootableVerdict } from '@/lib/orchestrator';
-import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
 import type { FleetOriginsVerdict } from '@/lib/ai/fleetOrigins';
-import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak';
 import type { MonitorConfigVerdict } from '@/lib/monitors';
 import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe';
 import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
@@ -108,6 +106,14 @@ import type { IndeterminateProbeReading } from '@/lib/services/indeterminateStre
 // message (`INDEX_REBUILD_STREAK_BLIND_SPOT`), and MOTIR-5058 is the card that
 // closes the arm. Do not let a later reader take a green verdict here for a
 // guarantee it was never able to make.
+//
+// ⚠️ MOTIR-12037 RETIRED THREE OF THEM — the indexer image's preflight, the index
+// container's motir-ai address and the rebuild streak — with the code-graph
+// index fleet itself (Story MOTIR-11026): code-graph indexing moved to
+// motir-codegraph, so motir-core boots no index container, hands none an
+// address and records no index run's mode. Their history above is kept because
+// each fault it describes is the argument for the probe that replaced it in
+// kind; the step ids are on `RETIRED_STEP_IDS` so none is ever reused.
 //
 // As of MOTIR-5831 it carries a SIXTH probe, and it is the first one that asks a
 // question about THIS PROCESS'S OWN ENVIRONMENT rather than about a registry, an
@@ -243,14 +249,9 @@ export interface DailyHealthCheckResult {
    *  very different states, and a result that only appeared on failure could not
    *  tell them apart. */
   fleet: FleetBootableVerdict;
-  /** The INDEXER image's preflight verdict (MOTIR-2030) — the fleet's second
-   *  pull path, recorded beside the runner's rather than merged into it. A
-   *  deployment that runs CI but does not index reports `not_applicable` here
-   *  while `fleet` says `bootable`, and the ledger can tell those apart. */
-  indexFleet: FleetBootableVerdict;
-  /** The HOSTED-AGENT image's preflight verdict (MOTIR-9420) — the third pull
+  /** The HOSTED-AGENT image's preflight verdict (MOTIR-9420) — the second pull
    *  path, probed ANONYMOUSLY the way an agent-runner VM pulls it, and recorded
-   *  beside the other two. A deployment that runs no hosted agent reports
+   *  beside the runner's. A deployment that runs no hosted agent reports
    *  `not_applicable`. */
   hostedAgentImage: FleetBootableVerdict;
   /** Whether the pinned hosted-agent image follows the newest one the image lane
@@ -259,28 +260,12 @@ export interface DailyHealthCheckResult {
    *  (a newer build whose pin pull request is still open) is distinguishable
    *  from `current` and from a `lagging` that fails the run. */
   hostedAgentImageLag: HostedAgentImageLagVerdictDTO;
-  /** Whether the address an index container would be GIVEN for motir-ai can work
-   *  for it (MOTIR-4518) — recorded on the healthy tick too, so the ledger can
-   *  answer "was the container's motir-ai address sane yesterday?". A deployment
-   *  that indexes reports `reachable`, `private_address` or `indeterminate`; one
-   *  that does not reports `not_applicable` beside a `not_applicable`
-   *  `indexFleet`. */
-  indexContainerAi: ContainerAiAddressVerdict;
-  /** Whether the THREE addresses every fleet machine is handed — core's public
-   *  origin, motir-ai's container-facing origin and the gateway's run-lane
-   *  origin — can work for it (Story MOTIR-9714), one reading per origin.
+  /** Whether the addresses every fleet machine is handed — core's public origin
+   *  and the gateway's run-lane origin — can work for it (Story MOTIR-9714), one reading per origin.
    *  Recorded on the healthy tick too, so the ledger answers "were the fleet's
    *  addresses sane yesterday?". A deployment on the fake orchestrator reports
    *  `not_applicable`. */
   fleetOrigins: FleetOriginsVerdict;
-  /** Whether any repository has been denied a snapshot N consecutive times
-   *  (MOTIR-5027) — recorded on the healthy tick too, so the ledger answers
-   *  "was the index still incremental yesterday?". It is the first probe here
-   *  that reads the LEDGER rather than a registry or an address, and the first
-   *  that asks whether a feature is DOING what it claims rather than whether a
-   *  run succeeded. Its `blindSpot` rides on every arm; read it before drawing
-   *  any conclusion from a green one. */
-  indexRebuildStreak: IndexRebuildStreakVerdictDTO;
   /** Whether every partly-configured monitor provider carries every environment
    *  variable it DECLARED it needs (MOTIR-5831) — recorded on the healthy tick
    *  too, so the ledger answers "was the Sentry integration fully configured
@@ -368,37 +353,9 @@ export class FleetImageUnpullableError extends Error {
 }
 
 /**
- * Thrown when the deployment's configured INDEXER image cannot be pulled
- * (MOTIR-2030) — §5's third constraint, given the loud surface §6 requires.
- *
- * A SEPARATE error from {@link FleetImageUnpullableError}, and the message is
- * the reason: it names the INDEXER's reference, the INDEXER's variable, and the
- * failure mode peculiar to that path. §5's second constraint makes the likely
- * cause a GARBAGE-COLLECTED mirror rather than a visibility mistake — Fly cleans
- * up unreferenced images and a fleet of ephemeral machines references nothing
- * between jobs — so the message says to re-run the mirror step, which is a
- * different fix from "check the package's visibility". Telling an operator to
- * check GHCR visibility for an image Fly quietly collected would send them to
- * the wrong registry entirely.
- */
-export class IndexFleetImageUnpullableError extends Error {
-  constructor(readonly verdict: Extract<FleetBootableVerdict, { verdict: 'unpullable' }>) {
-    super(
-      `The fleet's INDEXER image cannot be pulled: ${verdict.reference} — ${verdict.detail}. ` +
-        `No code-graph index container can boot until this is fixed; CI is unaffected ` +
-        `(it pulls a different image). Check that MOTIR_INDEXER_IMAGE names a digest that ` +
-        `still exists, and suspect the mirror first: registry.fly.io garbage-collects ` +
-        `UNREFERENCED images and the fleet's machines are ephemeral, so re-run the ` +
-        `release lane's registry-to-registry copy (docs/decisions/fleet-image-pull.md §5).`,
-    );
-    this.name = 'IndexFleetImageUnpullableError';
-  }
-}
-
-/**
  * Thrown when the HOSTED-AGENT image cannot be pulled anonymously (MOTIR-9420).
  *
- * A separate error, like the indexer's, so the message names the right image and
+ * A separate error from the runner's, so the message names the right image and
  * the right fix: an agent-runner VM has no instance profile and no Fly org
  * credential, so the image must stay PUBLIC on GHCR — a private package, or a
  * mirror to `registry.fly.io` or ECR, strands every hosted run on AWS.
@@ -442,47 +399,7 @@ export class HostedAgentImageLaggingError extends Error {
 }
 
 /**
- * Thrown when the address this deployment would hand an index container cannot
- * work for it (MOTIR-4518) — either unset, or PRIVATE and therefore unresolvable
- * from the fleet's organization.
- *
- * A SEPARATE error from the two image ones, and the message is the reason. Those
- * two send an operator to a REGISTRY; this one sends them to motir-core's own
- * value and the stack output it must equal (Story MOTIR-9714), and the fix is a
- * different change in a different place. Telling
- * someone to re-run the image mirror for a name-resolution fault would send them
- * to the wrong system entirely — which is precisely what happened for two weeks
- * while both image probes reported green.
- *
- * It is loud on the two DEFINITE arms only. `indeterminate` means this process
- * could not reach the address, which is a statement about motir-core's network
- * rather than about the address, and failing on it would teach an operator that
- * this row is noise — the failure mode every probe in this job is written to
- * avoid.
- */
-export class IndexContainerAiAddressError extends Error {
-  constructor(
-    readonly verdict: Extract<
-      ContainerAiAddressVerdict,
-      { verdict: 'unconfigured' | 'private_address' }
-    >,
-  ) {
-    super(
-      `An index container cannot reach motir-ai: ${verdict.detail} ` +
-        `No code-graph index can be published until this is fixed — the container will still ` +
-        `boot, download the repository and build the whole graph, and then throw it away at the ` +
-        `upload grant. Set MOTIR_AI_CONTAINER_URL on motir-core's web and worker to the ` +
-        `motir-infra services stack output AiContainerOrigin (its container-facing routes are ` +
-        `gated on the run-scoped credential either way). It is deliberately not ` +
-        `MOTIR_AI_URL, which is motir-core's own private seam and must stay that way ` +
-        `(MOTIR-3277 · MOTIR-4518).`,
-    );
-    this.name = 'IndexContainerAiAddressError';
-  }
-}
-
-/**
- * Thrown when any of the three addresses every fleet machine is handed is a
+ * Thrown when any of the addresses every fleet machine is handed is a
  * DEFINITE failure (Story MOTIR-9714 · MOTIR-10750): unset, malformed, or a
  * private or Fly-owned host. The message names, per failing origin, the
  * variable, what is wrong with it and the motir-infra stack output it must
@@ -500,7 +417,7 @@ export class FleetOriginsError extends Error {
     );
     super(
       `${verdict.failures.length} fleet origin(s) cannot work for a fleet machine: ` +
-        `${sentences.join(' ')} The indexer, the agent runner and the agent hoster are ` +
+        `${sentences.join(' ')} The agent runner and the agent hoster are ` +
         `handed these addresses, and a machine handed a wrong one boots, is billed and fails ` +
         `late (MOTIR-4518 · MOTIR-4916).`,
     );
@@ -509,50 +426,12 @@ export class FleetOriginsError extends Error {
 }
 
 /**
- * Thrown when a repository's index has been REBUILDING from scratch for the
- * threshold number of consecutive runs (MOTIR-5027) — the assertion "build
- * once, sync forever" never had.
- *
- * A SEPARATE error from the three above, and the message is the reason. Those
- * send an operator to a registry or to a Fly secret because a container cannot
- * BOOT or cannot REACH anything. This one fires when every container booted
- * perfectly, reached motir-ai, built a real graph and published it — and did the
- * expensive thing every single time. Nothing else in this job can be red for
- * that, which is the entire defect: MOTIR-4415 and MOTIR-5009 each ran for
- * weeks with every probe here green.
- *
- * ⚠️ THE MESSAGE CARRIES THE BLIND SPOT, and that is not padding. The DLQ row's
- * `failure` is the whole of what a human reads, and a reader who takes this
- * check to mean *the index is incremental* will read its silence as a guarantee
- * it cannot make. So the sentence that says what it did NOT measure travels with
- * the sentence that says what it did.
- */
-export class IndexRebuildStreakError extends Error {
-  constructor(readonly verdict: Extract<IndexRebuildStreakVerdictDTO, { verdict: 'rebuilding' }>) {
-    const offenders = verdict.offenders
-      .map((o) => `${o.repoRef} (${o.consecutiveRebuilds} of its last ${o.modeRuns} runs)`)
-      .join(', ');
-    super(
-      `${verdict.offenders.length} repositor${verdict.offenders.length === 1 ? 'y has' : 'ies have'} ` +
-        `rebuilt the code graph from scratch on ${verdict.threshold}+ consecutive runs: ${offenders}. ` +
-        `"Build once, sync forever" is off — every one of those runs paid a full re-parse. ` +
-        `Two systems to fork on: ${verdict.candidates.join(' AND ')}. ` +
-        `Start with \`fly logs -a motir-ai\` for the withholding line, and compare ` +
-        `MOTIR_INDEXER_IMAGE's engine against the \`CodeRepo.codegraphVersion\` rows. ` +
-        `⚠️ SCOPE: ${verdict.blindSpot}`,
-    );
-    this.name = 'IndexRebuildStreakError';
-  }
-}
-
-/**
  * Thrown when a monitor provider this deployment has PARTLY configured is missing
  * an environment variable it declared (MOTIR-5831) — the assertion the seven-day
  * `SENTRY_APP_CLIENT_SECRET` outage never had.
  *
- * A SEPARATE error from the five above, and the message is the reason. Those send
- * an operator to a registry, to a Fly secret for an ADDRESS, or to the indexer's
- * engine. This one sends them to a Fly secret for a CREDENTIAL, with the NAME
+ * A SEPARATE error from the ones above, and the message is the reason. Those send
+ * an operator to a registry or to a stack output for an ADDRESS. This one sends them to a Fly secret for a CREDENTIAL, with the NAME
  * they have to set — and the fix is `fly secrets set` on a specific app, which is
  * a different command in a different place from every one of them.
  *
@@ -560,8 +439,9 @@ export class IndexRebuildStreakError extends Error {
  * no value, no length and no digest: the DLQ row is the whole of what a human
  * reads, and the question it answers is whether the name is set.
  *
- * ⚠️ AND IT CARRIES THE BLIND SPOT, for the reason {@link IndexRebuildStreakError}
- * states in the same words. A reader who takes this check's silence to mean *the
+ * ⚠️ AND IT CARRIES THE BLIND SPOT. The DLQ row's `failure` is the whole of what
+ * a human reads, so the sentence that says what the check did NOT measure travels
+ * with the sentence that says what it did. A reader who takes this check's silence to mean *the
  * monitor is configured* will be wrong, because a provider that lost every name
  * at once reads as never-configured. So the sentence that says what it did NOT
  * measure travels with the sentence that says what it did.
@@ -755,7 +635,7 @@ export class RunnerImageStaleError extends Error {
  * The message names each probe and its step, how many runs in a row and since
  * when, and the phase and detail of the latest read, because the DLQ row is the
  * whole of what an operator reads. The blind spot travels with it, for the
- * reason {@link IndexRebuildStreakError} gives.
+ * reason {@link MonitorConfigIncompleteError} gives.
  */
 export class ProbeIndeterminateStreakError extends Error {
   /** Lands on the failed row's `failure.code`, so a later run knows this row. */
@@ -820,21 +700,15 @@ export const DAILY_HEALTH_CHECK_PROBES: {
 } = {
   schedules: { step: 'schedule-health', describeIndeterminate: null },
   fleet: { step: 'fleet-boot-preflight', describeIndeterminate: describeImage },
-  indexFleet: { step: 'index-fleet-boot-preflight', describeIndeterminate: describeImage },
   hostedAgentImage: { step: 'hosted-agent-image-preflight', describeIndeterminate: describeImage },
   hostedAgentImageLag: {
     step: 'hosted-agent-image-lag',
     describeIndeterminate: (v) => ({ phase: v.phase, detail: `${v.reference}: ${v.detail}` }),
   },
-  indexContainerAi: {
-    step: 'index-container-ai-address',
-    describeIndeterminate: (v) => ({ phase: 'address', detail: `${v.address}: ${v.detail}` }),
-  },
   fleetOrigins: {
-    step: 'fleet-origins',
+    step: 'fleet-origins-v2',
     describeIndeterminate: (v) => ({ phase: 'address', detail: v.detail }),
   },
-  indexRebuildStreak: { step: 'index-rebuild-streak', describeIndeterminate: null },
   monitorConfig: { step: 'monitor-config-preflight', describeIndeterminate: null },
   credentialExpiry: { step: 'credential-expiry', describeIndeterminate: null },
   hostedRuns: { step: 'hosted-run-probe', describeIndeterminate: null },
@@ -966,23 +840,14 @@ export const dailyHealthCheck = defineJob(
       services.jobScheduleHealth.check(),
     );
     const fleet = await ctx.step.run('fleet-boot-preflight', () => services.fleetPreflight.check());
-    const indexFleet = await ctx.step.run('index-fleet-boot-preflight', () =>
-      services.fleetPreflight.checkIndexFleet(),
-    );
     const hostedAgentImage = await ctx.step.run('hosted-agent-image-preflight', () =>
       services.fleetPreflight.checkHostedAgentImage(),
     );
     const hostedAgentImageLag = await ctx.step.run('hosted-agent-image-lag', () =>
       services.hostedAgentImageLag.check(),
     );
-    const indexContainerAi = await ctx.step.run('index-container-ai-address', () =>
-      services.fleetPreflight.checkIndexContainerAiAddress(),
-    );
-    const fleetOrigins = await ctx.step.run('fleet-origins', () =>
+    const fleetOrigins = await ctx.step.run('fleet-origins-v2', () =>
       services.fleetPreflight.checkFleetOrigins(),
-    );
-    const indexRebuildStreak = await ctx.step.run('index-rebuild-streak', () =>
-      services.indexRebuildStreak.check(),
     );
     const monitorConfig = await ctx.step.run('monitor-config-preflight', () =>
       services.monitorConfigPreflight.check(),
@@ -1006,12 +871,9 @@ export const dailyHealthCheck = defineJob(
     const verdicts = {
       schedules,
       fleet,
-      indexFleet,
       hostedAgentImage,
       hostedAgentImageLag,
-      indexContainerAi,
       fleetOrigins,
-      indexRebuildStreak,
       monitorConfig,
       credentialExpiry,
       hostedRuns,
@@ -1025,11 +887,11 @@ export const dailyHealthCheck = defineJob(
       services.indeterminateStreak.check(indeterminateReadings(verdicts)),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
-    // unpullable runner image and an unpullable indexer image are independent
-    // faults, and a run that reported only the first would hide the rest for as
-    // many days as the first took to fix. So all the reads are taken above and
-    // only the reporting is ordered. This is why MOTIR-2030's probe is a second
-    // `step.run` rather than a branch inside the first one.
+    // unpullable runner image and an unpullable hosted-agent image are
+    // independent faults, and a run that reported only the first would hide the
+    // rest for as many days as the first took to fix. So all the reads are taken
+    // above and only the reporting is ordered. This is why each pull path is its
+    // own `step.run` rather than a branch inside the first one.
     //
     // This job's own ledger row is written by `recordStart` BEFORE the handler
     // body runs, so the check always sees a fresh run for
@@ -1045,53 +907,17 @@ export const dailyHealthCheck = defineJob(
     // not answered on the last `INDETERMINATE_STREAK_THRESHOLD` runs (MOTIR-10429).
     if (fleet.verdict === 'unpullable') throw new FleetImageUnpullableError(fleet);
 
-    // The INDEXER path, reported after the runner's and on exactly the same
-    // terms: only a DEFINITE refusal is loud, and `not_applicable` — a deployment
-    // that runs CI but has not wired `MOTIR_INDEXER_IMAGE` — is a green state,
-    // not a fault. Runner first only because a deployment that cannot boot CI has
-    // the larger outage; both verdicts are on the row either way.
-    if (indexFleet.verdict === 'unpullable') throw new IndexFleetImageUnpullableError(indexFleet);
-
     // The HOSTED-AGENT path (MOTIR-9420), on the same terms: only a definite
     // refusal is loud, and `not_applicable` is a deployment with no hosted agent.
     if (hostedAgentImage.verdict === 'unpullable') {
       throw new HostedAgentImageUnpullableError(hostedAgentImage);
     }
 
-    // The REACHABILITY probe, reported last and on the same terms: only the two
-    // DEFINITE arms are loud. `indeterminate` is this process failing to reach an
-    // address, not the address failing; `not_applicable` is a deployment that
-    // does not index. Both are recorded on the row either way.
-    if (
-      indexContainerAi.verdict === 'unconfigured' ||
-      indexContainerAi.verdict === 'private_address'
-    ) {
-      throw new IndexContainerAiAddressError(indexContainerAi);
-    }
-
     // The FLEET ORIGINS (Story MOTIR-9714), on the same terms: only `failed` is
     // loud, and `indeterminate` is core's probe failing to get an answer, which
-    // the streak escalates. After the index container's own address, so a bad
-    // motir-ai address keeps its more specific message; both name the stack
+    // the streak escalates. The message names, per failing origin, the stack
     // output it must equal.
     if (fleetOrigins.verdict === 'failed') throw new FleetOriginsError(fleetOrigins);
-
-    // The LEDGER probe, reported last and on the same terms as every one above
-    // it: only the DEFINITE arm is loud. `not_applicable` is a deployment that
-    // has never indexed, and `ok` can still carry `unknownRepoRefs` — repos
-    // whose runs recorded no mode at all, which is UNMEASURED rather than
-    // healthy and is deliberately not an alarm.
-    //
-    // ⚠️ WHY `unknown` IS NOT LOUD, stated because the opposite reading is
-    // reasonable and wrong. On the day this shipped 844 of 899 succeeded runs
-    // carried no mode, so failing on it would dead-letter this job every
-    // morning over a state no operator can act on — and a check that cries wolf
-    // is a check somebody silences, which is how MOTIR-3606 spent 23 days red
-    // with nobody reading it. It is REPORTED on the row instead, in its own
-    // field, so a reader can see what was not measured without being paged.
-    if (indexRebuildStreak.verdict === 'rebuilding') {
-      throw new IndexRebuildStreakError(indexRebuildStreak);
-    }
 
     // The ENVIRONMENT probe, reported last and on exactly the same terms as every
     // one above it: only the DEFINITE arm is loud. `not_applicable` is a

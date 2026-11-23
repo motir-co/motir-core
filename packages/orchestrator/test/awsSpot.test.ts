@@ -19,7 +19,6 @@ import {
   AWS_AMI_ID,
   AWS_HOSTED_ENV,
   AWS_HOSTED_IMAGE,
-  AWS_INDEXER_AMI_ID,
   AWS_SHARD_TAG,
   AWS_SPEC,
 } from './contract/awsHarness';
@@ -327,26 +326,16 @@ describe('nothing else is ever Spot', () => {
     env: AWS_HOSTED_ENV,
     capacity: 'spot',
   };
-  const INDEX_SPEC: ContainerSpec = {
-    ...AWS_SPEC,
-    workload: 'code_graph_index',
-    workflowJobId: null,
-    image: `ghcr.io/motir-co/motir-indexer@sha256:${'b'.repeat(64)}`,
-    env: { MOTIR_INDEX_RUN_CREDENTIAL: 'run-cred', MOTIR_INDEX_PROJECT_ID: 'proj-1' },
-    capacity: 'spot',
-  };
 
   it.each([
     ['a CI runner with no capacity', AWS_SPEC],
     ['a CI runner asking on_demand', { ...AWS_SPEC, capacity: 'on_demand' as const }],
-    ['an index VM asking spot', INDEX_SPEC],
     ['a hosted agent asking spot', HOSTED_SPEC],
   ])('%s sends no market option, on the type it always sent', async (_label, spec) => {
     const types = vi.fn(async () => TYPES);
 
     const handle = await adapter({
       instanceType: 'm6i.large',
-      indexerAmiId: AWS_INDEXER_AMI_ID,
       spotInstanceTypes: types,
     }).provision(spec);
 

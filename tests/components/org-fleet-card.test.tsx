@@ -45,7 +45,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     name: 'Acme Corp',
     isMeta: false,
     internalBilling: false,
-    byWorkload: { ci_runner: 3, hosted_agent: 1, agent_instance: 2, code_graph_index: 1 },
+    byWorkload: { ci_runner: 3, hosted_agent: 1, agent_instance: 2 },
     agentsLive: 2,
     plan: {
       kind: 'capped',
@@ -107,7 +107,9 @@ describe('OrgFleetCard', () => {
     expect(within(screen.getByTestId('org-fleet-tile-ciRunner')).getByText('3')).toBeTruthy();
     expect(within(screen.getByTestId('org-fleet-tile-hostedAgent')).getByText('1')).toBeTruthy();
     expect(within(screen.getByTestId('org-fleet-tile-agentInstance')).getByText('2')).toBeTruthy();
-    expect(within(screen.getByTestId('org-fleet-tile-index')).getByText('1')).toBeTruthy();
+    // The index tile retired with the indexer (MOTIR-12040): three tiles, no index count.
+    expect(screen.queryByTestId('org-fleet-tile-index')).toBeNull();
+    expect(screen.getByTestId('org-fleet-card').textContent).not.toMatch(/index/i);
     // MOTIR-9377: the plan and its four figures, each tile against its own.
     expect(screen.getByTestId('org-fleet-plan').textContent).toBe(
       'Plan Standard · Motir agent runs at once: 1 · agents per person: 1 · agents: 5 · CI jobs at once: 5',
@@ -116,7 +118,6 @@ describe('OrgFleetCard', () => {
     expect(screen.getByTestId('org-fleet-tile-hostedAgent').textContent).toContain('1 of 1');
     // Running machines, against no figure: the org figure counts live agents (MOTIR-9954).
     expect(screen.getByTestId('org-fleet-tile-agentInstance').textContent).not.toContain(' of ');
-    expect(screen.getByTestId('org-fleet-tile-index').textContent).not.toContain(' of ');
     expect(screen.getByTestId('org-fleet-card').textContent).not.toMatch(/pool|500/i);
     expect(screen.getByText('1,240 credits')).toBeTruthy();
     expect(
@@ -159,10 +160,10 @@ describe('OrgFleetCard', () => {
     },
   );
 
-  it('nothing running disables it with “Nothing to stop.” — an index container alone counts as nothing (S2 d)', () => {
+  it('nothing running disables it with “Nothing to stop.” (S2 d)', () => {
     renderCard({
       row: row({
-        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0, code_graph_index: 1 },
+        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0 },
         verdicts: ['ok'],
       }),
     });
@@ -170,13 +171,14 @@ describe('OrgFleetCard', () => {
     expect(button.hasAttribute('disabled')).toBe(true);
     const reason = document.getElementById(button.getAttribute('aria-describedby') ?? '');
     expect(reason?.textContent).toBe('Nothing to stop.');
+    expect(screen.getByText('Nothing is running on the fleet for this organization.')).toBeTruthy();
   });
 
   it('the role reason wins over “Nothing to stop.”', () => {
     renderCard({
       role: 'operator',
       row: row({
-        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0, code_graph_index: 0 },
+        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0 },
       }),
     });
     expect(screen.queryByText('Nothing to stop.')).toBeNull();
@@ -187,7 +189,7 @@ describe('OrgFleetCard', () => {
   it('after a stop the foot shows the fleet.stop row — actor, time, reason, counts (S4 k)', () => {
     renderCard({
       row: row({
-        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0, code_graph_index: 1 },
+        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0 },
         verdicts: ['ok'],
       }),
       lastStop: {
@@ -229,7 +231,7 @@ describe('OrgFleetCard', () => {
   ] as const)('a plan with no figures is said in words, never a figure (%j)', (plan, words) => {
     renderCard({ row: row({ plan }) });
     expect(screen.getByTestId('org-fleet-plan').textContent).toBe(words);
-    const tiles = ['hostedAgent', 'agentInstance', 'index'];
+    const tiles = ['hostedAgent', 'agentInstance'];
     for (const key of tiles) {
       expect(screen.getByTestId(`org-fleet-tile-${key}`).textContent).not.toContain(' of ');
     }

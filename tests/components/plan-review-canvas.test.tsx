@@ -21,6 +21,19 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // a rendering contract, and the only assertion that holds one asserts on what
 // renders.
 
+/**
+ * The level's `cross` arrows — the warning-stroked edge paths. Since MOTIR-12158
+ * no chip marks an edge's midpoint (the blocked card wears the tab instead), so
+ * the tangle is counted on the edge layer itself.
+ */
+function crossEdgePaths(): Element[] {
+  const edges = screen.queryByTestId('canvas-edges');
+  return edges
+    ? [...edges.querySelectorAll('path')].filter((p) =>
+        (p.getAttribute('class') ?? '').includes('stroke-(--el-warning)'),
+      )
+    : [];
+}
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -1109,12 +1122,12 @@ describe('PlanReviewCanvas — a blocker the plan RELOCATES onto the level (bug 
     await screen.findByText('The blocker the plan moves in');
 
     // Both cards on the level, and the arrow between them in the ordinary
-    // within-level language — no red flag at its midpoint.
+    // within-level language — no red `cross` arrow.
     expect(el(STORY_ID)).toBeTruthy();
     expect(el(OFF_ID)).toBeTruthy();
-    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(0);
+    expect(crossEdgePaths()).toHaveLength(0);
     // …and the dependent is not wearing the off-level ring either.
-    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
   });
 
   it('still draws it for a blocker the plan leaves where it is', async () => {
@@ -1124,8 +1137,8 @@ describe('PlanReviewCanvas — a blocker the plan RELOCATES onto the level (bug 
     render(<PlanReviewCanvas items={[proposal()]} projectKey="MOTIR" version={0} outcome={null} />);
     await screen.findByText('A proposed subtask');
 
-    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(1);
-    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(crossEdgePaths()).toHaveLength(1);
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
   });
 });
 
@@ -1159,8 +1172,8 @@ describe('PlanReviewCanvas — a proposal blocked by a card OFF the level (bug M
     mount([blockedElsewhere()]);
     await screen.findByText('A proposed subtask');
 
-    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(1);
-    expect(within(el('pi_1') as HTMLElement).getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(crossEdgePaths()).toHaveLength(1);
+    expect(within(el('pi_1') as HTMLElement).getByTestId('blocked-tab')).toBeTruthy();
     expect(within(el(OFF_ID) as HTMLElement).getByText('MOTIR-99')).toBeTruthy();
     expect(within(el(OFF_ID) as HTMLElement).getByText('A card under another story')).toBeTruthy();
   });
@@ -1198,7 +1211,7 @@ describe('PlanReviewCanvas — a proposal blocked by a card OFF the level (bug M
     ]);
     await screen.findByText('A proposed subtask');
 
-    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(0);
-    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+    expect(crossEdgePaths()).toHaveLength(0);
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
   });
 });

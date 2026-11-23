@@ -36,7 +36,7 @@ let operatorEmail: string;
 let userId: string;
 let orgId: string;
 let otherOrgId: string;
-let ids: { ci: string; index: string; hoster: string; shared: string; other: string };
+let ids: { ci: string; hoster: string; shared: string; other: string };
 
 let orgSeq = 0;
 async function seedOrg(): Promise<string> {
@@ -73,10 +73,10 @@ async function account(
 const ask = (over: Partial<FleetCapacityRequestInput> = {}): FleetCapacityRequestInput => ({
   organizationId: orgId,
   userId,
-  shardId: ids.index,
-  fleetKind: 'code_graph_index',
+  shardId: ids.hoster,
+  fleetKind: 'agent_instance',
   desiredVcpu: 240,
-  reason: 'We index forty repositories and the queue backs up every morning.',
+  reason: 'Forty agents run at once and the queue backs up every morning.',
   ...over,
 });
 
@@ -109,11 +109,10 @@ beforeEach(async () => {
   orgId = await seedOrg();
   otherOrgId = await seedOrg();
   const ci = await account('host-a-ci', 'ci_runner', '400000000001', orgId, 200);
-  const index = await account('host-a-index', 'code_graph_index', MERGED_ACCOUNT, orgId, 120);
   const hoster = await account('host-a-agent-host', 'agent_instance', MERGED_ACCOUNT, orgId, 120);
   const shared = await account('ci-runner-use1-1', 'ci_runner', '111122223333', null, 640);
   const other = await account('host-b-ci', 'ci_runner', '400000000009', otherOrgId, 200);
-  ids = { ci: ci.id, index: index.id, hoster: hoster.id, shared: shared.id, other: other.id };
+  ids = { ci: ci.id, hoster: hoster.id, shared: shared.id, other: other.id };
 });
 
 afterAll(async () => {
@@ -128,9 +127,9 @@ describe('request', () => {
 
     expect(dto).toMatchObject({
       organizationId: orgId,
-      shardId: ids.index,
+      shardId: ids.hoster,
       awsAccountId: MERGED_ACCOUNT,
-      fleetKind: 'code_graph_index',
+      fleetKind: 'agent_instance',
       quotaCode: 'L-1216C47A',
       desiredVcpu: 240,
       status: 'open',
@@ -138,7 +137,7 @@ describe('request', () => {
       createdAt: NOW.toISOString(),
       outcome: null,
     });
-    expect(dto.reasonMd).toContain('forty repositories');
+    expect(dto.reasonMd).toContain('Forty agents');
     expect(await adminDb.fleetCapacityRequest.count()).toBe(1);
   });
 
@@ -169,13 +168,13 @@ describe('request', () => {
     expect(sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it('answers the active request for the same figure across both merged kinds, and refuses another figure', async () => {
+  it('answers the active request for the same figure on the account, and refuses another figure', async () => {
     const first = await fleetCapacityRequestService.request(ask());
-    const viaHoster = await fleetCapacityRequestService.request(
+    const again = await fleetCapacityRequestService.request(
       ask({ shardId: ids.hoster, fleetKind: 'agent_instance' }),
     );
 
-    expect(viaHoster.id).toBe(first.id);
+    expect(again.id).toBe(first.id);
     await expect(
       fleetCapacityRequestService.request(
         ask({ shardId: ids.hoster, fleetKind: 'agent_instance', desiredVcpu: 300 }),
@@ -211,11 +210,11 @@ describe('request', () => {
     expect(context.fingerprint).toEqual(['fleet-capacity-request', dto.id]);
     expect(context.tags).toMatchObject({
       organization_id: orgId,
-      fleet_kind: 'code_graph_index',
+      fleet_kind: 'agent_instance',
       aws_account_id: MERGED_ACCOUNT,
     });
     expect(String(error.message)).toContain(dto.id);
-    expect(JSON.stringify(context.tags)).not.toContain('forty repositories');
+    expect(JSON.stringify(context.tags)).not.toContain('Forty agents');
   });
 
   it('a failing alert does not fail or roll back the request', async () => {
@@ -271,7 +270,7 @@ describe('linkQuotaRequest and close', () => {
     ).rejects.toBeInstanceOf(FleetCapacityRequestLinkMismatchError);
 
     await fleetCapacityRequestService.close({ requestId: request.id, note: 'Declined' }, operator);
-    const quota = await quotaRequestOn(ids.index, 'quota-req-2');
+    const quota = await quotaRequestOn(ids.hoster, 'quota-req-2');
     await expect(
       fleetCapacityRequestService.linkQuotaRequest(
         { requestId: request.id, quotaRequestId: quota.id },
@@ -325,12 +324,12 @@ describe('linkQuotaRequest and close', () => {
 describe('fleet-admin capacity-requests, capacity-request-link, capacity-request-close', () => {
   it('list, link and close print ids and figures, and write one audit entry each', async () => {
     const request = await fleetCapacityRequestService.request(ask());
-    const quota = await quotaRequestOn(ids.index);
+    const quota = await quotaRequestOn(ids.hoster);
 
     const listed = await run('capacity-requests', '--operator', operatorEmail);
     expect(listed.code).toBe(0);
     expect(listed.out).toContain(request.id);
-    expect(listed.out).toContain(`account ${MERGED_ACCOUNT}  code_graph_index`);
+    expect(listed.out).toContain(`account ${MERGED_ACCOUNT}  agent_instance`);
     expect(listed.out).toContain('240 vCPU  open');
 
     const linked = await run(
@@ -366,7 +365,7 @@ describe('fleet-admin capacity-requests, capacity-request-link, capacity-request
     ]);
     expect(audits[2]!.reason).toBe('AWS declined');
     const printed = JSON.stringify([listed, linked, closed, audits]);
-    expect(printed).not.toContain('forty repositories');
+    expect(printed).not.toContain('Forty agents');
     expect(printed).not.toContain('@motir.co');
     expect(printed).not.toMatch(/FLEET_SHARD_[A-Z_]+=/);
   });

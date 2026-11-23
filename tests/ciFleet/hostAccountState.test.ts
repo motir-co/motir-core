@@ -6,6 +6,7 @@ import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { hostAccountPlan } from '@/lib/ciFleet/hostAccounts';
+import { FleetShardNotFoundError } from '@/lib/ciFleet/errors';
 import { deriveAccountState, LIVE_MIN_VCPU } from '@/lib/ciFleet/hostAccountState';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
@@ -120,14 +121,9 @@ async function hostOrg() {
   return org;
 }
 
-const rowOf = (
-  organizationId: string,
-  slot: 'ci_runner' | 'agent_runner' | 'merged',
-  shared = false,
-) => {
+const rowOf = (organizationId: string, slot: 'ci_runner' | 'agent_runner' | 'merged') => {
   const plan = hostAccountPlan(organizationId, slot, hostMonthlyPlanCredits());
-  const name = shared ? plan.sharedRow!.name : plan.account.name;
-  return adminDb.fleetShard.findUniqueOrThrow({ where: { name } });
+  return adminDb.fleetShard.findUniqueOrThrow({ where: { name: plan.account.name } });
 };
 
 /** The fake AWS request id filed for one slot's account. */
@@ -183,7 +179,6 @@ beforeEach(async () => {
   await createTestUser({ email: MOTIR_SYSTEM_USER_EMAIL });
   await primary('ci-runner-use1-1', 'ci_runner', '111122223331');
   await primary('hosted-agent-use1-1', 'hosted_agent', '111122223332');
-  await primary('indexer-use1-1', 'code_graph_index', '111122223333');
   await primary('agent-host-use1-1', 'agent_instance', '111122223334');
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -220,14 +215,20 @@ describe('deriveAccountState (MOTIR-9585)', () => {
 });
 
 describe('one pass over a fresh Host organisation', () => {
-  it('stores quota requested on every row — both of the merged account — and settles them active', async () => {
+  it('stores quota requested on every row — one per account — and settles them active', async () => {
     const org = await hostOrg();
 
     const summary = await pass(at(1));
 
-    expect(summary).toEqual({ ran: true, states: { quota_requested: 3 }, settled: 4, failures: 0 });
+    expect(summary).toEqual({ ran: true, states: { quota_requested: 3 }, settled: 3, failures: 0 });
     const rows = await adminDb.fleetShard.findMany({ where: { ownerOrganizationId: org.id } });
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(3);
+    // The merged account is its one agent_instance row (MOTIR-12038).
+    expect(rows.map((row) => row.fleetKind).sort()).toEqual([
+      'agent_instance',
+      'ci_runner',
+      'hosted_agent',
+    ]);
     for (const row of rows) {
       expect(row).toMatchObject({
         state: 'active',
@@ -244,7 +245,7 @@ describe('one pass over a fresh Host organisation', () => {
     const org = await hostOrg();
     await pass(at(1));
 
-    for (const kind of ['ci_runner', 'hosted_agent', 'code_graph_index', 'agent_instance']) {
+    for (const kind of ['ci_runner', 'hosted_agent', 'agent_instance']) {
       const selected = await withSystemContext((tx) =>
         fleetShardAdmissionService.selectionSetInTx(
           { fleetKind: kind as FleetWorkloadKind, organizationId: org.id },
@@ -263,7 +264,7 @@ describe('one pass over a fresh Host organisation', () => {
 });
 
 describe('a grant read by the quota tracker', () => {
-  it('moves the agent-runner account to live at 32, and the merged account at 40 for both rows', async () => {
+  it('moves the agent-runner account to live at 32, and the merged account at 40', async () => {
     const org = await hostOrg();
     await pass(at(1));
     organization.settleQuotaRequest(await awsRequestOf(org.id, 'agent_runner'), 'APPROVED', 32);
@@ -274,14 +275,16 @@ describe('a grant read by the quota tracker', () => {
 
     expect(summary.states).toEqual({ quota_requested: 1, live: 2 });
     expect(await rowOf(org.id, 'agent_runner')).toMatchObject({ grantedAt: at(3), liveAt: at(3) });
-    const index = await rowOf(org.id, 'merged');
-    const host = await rowOf(org.id, 'merged', true);
-    for (const row of [index, host]) {
-      expect(row).toMatchObject({ quotaRequestedAt: at(1), grantedAt: at(3), liveAt: at(3) });
-    }
-    // The raise was recorded against the indexer row only.
-    expect(await adminDb.fleetQuotaRequest.count({ where: { shardId: host.id } })).toBe(0);
-    expect((await fleetShardService.getShard(host.id)).accountState).toBe('live');
+    const merged = await rowOf(org.id, 'merged');
+    expect(merged).toMatchObject({
+      fleetKind: 'agent_instance',
+      quotaRequestedAt: at(1),
+      grantedAt: at(3),
+      liveAt: at(3),
+    });
+    // The one raise was recorded against the merged account's own row.
+    expect(await adminDb.fleetQuotaRequest.count({ where: { shardId: merged.id } })).toBe(1);
+    expect((await fleetShardService.getShard(merged.id)).accountState).toBe('live');
     expect(await rowOf(org.id, 'ci_runner')).toMatchObject({ grantedAt: null, liveAt: null });
   });
 
@@ -343,18 +346,6 @@ describe('the times', () => {
       rows.map((r) => [r.name, r.quotaRequestedAt, r.grantedAt, r.liveAt]);
     expect(times(after)).toEqual(times(before));
   });
-
-  it('a second row written later takes the account time its sibling already holds', async () => {
-    const org = await hostOrg();
-    await pass(at(1));
-    const host = await rowOf(org.id, 'merged', true);
-    // As if the shared row had been written after the first pass.
-    await adminDb.fleetShard.update({ where: { id: host.id }, data: { quotaRequestedAt: null } });
-
-    await pass(at(5));
-
-    expect(await rowOf(org.id, 'merged', true)).toMatchObject({ quotaRequestedAt: at(1) });
-  });
 });
 
 describe('the shared floor', () => {
@@ -365,14 +356,13 @@ describe('the shared floor', () => {
     const org = await hostOrg();
     await pass(at(1));
     expect(await hostAccountStateService.sharedFloorKinds(org.id)).toEqual(
-      expect.arrayContaining(['ci_runner', 'hosted_agent', 'code_graph_index', 'agent_instance']),
+      expect.arrayContaining(['ci_runner', 'hosted_agent', 'agent_instance']),
     );
 
     organization.settleQuotaRequest(await awsRequestOf(org.id, 'merged'), 'APPROVED', 40);
     await track(at(2));
     await pass(at(3));
 
-    expect(await hostAccountStateService.isOnSharedFloor(org.id, 'code_graph_index')).toBe(false);
     expect(await hostAccountStateService.isOnSharedFloor(org.id, 'agent_instance')).toBe(false);
     expect(await hostAccountStateService.isOnSharedFloor(org.id, 'ci_runner')).toBe(true);
     expect(await hostAccountStateService.isOnSharedFloor(org.id, 'hosted_agent')).toBe(true);
@@ -391,7 +381,7 @@ describe('a failing account', () => {
       },
     });
 
-    expect(summary).toMatchObject({ ran: true, failures: 1, settled: 3 });
+    expect(summary).toMatchObject({ ran: true, failures: 1, settled: 2 });
     expect(await rowOf(org.id, 'ci_runner')).toMatchObject({
       state: 'provisioning',
       quotaRequestedAt: at(1),
@@ -405,6 +395,34 @@ describe('a failing account', () => {
     });
     for (const secret of Object.values(SECRETS)) expect(written).not.toContain(secret);
     expect(written).not.toContain('@motir.co');
+  });
+
+  it('an account whose settle throws is counted and logged by name, and the rest still settle', async () => {
+    const org = await hostOrg();
+    const ci = await rowOf(org.id, 'ci_runner');
+    const settle = hostAccountStateService.settleAccount.bind(hostAccountStateService);
+    vi.spyOn(hostAccountStateService, 'settleAccount').mockImplementation(async (id, deps) => {
+      // A non-Error throw: logged as UnknownError, never by its text.
+      if (id === ci.awsAccountId) throw `settle broke ${SECRETS.sessionSecret}`;
+      return settle(id, deps);
+    });
+
+    const summary = await pass(at(1));
+
+    expect(summary).toMatchObject({ ran: true, failures: 1, settled: 2 });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("an own account's state pass failed"),
+      { awsAccountId: ci.awsAccountId, error: 'UnknownError' },
+    );
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      SECRETS.sessionSecret,
+    );
+  });
+
+  it('settling an AWS account no own row names is refused as not found', async () => {
+    await expect(hostAccountStateService.settleAccount('999999999999')).rejects.toBeInstanceOf(
+      FleetShardNotFoundError,
+    );
   });
 
   it('a second run while one holds the pass does nothing', async () => {
