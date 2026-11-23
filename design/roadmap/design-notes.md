@@ -18,27 +18,32 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 
 ## Asset set (the files)
 
-| File                                      | What it is                                                                                                                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design-notes.md`                         | this spec (primitives, copy, token roles, per-behaviour provenance)                                                                                     |
-| `roadmap.mock.html`                       | the canvas source of truth — a multi-panel mock built from the real tokens                                                                              |
-| `roadmap.png`                             | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
-| `edges.mock.html`                         | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                                                          |
-| `edges.png`                               | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
-| `grid-init.mock.html`                     | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                                                          |
-| `grid-init.png`                           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
-| `detail-surfaces.mock.html`               | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries                                           |
-| `detail-surfaces.png`                     | the detail-surfaces export (same render settings)                                                                                                       |
-| `auto-drill.mock.html`                    | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases                                                   |
-| `auto-drill.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
-| `planning-origin-drill.mock.html`         | the **planning card DRILLS into the pre-plan stations** (MOTIR-2204): the phase card, the drilled station level, and the card's honest states           |
-| `planning-origin-drill.png` / `.dark.png` | its full-page exports (light + dark — the station tiles' tier tints are checked in both)                                                                |
-| `root-non-epic-rows.mock.html`            | the ROOT level's **non-epic rows** (MOTIR-3493): the grouped node, the level it drills into, and a level cap that is visible                            |
-| `root-non-epic-rows.png`                  | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
-| `roadmap-arrival.mock.html`               | the **roadmap you come back to** (MOTIR-3834): the level-addressable URL, the full-fold frame, the collapsible Dependencies panel, and the ARRIVAL view |
-| `roadmap-arrival.png`                     | its full-page export (`scripts/render-design-mock.mjs`, light, `deviceScaleFactor 2`, 1200px)                                                           |
-| `roadmap--folder-node.mock.html`          | a **FOLDER on the canvas** (MOTIR-5713): the folder card, the folder level, and the navigable folder crumb — a delta                                    |
-| `edges--covered-by-parent.mock.html`      | **covered cross-parent edges** (MOTIR-6353): when _blocked elsewhere_ shows, the covered and exempt cases, the legend copy — a delta                    |
+| File                                      | What it is                                                                                                                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design-notes.md`                         | this spec (primitives, copy, token roles, per-behaviour provenance)                                                                                                         |
+| `roadmap.mock.html`                       | the canvas source of truth — a multi-panel mock built from the real tokens                                                                                                  |
+| `roadmap.png`                             | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                                            |
+| `edges.mock.html`                         | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                                                                              |
+| `edges.png`                               | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                                            |
+| `grid-init.mock.html`                     | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                                                                              |
+| `grid-init.png`                           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                                            |
+| `detail-surfaces.mock.html`               | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries                                                               |
+| `detail-surfaces.png`                     | the detail-surfaces export (same render settings)                                                                                                                           |
+| `auto-drill.mock.html`                    | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases                                                                       |
+| `auto-drill.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                                            |
+| `planning-origin-drill.mock.html`         | the **planning card DRILLS into the pre-plan stations** (MOTIR-2204): the phase card, the drilled station level, and the card's honest states                               |
+| `planning-origin-drill.png` / `.dark.png` | its full-page exports (light + dark — the station tiles' tier tints are checked in both)                                                                                    |
+| `root-non-epic-rows.mock.html`            | the ROOT level's **non-epic rows** (MOTIR-3493): the grouped node, the level it drills into, and a level cap that is visible                                                |
+| `root-non-epic-rows.png`                  | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                                            |
+| `roadmap-arrival.mock.html`               | the **roadmap you come back to** (MOTIR-3834): the level-addressable URL, the full-fold frame, the collapsible Dependencies panel, and the ARRIVAL view                     |
+| `roadmap-arrival.png`                     | its full-page export (`scripts/render-design-mock.mjs`, light, `deviceScaleFactor 2`, 1200px)                                                                               |
+| `roadmap--folder-node.mock.html`          | a **FOLDER on the canvas** (MOTIR-5713): the folder card, the folder level, and the navigable folder crumb — a delta                                                        |
+| `edges--covered-by-parent.mock.html`      | **covered cross-parent edges** (MOTIR-6353): when _blocked elsewhere_ shows, the covered and exempt cases, the legend copy — a delta                                        |
+| `roadmap--canvas-card-tag-row.mock.html`  | the **canvas card, re-laid** (MOTIR-10508): the tag row, the title-only body, the _To plan_ story and the hover next-action button — a delta                                |
+| `roadmap--plan-check-alert.mock.html`     | the canvas card's **Plan button checks first** (MOTIR-10543): the checking state, the _can't-plan_ alert and the check-failed toast — a delta                               |
+| `roadmap--here-tab.mock.html`             | **"You are here" moves onto a tab** (MOTIR-10629): the here tab on the card's top-left edge, its states, styles and zoom — a delta                                          |
+| `roadmap--epic-to-plan.mock.html`         | a **childless To do EPIC is To plan** (MOTIR-11106): the epic card in the To plan state, its Plan button, and the epics that keep today's look — a delta                    |
+| `roadmap--blocked-tab.mock.html`          | **"blocked elsewhere" moves onto a tab** (MOTIR-12157): the edge-midpoint chip removed, the blocked tab on both canvases, its states, styles, palettes and legend — a delta |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -2344,3 +2349,802 @@ Planning chips warm slightly; and a drilled level, where only the Bug tile's pea
 You-are-here pill, the Ready wash, the Done card, the green meters and every edge are unchanged. The
 citrine Design hue does not reach the roadmap, because a node draws a kind icon rather than a
 work-type chip.
+
+## The canvas card, re-laid: tag row, title-only body, To plan, next action (MOTIR-10508)
+
+**Amends** the work-item node drawn in `design/roadmap/roadmap.mock.html`, the Ready and Done
+treatments in `design/roadmap/done-ready.mock.html`, and the Manual chip's placement in
+`design/roadmap/node-worktype.mock.html`. Delta mock:
+`design/roadmap/roadmap--canvas-card-tag-row.mock.html`. Those older mocks stay as records; panel 1
+of the delta renders what `main` ships today, so the change reads against the real card.
+
+**Design-system verdict:** no new token and no new primitive. Every colour is an existing `--el-*`
+token, every shape an existing element-semantic token. The card stays `NODE_W` × `NODE_H`
+(280 × 124); the shell (`WorkItemCardShell`) changes its inner layout and gains one slot.
+
+### What the panels show
+
+1. As shipped today, for comparison.
+2. Anatomy: one card with every slot filled, numbered.
+3. Every state at rest, light: normal (leaf with assignee, story with meter), Ready, In Review, CI
+   failed, changes requested, To plan, Done with meter, Manual, You are here, blocked elsewhere,
+   not in sprint.
+4. The same, dark.
+5. The next-action button hovered, with its tooltip, light: run, review, fix (CI failed), fix
+   (changes requested), Plan, and the three cards that get no button.
+6. The same, dark.
+7. After a copy: the Check glyph and the shipped success toast, light and dark.
+8. Every state hovered, light, so the button is seen in place on each card.
+9. The same, dark.
+10. When the tag row overflows `NODE_W`: what gives way.
+11. To plan against the other states: which wins, light and dark.
+12. The proposal card (`PlanItemNode`) through the new shell: add, modify, remove, light and dark.
+13. Chinese (zh): the hovered states, the tooltips, the Plan face and the toast.
+
+### Anatomy
+
+- **Tag row** (`flex min-w-0 shrink-0 items-center gap-1.5`), left to right: the kind tile (24px,
+  `--radius-control`, the kind's `KIND_TINT`, `IssueTypeIcon` at 14px in its `--el-type-*` hue); the
+  identifier (mono `text-xs`, `--el-text-secondary`, never shrinks); the **status slot** (the status
+  pill, or the Here / To plan / Ready / Done pill that replaces it); the Manual chip; then, pushed
+  right (`ml-auto`), Not public, not in sprint, the blocked flag, or the drill chevron. The right
+  cluster is rendered only when it holds something.
+- **One chip size on the tag row:** every chip is 11px text, a 12px glyph,
+  `px-(--spacing-chip-x-6) py-(--spacing-chip-y)`, `--radius-badge`. The shipped blocked flag
+  (`text-xs`, `--spacing-chip-x`) comes down to it, so the row reads as one line of tags.
+- **Body:** the title alone, `text-sm font-semibold leading-snug`, full width under the tag row
+  (`mt-2 min-h-0 flex-1 overflow-hidden`). It clamps at three lines with no footer and two with one,
+  so it always ends inside the 124px box (measured: the title's last line ends at 103px at most, the
+  footer at 111px). A proposal with a diff line keeps its shipped single-line title.
+- **Footer:** unchanged — the progress meter and the verified count on a container, the assignee on
+  a leaf.
+
+### When the tag row overflows — what gives way
+
+The tag row has 254px. The identifier, the kind tile and the right-hand tags never shrink. In order:
+
+1. **A right-hand text tag is present** (Not public, not in sprint, or blocked): the status slot and
+   the Manual chip both drop to their glyph. The full name rides the chip's `title` and
+   `aria-label` (`role="img"`), so it is still read out and shown on hover. This is a fixed rule,
+   not a measurement: with a five-digit key, any status label plus any right-hand tag does not fit.
+2. **The blocked flag shows a short label**, `blocked` (`roadmap.canvas.node.blockedShort`, new),
+   with its glyph; its full sentence (`blockedElsewhere`, or `blockerNotInSprint`) rides `title` and
+   `aria-label`. The danger frame already says the card is blocked; the flag names it, the tooltip
+   explains it.
+3. **No right-hand text tag:** everything shows in full. A long custom status is the last thing to
+   give way: its label truncates with an ellipsis (`min-w-0`, `truncate`), its glyph stays, its name
+   rides `title`.
+
+Every case is measured in the mock: no tag row overflows its card.
+
+### The To plan story
+
+- **When:** a story with no children whose status category is `todo`. A childless story already In
+  Progress is not To plan (someone holds it); a childless Done story is Done.
+- **Colour:** the card takes `--el-tint-yellow` as its wash, with `--shadow-card`. It is the tint the
+  `planning` status chip already wears (`lib/workflows/canvasStatusMeta.ts`), so "needs planning"
+  reads the same on the chip and on the card. It is distinct from Ready (`--el-tint-mint`), Done
+  (`--el-tint-sky`), You are here (the `--el-accent` border), blocked (the `--el-danger` border) and
+  not in sprint (the dotted `--el-border-strong` edge on `--el-muted`).
+- **The To plan pill** takes the status slot: the Ready pill's white chip (`--el-page-bg`,
+  `--el-border`, `--el-text-strong`) with a `ListPlus` glyph in `--el-text-secondary`, and the label
+  `To plan` / `待规划` (`roadmap.canvas.node.toPlan`, new).
+- **Precedence:** blocked elsewhere > You are here > Done > **To plan** > Ready > not in sprint >
+  normal. Blocked and Here win the frame, and the To plan pill keeps the status slot under blocked
+  (as its glyph, per the give-way rule); Here takes the slot. Not in sprint keeps its dotted edge
+  over the yellow wash and drops the shadow, as it does over the Ready wash today. The Plan button
+  appears in every one of these, because the card still needs planning.
+
+### The next-action button
+
+| Card                                                | Button                     | Does                                                    |
+| --------------------------------------------------- | -------------------------- | ------------------------------------------------------- |
+| To plan                                             | Sparkles + `Plan` (`规划`) | opens the planning overlay with this card as the target |
+| fix reason `ci_failed` or `changes_requested`       | Copy + `motir fix`         | copies `motir fix <KEY>`                                |
+| In Review                                           | Copy + `motir review`      | copies `motir review <KEY>`                             |
+| Ready, and not manual                               | Copy + `motir run`         | copies `motir run <KEY>`                                |
+| anything else, a manual Ready card, a proposal card | none                       | —                                                       |
+
+The rows are checked top to bottom: a fix reason wins over In Review, so a card whose review asked
+for changes copies `motir fix`. The fix reason is not on the roadmap node today; MOTIR-10509 adds it.
+
+- **Face:** the shipped `Button` `secondary` `sm` (`h-(--height-btn-sm)`, `--radius-btn`,
+  `--el-button-border`), on `--el-page-bg` with `--shadow-elevated` so it lifts off any wash. A copy
+  button shows the Copy glyph and the command's verb in mono (`motir run`); the key is in the tooltip
+  and the copied text, not on the face. The Plan button uses `WorkItemPlanEntrance`'s face: the
+  Sparkles glyph, `Plan`, `border-(--el-accent)` and `text-(--el-accent-on-surface)`.
+- **Placement:** hung on the card's bottom edge, right-aligned (`absolute right-3 bottom-0
+translate-y-1/2`), drawn **outside** the overflow-hidden frame, so it never clips and never moves
+  the card's contents. While shown it may cover the right end of the footer; that is acceptable for a
+  transient affordance.
+- **When it shows:** on the card's hover and on `:focus-within` (keyboard focus on the node or the
+  button). On a device with no hover (`@media (hover: none)`), it is always shown.
+- **Tooltip:** the shipped `Tooltip`. `Copy <cmd>motir run MOTIR-10509</cmd>`; for a fix, the reason
+  leads: `CI failed — copy …` / `Changes requested — copy …`; and for Plan,
+  `Open planning with {key} as the target`.
+- **After a copy:** the glyph turns to Check for two seconds and the shipped success toast confirms
+  it (`Copied` / `Paste motir run MOTIR-10509 into your terminal.`) — `CommandChip`'s behaviour,
+  reused.
+
+### Implementation notes for MOTIR-10509
+
+- The shell gains an `action` slot rendered as a sibling of the frame inside a `relative` wrapper
+  of the same size, so it sits outside `overflow-hidden`. The id line's `identifierTrailing` content
+  (the Manual chip) moves into the tag row after the status slot.
+- The canvas node wrapper (`[data-node-id]`) owns pointerdown (a node gesture), click (select) and
+  Enter/Space (drill). The button stops propagation on `pointerdown`, `click` and its key events, so
+  pressing it neither drags, selects nor drills.
+- The node carries `data-node-state="to-plan"` in the To plan state, beside the existing values.
+- The button's accessible name is `Copy motir run MOTIR-10509` (`action.copyAria`) or the Plan
+  entrance's `Plan {item}`.
+
+### Copy
+
+| key (`roadmap.canvas.node.*`)            | en                                              | zh                                       |
+| ---------------------------------------- | ----------------------------------------------- | ---------------------------------------- |
+| `toPlan`                                 | To plan                                         | 待规划                                   |
+| `blockedShort`                           | blocked                                         | 受阻                                     |
+| `action.copyAria`                        | Copy {command}                                  | 复制 {command}                           |
+| `action.copyTooltip`                     | Copy `<cmd>{command}</cmd>`                     | 复制 `<cmd>{command}</cmd>`              |
+| `action.copyTooltipCiFailed`             | CI failed — copy `<cmd>{command}</cmd>`         | CI 未通过 — 复制 `<cmd>{command}</cmd>`  |
+| `action.copyTooltipChangesRequested`     | Changes requested — copy `<cmd>{command}</cmd>` | 已要求修改 — 复制 `<cmd>{command}</cmd>` |
+| `action.planTooltip`                     | Open planning with {key} as the target          | 打开规划，以 {key} 为目标                |
+| `action.toastTitle` / `action.toastBody` | Copied / Paste {command} into your terminal.    | 已复制 / 请将 {command} 粘贴到终端。     |
+
+The toast pair is the shipped `ready.toast` copy; the build may reuse those keys rather than add new
+ones. The Plan label and its aria are `WorkItemPlanEntrance`'s shipped strings. The other nine
+locales follow the repository's locale-parity rule when MOTIR-10509 lands the keys.
+
+### Tokens and accessibility
+
+- Text on the washes is `--el-text` (title) and `--el-text-secondary` (identifier, To plan glyph),
+  both AA on every tint in both themes. No `--el-text-muted` text sits on a tinted or surface fill;
+  the drill chevron keeps its shipped `--el-text-muted` as a decorative, `aria-hidden` glyph.
+- Each state is a glyph and a label plus a colour, never colour alone (finding #35). A chip reduced
+  to its glyph keeps its name in `aria-label` and `title`.
+- The button is a real `<button>` with a visible focus ring (`--focus-ring-color`), reachable by Tab
+  from the node.
+
+### Out of scope
+
+The folder node and the grouped-level node draw their own cards and are left as they are; MOTIR-10509
+should not move them onto the new shell without a design of their own.
+
+### How the asset was produced
+
+Every card in the mock is the shipped `WorkItemNode` / `PlanItemNode` markup rendered headless in a
+throwaway Vitest spec that swapped `WorkItemCardShell` for the proposed shell, through the repo's
+`renderMock`, with the stylesheet Tailwind's real output over `packages/design-system/theme.css`. The
+spec was deleted before the commit; the tooltip and the toast are static drawings of the shipped
+`Tooltip` and success toast.
+
+## The Plan button checks first, and says why a card can't be planned (MOTIR-10543)
+
+**Amends** § _The canvas card, re-laid: tag row, title-only body, To plan, next action
+(MOTIR-10508)_ above, and its delta mock `design/roadmap/roadmap--canvas-card-tag-row.mock.html`.
+Delta mock: `design/roadmap/roadmap--plan-check-alert.mock.html`. It adds what happens on a click of
+the To plan card's **Plan** button. It does not redraw the card, its tag row or the button, and it
+does not change when the button appears: that stays MOTIR-10508's rule.
+
+**Design-system verdict.** motir-core is on Motir Design: its `package.json` depends on
+`@motir/design-system` and `app/globals.css` imports `@motir/design-system/theme.css`. The mock is
+built with the package's `renderMock` at the app's axes (`warm-editorial` · `motir` · `motir`,
+`data-theme` light, with a nested dark scope for panel 8). **No new token and no new part.** Every
+colour is an existing `--el-*` token and every shape an existing element-semantic token. One
+**proposed addition to `@motir/design-system`** is listed under _Accessibility_ (a describedby
+pass-through on `Modal`).
+
+### What the panels show
+
+1. **Idle.** The Plan button as MOTIR-10508 ships it, on a hovered To plan card (MOTIR-10552) beside
+   the story it waits on (MOTIR-10550). Nothing on the card says it can't be planned: the check runs
+   on the click, not on render or hover.
+2. **Checking.** The state between the click and the answer.
+3. **Can plan.** The click carries on to the planning overlay, as today. Nothing new is drawn.
+4. **Can't plan, one blocker with no subtasks.** The can't-plan alert over the canvas.
+5. **Can't plan, several blockers with no subtasks.** One reason line per blocker, in key order.
+6. **Check failed.** The shipped error toast, with Retry.
+7. **Narrow width.** The alert at 375px.
+8. **Dark.** The alert with one reason line.
+
+### How the panels were drawn (reuse)
+
+- The cards are the **shipped `WorkItemNode`**, rendered headless from its own source in the To plan
+  state (a childless `todo` story).
+- The Plan button is **MOTIR-10508's shipped `PlanNextAction`** face: the shipped `Button`
+  `secondary` `sm`, the Sparkles glyph, `Plan`, `border-(--el-accent)`,
+  `text-(--el-accent-on-surface)`, `bg-(--el-page-bg)`, `shadow-(--shadow-elevated)`, hung on the
+  card's top edge. The mock draws it in its hovered state (the `opacity-0` that hover lifts is left
+  off), and draws the checking state with the shipped `Button`'s own `loading` prop.
+- The alert is the **shipped `components/ui/Modal.tsx`** (the design-system `Modal`): its content
+  panel's classes (`rounded-(--radius-modal)`, `bg-(--el-page-bg)`, `border-(--el-border)`,
+  `shadow-(--shadow-modal)`, `p-(--spacing-card-padding)`), its title and description markup, the
+  real `Modal.Body` and `Modal.Footer`, and the `--el-overlay-scrim` backdrop. A Radix portal renders
+  nothing headless, so the panel is drawn in place; the build uses `<Modal>` itself.
+- The check-failed message is the **shipped toast** (`useToast`, `variant: 'error'`, with an
+  `action`), drawn in place for the same reason.
+
+### Elements
+
+**Checking state** (of the Plan button)
+
+- On click, the button takes the shipped `Button` `loading` state: the `Spinner` replaces the
+  Sparkles glyph, the label stays `Plan`, and the button is `disabled` with `aria-busy="true"`. A
+  second click does nothing.
+- The button stays shown for as long as it is checking, even when the pointer leaves the card or
+  focus moves, so the state does not vanish mid-check.
+- The canvas stays interactive: pan, zoom, select and drill all still work. Only this button waits.
+- When the answer comes back the button returns to idle, then one of three things happens: the
+  overlay opens (can plan), the alert opens (can't plan) or the toast shows (check failed).
+
+**Can't-plan alert**
+
+- The shipped `Modal`, `size="md"` (the 28rem cap; 90vw below it), `role="alertdialog"`, with
+  `hideClose`: the footer's Close is the one dismiss, so there are not two controls that do the same
+  thing.
+- **Title** names the card the reader clicked. **Lead line** (the Modal `description`) says how many
+  stories it waits on. Then the **reason list**, then the footer.
+- **Reason lines are a list** (`<ul>`, one `<li>` per reason, each `data-reason="<rule>"`). A later
+  reason (another rule) is one more line in the same list, with no layout change. When there are
+  several kinds of reason, the lead line becomes the generic one in _Copy_.
+- **No plan-anyway action.** The alert explains why planning would not get anywhere. It is not a
+  confirmation. Until the blocker has subtasks, a planning run on this card would stop at its
+  blocker, so offering to plan anyway would only start a run that stalls. The way forward is on
+  each reason line instead.
+- It is shown once per click: closing it and clicking Plan again runs the check again.
+
+**Reason line: blocker has no subtasks**
+
+- A bordered row (`border-(--el-border)`, `--radius-control`,
+  `px-(--spacing-control-x-12) py-(--spacing-control-y-8)`), on the modal's white page.
+- Left: the story kind glyph (`IssueTypeIcon`, `--el-type-story`, decorative, `aria-hidden`).
+- Middle: **one link** to the blocking story's page (`/items/{key}`), holding the key (mono
+  `text-xs font-semibold`) and the title (`text-sm font-medium`), both in `--el-link`, underlined on
+  hover, with the focus ring on keyboard focus. Under it, the reason in `text-xs`
+  `--el-text-secondary`.
+- Right: the **alert action**, when there is one (below).
+- **Order:** by the blocker's key number, ascending. It does not depend on how the check returned
+  them, so the same card shows the same list every time.
+
+**Alert action** (drawn, per line)
+
+- **Decision:** the second action is drawn **per reason line**, not in the footer: a `Button`
+  `ghost` `sm` with the Sparkles glyph and `Plan`, in `--el-accent-on-surface`, at the end of the
+  line. It shows only when that blocker is itself **To plan** (MOTIR-10508's rule: a childless
+  story in a `todo` status) and the reader may plan. Pressing it closes the alert and opens the
+  planning overlay with **the blocker** as the target, through the same click path as the card's
+  Plan button, so the blocker is checked too.
+- A blocker that is not To plan (panel 5's MOTIR-10548, already In Progress) gets no action. Its
+  line still names it and links to it, and still says what it needs.
+- Why per line: with several blockers, one footer button cannot say which blocker it plans, and a
+  per-line action keeps the single and several cases one layout.
+
+**Check failed**
+
+- When the check cannot be answered (network error, server error, timeout), the overlay does not
+  open and no alert opens. The button returns to idle, and the shipped error toast shows with a
+  **Retry** action, which runs the check again (and goes on as a normal click would). Dismissing the
+  toast changes nothing.
+- A toast, not an inline error, because the card is a fixed 280 × 124 box with no room for an error
+  line, and the toast is the app's shipped surface for a failed action.
+
+### Copy (en)
+
+| Element                              | Copy                                                              |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| Alert title                          | `{key} can't be planned yet`                                      |
+| Lead line, one blocker               | `It waits on a story that has no subtasks yet.`                   |
+| Lead line, several blockers          | `It waits on {count} stories that have no subtasks yet.`          |
+| Lead line, mixed reasons (later)     | `Fix these first, then plan it again.`                            |
+| Reason line (under the blocker link) | `Has no subtasks yet. It needs them before {key} can be planned.` |
+| Alert action (per line)              | `Plan` — accessible name `Plan {blockerKey}`                      |
+| Dismiss                              | `Close`                                                           |
+| Check failed, toast title            | `Couldn't check {key}`                                            |
+| Check failed, toast body             | `Planning didn't open. Check your connection and try again.`      |
+| Check failed, toast action           | `Retry`                                                           |
+| Checking (the button)                | `Plan`, unchanged; `aria-busy` says it is working                 |
+
+`{key}` is the card the reader clicked. The blocker's key and title are its own. The copy never uses
+the planner's own words (lay, author, hold, leaf). The `Plan` label and its `Plan {item}` aria are
+the shipped `aiPlanning.entrance.plan` / `planAria` strings, and `Close` is `common.close`. The new
+keys sit beside MOTIR-10508's under `roadmap.canvas.node.action.*`; the other locales follow the
+repository's locale-parity rule when MOTIR-10544 lands them.
+
+### Accessibility contract
+
+- The alert has `role="alertdialog"`, so assistive tech announces it as an interruption.
+- **Labelled** by its title (`aria-labelledby`). **Described** by the lead line **and** the reason
+  list (`aria-describedby="<lead id> <list id>"`), so the reasons are read with the title, not only
+  when the reader tabs into them. The shipped `Modal` wires `aria-describedby` only to its string
+  `description`. **Proposed addition to `@motir/design-system`:** a `describedBy` prop on `Modal`
+  that adds ids to the content's `aria-describedby`, so the build stays on the shipped `Modal`
+  instead of forking it.
+- **Focus moves into the alert when it opens, onto Close** (the safe action; Enter then just
+  closes). Tab order: each blocker link, then that line's Plan when it has one, line by line, then
+  Close. Focus is trapped while it is open (Radix).
+- **Focus returns to the card's Plan button when it closes**, whether by Close, Escape or a click on
+  the scrim. Radix returns it to the trigger; because the button sits on a node that only shows it
+  on hover or `:focus-within`, keeping focus on it keeps it visible.
+- **Escape closes it**, and so does a click on the scrim. Neither does anything else.
+- Pressing a line's **Plan** closes the alert and moves focus into the planning overlay, as the
+  card's Plan button does today.
+- **Checking:** the button is `aria-busy="true"` and disabled while checking; when the check fails,
+  the toast is announced through the shipped toast's live region.
+
+### Tokens
+
+- Title `--el-text`; lead line `--el-text-subtitle` (the Modal's own); links `--el-link`; reason line
+  and the decorative glyph colour as above; per-line Plan `--el-accent-on-surface`; Close the shipped
+  `secondary` button. All of them sit on `--el-page-bg` (the modal's page), where each clears AA in
+  both themes; no `--el-text-muted` or `--el-text-faint` text sits on a surface fill. The toast's
+  body keeps the shipped toast's `--el-text-muted`, on its own `--el-page-bg`.
+- Colour is never the only signal: the reason is written out, and the link is underlined on hover
+  and carries the focus ring.
+
+### For the code card (MOTIR-10544)
+
+Names to refer to: **Checking state**, **Can't-plan alert**, **Reason line: blocker has no
+subtasks**, **Alert action**, **Check failed**. How the check is computed and where it runs are the
+code card's to decide; this design only needs the answer to carry, per reason, the blocker's key,
+title and whether it is To plan.
+
+### How the asset was produced
+
+The mock was rendered with the repository's `renderMock`, from a throwaway Vitest spec that
+rendered the shipped `WorkItemNode`, `Button`, `IssueTypeIcon`, `Modal.Body` and `Modal.Footer` with
+the real `en` catalogue. The spec was deleted before the commit. The modal panel, the hovered Plan
+button and the toast are drawn in place from the shipped components' markup, because a portal and a
+hover state do not render headless.
+
+## "You are here" moves off the tag row onto a tab (MOTIR-10629)
+
+**Amends** design **MOTIR-10508**: its notes section _The canvas card, re-laid: tag row, title-only
+body, To plan, next action (MOTIR-10508)_ and its delta mock `roadmap--canvas-card-tag-row.mock.html`
+(the "You are here" card in its panels 3, 4, 10 and 11), both as published on MOTIR-10508. Delta mock: `design/roadmap/roadmap--here-tab.mock.html`. Panel 1
+of the delta renders what `main` ships today, so the change reads against the real card.
+
+**Design system, checked first.** `package.json` depends on `@motir/design-system` (`workspace:*`,
+version 0.20.0) and `app/globals.css` imports `@motir/design-system/theme.css`, so the project is on
+Motir Design. Its axes come from `app/layout.tsx` (`data-style` / `data-palette` / `data-type` from the
+applied theme); the mock draws at `warm-editorial` · `motir` · `motir`, the defaults the app applies,
+and panels 4 and 5 re-scope every style. The mock is built with `renderMock` from
+`@motir/design-system/mock` (`boardWidth: 'full'`). No new token, no new design-system part. One new
+product-local piece: **`HereTab`**, a slot of `WorkItemCardShell` in
+`components/planning/WorkItemNode.tsx` (canvas-only, so it stays out of the package).
+
+### The problem it fixes
+
+`HerePill` is passed to `WorkItemStateTags` as `slotOverride`, so it takes the status slot: the here
+card never shows its status (In Progress, In Review…), and when a right-hand text tag is present the
+give-way rule cuts the pin and the Manual chip to glyphs. The card the reader most needs to read shows
+the fewest facts (panel 1).
+
+### What the panels show
+
+0. Where it sits: a slice of the roadmap canvas at 1×, two rows at the layout's real spacing, with a
+   selected card above (its View / Open slot in the gap), the here card hovered (tab and next-action
+   button together) and a row-wrap edge entering the here card's top.
+1. Was: the shipped `WorkItemNode`, every state the card asks for.
+2. Proposed, light: here; here + ready; here + blocked elsewhere; here + not in sprint; here + Manual;
+   here + run disposition; here + selected; here + hovered.
+3. The same, dark.
+4. Every `data-style`, light, the here card hovered.
+5. Every `data-style`, dark.
+6. Zoomed out: 100%, 60%, 45%, 30%.
+7. Alternatives weighed and rejected (the corner pin is drawn; the in-card row is measured, not drawn).
+8. The onboarding `StationCard`, unchanged.
+9. Chinese (zh), light and dark.
+10. Portuguese, the longest of the eleven strings, hovered, warm-editorial and neo-brutalism.
+
+### The tab
+
+- **Where:** hung on the card's **top edge, left**, as a sibling of the frame inside the shell's
+  `relative` wrapper (the same seam the next-action button uses, so it is outside `overflow-hidden`
+  and outside the fixed `NODE_W × NODE_H` footprint). It sits in the 72px row gap (`GAP_Y`), so
+  `NODE_H` and the layout are untouched.
+- **Classes:** `absolute bottom-[calc(100%-1px)] left-3 z-10 inline-flex h-5 items-center gap-1
+rounded-t-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) text-[11px] leading-none
+font-semibold whitespace-nowrap text-(--el-accent-text)`.
+  - `bottom-[calc(100%-1px)]`: the tab's bottom overlaps the frame's 1px top border, so on the accent
+    frame the tab and the border are one shape, a folder tab.
+  - `left-3` (12px): the mirror of the next-action button's `right-3`, and clear of the card's corner
+    radius in every style.
+  - `h-5` (20px — heights of 24px and under stay raw), `text-[11px]` and a 12px glyph: the tag row's
+    one chip size (MOTIR-10508).
+  - `rounded-t-(--radius-badge)` and `px-(--spacing-chip-x-6)`: the chip's own shape tokens, so a
+    style swap reshapes it (square under neo-brutalism and swiss-minimal-flat, round under
+    soft-playful). The bottom corners stay square because they join the frame.
+  - **No shadow.** Under neo-brutalism the card's hard offset shadow belongs to the frame; a second
+    offset block on a 20px tab reads as a loose chip, not part of the frame (panels 4, 5).
+- **Content:** `MapPin` (`size-3`, `aria-hidden`) and the shipped `roadmap.canvas.node.here` string.
+  No new copy. It never truncates and never drops to its glyph: the give-way rule no longer touches it.
+- **Colour:** `--el-accent` fill, `--el-accent-text` ink: the accent fill/ink pair the primary button
+  uses, so it is AA in all twenty palette × theme combinations by the palette author's own contract.
+
+### What stays as it is
+
+- The accent frame (`border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)`),
+  `aria-current="step"` on the frame and `data-node-state="here"`.
+- The frame precedence: blocked elsewhere > You are here > Done > To plan > Ready > not in sprint.
+  Under blocked, the danger frame keeps the border and the tab stays accent (panel 2): both facts are
+  true and both show.
+- The give-way rule, exactly as it reads: a right-hand text tag drops the status slot and the Manual
+  chip to glyphs. What changes is what sits in that slot.
+
+### What changes in the status slot
+
+The slot is the status again on the here card: `statusSlotOf(item, { ready, blocked })` with no
+`here` argument, so it answers status / Done / To plan / Ready by the shared rule
+(`lib/workItems/statusSlot.ts`, MOTIR-10534) like every other card. The `slotOverride` prop is no
+longer passed from `WorkItemNode`; `HerePill` is deleted. (`statusSlotOf`'s `here` parameter and the
+`'here'` member of `StatusSlotKind` then have no caller; MOTIR-10630 removes them with the pinned
+tests.) Under here + ready the slot shows the Ready pill; the Ready mint wash stays suppressed because
+here wins the frame.
+
+### Clearances, measured in the mock
+
+| between                                                | worst case                                                                                   | result        |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------- |
+| the tab and the hovered next-action button (same card) | pt `Você está aqui` (tab 12→118px) vs `motir review` under neo-brutalism (button from 133px) | 15px clear    |
+| the same, en                                           | tab 12→107px vs button from 133–135px                                                        | 25–29px clear |
+| the tab and the selected card above's View / Open slot | slot reaches 14px into the 72px gap; tab takes the top 20px                                  | 38px clear    |
+| the tab and a single edge entering the top             | the router lands one top entry at t = 0.5 (140px)                                            | clear         |
+
+`motir review` is the widest next-action face (the verb is mono and untranslated); Plan, `motir run`,
+`motir fix` and `motir guide` are narrower.
+
+**Two or more edges entering the here card's top.** `routeEdges` (`lib/planning/canvasGeometry.ts`)
+fans several entries on one side across t = 0.28–0.72, so the first lands at 78px, under the tab. For
+the here card's TOP side only, MOTIR-10630 starts that band at t = 0.5 (140px) instead, so every
+arrowhead stays clear of the widest tab (118px). Every other side and every other card keep the shipped
+band.
+
+### Selected
+
+The selection ring (`ring-2 ring-offset-2`, on the canvas node wrapper) passes under the tab, which is
+painted above it; the action slot stays centred on the bottom edge. Nothing on the top-left edge
+competes (panel 2).
+
+### Zoomed out
+
+The canvas has no level-of-detail switch: the world transform scales every card whole, from 2× down to
+`MIN_SCALE` 0.3 (`lib/planning/canvasGeometry.ts`). **The tab stays as it is and scales with the card.**
+Below about 60% its words stop being legible, as the status pill's do; what carries "here" then is the
+solid accent block on the card's top-left edge plus the accent frame, the only filled block in that
+position on any card, which still reads at 30% (panel 6). Collapsing to the pin glyph would need a
+zoom-dependent render the canvas has for no other element, and would save nothing at that size: the
+block is the signal, not the glyph inside it. Locate snaps to the here card at a readable zoom.
+
+### Alternatives weighed
+
+- **An extra top row inside the card — rejected.** The title's last line ends at 103px in the 124px
+  box (MOTIR-10508), so a 20px row inside the frame costs a title line (three lines become two), and
+  the layout spaces rows by `NODE_H`, so growing one card is not available.
+- **A pin badge on the top-left corner only — rejected** (drawn in panel 7). Legible zoomed out and
+  costs no width, but it is a glyph with no words, and "you are here" is the orientation cue for a
+  reader who has just arrived; it also sits on the card's corner, which every style draws differently.
+- **The tab — chosen.** It keeps the words, costs nothing inside the card, and frees the status slot.
+
+### The onboarding station card
+
+`StationCard` (`components/onboarding/StationNode.tsx`) **stays as it is.** Its You are here is a
+state pill in its own bottom-right footer row; it displaces nothing, because a station has no status
+slot and no fixed height. It already speaks the same language (map-pin, the words, the accent border
+on the card), so the two read as one cue (panel 8).
+
+### Accessibility
+
+- The tab is rendered **before** the frame in the DOM and is not `aria-hidden`, so its words are read
+  first, as the pill's were; `aria-current="step"` on the frame stays the semantic.
+- The state is never colour alone: the frame colour, the tab's glyph and its words.
+
+### Implementation notes for MOTIR-10630
+
+- `WorkItemCardShell` gains a `tab?: ReactNode` slot rendered as the first child of the
+  `group/node relative` wrapper. `WorkItemNode` passes `tab={here ? <HereTab /> : null}` and drops
+  `slotOverride`.
+- `PlanItemNode` passes no tab (a proposal is never "here"), so it renders exactly as before.
+- `routeEdges` takes the here card's id (or a per-rect flag) to start its top-side band at t = 0.5.
+- The tests that pin the old pill (`HerePill`, the here slot in `statusSlotOf`, the slot-override
+  path) move to the tab.
+
+### Out of scope
+
+The hovered next-action button already overlaps the tag row's chips by 1–3px in every style (more
+visibly under neo-brutalism's offset shadow); it predates this card and is filed as **MOTIR-10631**.
+
+### How the asset was produced
+
+Every card is the shipped `WorkItemNode` rendered headless through `renderMock`: panel 1 from `main`
+as it is, the other panels from a throwaway copy patched only as § _Implementation notes_ says. The
+generator was bundled with esbuild, run once and deleted before the commit; the selection slot and the
+canvas slice's edges are static drawings of `ProjectRoadmapCanvas`'s and `PlanningCanvas`'s own markup
+at the layout's real spacing.
+
+## A childless To do epic is To plan (MOTIR-11106 / Story MOTIR-10861)
+
+**Amends** § _The canvas card, re-laid: tag row, title-only body, To plan, next action (MOTIR-10508)_
+— its sub-section _The To plan story_ — and the mock it cites,
+`design/roadmap/roadmap--canvas-card-tag-row.mock.html`. Delta mock:
+`design/roadmap/roadmap--epic-to-plan.mock.html`. The older mock stays as a record; panel 1 of
+the delta renders what `main` ships today, so the change reads against the real card.
+
+**Design system (step 1 of the design card):** `package.json` depends on `@motir/design-system`
+(a workspace package) and `app/globals.css` imports `@motir/design-system/theme.css`, so the project
+is ON Motir Design. The root layout's axes are read from the appearance cookie; the mock is drawn at
+the same axes as the MOTIR-10508 delta (`warm-editorial` · `motir` · `motir`) so the two compare
+like for like. **No new token, primitive, copy key or component** — every element is MOTIR-10508's,
+reused unchanged.
+
+### What changes
+
+One word in the rule: **To plan** is a childless item in a `todo`-category status whose kind is a
+**story or an epic** (was: a story). Everything that hangs off the rule follows on every surface:
+
+- **Roadmap canvas card:** the To plan pill in the status slot (`ListPlus` glyph,
+  `roadmap.canvas.node.toPlan`), the `--el-tint-yellow` wash with `--shadow-card`, and
+  `data-node-state="to-plan"`. It replaces the Ready pill and mint wash a childless, unblocked To Do
+  epic wears today (panel 1).
+- **Hover next-action button:** the To plan row of the next-action table already comes first and
+  is kind-blind, so the epic gets the **Plan** button (Sparkles + `Plan`, `border-(--el-accent)`,
+  `text-(--el-accent-on-surface)`, hung on the card's top edge as shipped). It runs the
+  plannability check and opens the planning overlay with the epic as the target, exactly as for a
+  story. The ready-epic row (MOTIR-10741, no button) is never reached for a To plan epic.
+- **/boards card, quick view header, item page header:** the same To plan pill in the shared status
+  slot, no Plan button on the card (as for a story). The quick view's shipped Plan entrance already
+  shows for a childless epic and is unchanged.
+
+### The states, panel by panel
+
+1. **Today on main**, for comparison: the childless To Do epic reads Ready (mint), its hover offers
+   nothing; the childless To Do story beside it is To plan with Plan.
+2. / 3. **The To plan epic** on the canvas, light and dark: at rest; hovered with the Plan button
+   (the reader can plan); and a childless epic in **Blocked** — a `todo`-category status — which is
+   To plan too, exactly as a story is. (Blocked here is the workflow STATUS, not the _blocked
+   elsewhere_ flag, which keeps its own precedence from MOTIR-10508.)
+3. / 5. **A reader who cannot plan**, light and dark: a member of a project with no AI configured
+   (`nextActions.plan` false) and a Visitor (no next actions at all). Pill and wash, no button.
+4. / 7. **Epics that keep today's look**, hovered, light and dark: an epic with children (Ready, and
+   the status chip when not ready), an epic whose children are unknown (`hasChildren` not provided —
+   never To plan), a childless epic In Progress, and a Done epic. None of them gets a button.
+5. / 9. **The same To plan epic on /boards, in the quick view and on the item page header**, light
+   and dark.
+
+**Access path:** the epic's card on the roadmap canvas is the door; its hover Plan button opens the
+planning overlay, which is unchanged (the planning surfaces already accept an epic target —
+`lib/planning/planEntranceVisibility.ts` rule 3 and the plannability check have no kind gate).
+
+### Precedence (unchanged)
+
+blocked elsewhere > You are here > Done > **To plan** > Ready > not in sprint > normal, now for an
+epic as for a story. A To plan epic under _blocked elsewhere_ keeps the danger frame and the To plan
+glyph in its slot, by MOTIR-10508's give-way rule.
+
+### Tokens and accessibility
+
+Unchanged from MOTIR-10508: title `--el-text` and identifier `--el-text-secondary` on the yellow
+wash, AA in both themes; the pill keeps its name in `title` (and in `aria-label` when cut to its
+glyph). In the item-page header drawing the identifier is `--el-text-secondary`, which clears AA on
+every surface in both themes.
+
+### How the asset was produced
+
+Every card and surface is the shipped component (`WorkItemNode`, `BoardCard`,
+`IssueQuickViewPanel`, `ItemHeaderStateTags` inside the item page's header markup) rendered through
+the repo's `renderMock` in a throwaway Vitest spec, with the status-slot module swapped for the
+proposed rule (`kind === 'story' || kind === 'epic'`) on panels 2–9 and left as shipped on panel 1.
+The hovered panels reveal the shipped next-action button the way `group-hover` does. The spec was
+deleted before publishing.
+
+## "Blocked elsewhere" moves off the edge onto a tab on the blocked card (MOTIR-12157)
+
+**Amends** design **MOTIR-10629**: its notes section _"You are here" moves off the tag row onto a tab
+(MOTIR-10629)_ above and its delta mock `design/roadmap/roadmap--here-tab.mock.html` (the tab language
+this card reuses, and its "here + blocked elsewhere" state in panel 2). It also amends § _Covered
+cross-parent edges (MOTIR-6015)_ and MOTIR-6353's delta mock `design/roadmap/edges--covered-by-parent.mock.html`
+(the `blocked elsewhere` legend row), and § _The canvas card, re-laid … (MOTIR-10508)_ with its mock
+`design/roadmap/roadmap--canvas-card-tag-row.mock.html` (the tag row's `blocked` tag). Delta mock:
+`design/roadmap/roadmap--blocked-tab.mock.html`. Panels 0 (top), 1 and 4 (top) render what `main`
+ships today, so the change reads against the real canvas.
+
+**Design system, checked first.** `package.json` depends on `@motir/design-system` (`workspace:*`,
+version 0.24.1) and `app/globals.css` imports `@motir/design-system/theme.css`, so the project is on
+Motir Design. The mock draws at the app's default axes, `warm-editorial` · `motir` · `motir`, light,
+with nested `data-appearance-scope` blocks for dark, every `data-style` (panels 5, 6) and every
+palette (panel 9). It is built with `renderMock` from `@motir/design-system/mock`
+(`boardWidth: 'full'`). **No new token, no new copy, no new design-system part.** One new
+product-local piece: **`BlockedTab`**, a second filler of `WorkItemCardShell`'s existing `tab` slot
+(`components/planning/WorkItemNode.tsx`, canvas-only like `HereTab`).
+
+### The problem it fixes
+
+`PlanningCanvas` draws a "blocked elsewhere" chip at the midpoint of every `cross` edge, in the
+`canvas-cross-flags` layer that paints **above** the cards. The midpoint is wherever the route happens
+to bend, so the chip lands on whatever card the edge passes under and reads as **that** card's flag:
+in the reported case it covered the title of MOTIR-12005, a Ready card that is not blocked at all
+(panel 0, top). The blocked card already says so twice (its danger frame and the tag-row `blocked`
+tag), so the chip adds a third, misplaced copy of a fact the card owns.
+
+### What the panels show
+
+0. Where it sits: a slice of the roadmap canvas at 1×, three rows at the layout's real spacing (ghost
+   anchor, a Ready card the cross edge passes under, the blocked card with a second edge entering its
+   top), routed by the shipped `routeEdges`. Was (top), proposed (bottom).
+1. Was: the shipped `WorkItemNode`, every state the card asks for.
+2. Proposed, light: blocked elsewhere (project scope); blocker not in sprint (sprint scope);
+   blocked + You are here; + selected; + Manual; + not in sprint; + run disposition; + hovered;
+   blocked + here + Manual + hovered.
+3. The same, dark.
+4. The plan-review canvas (`PlanItemNode`): add, modify, stale add and decided (accepted), each
+   blocked elsewhere. Was (light), proposed (light), proposed (dark).
+5. Every `data-style`, light, the blocked card hovered (next-action button out).
+6. Every `data-style`, dark.
+7. Zoomed out: 100%, 60%, 45%, 30%, the blocked card beside a here card.
+8. The edge legend's `blocked elsewhere` row: was, proposed.
+9. The tab's fill/ink pair in all 14 palettes × light/dark, each with its measured contrast.
+10. The longest strings: nl, pl, it, sprint scope, hovered, warm-editorial and neo-brutalism.
+11. Alternatives weighed and rejected: two tabs side by side, the full sentence on the tab, the tab on
+    the bottom edge.
+
+### The tab
+
+- **Where:** the same slot as the here tab and the plan canvas's outcome tab: hung on the card's
+  **top edge, left** (`CardEdgeTab`, `left-3`, `bottom-[calc(100%-1px)]`), outside the frame's
+  `overflow-hidden` and outside `NODE_W × NODE_H`, in the 72px row gap. Layout untouched.
+- **Classes:** `CardEdgeTab`'s own, unchanged (`absolute bottom-[calc(100%-1px)] left-3 z-10
+inline-flex h-5 items-center gap-1 rounded-t-(--radius-badge) px-(--spacing-chip-x-6) text-[11px]
+leading-none font-semibold whitespace-nowrap`) with the tone `bg-(--el-danger) text-(--el-danger-text)`.
+  No shadow (the MOTIR-10629 reason: under neo-brutalism the hard shadow belongs to the frame).
+- **Content:** `Flag` (`size-3`, `aria-hidden`) and the shipped short word
+  `roadmap.canvas.node.blockedShort` (en `blocked`), the same word and glyph the tag-row `BlockedTag`
+  shows today. **No new copy.**
+- **Accessible name:** the tab is `role="img"` with `aria-label` and `title` set to the full shipped
+  sentence: `roadmap.canvas.node.blockedElsewhere` (project scope) or `…blockerNotInSprint` (sprint
+  scope), exactly as `BlockedTag` carries it today. The visible word is `aria-hidden`.
+- **Colour: the danger fill/ink pair**, `--el-danger` with `--el-danger-text` — the one pair the
+  repository's rule allows `--el-danger-text` in (it is `Button`'s danger variant). On the blocked
+  card the danger frame's 1px border and the tab become one red shape, a folder tab, the same way
+  the here tab joins the accent frame. Measured in panel 9 (11px bold, so AA needs 4.5:1):
+
+  | palette   | light | dark |
+  | --------- | ----- | ---- |
+  | motir     | 5.46  | 4.59 |
+  | amethyst  | 4.51  | 4.51 |
+  | cobalt    | 4.92  | 4.59 |
+  | evergreen | 4.57  | 6.82 |
+  | spectrum  | 4.80  | 5.46 |
+  | amber     | 5.03  | 5.49 |
+  | sienna    | 5.46  | 5.14 |
+  | garnet    | 4.57  | 6.96 |
+  | citrine   | 5.14  | 6.14 |
+  | candy     | 5.39  | 8.81 |
+  | lagoon    | 5.21  | 8.82 |
+  | olive     | 5.21  | 8.82 |
+  | contrast  | 5.21  | 8.82 |
+  | midnight  | 5.11  | 8.82 |
+
+  All 28 clear AA; the floor is amethyst at 4.51:1. Because the margin there is thin, MOTIR-12158
+  adds the tab's pair to the theme contrast test (the arm that already holds the danger button's pair),
+  so a palette edit that drops it under 4.5 fails a test instead of shipping. The tint pair
+  (`--el-danger-surface` / `--el-danger-on-surface`, ≥ 4.77:1 by contract) was the fallback had any
+  combination failed; it was not needed, and a pale tab would not join the red frame.
+
+### One tab per edge: who keeps it
+
+A card shows **at most one tab on its top-left edge**. When the card is also "You are here" (roadmap)
+or carries a decided outcome (plan review), **that identity tab keeps the edge**, and the blocked
+card renders exactly as it ships today: danger frame plus the tag-row `blocked` tag. Both facts still
+show; neither moves. On every other blocked card the tab replaces the tag-row tag.
+
+Why: the here and outcome tabs say what the card **is** to the reader; blocked is one of its states,
+which the frame already carries in colour. Side by side, the widest here tab (pt, 12→118px) plus 4px
+plus the widest blocked tab (pl, 98px) reaches 220px, past the hovered next-action button (from 133px)
+and the tabbed top entry (140px): panel 11, left. A combined tab would be a third shape to learn.
+
+### The tag row, the give-way and the other tags
+
+- **The tag-row `blocked` tag is replaced by the tab** on every blocked card that wears it. The
+  tag row is freed: blocked no longer triggers the give-way rule, so the status pill and the Manual
+  chip keep their words on a blocked card (panel 2 against panel 1). The give-way still applies to the
+  other right-hand text tags (not public, not in sprint, held).
+- **Not in sprint + blocked (sprint scope).** Today `showNotInSprintTag = notInSprint && !crossBlocked`
+  hides the not-in-sprint tag on a blocked card because the two shared the right-hand slot. With
+  blocked on the tab both facts show: the tab and the `not in sprint` tag. On a here + blocked card
+  the old suppression stays, because there the `blocked` tag is still in the row.
+- **Frame precedence is unchanged:** blocked elsewhere > You are here > Done > To plan > Ready >
+  not in sprint. The danger frame stays on every blocked card.
+- **Manual and run disposition** live in the tag row and are untouched (panel 2). A run disposition
+  on a blocked card now has room: today's shipped card pushes the `blocked` tag past the frame's
+  right edge (panel 1, "run disposition"); with the tab it no longer does.
+
+### The edge, its arrowheads and the legend
+
+- **The midpoint chip is deleted** (the whole `canvas-cross-flags` layer in `PlanningCanvas`). The
+  `cross` edge keeps everything else: `--el-warning` stroke at 2.5, the warning marker, the dashed
+  ghost anchor and its "in {story} ↗" line. No marker of any kind at the midpoint.
+- **Arrowheads entering a tabbed card's top.** `routeEdges` already starts the top-side band at
+  t = 0.5 (140px) for a card flagged `tabbed`; today `ProjectRoadmapCanvas` flags only the here card.
+  **Every card wearing any top-left tab is flagged** — here, blocked and (on the plan-review canvas)
+  decided-outcome cards — so no arrowhead lands under a tab (panel 0, the edge into MOTIR-12004's top).
+  This also closes a gap today's plan-review canvas has with its outcome tab, which sets no flag.
+- **Legend.** The `blocked elsewhere` row keeps its wording and its warning swatch, and gains a small
+  static specimen of the tab (`aria-hidden`, the same classes without the absolute placement) between
+  the swatch and the label, so the red tab on a card and the orange edge read as one fact (panel 8).
+  `legend.blockedElsewhere` and `legend.blockedElsewhereMeaning` are unchanged.
+
+### Both canvases
+
+- **Roadmap (`WorkItemNode`)**: as above.
+- **Plan review (`PlanItemNode`)**: a plan card has no danger frame, so today its only signal is the
+  tag-row `blocked` text tag. It takes the same `BlockedTab` (project-scope sentence; the plan canvas
+  has no sprint scope) unless the card is decided, where the outcome tab keeps the edge and the tag
+  stays in the row (panel 4). A stale card keeps its `Out of date` tag in the row beside the tab.
+
+### Clearances, measured in the mock
+
+| between                                                | worst case                                                                         | result        |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------- |
+| the blocked tab and the hovered next-action button     | pl `zablokowane` (tab 12→110px) vs `motir review` under neo-brutalism (from 133px) | 23px clear    |
+| the same, en                                           | `blocked` tab 12→82px vs button from 133–135px                                     | 51–53px clear |
+| the blocked tab across every `data-style`              | widest 74px (soft-playful) / narrowest 66px; button from 133px                     | ≥ 47px clear  |
+| the blocked tab and a top entry on a tabbed card       | the router lands the first top entry at t = 0.5 (140px)                            | 30px clear    |
+| the tab and the selected card above's View / Open slot | slot reaches 14px into the 72px gap; tab takes the top 20px                        | 38px clear    |
+
+### Selected
+
+The selection ring passes under the tab, which paints above it; the View / Open slot stays on the
+bottom edge. Nothing competes (panel 2). A tab on the bottom edge was rejected for exactly this: the
+action slot covers it when the card is selected (panel 11, right).
+
+### Zoomed out
+
+As with the here tab, there is no level-of-detail switch: the tab scales with the card. Below about
+60% the word stops being legible; what carries the fact is the solid red block on the top-left edge
+joined to the red frame, which still reads at 30% beside the here card's dark block (panel 7).
+
+### Alternatives weighed
+
+- **Two tabs side by side (here + blocked) — rejected:** collides with the hovered next-action and the
+  top arrow entry (above; panel 11, left).
+- **The full sentence on the tab — rejected:** it ("elemento bloccante non nello Sprint") runs past
+  the next-action button (panel 11, middle). The sentence stays the tab's accessible name and tooltip,
+  where `BlockedTag` keeps it today.
+- **The tab on the bottom edge — rejected:** the selected card's action slot covers it (panel 11, right).
+- **Keep the chip but clamp it into the gap — rejected:** a midpoint chip still says nothing about
+  which end is blocked, and the card already owns the fact.
+- **The tint pair on the tab — not needed** (see Colour).
+
+### Accessibility
+
+- The tab is rendered **before** the frame in the DOM, as the here tab is, so its name is read before
+  the card; the frame keeps `data-node-state` and the danger frame stays a non-colour cue together
+  with the glyph and word.
+- The blocked state is never colour alone: the frame, the tab's flag glyph and its word, and the
+  sentence as the accessible name.
+
+### Implementation notes for MOTIR-12158
+
+- `WorkItemNode.tsx`: add `BlockedTab({ sprint })` beside `HereTab`, using `CardEdgeTab` with an
+  optional `label` that sets `role="img"`, `aria-label` and `title`. `WorkItemNode` passes
+  `tab={here ? <HereTab /> : crossBlocked ? <BlockedTab sprint={crossBlockedSprint} /> : null}`;
+  the tag-row `CrossBlockedFlag`, the give-way trigger and the not-in-sprint suppression use
+  `blockedInRow = crossBlocked && here` instead of `crossBlocked`.
+- `PlanItemNode.tsx`: `tab={outcome ? <PlanItemOutcomeTab /> : crossBlocked ? <BlockedTab /> : null}`;
+  the tag row keeps `CrossBlockedFlag` only when `crossBlocked && outcome`.
+- `PlanningCanvas.tsx`: delete the `canvas-cross-flags` layer and the `node.blockedElsewhere` use it
+  makes (the string stays: the tab's accessible name uses it).
+- `ProjectRoadmapCanvas.tsx` (and the plan-review mount): pass `topTab` for every card that renders a
+  tab (here, crossBlocked, decided outcome), not only `n.here`. Add the legend specimen.
+- Tests: the suites that pin the midpoint chip (`cross-flag` test ids), the tag-row `blocked` tag on
+  a non-here card, and the not-in-sprint suppression move to the tab; add the tab's pair to the
+  theme contrast test.
+
+### How the asset was produced
+
+Every card is the shipped `WorkItemNode` / `PlanItemNode` rendered headless through `renderMock`: the
+"was" panels from `main` as it is, the proposed panels from throwaway copies patched only as
+§ _Implementation notes_ says. The canvas slice's edges are routed by the shipped `routeEdges`; the
+midpoint chip, the selection ring and slot, and the legend are static copies of `PlanningCanvas`'s and
+`ProjectRoadmapCanvas`'s own markup. Widths, clearances and the contrast table were measured with
+Playwright on the rendered mock and written back by a second render. The generator was bundled with
+esbuild and deleted before the commit.
