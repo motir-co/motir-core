@@ -7631,12 +7631,9 @@
         },
         "other": "その他の理由"
       },
-      "indexing": "コードグラフのインデックス作成：{count} 件実行中 · どのプランの上限にも含まれません",
-      "indexingNotRead": "コードグラフのインデックス作成：読み取れませんでした · どのプランの上限にも含まれません",
       "whereItRuns": "実行場所",
       "kind": {
         "ci_runner": "CI ランナー",
-        "code_graph_index": "インデクサー",
         "hosted_agent": "エージェントランナー",
         "agent_instance": "エージェントのホスト"
       },
@@ -7655,12 +7652,12 @@
         "kind": {
           "ci_runner": "CI ランナー",
           "hosted_agent": "エージェントランナー",
-          "indexer_and_hoster": "インデクサー + エージェントのホスト"
+          "agent_hoster": "エージェントのホスト"
         },
         "role": {
           "ci_runner": "CI ジョブを実行します",
           "hosted_agent": "Motir エージェントのジョブを実行します",
-          "indexer_and_hoster": "コードのインデックスを作成し、エージェントをホストします"
+          "agent_hoster": "エージェントをホストします"
         },
         "state": {
           "created": "作成済み",
@@ -7676,11 +7673,10 @@
         "sharedFloor": {
           "ci_runner": "まだ共有の下限にあります：CI は {figure} 台のランナー。",
           "hosted_agent": "まだ共有の下限にあり、Max の上限で動いています：同時に {figure} 件のエージェント実行。",
-          "indexer_and_hoster": "インデックス作成とエージェントのホストはまだ共有の下限にあります：ホスト型エージェントは 1 人あたり {perPerson}、組織あたり {perOrg}。"
+          "agent_hoster": "エージェントのホストはまだ共有の下限にあります：ホスト型エージェントは 1 人あたり {perPerson}、組織あたり {perOrg}。"
         },
         "liveOnceNetwork": "アカウントのネットワークが構築されると稼働します。",
-        "deniedNote": "AWS が引き上げを承認するまで、アカウントは「{state}」のままです。",
-        "keptSpots": "インデックス作成のために常に {count} 台分のマシン枠を確保します。エージェントのインスタンスは残りを使います。"
+        "deniedNote": "AWS が引き上げを承認するまで、アカウントは「{state}」のままです。"
       },
       "quotaOutcome": {
         "pending": "AWS で処理中",

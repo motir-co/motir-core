@@ -7634,12 +7634,9 @@
         },
         "other": "Z innego powodu"
       },
-      "indexing": "Indeksowanie grafu kodu: działa {count} · nie wlicza się do żadnego limitu planu",
-      "indexingNotRead": "Indeksowanie grafu kodu: nie odczytano · nie wlicza się do żadnego limitu planu",
       "whereItRuns": "Gdzie to działa",
       "kind": {
         "ci_runner": "Runner CI",
-        "code_graph_index": "Indekser",
         "hosted_agent": "Runner agentów",
         "agent_instance": "Hosting agentów"
       },
@@ -7658,12 +7655,12 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner agentów",
-          "indexer_and_hoster": "Indekser + hosting agentów"
+          "agent_hoster": "Hosting agentów"
         },
         "role": {
           "ci_runner": "Uruchamia zadania CI",
           "hosted_agent": "Wykonuje Twoje uruchomienia agenta Motir",
-          "indexer_and_hoster": "Indeksuje kod i hostuje agenty"
+          "agent_hoster": "Hostuje Twoje agenty"
         },
         "state": {
           "created": "Utworzone",
@@ -7679,11 +7676,10 @@
         "sharedFloor": {
           "ci_runner": "Wciąż na wspólnym minimum: runnery CI: {figure}.",
           "hosted_agent": "Wciąż na wspólnym minimum, z limitami planu Max: uruchomienia agentów naraz: {figure}.",
-          "indexer_and_hoster": "Indeksowanie i hosting agentów są wciąż na wspólnym minimum: hostowane agenty {perPerson} na osobę, {perOrg} na organizację."
+          "agent_hoster": "Hosting agentów jest wciąż na wspólnym minimum: hostowane agenty {perPerson} na osobę, {perOrg} na organizację."
         },
         "liveOnceNetwork": "Zacznie działać, gdy sieć konta zostanie zbudowana.",
-        "deniedNote": "Konto pozostaje w stanie „{state}”, dopóki AWS nie przyzna zwiększenia.",
-        "keptSpots": "Miejsca na maszyny zawsze zarezerwowane na indeksowanie: {count}; instancje agentów korzystają z reszty."
+        "deniedNote": "Konto pozostaje w stanie „{state}”, dopóki AWS nie przyzna zwiększenia."
       },
       "quotaOutcome": {
         "pending": "W toku po stronie AWS",

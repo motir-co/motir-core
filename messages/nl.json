@@ -7634,12 +7634,9 @@
         },
         "other": "Om een andere reden"
       },
-      "indexing": "Indexering van de codegraaf: {count} actief · telt voor geen enkele plangrens",
-      "indexingNotRead": "Indexering van de codegraaf: niet gelezen · telt voor geen enkele plangrens",
       "whereItRuns": "Waar het draait",
       "kind": {
         "ci_runner": "CI-runner",
-        "code_graph_index": "Indexer",
         "hosted_agent": "Agentrunner",
         "agent_instance": "Agenthosting"
       },
@@ -7658,12 +7655,12 @@
         "kind": {
           "ci_runner": "CI-runner",
           "hosted_agent": "Agentrunner",
-          "indexer_and_hoster": "Indexer + agenthosting"
+          "agent_hoster": "Agenthosting"
         },
         "role": {
           "ci_runner": "Voert je CI-jobs uit",
           "hosted_agent": "Voert je Motir-agentruns uit",
-          "indexer_and_hoster": "Indexeert je code en host je agents"
+          "agent_hoster": "Host je agents"
         },
         "state": {
           "created": "Aangemaakt",
@@ -7679,11 +7676,10 @@
         "sharedFloor": {
           "ci_runner": "Nog op de gedeelde ondergrens: CI {figure} runners.",
           "hosted_agent": "Nog op de gedeelde ondergrens, met de grenzen van Max: {figure} agentruns tegelijk.",
-          "indexer_and_hoster": "Indexering en agenthosting staan nog op de gedeelde ondergrens: gehoste agents {perPerson} per persoon, {perOrg} per organisatie."
+          "agent_hoster": "Agenthosting staat nog op de gedeelde ondergrens: gehoste agents {perPerson} per persoon, {perOrg} per organisatie."
         },
         "liveOnceNetwork": "Live zodra het netwerk van het account gebouwd is.",
-        "deniedNote": "Het account blijft op ‘{state}’ tot AWS een verhoging toekent.",
-        "keptSpots": "{count} machineplaatsen blijven altijd gereserveerd voor indexering; agentinstanties gebruiken de rest."
+        "deniedNote": "Het account blijft op ‘{state}’ tot AWS een verhoging toekent."
       },
       "quotaOutcome": {
         "pending": "In behandeling bij AWS",

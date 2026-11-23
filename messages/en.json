@@ -7631,12 +7631,9 @@
         },
         "other": "for another reason"
       },
-      "indexing": "Code-graph indexing: {count} running · counted against no plan limit",
-      "indexingNotRead": "Code-graph indexing: not read · counted against no plan limit",
       "whereItRuns": "Where it runs",
       "kind": {
         "ci_runner": "CI runner",
-        "code_graph_index": "Indexer",
         "hosted_agent": "Agent runner",
         "agent_instance": "Agent hoster"
       },
@@ -7655,12 +7652,12 @@
         "kind": {
           "ci_runner": "CI runner",
           "hosted_agent": "Agent runner",
-          "indexer_and_hoster": "Indexer + agent hoster"
+          "agent_hoster": "Agent hoster"
         },
         "role": {
           "ci_runner": "Runs your CI jobs",
           "hosted_agent": "Runs your Motir agent runs",
-          "indexer_and_hoster": "Indexes your code and hosts your agents"
+          "agent_hoster": "Hosts your agents"
         },
         "state": {
           "created": "Created",
@@ -7676,11 +7673,10 @@
         "sharedFloor": {
           "ci_runner": "Still on the shared floor: CI at {figure} runners.",
           "hosted_agent": "Still on the shared floor at Max's limits: {figure} agent runs at once.",
-          "indexer_and_hoster": "Indexing and agent hosting still on the shared floor: hosted agents at {perPerson} per person and {perOrg} per organisation."
+          "agent_hoster": "Agent hosting still on the shared floor: hosted agents at {perPerson} per person and {perOrg} per organisation."
         },
         "liveOnceNetwork": "Live once the account's network is built.",
-        "deniedNote": "The account stays at “{state}” until AWS grants a raise.",
-        "keptSpots": "{count} machine spots are always kept for indexing; agent instances run on the rest."
+        "deniedNote": "The account stays at “{state}” until AWS grants a raise."
       },
       "quotaOutcome": {
         "pending": "Pending with AWS",

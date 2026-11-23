@@ -7634,12 +7634,9 @@
         },
         "other": "Por otro motivo"
       },
-      "indexing": "Indexación del grafo de código: {count} en ejecución · no cuenta para ningún límite de plan",
-      "indexingNotRead": "Indexación del grafo de código: no leído · no cuenta para ningún límite de plan",
       "whereItRuns": "Dónde se ejecuta",
       "kind": {
         "ci_runner": "Runner de CI",
-        "code_graph_index": "Indexador",
         "hosted_agent": "Runner de agentes",
         "agent_instance": "Alojamiento de agentes"
       },
@@ -7658,12 +7655,12 @@
         "kind": {
           "ci_runner": "Runner de CI",
           "hosted_agent": "Runner de agentes",
-          "indexer_and_hoster": "Indexador + alojamiento de agentes"
+          "agent_hoster": "Alojamiento de agentes"
         },
         "role": {
           "ci_runner": "Ejecuta tus trabajos de CI",
           "hosted_agent": "Ejecuta tus ejecuciones del agente Motir",
-          "indexer_and_hoster": "Indexa tu código y aloja tus agentes"
+          "agent_hoster": "Aloja tus agentes"
         },
         "state": {
           "created": "Creada",
@@ -7679,11 +7676,10 @@
         "sharedFloor": {
           "ci_runner": "Aún en el mínimo compartido: CI {figure} runners.",
           "hosted_agent": "Aún en el mínimo compartido, con los límites de Max: {figure} ejecuciones de agente a la vez.",
-          "indexer_and_hoster": "La indexación y el alojamiento de agentes siguen en el mínimo compartido: agentes alojados {perPerson} por persona, {perOrg} por organización."
+          "agent_hoster": "El alojamiento de agentes sigue en el mínimo compartido: agentes alojados {perPerson} por persona, {perOrg} por organización."
         },
         "liveOnceNetwork": "Activa en cuanto se construya la red de la cuenta.",
-        "deniedNote": "La cuenta sigue en “{state}” hasta que AWS conceda un aumento.",
-        "keptSpots": "Siempre se reservan {count} plazas de máquina para la indexación; las instancias de agente usan el resto."
+        "deniedNote": "La cuenta sigue en “{state}” hasta que AWS conceda un aumento."
       },
       "quotaOutcome": {
         "pending": "En trámite en AWS",

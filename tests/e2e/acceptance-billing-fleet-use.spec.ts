@@ -76,10 +76,10 @@ import zh from '@/messages/zh.json';
 //  - agent hoster (`agent_instance`): the stored `platform_fleet_kind_switch`
 //    row /admin/fleet-settings writes. Written OFF for the walk (and put back as
 //    it was afterwards), so it reads Fly.
-//  - indexer (`code_graph_index`): `MOTIR_INDEX_FLEET_PROVIDER`, which the lane
-//    does not set and a spec cannot change in the server. Reads Fly.
+// Billing lists only these three kinds (`FLEET_USE_KINDS`, MOTIR-12039): the
+// code-graph indexer left motir-core, so no indexer row or line renders.
 // So the person accepting the story sees two kinds on Motir's shared AWS pool
-// and two on Fly, and on Host the agent runner on the org's own account.
+// and one on Fly, and on Host the agent runner on the org's own account.
 //
 // ── FIGURES AND WORDS ─────────────────────────────────────────────────────────
 // Every plan figure is read from `lib/billing/planCaps.ts` (`capsForPlanKey`),
@@ -356,19 +356,24 @@ test.describe('Fleet use on Billing & plans', () => {
       },
     );
 
-    await timed('Where each kind runs: two on Motir’s shared AWS pool, two on Fly', async () => {
-      const fleet = section(page);
-      await expect(fleet.getByRole('heading', { name: copy.whereItRuns })).toBeVisible();
-      await expect(whereItRuns(fleet, copy.kind.hosted_agent)).toHaveText(
-        copy.provider.shared_aws_pool,
-      );
-      await expect(whereItRuns(fleet, copy.kind.ci_runner)).toHaveText(
-        copy.provider.shared_aws_pool,
-      );
-      await expect(whereItRuns(fleet, copy.kind.agent_instance)).toHaveText(copy.provider.fly);
-      await expect(whereItRuns(fleet, copy.kind.code_graph_index)).toHaveText(copy.provider.fly);
-      await expect(fleet).not.toContainText(copy.provider.own_aws_account);
-    });
+    await timed(
+      'Where each kind runs: two on Motir’s shared AWS pool, one on Fly, no indexer',
+      async () => {
+        const fleet = section(page);
+        await expect(fleet.getByRole('heading', { name: copy.whereItRuns })).toBeVisible();
+        await expect(whereItRuns(fleet, copy.kind.hosted_agent)).toHaveText(
+          copy.provider.shared_aws_pool,
+        );
+        await expect(whereItRuns(fleet, copy.kind.ci_runner)).toHaveText(
+          copy.provider.shared_aws_pool,
+        );
+        await expect(whereItRuns(fleet, copy.kind.agent_instance)).toHaveText(copy.provider.fly);
+        await expect(fleet.locator('dt')).toHaveCount(3);
+        await expect(fleet).not.toContainText('Indexer');
+        await expect(fleet).not.toContainText('Code-graph indexing');
+        await expect(fleet).not.toContainText(copy.provider.own_aws_account);
+      },
+    );
 
     await timed('A member of the organisation sees no Fleet use section', async () => {
       const member = await addOrgMember(pro, `acc-fleet-member-${stamp}@example.com`);
@@ -420,7 +425,7 @@ test.describe('Fleet use on Billing & plans', () => {
         ]) {
           await expect(figureRow(fleet, key)).toContainText(copy.notRead);
         }
-        await expect(fleet).toContainText(copy.indexingNotRead);
+        await expect(fleet).not.toContainText('Code-graph indexing');
         await expect(fleet).not.toContainText(/\b0\b/);
         await expect(fleet).not.toContainText(copy.noLimit);
       },
@@ -444,7 +449,7 @@ test.describe('Fleet use on Billing & plans', () => {
     });
     const merged = await seedOwnAccount({
       organizationId: host.organizationId,
-      kinds: ['code_graph_index', 'agent_instance'],
+      kinds: ['agent_instance'],
       desiredVcpu: ASKED.merged,
       requestedAt: purchasedAt,
     });
@@ -464,7 +469,7 @@ test.describe('Fleet use on Billing & plans', () => {
         const rows: Array<[string, number]> = [
           ['ci_runner', ASKED.ci],
           ['hosted_agent', ASKED.agentRunner],
-          ['indexer_and_hoster', ASKED.merged],
+          ['agent_hoster', ASKED.merged],
         ];
         for (const [kind, asked] of rows) {
           const row = accountRow(fleet, kind);
@@ -483,17 +488,18 @@ test.describe('Fleet use on Billing & plans', () => {
             figure: n(HOST_FLOOR.agentRunsInParallel),
           }),
         );
-        const mergedRow = accountRow(fleet, 'indexer_and_hoster');
-        await expect(mergedRow).toContainText(copy.accounts.role.indexer_and_hoster);
+        const mergedRow = accountRow(fleet, 'agent_hoster');
+        await expect(mergedRow).toContainText(copy.accounts.role.agent_hoster);
         await expect(mergedRow).toContainText(
-          icu(copy.accounts.sharedFloor.indexer_and_hoster, {
+          icu(copy.accounts.sharedFloor.agent_hoster, {
             perPerson: n(HOST_FLOOR.agentsPerUser),
             perOrg: n(HOST_FLOOR.agentsPerOrg),
           }),
         );
-        // No index spots are kept on the merged account since MOTIR-12038: the
-        // kept-spots line, whatever its count, does not render.
-        await expect(mergedRow).not.toContainText(copy.accounts.keptSpots.split('}').pop()!.trim());
+        // The re-homed merged account is an agent hoster: no kept-spots line and
+        // no indexer wording on it (MOTIR-12039).
+        await expect(mergedRow).not.toContainText('kept for indexing');
+        await expect(mergedRow).not.toContainText('Indexer');
 
         const runs = figureRow(fleet, 'agentRunsInParallel');
         await expect(runs).toContainText(inUseOf(0, HOST_FLOOR.agentRunsInParallel));
@@ -540,13 +546,13 @@ test.describe('Fleet use on Billing & plans', () => {
           copy.provider.own_aws_account,
         );
 
-        const mergedRow = accountRow(fleet, 'indexer_and_hoster');
+        const mergedRow = accountRow(fleet, 'agent_hoster');
         await expect(mergedRow).toContainText(copy.accounts.quotaDenied);
         await expect(mergedRow).toContainText(
           icu(copy.accounts.deniedNote, { state: copy.accounts.state.quota_requested }),
         );
         await expect(mergedRow).toContainText(
-          icu(copy.accounts.sharedFloor.indexer_and_hoster, {
+          icu(copy.accounts.sharedFloor.agent_hoster, {
             perPerson: n(HOST_FLOOR.agentsPerUser),
             perOrg: n(HOST_FLOOR.agentsPerOrg),
           }),
@@ -612,9 +618,7 @@ test.describe('Fleet use on Billing & plans', () => {
       await expect(fleet.getByRole('heading', { name: words.whereItRuns })).toBeVisible();
       await expect(fleet.getByRole('heading', { name: words.accounts.title })).toBeVisible();
       await expect(accountRow(fleet, 'hosted_agent')).toContainText(words.accounts.state.live);
-      await expect(accountRow(fleet, 'indexer_and_hoster')).toContainText(
-        words.accounts.quotaDenied,
-      );
+      await expect(accountRow(fleet, 'agent_hoster')).toContainText(words.accounts.quotaDenied);
       await expect(figureRow(fleet, 'agentRunsInParallel')).toContainText(
         icu(words.inUseOf, { inUse: n(0, 'zh'), figure: n(ownFigure, 'zh') }, 'zh'),
       );

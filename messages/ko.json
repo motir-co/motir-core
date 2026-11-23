@@ -7628,12 +7628,9 @@
         },
         "other": "기타 이유"
       },
-      "indexing": "코드 그래프 색인: {count}개 실행 중 · 어떤 계획 한도에도 포함되지 않습니다",
-      "indexingNotRead": "코드 그래프 색인: 읽지 못함 · 어떤 계획 한도에도 포함되지 않습니다",
       "whereItRuns": "실행 위치",
       "kind": {
         "ci_runner": "CI 러너",
-        "code_graph_index": "색인기",
         "hosted_agent": "에이전트 러너",
         "agent_instance": "에이전트 호스팅"
       },
@@ -7652,12 +7649,12 @@
         "kind": {
           "ci_runner": "CI 러너",
           "hosted_agent": "에이전트 러너",
-          "indexer_and_hoster": "색인기 + 에이전트 호스팅"
+          "agent_hoster": "에이전트 호스팅"
         },
         "role": {
           "ci_runner": "CI 작업을 실행합니다",
           "hosted_agent": "Motir 에이전트 작업을 실행합니다",
-          "indexer_and_hoster": "코드를 색인하고 에이전트를 호스팅합니다"
+          "agent_hoster": "에이전트를 호스팅합니다"
         },
         "state": {
           "created": "생성됨",
@@ -7673,11 +7670,10 @@
         "sharedFloor": {
           "ci_runner": "아직 공유 기본 한도에 있습니다: CI 러너 {figure}개.",
           "hosted_agent": "아직 공유 기본 한도에 있으며 Max 한도로 실행됩니다: 에이전트 실행 동시 {figure}개.",
-          "indexer_and_hoster": "색인과 에이전트 호스팅이 아직 공유 기본 한도에 있습니다: 호스팅 에이전트 1인당 {perPerson}개, 조직당 {perOrg}개."
+          "agent_hoster": "에이전트 호스팅이 아직 공유 기본 한도에 있습니다: 호스팅 에이전트 1인당 {perPerson}개, 조직당 {perOrg}개."
         },
         "liveOnceNetwork": "계정 네트워크가 구축되면 가동됩니다.",
-        "deniedNote": "AWS가 증설을 승인할 때까지 계정은 “{state}” 상태로 남습니다.",
-        "keptSpots": "색인을 위해 항상 머신 자리 {count}개를 확보합니다. 에이전트 인스턴스는 나머지를 사용합니다."
+        "deniedNote": "AWS가 증설을 승인할 때까지 계정은 “{state}” 상태로 남습니다."
       },
       "quotaOutcome": {
         "pending": "AWS 처리 중",

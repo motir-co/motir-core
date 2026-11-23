@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FleetQuotaRequest, FleetShard } from '@/generated/prisma/client';
 import {
+  FLEET_USE_KINDS,
   figureSourceFor,
   groupOwnAccounts,
   providerFor,
@@ -122,16 +123,17 @@ function raise(
 }
 
 describe('groupOwnAccounts', () => {
-  it('groups the merged account’s two rows into one, ordered ci → agent runner → merged', () => {
+  it('groups rows by AWS account, ordered ci → agent runner → agent hoster', () => {
     const groups = groupOwnAccounts(
       [
-        row('m1', 'code_graph_index', '333', { quotaRequestedAt: T0 }),
+        // The merged account as MOTIR-12038 left it: one `agent_instance` row,
+        // its past raise re-pointed at that row.
         row('m2', 'agent_instance', '333', { quotaRequestedAt: T0 }),
         row('h', 'hosted_agent', '222', { quotaRequestedAt: T0, grantedAt: T1, liveAt: T1 }),
         row('c', 'ci_runner', '111'),
       ],
       [
-        raise('m1', 120, null, 'denied'),
+        raise('m2', 120, null, 'denied'),
         raise('h', 32, 32, 'approved'),
         raise('h', 64, null, 'pending', T1),
       ],
@@ -139,14 +141,13 @@ describe('groupOwnAccounts', () => {
     expect(groups.map((group) => group.accountKind)).toEqual([
       'ci_runner',
       'hosted_agent',
-      'indexer_and_hoster',
+      'agent_hoster',
     ]);
     expect(groups[0]).toMatchObject({
       state: 'created',
       vcpuAsked: null,
       vcpuGranted: null,
       quotaOutcome: null,
-      keptIndexSpots: null,
       requestKind: 'ci_runner',
     });
     expect(groups[1]).toMatchObject({
@@ -157,22 +158,74 @@ describe('groupOwnAccounts', () => {
       quotaOutcome: 'pending',
     });
     expect(groups[2]).toMatchObject({
-      fleetKinds: ['code_graph_index', 'agent_instance'],
-      requestKind: 'code_graph_index',
+      fleetKinds: ['agent_instance'],
+      requestKind: 'agent_instance',
       state: 'quota_requested',
       vcpuAsked: 120,
       vcpuGranted: null,
       quotaOutcome: 'denied',
-      // Nothing is kept for indexing since MOTIR-12038.
-      keptIndexSpots: null,
     });
+    // No kept-spots figure on any account group (MOTIR-12039).
+    for (const group of groups) {
+      expect(Object.keys(group).sort()).toEqual(
+        [
+          'accountKind',
+          'createdAt',
+          'fleetKinds',
+          'grantedAt',
+          'liveAt',
+          'quotaOutcome',
+          'quotaRequestedAt',
+          'requestKind',
+          'shardIds',
+          'state',
+          'vcpuAsked',
+          'vcpuGranted',
+        ].sort(),
+      );
+    }
   });
 
-  it('returns no AWS account id or shard id', () => {
+  it('keeps each account’s shard ids on the group, for the mapper to attach history by', () => {
+    const groups = groupOwnAccounts(
+      [
+        row('a1', 'agent_instance', '333'),
+        row('a2', 'agent_instance', '333'),
+        row('c', 'ci_runner', '111'),
+      ],
+      [],
+    );
+    expect(groups.map((group) => [...group.shardIds].sort())).toEqual([['c'], ['a1', 'a2']]);
+  });
+
+  it('lists no account whose rows run none of billing’s kinds', () => {
+    // A row left on a kind billing does not describe (the retired indexer) is no
+    // account on Billing & plans — never an "indexer" account by another name.
+    const groups = groupOwnAccounts(
+      [row('x', 'code_graph_index', '444'), row('c', 'ci_runner', '111')],
+      [raise('x', 8, null, 'pending')],
+    );
+    expect(groups.map((group) => group.accountKind)).toEqual(['ci_runner']);
+  });
+
+  it('describes only billing’s own kinds on an account', () => {
+    const [group] = groupOwnAccounts(
+      [row('x', 'code_graph_index', '333'), row('a', 'agent_instance', '333')],
+      [],
+    );
+    expect(group).toMatchObject({ accountKind: 'agent_hoster', fleetKinds: ['agent_instance'] });
+  });
+
+  it('returns no AWS account id', () => {
     const text = JSON.stringify(
       groupOwnAccounts([row('shard-xyz', 'ci_runner', '987654321098')], []),
     );
     expect(text).not.toContain('987654321098');
-    expect(text).not.toContain('shard-xyz');
+  });
+});
+
+describe('FLEET_USE_KINDS', () => {
+  it('is billing’s own list: CI runner, agent runner, agent hoster', () => {
+    expect(FLEET_USE_KINDS).toEqual(['ci_runner', 'hosted_agent', 'agent_instance']);
   });
 });

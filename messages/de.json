@@ -7634,12 +7634,9 @@
         },
         "other": "Aus einem anderen Grund"
       },
-      "indexing": "Code-Graph-Indexierung: {count} laufen · zählt zu keiner Plangrenze",
-      "indexingNotRead": "Code-Graph-Indexierung: nicht gelesen · zählt zu keiner Plangrenze",
       "whereItRuns": "Wo es läuft",
       "kind": {
         "ci_runner": "CI-Runner",
-        "code_graph_index": "Indexer",
         "hosted_agent": "Agent-Runner",
         "agent_instance": "Agent-Hosting"
       },
@@ -7658,12 +7655,12 @@
         "kind": {
           "ci_runner": "CI-Runner",
           "hosted_agent": "Agent-Runner",
-          "indexer_and_hoster": "Indexer + Agent-Hosting"
+          "agent_hoster": "Agent-Hosting"
         },
         "role": {
           "ci_runner": "Führt Ihre CI-Jobs aus",
           "hosted_agent": "Führt Ihre Motir-Agent-Jobs aus",
-          "indexer_and_hoster": "Indexiert Ihren Code und hostet Ihre Agents"
+          "agent_hoster": "Hostet Ihre Agents"
         },
         "state": {
           "created": "Angelegt",
@@ -7679,11 +7676,10 @@
         "sharedFloor": {
           "ci_runner": "Noch auf der gemeinsamen Untergrenze: CI {figure} Runner.",
           "hosted_agent": "Noch auf der gemeinsamen Untergrenze, mit den Grenzen von Max: {figure} Agent-Läufe gleichzeitig.",
-          "indexer_and_hoster": "Indexierung und Agent-Hosting sind noch auf der gemeinsamen Untergrenze: gehostete Agents {perPerson} pro Person, {perOrg} pro Organisation."
+          "agent_hoster": "Agent-Hosting ist noch auf der gemeinsamen Untergrenze: gehostete Agents {perPerson} pro Person, {perOrg} pro Organisation."
         },
         "liveOnceNetwork": "Live, sobald das Netzwerk des Kontos aufgebaut ist.",
-        "deniedNote": "Das Konto bleibt bei „{state}“, bis AWS eine Erhöhung genehmigt.",
-        "keptSpots": "{count} Maschinenplätze bleiben immer für die Indexierung reserviert; Agent-Instanzen nutzen den Rest."
+        "deniedNote": "Das Konto bleibt bei „{state}“, bis AWS eine Erhöhung genehmigt."
       },
       "quotaOutcome": {
         "pending": "Bei AWS in Bearbeitung",

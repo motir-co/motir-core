@@ -172,7 +172,6 @@ function FleetUseBody({
   return (
     <FleetUseCard t={t} plan={<PlanName t={t} name={plan.planName} />}>
       <FigureRows t={t} data={data} />
-      <IndexingLine t={t} inUse={data.codeGraphIndex.inUse} />
       <WhereItRunsList t={t} data={data} />
       <OwnAccountsBlock t={t} data={data} orgId={orgId} reload={reload} />
     </FleetUseCard>
@@ -304,15 +303,6 @@ function WaitingBreakdown({
   );
 }
 
-function IndexingLine({ t, inUse }: { t: T; inUse: number | null }) {
-  const locale = useLocale();
-  return (
-    <p className="font-sans text-xs text-(--el-text-secondary)">
-      {inUse === null ? t('indexingNotRead') : t('indexing', { count: fmt(inUse, locale) })}
-    </p>
-  );
-}
-
 function WhereItRunsList({ t, data }: { t: T; data: FleetUseDTO }) {
   return (
     <div className="flex flex-col gap-2">
@@ -370,7 +360,6 @@ function NotReadSection({
     <FleetUseCard t={t} plan={<PlanWord text={t('planNotRead')} />}>
       <DashedNotice t={t} text={t('notReadNotice')} retry={() => void retry()} />
       <FigureRows t={t} data={shown} />
-      <IndexingLine t={t} inUse={null} />
       {data ? <WhereItRunsList t={t} data={data} /> : null}
     </FleetUseCard>
   );
@@ -385,7 +374,6 @@ const EMPTY_FLEET_USE: FleetUseDTO = {
     agentsPerPerson: NOT_READ_ROW,
     ciJobsInFlight: NOT_READ_ROW,
   },
-  codeGraphIndex: { inUse: null },
   whereItRuns: [],
   hostAccounts: null,
 };
@@ -395,7 +383,6 @@ function NoPlanLimits({ t, data }: { t: T; data: FleetUseDTO }) {
     <FleetUseCard t={t} plan={<PlanWord text={t('noPlanLimits')} />}>
       <p className="font-sans text-sm text-(--el-text)">{t('noPlanLimitsNote')}</p>
       <FigureRows t={t} data={data} noLimits />
-      <IndexingLine t={t} inUse={data.codeGraphIndex.inUse} />
       <WhereItRunsList t={t} data={data} />
     </FleetUseCard>
   );
@@ -466,11 +453,6 @@ function AccountRow({
       <AccountHeading t={t} account={account} />
       <VcpuFigures t={t} account={account} />
       <SharedFloorNote t={t} account={account} data={data} />
-      {account.keptIndexSpots === null ? null : (
-        <p className="font-sans text-xs text-(--el-text-secondary)">
-          {t('accounts.keptSpots', { count: account.keptIndexSpots })}
-        </p>
-      )}
       {latest ? <RequestStatusLine t={t} request={active ?? latest} /> : null}
       {active ? null : <RequestButton t={t} account={account} orgId={orgId} onSent={reload} />}
     </div>

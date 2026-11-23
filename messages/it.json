@@ -7634,12 +7634,9 @@
         },
         "other": "Per un altro motivo"
       },
-      "indexing": "Indicizzazione del grafo del codice: {count} in esecuzione · non conta per alcun limite di piano",
-      "indexingNotRead": "Indicizzazione del grafo del codice: non letto · non conta per alcun limite di piano",
       "whereItRuns": "Dove viene eseguito",
       "kind": {
         "ci_runner": "Runner CI",
-        "code_graph_index": "Indicizzatore",
         "hosted_agent": "Runner di agenti",
         "agent_instance": "Hosting di agenti"
       },
@@ -7658,12 +7655,12 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner di agenti",
-          "indexer_and_hoster": "Indicizzatore + hosting di agenti"
+          "agent_hoster": "Hosting di agenti"
         },
         "role": {
           "ci_runner": "Esegue i tuoi job CI",
           "hosted_agent": "Esegue le tue esecuzioni dell’agente Motir",
-          "indexer_and_hoster": "Indicizza il tuo codice e ospita i tuoi agenti"
+          "agent_hoster": "Ospita i tuoi agenti"
         },
         "state": {
           "created": "Creato",
@@ -7679,11 +7676,10 @@
         "sharedFloor": {
           "ci_runner": "Ancora sulla soglia condivisa: CI {figure} runner.",
           "hosted_agent": "Ancora sulla soglia condivisa, con i limiti di Max: {figure} esecuzioni di agenti in contemporanea.",
-          "indexer_and_hoster": "Indicizzazione e hosting di agenti sono ancora sulla soglia condivisa: agenti ospitati {perPerson} per persona, {perOrg} per organizzazione."
+          "agent_hoster": "L’hosting di agenti è ancora sulla soglia condivisa: agenti ospitati {perPerson} per persona, {perOrg} per organizzazione."
         },
         "liveOnceNetwork": "Attivo non appena la rete dell’account è costruita.",
-        "deniedNote": "L’account resta a «{state}» finché AWS non concede un aumento.",
-        "keptSpots": "{count} posti macchina restano sempre riservati all’indicizzazione; le istanze degli agenti usano il resto."
+        "deniedNote": "L’account resta a «{state}» finché AWS non concede un aumento."
       },
       "quotaOutcome": {
         "pending": "In lavorazione presso AWS",

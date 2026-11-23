@@ -7625,12 +7625,9 @@
         },
         "other": "其他原因"
       },
-      "indexing": "代码图索引：{count} 个运行中 · 不计入任何计划上限",
-      "indexingNotRead": "代码图索引：未能读取 · 不计入任何计划上限",
       "whereItRuns": "运行位置",
       "kind": {
         "ci_runner": "CI 运行器",
-        "code_graph_index": "索引器",
         "hosted_agent": "智能体运行器",
         "agent_instance": "智能体托管"
       },
@@ -7649,12 +7646,12 @@
         "kind": {
           "ci_runner": "CI 运行器",
           "hosted_agent": "智能体运行器",
-          "indexer_and_hoster": "索引器 + 智能体托管"
+          "agent_hoster": "智能体托管"
         },
         "role": {
           "ci_runner": "运行你的 CI 任务",
           "hosted_agent": "运行你的 Motir 智能体任务",
-          "indexer_and_hoster": "为你的代码建索引并托管你的智能体"
+          "agent_hoster": "托管你的智能体"
         },
         "state": {
           "created": "已创建",
@@ -7670,11 +7667,10 @@
         "sharedFloor": {
           "ci_runner": "仍在共享底线上：CI {figure} 个运行器。",
           "hosted_agent": "仍在共享底线上，按 Max 上限：同时 {figure} 个智能体运行。",
-          "indexer_and_hoster": "索引和智能体托管仍在共享底线上：托管智能体每人 {perPerson} 个、每个组织 {perOrg} 个。"
+          "agent_hoster": "智能体托管仍在共享底线上：托管智能体每人 {perPerson} 个、每个组织 {perOrg} 个。"
         },
         "liveOnceNetwork": "账户网络建好后即上线。",
-        "deniedNote": "在 AWS 批准提额之前，账户保持在“{state}”。",
-        "keptSpots": "始终为索引保留 {count} 个机器位；智能体实例使用其余部分。"
+        "deniedNote": "在 AWS 批准提额之前，账户保持在“{state}”。"
       },
       "quotaOutcome": {
         "pending": "AWS 处理中",

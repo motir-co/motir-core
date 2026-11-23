@@ -1,4 +1,4 @@
-import type { FleetWorkloadKind } from '@motir/orchestrator';
+import type { FleetUseKind } from '@/lib/billing/fleetUse';
 import type { FleetQuotaRequestStatusDTO } from '@/lib/dto/fleetPools';
 import type { HostAccountState } from '@/lib/ciFleet/hostAccountState';
 import type { OrgFleetCapacityRequestDTO } from '@/lib/dto/fleetCapacityRequest';
@@ -56,16 +56,18 @@ export interface FleetUseFigureDTO {
 export type FleetUseProvider = 'fly' | 'shared_aws_pool' | 'own_aws_account';
 
 export interface FleetUseWhereItRunsDTO {
-  fleetKind: FleetWorkloadKind;
+  fleetKind: FleetUseKind;
   provider: FleetUseProvider;
 }
 
-/** One of a Host org's own AWS accounts, named by what it runs — never by id. */
+/** One of a Host org's own AWS accounts, named by what it runs — never by id.
+ *  `agent_hoster` is the account that runs the org's agent instances (the
+ *  former merged indexer + hoster account, re-homed in MOTIR-12038). */
 export interface FleetUseHostAccountDTO {
-  accountKind: 'ci_runner' | 'hosted_agent' | 'indexer_and_hoster';
-  fleetKinds: FleetWorkloadKind[];
+  accountKind: 'ci_runner' | 'hosted_agent' | 'agent_hoster';
+  fleetKinds: FleetUseKind[];
   /** The kind the Request more capacity POST takes for this account. */
-  requestKind: FleetWorkloadKind;
+  requestKind: FleetUseKind;
   state: HostAccountState;
   createdAt: string;
   quotaRequestedAt: string | null;
@@ -78,9 +80,9 @@ export interface FleetUseHostAccountDTO {
   /** AWS's status on the latest raise — a denial reads here, beside `state`. */
   quotaOutcome: FleetQuotaRequestStatusDTO | null;
   onSharedFloor: boolean;
-  /** The index spots always kept on the merged account; null elsewhere. */
-  keptIndexSpots: number | null;
-  /** The org's requests on this account's kinds, newest first. */
+  /** The org's requests on this account, newest first — attached by the
+   *  account's own rows, so a past request keeps its place whatever kind it
+   *  named. */
   capacityRequests: OrgFleetCapacityRequestDTO[];
 }
 
@@ -94,9 +96,7 @@ export interface FleetUseDTO {
     agentsPerPerson: FleetUseFigureDTO;
     ciJobsInFlight: FleetUseFigureDTO;
   };
-  /** Held to no figure. */
-  codeGraphIndex: { inUse: number | null };
-  /** One row per fleet kind, in the registry's order. */
+  /** One row per kind billing describes (`FLEET_USE_KINDS`), in its order. */
   whereItRuns: FleetUseWhereItRunsDTO[];
   /** Null for an org with no own account; `not_read` when the read failed. */
   hostAccounts: FleetUseHostAccountDTO[] | { kind: 'not_read' } | null;
