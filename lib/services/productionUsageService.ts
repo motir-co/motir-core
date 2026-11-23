@@ -10,7 +10,6 @@ import {
   type HostedApplicationMeterTarget,
 } from '@/lib/repositories/hostedApplicationRepository';
 import { productionUsageSliceRepository } from '@/lib/repositories/productionUsageSliceRepository';
-import { resolveRepository } from '@/lib/services/productionPanelService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -146,6 +145,13 @@ async function getUsageForRepository(
   actor: ServiceContext,
   options: { now?: Date } = {},
 ): Promise<ProductionUsageDto> {
+  // Loaded on demand: the production usage meter (a system job) imports this
+  // module for the balance read, and the panel service's static import graph
+  // reaches `@/lib/workspaces` → `@/lib/auth`, which needs the auth env at load.
+  // A job registry that loads auth cannot be imported by the docs-guard lane
+  // (`tests/jobs/catch-up-disposition-adr.test.ts`), so only this user-facing
+  // read pulls the panel service in.
+  const { resolveRepository } = await import('@/lib/services/productionPanelService');
   const { projectId } = await resolveRepository(projectKey, projectRepositoryId, actor);
   const permissions = await projectAccessService.getPermissions(projectId, actor);
   if (!permissions.has('project:browse')) throw new ProjectNotFoundError(projectId);
