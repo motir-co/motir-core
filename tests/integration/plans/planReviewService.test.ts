@@ -1015,7 +1015,9 @@ describe('planReviewService.getPlanReview', () => {
         view: defaultPlanView(review),
       }).toEqual({ plan: shape.title, size: shape.size, total: shape.total, view: shape.view });
     }
-  });
+    // It seeds several shapes of plan, each over the canvas's node cap: ~12 s
+    // locally, past the 15 s default on a loaded CI shard.
+  }, 60_000);
 
   it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
     // Three plans, each over its own copy of one tree (a plan holds its targets, so
