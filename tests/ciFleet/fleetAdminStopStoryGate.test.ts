@@ -330,7 +330,6 @@ describe('preview → stop → census (AC3)', () => {
       ciContainers: 2,
       hostedRuns: 1,
       agentInstances: 2,
-      indexContainers: 1,
     });
     expect(result).toEqual({
       runsCancelled: preview.ciRuns,

@@ -352,7 +352,6 @@ describe('previewStopEverything', () => {
       ciContainers: 2,
       hostedRuns: 1,
       runningAgents: 2,
-      indexContainers: 1,
     });
     await expectNoLeak(preview, mine);
   });
@@ -372,22 +371,22 @@ describe('previewStopEverything', () => {
       ciContainers: 2,
       hostedRuns: null,
       runningAgents: null,
-      indexContainers: 1,
     });
   });
 
-  it('every count of the five can fail alone to null', async () => {
+  it('every count of the four can fail alone to null', async () => {
     const { ciRunnerProvisioningIntentRepository } =
       await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
-    const { fleetCeilingService } = await import('@/lib/services/fleetCeilingService');
     vi.spyOn(
       ciRunnerProvisioningIntentRepository,
       'countInFlightForOrganization',
     ).mockRejectedValue('down');
-    vi.spyOn(fleetCeilingService, 'orgCensus').mockRejectedValue(new Error('down'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const preview = await orgFleetStopService.previewStopEverything(actor(fx), clock.now());
-    expect(preview).toMatchObject({ ciContainers: null, indexContainers: null, ciRuns: 2 });
+    expect(preview).toMatchObject({ ciContainers: null, ciRuns: 2 });
+    expect(Object.keys(preview).sort()).toEqual(
+      ['ciContainers', 'ciRuns', 'hostedRuns', 'runningAgents'].sort(),
+    );
   });
 });
 

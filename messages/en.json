@@ -4272,8 +4272,6 @@
           "agentsNote": "Running and hibernating",
           "ciJobs": "CI jobs in flight",
           "ciWaiting": "{count, plural, =0 {None waiting} other {# waiting}}",
-          "index": "Index jobs",
-          "indexNote": "Not charged",
           "of": " of {figure}",
           "notRead": "Couldn’t read",
           "failedTitle": "Couldn’t read the fleet figures",
@@ -4343,12 +4341,6 @@
             "other": "other"
           }
         },
-        "index": {
-          "title": "Index jobs",
-          "running": "<n>{count}</n> running",
-          "note": "Indexing keeps code search current. It is not charged and is not stopped here.",
-          "failed": "Couldn’t read the index jobs"
-        },
         "motirStops": {
           "title": "Stopped by Motir · last 7 days",
           "lead": "Machines Motir itself stopped for this organization, and why.",
@@ -4359,7 +4351,6 @@
             "ci_runner": "CI job container",
             "hosted_agent": "Agent run",
             "agent_instance": "Agent instance",
-            "code_graph_index": "Index job",
             "other": "Machine"
           },
           "reason": {
@@ -4407,7 +4398,6 @@
           "ciUnknownRuns": "CI jobs cancelled",
           "hosted": "{count, plural, one {agent run ended} other {agent runs ended}}",
           "agents": "{count, plural, one {running agent hibernated} other {running agents hibernated}}",
-          "index": "{count, plural, one {index job keeps running} other {index jobs keep running}} — indexing is not stopped here",
           "afterwards": "Nothing is blocked afterwards: members can start new work straight away. The owners of hibernated agents are told.",
           "countedAt": "Counted at {time}.",
           "unreadableTitle": "Couldn’t count what is running",
@@ -4429,7 +4419,6 @@
           "ciFailed": "{count, plural, one {# CI repository or container did not stop.} other {# CI repositories or containers did not stop.}} Refresh and try Stop everything again.",
           "hostedFailed": "{count, plural, one {# agent run did not end.} other {# agent runs did not end.}} Try Cancel on its row.",
           "agentsFailed": "{count, plural, one {# agent did not stop: the stop did not confirm. Try Hibernate on its row.} other {# agents did not stop: the stop did not confirm. Try Hibernate on their rows.}}",
-          "index": "Index jobs were left running.",
           "byYou": "Stopped by you, {when}.",
           "dismiss": "Dismiss",
           "dismissAria": "Dismiss the stop result"
@@ -11693,15 +11682,13 @@
             "mismatched": "mismatched · running and debited disagree"
           },
           "group": {
-            "plan": "Held to the plan",
-            "uncapped": "No plan figure"
+            "plan": "Held to the plan"
           },
           "col": {
             "org": "Organisation",
             "plan": "Plan",
             "ciRunner": "CI runners",
             "hostedAgent": "Motir agent runs",
-            "index": "Index containers",
             "agentInstance": "Agent instances",
             "accrued": "CI minutes · last {minutes} min",
             "credits": "Credits this month · confirmed",
@@ -11733,7 +11720,7 @@
           "foot": "Showing {from}–{to} of {total} · mismatched first, then most containers · only CI is judged — it is the one workload debited while it runs",
           "empty": {
             "title": "No organisation is running a fleet container",
-            "body": "No organisation holds a CI runner, Motir agent run, agent instance or index container right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault."
+            "body": "No organisation holds a CI runner, Motir agent run or agent instance right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault."
           },
           "error": {
             "title": "Couldn’t read the fleet",
@@ -13566,14 +13553,12 @@
         "workload": {
           "ciRunner": "CI runners",
           "hostedAgent": "Motir agent runs",
-          "agentInstance": "Agent instances",
-          "index": "Index containers"
+          "agentInstance": "Agent instances"
         },
         "charge": {
           "ciRunner": "Charged while it runs",
           "hostedAgent": "Charged when the run ends",
-          "agentInstance": "Charged per running interval",
-          "index": "Motir’s cost — never charged"
+          "agentInstance": "Charged per running interval"
         },
         "tile": {
           "of": " of {figure}",
@@ -13603,7 +13588,6 @@
           "ciUnknown": "CI runs not counted — GitHub could not be read; the stop still cancels them — and <strong>{containers}</strong> {containers, plural, one {CI container destroyed} other {CI containers destroyed}}",
           "hosted": "{count, plural, one {Motir agent run ended} other {Motir agent runs ended}}",
           "instances": "{count, plural, one {agent instance hibernated} other {agent instances hibernated}}",
-          "index": "{count, plural, one {index container} other {index containers}} left to finish — indexing is Motir’s own cost and is never charged to the organization",
           "notSuspension": "<strong>This is not a suspension.</strong> Nothing is blocked: {org}’s next CI run, agent run or agent start goes through normal admission.",
           "asOf": "Counted at {time}. The stop acts on whatever is running when you confirm.",
           "loading": "Counting what is running…",
@@ -15014,10 +14998,6 @@
           "title": "CI runner image",
           "subtitle": "What every fleet CI job runs in. Pinned by MOTIR_RUNNER_IMAGE; newest is the latest runner-v* release."
         },
-        "indexer": {
-          "title": "Indexer image",
-          "subtitle": "What every code-graph index run boots. Pinned by MOTIR_INDEXER_IMAGE; newest is the latest indexer-v* release."
-        },
         "sandbox": {
           "title": "Agent-instance images",
           "subtitle": "The sandbox agents run in, one tag per profile at ghcr.io/motir-co/motir-sandbox. Complete when every profile has its tag at the newest cli-v* release."
@@ -15026,7 +15006,6 @@
       "imageName": {
         "hosted": "Motir agent image",
         "runner": "CI runner image",
-        "indexer": "indexer image",
         "sandbox": "agent-instance images"
       },
       "source": {
@@ -15057,17 +15036,13 @@
         "hosted": "{count, plural, one {# commit} other {# commits}} to packages/cli between the pinned build and the newest one.",
         "runner": "({tags}) · {days, plural, one {# day} other {# days}} · {commits, plural, one {# commit} other {# commits}} to infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# day} other {# days}} · {commits, plural, one {# commit} other {# commits}} to infra/ci-runner.",
-        "indexer": "({tags}) · {days, plural, one {# day} other {# days}} · {commits, plural, one {# commit} other {# commits}} to the indexer.",
-        "indexerNoTags": "{days, plural, one {# day} other {# days}} · {commits, plural, one {# commit} other {# commits}} to the indexer.",
         "link": "See the commits"
       },
       "unreleased": {
         "title": "Merged since {release}, in no release",
-        "count": "{count, plural, one {# change} other {# changes}} to infra/ci-runner",
-        "indexerCount": "{count, plural, one {# merged change to the indexer came after it} other {# merged changes to the indexer came after it}}"
+        "count": "{count, plural, one {# change} other {# changes}} to infra/ci-runner"
       },
       "releaseNeeded": "<strong>A release is needed.</strong> These changes reach the fleet only in a new runner release, and this page does not cut one. Push the tag <mono>{tag}</mono>; the release lane then publishes it and the row offers Publish latest.",
-      "releaseNeededIndexer": "<strong>A release is needed.</strong> These changes reach index runs only in a new indexer release, and this page does not cut one. Push the tag <mono>{tag}</mono> in motir-ai; its release lane then publishes it and the row offers Publish latest.",
       "ami": {
         "title": "Runner AMI · read only",
         "current": "Current",
@@ -15100,14 +15075,10 @@
         "note": {
           "hosted": "Pins the newest main build through the Motir agent pin workflow. Web and worker roll onto it.",
           "runner": "Pins {release} through the runner pin workflow. Web and worker roll onto it.",
-          "indexer": "Pins {release} through the indexer pin pull request. Web and worker roll onto it.",
           "sandbox": "Re-publishes {release}. Only the {count} missing tags are pushed; nothing in production rolls.",
           "hostedCurrent": "Nothing newer to publish. Production pins the newest main build.",
           "runnerCurrent": "Nothing newer to publish. Production pins the newest runner release.",
           "runnerReleaseNeeded": "Nothing newer to publish: production pins the newest release. The merged changes above need a release first.",
-          "indexerCurrent": "Nothing newer to publish. Production pins the newest indexer release.",
-          "indexerReleaseNeeded": "Nothing newer to publish: production pins the newest indexer release. The merged changes above need a release first.",
-          "indexerNotRead": "Publish latest stays off until the pin and the newest release are both read.",
           "sandboxCurrent": "Nothing newer to publish. Every profile has its tag at the newest release.",
           "sandboxOld": "{release} was cut before a re-run could push only the missing tags, so re-running it would push every tag again. Cut a new cli-v* release instead.",
           "running": "A run of this image's publish workflow is already in progress. Publish latest is off until it ends.",
@@ -15125,21 +15096,12 @@
         "sandboxFrom": "{published} of {total} tags at {version}",
         "hostedBody": "This starts the Motir agent pin workflow. It moves MOTIR_HOSTED_AGENT_IMAGE to the newest build and deploys: <strong>web and worker roll</strong> onto the new pin, and Motir agent runs started after the roll boot the new image.",
         "runnerBody": "This starts the runner pin workflow. It moves MOTIR_RUNNER_IMAGE to {release} and deploys: <strong>web and worker roll</strong> onto the new pin. The runner AMI is not changed.",
-        "indexerBody": "This opens the indexer pin pull request, which moves MOTIR_INDEXER_IMAGE to {release} and is queued to merge. Its deploy then <strong>rolls web and worker</strong>, and index runs started after the roll boot the new image. Index runs already going finish on the one they booted.",
         "sandboxBody": "This re-runs the sandbox release for {release} and pushes only the missing tags: {missing}. {published} are already published and are not pushed again. <strong>Nothing in production rolls.</strong>",
         "sandboxBodyNonePublished": "This re-runs the sandbox release for {release} and pushes only the missing tags: {missing}. <strong>Nothing in production rolls.</strong>"
       },
       "progress": {
         "title": "Publishing.",
         "body": "The publish workflow is running; this row updates when it ends.",
-        "indexerQueued": {
-          "title": "Pin pull request queued.",
-          "body": "It merges through the merge queue, then its deploy rolls web and worker; this row updates as it goes."
-        },
-        "indexerRolling": {
-          "title": "Rolling web and worker.",
-          "body": "The pin pull request merged and its deploy is moving web and worker onto {release}. New index runs boot it once the roll ends."
-        },
         "started": "· started {age} by {email}",
         "startedNoActor": "· started {age}",
         "button": "Publishing…"
@@ -15158,7 +15120,6 @@
       "workflow": {
         "hosted": "Motir agent pin",
         "runner": "Runner pin",
-        "indexer": "Indexer pin",
         "sandbox": "Sandbox release {tag}",
         "run": "{workflow} · run #{number}",
         "runNoNumber": "{workflow} · run"
@@ -15175,26 +15136,7 @@
       },
       "unset": {
         "title": "Not configured here",
-        "body": "{variable} is not set on this deployment, so there is no pin to compare.",
-        "indexerBody": "MOTIR_INDEXER_IMAGE is not set on this deployment, so this install does not index: no code-graph index run starts, and there is no pin to compare."
-      },
-      "notRead": {
-        "pin": {
-          "title": "Couldn't read the pin.",
-          "body": "ECR didn't answer for the digest MOTIR_INDEXER_IMAGE names, so it is not compared and nothing here means up to date."
-        },
-        "newest": {
-          "title": "Couldn't read the releases.",
-          "body": "GitHub didn't answer for motir-ai's indexer-v* releases, so the pin is not compared with anything."
-        },
-        "newestEcr": {
-          "title": "Couldn't read the releases.",
-          "body": "ECR didn't answer for the indexer repository's indexer-* release tags, so the pin is not compared with anything."
-        },
-        "history": {
-          "title": "Couldn't read the merged changes",
-          "body": "GitHub didn't answer for motir-ai's commit history, so changes no release holds are not listed. The pin and the newest release above still compare."
-        }
+        "body": "{variable} is not set on this deployment, so there is no pin to compare."
       },
       "loading": "Loading the {image}",
       "publishError": {

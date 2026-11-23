@@ -8,8 +8,8 @@ import type {
 // Motir boots, each read on its own so one source that does not answer leaves
 // only its own row saying so.
 
-/** The three images, in the page's fixed order. The indexer row (MOTIR-10986)
- *  left with the container-based indexer (MOTIR-12044). */
+/** The three images, in the page's fixed order. The code-graph image row
+ *  (MOTIR-10986) left with its container (MOTIR-12044). */
 export const FLEET_IMAGE_KEYS = ['hosted', 'runner', 'sandbox'] as const;
 export type FleetImageKey = (typeof FLEET_IMAGE_KEYS)[number];
 

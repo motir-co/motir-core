@@ -141,7 +141,6 @@ function fleet(overrides: Partial<OrgFleetDTO> = {}): OrgFleetDTO {
         },
       ],
     },
-    indexJobs: { kind: 'read', running: 1 },
     motirStops: {
       kind: 'read',
       since: ago(7 * 24 * 60),
@@ -159,7 +158,6 @@ const EMPTY: Partial<OrgFleetDTO> = {
   hostedRuns: { kind: 'read', rows: [] },
   agentInstances: { kind: 'read', rows: [] },
   ciJobs: { kind: 'read', inFlight: 0, waiting: { planLimit: 0, poolFull: 0, other: 0 }, rows: [] },
-  indexJobs: { kind: 'read', running: 0 },
   motirStops: { kind: 'read', since: ago(7 * 24 * 60), entries: [] },
   lastStop: { kind: 'read', stop: null },
 };
@@ -240,7 +238,9 @@ describe('the populated page (panel 2)', () => {
     expect(within(tiles).getByTestId('fleet-tile-agent-runs').textContent).toContain('1 of 4');
     expect(within(tiles).getByTestId('fleet-tile-agents').textContent).toContain('3 of 10');
     expect(within(tiles).getByTestId('fleet-tile-ci').textContent).toContain('1 waiting');
-    expect(within(tiles).getByTestId('fleet-tile-index').textContent).toContain('Not charged');
+    // Three tiles: the index tile retired with the indexer (MOTIR-12040).
+    expect(within(tiles).queryByTestId('fleet-tile-index')).toBeNull();
+    expect(tiles.children).toHaveLength(3);
 
     const hosted = screen.getByTestId('fleet-hosted');
     expect(within(hosted).getByText('1 live')).toBeTruthy();
@@ -256,7 +256,7 @@ describe('the populated page (panel 2)', () => {
     expect(within(ci).getAllByRole('link', { name: /View on GitHub/ })).toHaveLength(2);
     expect(within(ci).getByText('No project', { exact: false })).toBeTruthy();
 
-    expect(screen.getByTestId('fleet-index').textContent).toContain('1 running');
+    expect(screen.queryByTestId('fleet-index')).toBeNull();
     const stops = screen.getByTestId('fleet-motir-stops');
     expect(within(stops).getByText('CI job container')).toBeTruthy();
     expect(within(stops).getByText('Did not complete')).toBeTruthy();
@@ -332,7 +332,7 @@ describe('the empty page (panel 3)', () => {
     expect(screen.getByText('No agent run is live.')).toBeTruthy();
     expect(screen.getByText('No agent is running or hibernating.')).toBeTruthy();
     expect(screen.getByText('No CI job is in flight or waiting.')).toBeTruthy();
-    expect(screen.getByTestId('fleet-index').textContent).toContain('0 running');
+    expect(screen.queryByTestId('fleet-index')).toBeNull();
     expect(
       screen.getByText('Motir stopped nothing for this organization in the last 7 days.'),
     ).toBeTruthy();
@@ -358,7 +358,6 @@ describe('a part that was not read (panel 5)', () => {
         agentInstances: { kind: 'not_read' },
         hostedRuns: { kind: 'not_read' },
         ciJobs: { kind: 'not_read' },
-        indexJobs: { kind: 'not_read' },
         motirStops: { kind: 'not_read' },
         lastStop: { kind: 'not_read' },
         tiles: { kind: 'not_read' },
@@ -372,7 +371,7 @@ describe('a part that was not read (panel 5)', () => {
     expect(screen.getByTestId('fleet-tiles').textContent).toContain(
       'Couldn’t read the fleet figures',
     );
-    for (const id of ['fleet-hosted', 'fleet-ci', 'fleet-index', 'fleet-motir-stops']) {
+    for (const id of ['fleet-hosted', 'fleet-ci', 'fleet-motir-stops']) {
       expect(within(screen.getByTestId(id)).getByRole('alert')).toBeTruthy();
     }
     expect(screen.getByTestId('fleet-last-stop').textContent).toBe(
@@ -398,11 +397,10 @@ describe('a part that was not read (panel 5)', () => {
             ciJobsInFlight: figure(null, null),
           },
         },
-        indexJobs: { kind: 'not_read' },
       }),
     );
     const tiles = screen.getByTestId('fleet-tiles');
-    expect(within(tiles).getAllByText('Couldn’t read')).toHaveLength(4);
+    expect(within(tiles).getAllByText('Couldn’t read')).toHaveLength(3);
     expect(tiles.textContent).not.toMatch(/\b0\b/);
   });
 });
@@ -616,7 +614,7 @@ describe('Hibernate (panels 7a–7c)', () => {
 describe('Stop everything (panels 8a–9b)', () => {
   const PREVIEW = {
     ok: true as const,
-    preview: { ciRuns: 2, ciContainers: 3, hostedRuns: 1, runningAgents: 0, indexContainers: 1 },
+    preview: { ciRuns: 2, ciContainers: 3, hostedRuns: 1, runningAgents: 0 },
     countedAt: new Date(NOW).toISOString(),
   };
 
@@ -646,9 +644,8 @@ describe('Stop everything (panels 8a–9b)', () => {
     expect(within(effects).getByTestId('stop-all-effect-agents').className).toContain(
       'text-(--el-text-secondary)',
     );
-    expect(within(effects).getByTestId('stop-all-effect-index').textContent).toContain(
-      'index job keeps running',
-    );
+    expect(within(effects).queryByTestId('stop-all-effect-index')).toBeNull();
+    expect(effects.children).toHaveLength(3);
     expect(dialog.textContent).toContain('The owners of hibernated agents are told.');
     expect(document.activeElement?.textContent).toBe('Cancel');
 
@@ -657,7 +654,7 @@ describe('Stop everything (panels 8a–9b)', () => {
     expect(result.getAttribute('data-partial')).toBe('false');
     expect(result.textContent).toContain('Everything was stopped');
     expect(result.textContent).toContain('2 CI jobs cancelled, 3 of 3 containers stopped');
-    expect(result.textContent).toContain('Index jobs were left running.');
+    expect(result.textContent).not.toMatch(/index/i);
     expect(result.textContent).toMatch(/Stopped by you, today at /);
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
@@ -740,14 +737,13 @@ describe('edges', () => {
         hostedRuns: { kind: 'not_read' },
         agentInstances: { kind: 'not_read' },
         ciJobs: { kind: 'not_read' },
-        indexJobs: { kind: 'not_read' },
         motirStops: { kind: 'not_read' },
       }),
     );
     const retries = screen.getAllByRole('button', { name: 'Retry' });
-    expect(retries).toHaveLength(6);
+    expect(retries).toHaveLength(5);
     for (const retry of retries) fireEvent.click(retry);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it('Escape closes each confirmation when nothing is in flight', async () => {
@@ -861,13 +857,25 @@ describe('edges', () => {
               reason: 'no_record',
               completed: true,
             },
+            {
+              // A kill of a retired index container still inside the window
+              // reads under the generic label, never a removed key (MOTIR-12040).
+              decidedAt: ago(2),
+              workload: 'code_graph_index' as never,
+              reason: 'no_record',
+              completed: true,
+            },
           ],
         },
       }),
     );
     expect(screen.getByTestId('fleet-agents').textContent).toContain('Busy');
     expect(screen.getByTestId('fleet-ci').textContent).toContain('Waiting · other');
-    expect(screen.getByTestId('fleet-motir-stops').textContent).toContain('Machine');
+    const stopRows = within(screen.getByTestId('fleet-motir-stops')).getAllByTestId(
+      'fleet-motir-stop-row',
+    );
+    expect(stopRows.map((row) => row.textContent?.includes('Machine'))).toEqual([true, true]);
+    expect(screen.getByTestId('fleet-motir-stops').textContent).not.toMatch(/index/i);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel the run of OPS-1' }));
     let dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText('OPS-1 ·')).toBeTruthy();
@@ -961,7 +969,7 @@ describe('the stop result survives a reload (criterion 4)', () => {
   it('a remount shows the stored result until Dismiss, and only for its own org', async () => {
     previewStopEverythingAction.mockResolvedValue({
       ok: true,
-      preview: { ciRuns: 1, ciContainers: 1, hostedRuns: 0, runningAgents: 0, indexContainers: 0 },
+      preview: { ciRuns: 1, ciContainers: 1, hostedRuns: 0, runningAgents: 0 },
       countedAt: new Date(NOW).toISOString(),
     });
     stopEverythingAction.mockResolvedValue({ ok: true, result: done() });
@@ -1014,7 +1022,7 @@ describe('the stop result survives a reload (criterion 4)', () => {
     });
     previewStopEverythingAction.mockResolvedValue({
       ok: true,
-      preview: { ciRuns: 1, ciContainers: 1, hostedRuns: 0, runningAgents: 0, indexContainers: 0 },
+      preview: { ciRuns: 1, ciContainers: 1, hostedRuns: 0, runningAgents: 0 },
       countedAt: new Date(NOW).toISOString(),
     });
     stopEverythingAction.mockResolvedValue({ ok: true, result: done() });

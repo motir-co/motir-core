@@ -4272,8 +4272,6 @@
           "agentsNote": "실행 중 및 절전 중",
           "ciJobs": "진행 중인 CI 작업",
           "ciWaiting": "{count, plural, =0 {대기 없음} other {#개 대기 중}}",
-          "index": "인덱스 작업",
-          "indexNote": "과금되지 않음",
           "of": " / {figure}",
           "notRead": "읽을 수 없음",
           "failedTitle": "플릿 수치를 읽을 수 없습니다",
@@ -4343,12 +4341,6 @@
             "other": "기타"
           }
         },
-        "index": {
-          "title": "인덱스 작업",
-          "running": "<n>{count}</n>개 실행 중",
-          "note": "인덱싱은 코드 검색을 최신 상태로 유지합니다. 과금되지 않으며 여기서 중지되지 않습니다.",
-          "failed": "인덱스 작업을 읽을 수 없습니다"
-        },
         "motirStops": {
           "title": "Motir가 중지함 · 최근 7일",
           "lead": "Motir가 직접 이 조직을 위해 중지한 머신과 그 이유입니다.",
@@ -4359,7 +4351,6 @@
             "ci_runner": "CI 작업 컨테이너",
             "hosted_agent": "에이전트 실행",
             "agent_instance": "에이전트 인스턴스",
-            "code_graph_index": "인덱스 작업",
             "other": "머신"
           },
           "reason": {
@@ -4407,7 +4398,6 @@
           "ciUnknownRuns": "CI 작업 취소",
           "hosted": "{count, plural, other {개의 에이전트 실행 종료}}",
           "agents": "{count, plural, other {개의 실행 중인 에이전트 절전}}",
-          "index": "{count, plural, other {개의 인덱스 작업은 계속 실행}} — 여기서는 인덱싱을 중지하지 않습니다",
           "afterwards": "이후 차단되는 것은 없습니다. 멤버는 바로 새 작업을 시작할 수 있습니다. 절전된 에이전트의 소유자에게는 알림이 전송됩니다.",
           "countedAt": "{time} 기준 집계입니다.",
           "unreadableTitle": "실행 중인 항목을 셀 수 없습니다",
@@ -4429,7 +4419,6 @@
           "ciFailed": "{count, plural, other {CI 저장소 또는 컨테이너 #개가 중지되지 않았습니다.}} 새로 고친 후 모두 중지를 다시 시도하세요.",
           "hostedFailed": "{count, plural, other {에이전트 실행 #개가 종료되지 않았습니다.}} 해당 행에서 취소를 시도하세요.",
           "agentsFailed": "{count, plural, other {에이전트 #개가 중지되지 않았습니다. 중지가 확인되지 않았습니다. 해당 행에서 절전을 시도하세요.}}",
-          "index": "인덱스 작업은 계속 실행되었습니다.",
           "byYou": "내가 중지함, {when}.",
           "dismiss": "닫기",
           "dismissAria": "중지 결과 닫기"
@@ -11690,15 +11679,13 @@
             "mismatched": "불일치 · 실행 상태와 차감이 맞지 않음"
           },
           "group": {
-            "plan": "플랜 한도 적용",
-            "uncapped": "플랜 한도 없음"
+            "plan": "플랜 한도 적용"
           },
           "col": {
             "org": "조직",
             "plan": "플랜",
             "ciRunner": "CI 러너",
             "hostedAgent": "Motir 에이전트 실행",
-            "index": "인덱스 컨테이너",
             "agentInstance": "에이전트 인스턴스",
             "accrued": "CI 시간(분) · 최근 {minutes}분",
             "credits": "이번 달 크레딧 · 확정",
@@ -11730,7 +11717,7 @@
           "foot": "{total}개 중 {from}–{to} 표시 · 불일치 먼저, 그다음 컨테이너가 많은 순 · CI만 판정합니다 — 실행 중에 차감되는 유일한 워크로드입니다",
           "empty": {
             "title": "플릿 컨테이너를 실행 중인 조직이 없습니다",
-            "body": "현재 CI 러너, Motir 에이전트 실행, 에이전트 인스턴스, 인덱스 컨테이너를 보유한 조직이 없어 차감과 비교할 것이 없습니다. 결함이 아니라 정상적인 상태입니다."
+            "body": "현재 CI 러너, Motir 에이전트 실행, 에이전트 인스턴스를 보유한 조직이 없어 차감과 비교할 것이 없습니다. 결함이 아니라 정상적인 상태입니다."
           },
           "error": {
             "title": "플릿을 읽을 수 없습니다",
@@ -13563,14 +13550,12 @@
         "workload": {
           "ciRunner": "CI 러너",
           "hostedAgent": "Motir 에이전트 실행",
-          "agentInstance": "에이전트 인스턴스",
-          "index": "인덱스 컨테이너"
+          "agentInstance": "에이전트 인스턴스"
         },
         "charge": {
           "ciRunner": "실행 중에 청구됨",
           "hostedAgent": "실행이 끝날 때 청구됨",
-          "agentInstance": "실행 구간별 청구",
-          "index": "Motir 부담 비용 — 청구되지 않음"
+          "agentInstance": "실행 구간별 청구"
         },
         "tile": {
           "of": " / {figure}",
@@ -13600,7 +13585,6 @@
           "ciUnknown": "CI 실행은 집계되지 않음 — GitHub를 읽을 수 없습니다. 중지 시 여전히 취소됩니다 — 및 <strong>{containers}</strong> {containers, plural, other {개 CI 컨테이너 삭제}}",
           "hosted": "{count, plural, other {Motir 에이전트 실행 종료}}",
           "instances": "{count, plural, other {에이전트 인스턴스 절전}}",
-          "index": "{count, plural, other {인덱스 컨테이너}}는 끝까지 실행되도록 둡니다 — 인덱싱은 Motir 자체 비용이며 조직에 청구되지 않습니다",
           "notSuspension": "<strong>정지가 아닙니다.</strong> 차단되는 것은 없습니다: {org}의 다음 CI 실행, 에이전트 실행, 에이전트 시작은 일반 승인 절차를 거칩니다.",
           "asOf": "{time}에 집계했습니다. 중지는 확인하는 시점에 실행 중인 모든 항목에 적용됩니다.",
           "loading": "실행 중인 항목을 세는 중…",
@@ -15011,10 +14995,6 @@
           "title": "CI 러너 이미지",
           "subtitle": "플릿의 모든 CI 작업이 실행되는 환경입니다. MOTIR_RUNNER_IMAGE로 고정되며, 최신은 최신 runner-v* 릴리스입니다."
         },
-        "indexer": {
-          "title": "인덱서 이미지",
-          "subtitle": "코드 그래프의 모든 인덱스 실행이 부팅하는 이미지입니다. MOTIR_INDEXER_IMAGE로 고정되며, 최신은 최신 indexer-v* 릴리스입니다."
-        },
         "sandbox": {
           "title": "에이전트 인스턴스 이미지",
           "subtitle": "에이전트가 실행되는 샌드박스로, ghcr.io/motir-co/motir-sandbox에 프로필마다 태그가 하나씩 있습니다. 모든 프로필이 최신 cli-v* 릴리스의 태그를 가지면 완료입니다."
@@ -15023,7 +15003,6 @@
       "imageName": {
         "hosted": "Motir 에이전트 이미지",
         "runner": "CI 러너 이미지",
-        "indexer": "인덱서 이미지",
         "sandbox": "에이전트 인스턴스 이미지"
       },
       "source": {
@@ -15054,17 +15033,13 @@
         "hosted": "고정된 빌드와 최신 빌드 사이 packages/cli 커밋 {count, plural, other {#개}}.",
         "runner": "({tags}) · {days, plural, other {#일}} · infra/ci-runner 커밋 {commits, plural, other {#개}}.",
         "runnerNoTags": "{days, plural, other {#일}} · infra/ci-runner 커밋 {commits, plural, other {#개}}.",
-        "indexer": "({tags}) · {days, plural, other {#일}} · 인덱서 커밋 {commits, plural, other {#개}}.",
-        "indexerNoTags": "{days, plural, other {#일}} · 인덱서 커밋 {commits, plural, other {#개}}.",
         "link": "커밋 보기"
       },
       "unreleased": {
         "title": "{release} 이후 병합됨, 어떤 릴리스에도 없음",
-        "count": "infra/ci-runner 변경 {count, plural, other {#개}}",
-        "indexerCount": "{count, plural, other {인덱서에 병합된 변경 #개가 그 뒤에 들어옴}}"
+        "count": "infra/ci-runner 변경 {count, plural, other {#개}}"
       },
       "releaseNeeded": "<strong>릴리스가 필요합니다.</strong> 이 변경은 새 러너 릴리스로만 플릿에 반영되며, 이 페이지는 릴리스를 만들지 않습니다. 태그 <mono>{tag}</mono>를 푸시하세요. 그러면 릴리스 레인이 게시하고 이 행에 최신 게시가 나타납니다.",
-      "releaseNeededIndexer": "<strong>릴리스가 필요합니다.</strong> 이 변경은 새 인덱서 릴리스로만 인덱스 실행에 반영되며, 이 페이지는 릴리스를 만들지 않습니다. motir-ai에서 태그 <mono>{tag}</mono>를 푸시하세요. 그러면 해당 릴리스 레인이 게시하고 이 행에 최신 게시가 나타납니다.",
       "ami": {
         "title": "러너 AMI · 읽기 전용",
         "current": "최신",
@@ -15097,14 +15072,10 @@
         "note": {
           "hosted": "Motir 에이전트 고정 워크플로로 최신 main 빌드를 고정합니다. 웹과 워커가 그것으로 전환됩니다.",
           "runner": "러너 고정 워크플로로 {release}을(를) 고정합니다. 웹과 워커가 그것으로 전환됩니다.",
-          "indexer": "인덱서 고정 풀 리퀘스트로 {release}을(를) 고정합니다. 웹과 워커가 그것으로 전환됩니다.",
           "sandbox": "{release}을(를) 다시 게시합니다. 누락된 태그 {count}개만 푸시하며, 프로덕션에서는 아무것도 전환되지 않습니다.",
           "hostedCurrent": "게시할 새 항목이 없습니다. 프로덕션은 최신 main 빌드를 고정하고 있습니다.",
           "runnerCurrent": "게시할 새 항목이 없습니다. 프로덕션은 최신 러너 릴리스를 고정하고 있습니다.",
           "runnerReleaseNeeded": "게시할 새 항목이 없습니다. 프로덕션은 최신 릴리스를 고정하고 있습니다. 위의 병합된 변경에는 먼저 릴리스가 필요합니다.",
-          "indexerCurrent": "게시할 새 항목이 없습니다. 프로덕션은 최신 인덱서 릴리스를 고정하고 있습니다.",
-          "indexerReleaseNeeded": "게시할 새 항목이 없습니다. 프로덕션은 최신 인덱서 릴리스를 고정하고 있습니다. 위의 병합된 변경에는 먼저 릴리스가 필요합니다.",
-          "indexerNotRead": "고정과 최신 릴리스를 모두 읽을 때까지 최신 게시는 꺼져 있습니다.",
           "sandboxCurrent": "게시할 새 항목이 없습니다. 모든 프로필에 최신 릴리스 태그가 있습니다.",
           "sandboxOld": "{release}은(는) 재실행이 누락된 태그만 푸시할 수 있게 되기 전에 만들어져, 재실행하면 모든 태그를 다시 푸시합니다. 대신 새 cli-v* 릴리스를 만드세요.",
           "running": "이 이미지의 게시 워크플로 실행이 이미 진행 중입니다. 끝날 때까지 최신 게시가 꺼져 있습니다.",
@@ -15122,21 +15093,12 @@
         "sandboxFrom": "{version}의 태그 {total}개 중 {published}개",
         "hostedBody": "Motir 에이전트 고정 워크플로를 시작합니다. MOTIR_HOSTED_AGENT_IMAGE를 최신 빌드로 옮기고 배포합니다. <strong>웹과 워커가 새 고정으로 전환</strong>되며, 전환 후 시작된 Motir 에이전트 실행은 새 이미지로 부팅합니다.",
         "runnerBody": "러너 고정 워크플로를 시작합니다. MOTIR_RUNNER_IMAGE를 {release}(으)로 옮기고 배포합니다. <strong>웹과 워커가 새 고정으로 전환</strong>됩니다. 러너 AMI는 바뀌지 않습니다.",
-        "indexerBody": "인덱서 고정 풀 리퀘스트를 엽니다. 이 풀 리퀘스트는 MOTIR_INDEXER_IMAGE를 {release}(으)로 옮기고 병합 대기열에 들어갑니다. 그 배포가 <strong>웹과 워커를 전환</strong>하며, 전환 후 시작되는 인덱스 실행은 새 이미지를 부팅합니다. 이미 진행 중인 인덱스 실행은 부팅한 이미지로 끝납니다.",
         "sandboxBody": "{release}의 샌드박스 릴리스를 다시 실행해 누락된 태그 {missing}만 푸시합니다. {published}은(는) 이미 게시되어 다시 푸시하지 않습니다. <strong>프로덕션에서는 아무것도 전환되지 않습니다.</strong>",
         "sandboxBodyNonePublished": "{release}의 샌드박스 릴리스를 다시 실행해 누락된 태그 {missing}만 푸시합니다. <strong>프로덕션에서는 아무것도 전환되지 않습니다.</strong>"
       },
       "progress": {
         "title": "게시 중입니다.",
         "body": "게시 워크플로가 실행 중이며, 끝나면 이 행이 업데이트됩니다.",
-        "indexerQueued": {
-          "title": "고정 풀 리퀘스트가 대기열에 들어갔습니다.",
-          "body": "병합 대기열을 통해 병합된 뒤 그 배포가 웹과 워커를 전환합니다. 진행에 따라 이 행이 업데이트됩니다."
-        },
-        "indexerRolling": {
-          "title": "웹과 워커를 전환하는 중입니다.",
-          "body": "고정 풀 리퀘스트가 병합되었고 그 배포가 웹과 워커를 {release}(으)로 옮기고 있습니다. 전환이 끝나면 새 인덱스 실행이 그것을 부팅합니다."
-        },
         "started": "· {age} {email}이(가) 시작",
         "startedNoActor": "· {age} 시작",
         "button": "게시 중…"
@@ -15155,7 +15117,6 @@
       "workflow": {
         "hosted": "Motir 에이전트 고정",
         "runner": "러너 고정",
-        "indexer": "인덱서 고정",
         "sandbox": "샌드박스 릴리스 {tag}",
         "run": "{workflow} · 실행 #{number}",
         "runNoNumber": "{workflow} · 실행"
@@ -15172,26 +15133,7 @@
       },
       "unset": {
         "title": "여기서 구성되지 않음",
-        "body": "이 배포에는 {variable}이(가) 설정되지 않아 비교할 고정이 없습니다.",
-        "indexerBody": "이 배포에는 MOTIR_INDEXER_IMAGE가 설정되지 않아 이 설치는 인덱싱하지 않습니다. 코드 그래프 인덱스 실행이 시작되지 않으며 비교할 고정도 없습니다."
-      },
-      "notRead": {
-        "pin": {
-          "title": "고정을 읽지 못했습니다.",
-          "body": "MOTIR_INDEXER_IMAGE가 가리키는 다이제스트에 대해 ECR이 응답하지 않아 비교하지 않으며, 여기의 어떤 것도 최신이라는 뜻이 아닙니다."
-        },
-        "newest": {
-          "title": "릴리스를 읽지 못했습니다.",
-          "body": "motir-ai의 indexer-v* 릴리스에 대해 GitHub가 응답하지 않아 고정을 어떤 것과도 비교하지 않습니다."
-        },
-        "newestEcr": {
-          "title": "릴리스를 읽지 못했습니다.",
-          "body": "인덱서 저장소의 indexer-* 릴리스 태그에 대해 ECR이 응답하지 않아 고정을 어떤 것과도 비교하지 않습니다."
-        },
-        "history": {
-          "title": "병합된 변경을 읽지 못했습니다",
-          "body": "motir-ai의 커밋 기록에 대해 GitHub가 응답하지 않아 어떤 릴리스에도 없는 변경은 나열되지 않습니다. 위의 고정과 최신 릴리스는 여전히 비교됩니다."
-        }
+        "body": "이 배포에는 {variable}이(가) 설정되지 않아 비교할 고정이 없습니다."
       },
       "loading": "{image} 불러오는 중",
       "publishError": {

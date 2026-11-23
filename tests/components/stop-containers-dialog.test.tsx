@@ -27,7 +27,7 @@ const { StopContainersDialog } =
 
 const PREVIEW = {
   ok: true as const,
-  preview: { ciRuns: 2, ciContainers: 3, hostedRuns: 0, agentInstances: 2, indexContainers: 1 },
+  preview: { ciRuns: 2, ciContainers: 3, hostedRuns: 0, agentInstances: 2 },
   countedAt: '2026-10-02T14:32:00.000Z',
 };
 
@@ -97,9 +97,9 @@ describe('StopContainersDialog', () => {
     expect(within(dialog).getByTestId('stop-effect-instances').textContent).toBe(
       '2agent instances hibernated',
     );
-    expect(within(dialog).getByTestId('stop-effect-index').textContent).toContain(
-      'index container left to finish',
-    );
+    // Three effect lines: the index line retired with the indexer (MOTIR-12040).
+    expect(within(dialog).getByTestId('stop-effects').children).toHaveLength(3);
+    expect(within(dialog).queryByTestId('stop-effect-index')).toBeNull();
     expect(within(dialog).getByText(/Nothing is blocked: Acme Corp’s next CI run/)).toBeTruthy();
   });
 

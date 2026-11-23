@@ -32,7 +32,7 @@ import { TenantAccountsCard } from './_components/TenantAccountsCard';
  * ⚠️ EACH CARD IS READ AND SETTLED ON ITS OWN, behind its own `<Suspense>`, so a
  * registry, GitHub or AWS that does not answer leaves only its own card saying
  * so (Panel 9). The publish records are one audited read, shared by the three
- * image cards (the Indexer image card left with MOTIR-12044).
+ * image cards (a fourth image card left with MOTIR-12044).
  *
  * Pools' third card, Tenant hosting accounts (MOTIR-12014; design MOTIR-12013,
  * § AMENDMENT 2026-11-22), reads each tenant AWS account's quotas live; its

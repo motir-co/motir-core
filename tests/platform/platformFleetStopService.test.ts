@@ -268,7 +268,6 @@ describe('stop', () => {
       ciContainers: 3,
       hostedRuns: 1,
       agentInstances: 2,
-      indexContainers: 1,
     });
 
     const result = await platformFleetStopService.stop(
@@ -488,7 +487,6 @@ describe('preview', () => {
       ciContainers: 0,
       hostedRuns: 0,
       agentInstances: 0,
-      indexContainers: 0,
     });
     const rows = await adminDb.platformAuditLog.findMany({ orderBy: { createdAt: 'asc' } });
     expect(rows).toHaveLength(before + 1);

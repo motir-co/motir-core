@@ -27,7 +27,6 @@ import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopR
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { billingService, type OrgActorInput } from '@/lib/services/billingService';
-import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { fleetUseService } from '@/lib/services/fleetUseService';
 import { bucketWaitingReasons, waitingBucketOf } from '@/lib/services/fleetUseCountsService';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -39,8 +38,8 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 // ⚠️ COMPOSE, NEVER RE-DERIVE. The tiles are `fleetUseService`'s figures; the
 // live hosted runs are the slots the platform stop reads; the agents are
 // `agentInstanceRepository.listLiveForOrganization`; the CI totals are the
-// statements the counts service runs and each waiting job's cause is its bucket;
-// the index count is `fleetCeilingService.orgCensus`. This service only joins
+// statements the counts service runs and each waiting job's cause is its bucket.
+// This service only joins
 // names onto rows and contains failures.
 //
 // ⚠️ ONE ORGANISATION. Every statement is filtered by the `organizationId` the
@@ -232,13 +231,6 @@ async function readCiJobs(organizationId: string): Promise<{
   };
 }
 
-async function readIndexJobs(organizationId: string, now: Date): Promise<{ running: number }> {
-  const census = await withSystemContext((tx) =>
-    fleetCeilingService.orgCensus(organizationId, now, tx),
-  );
-  return { running: census.byWorkload.code_graph_index };
-}
-
 async function readMotirStops(
   organizationId: string,
   now: Date,
@@ -279,18 +271,16 @@ export const orgFleetService = {
     const { organizationId } = input;
     // The parts are independent and each contains its own failure, so they are
     // read together: the 30 s poll waits for the slowest part, not the sum.
-    const [tiles, hostedRuns, agentInstances, ciJobs, indexJobs, motirStops, lastStop] =
-      await Promise.all([
-        contained('fleet use figures', organizationId, () => readTiles(input, now)),
-        contained('hosted runs', organizationId, () => readHostedRuns(organizationId, now)),
-        contained('agent instances', organizationId, () =>
-          readAgentInstances(organizationId, input.actorUserId),
-        ),
-        contained('CI jobs', organizationId, () => readCiJobs(organizationId)),
-        contained('index jobs', organizationId, () => readIndexJobs(organizationId, now)),
-        contained('Motir stops', organizationId, () => readMotirStops(organizationId, now)),
-        contained('last stop', organizationId, () => readLastStop(organizationId)),
-      ]);
-    return { tiles, hostedRuns, agentInstances, ciJobs, indexJobs, motirStops, lastStop };
+    const [tiles, hostedRuns, agentInstances, ciJobs, motirStops, lastStop] = await Promise.all([
+      contained('fleet use figures', organizationId, () => readTiles(input, now)),
+      contained('hosted runs', organizationId, () => readHostedRuns(organizationId, now)),
+      contained('agent instances', organizationId, () =>
+        readAgentInstances(organizationId, input.actorUserId),
+      ),
+      contained('CI jobs', organizationId, () => readCiJobs(organizationId)),
+      contained('Motir stops', organizationId, () => readMotirStops(organizationId, now)),
+      contained('last stop', organizationId, () => readLastStop(organizationId)),
+    ]);
+    return { tiles, hostedRuns, agentInstances, ciJobs, motirStops, lastStop };
   },
 };

@@ -62,7 +62,7 @@ export interface FleetUseWhereItRunsDTO {
 
 /** One of a Host org's own AWS accounts, named by what it runs — never by id.
  *  `agent_hoster` is the account that runs the org's agent instances (the
- *  former merged indexer + hoster account, re-homed in MOTIR-12038). */
+ *  former merged account, re-homed onto one agent row in MOTIR-12038). */
 export interface FleetUseHostAccountDTO {
   accountKind: 'ci_runner' | 'hosted_agent' | 'agent_hoster';
   fleetKinds: FleetUseKind[];

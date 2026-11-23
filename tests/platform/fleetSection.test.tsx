@@ -245,7 +245,9 @@ describe('organisations card', () => {
     expect(c.textContent).toContain('1,284');
     expect(c.textContent).toContain('96');
     expect(c.textContent).toContain(fleet.orgs.group.plan);
-    expect(c.textContent).toContain(fleet.orgs.group.uncapped);
+    // No index column and no "No plan figure" group: they retired with the indexer (MOTIR-12040).
+    expect(c.querySelectorAll('thead tr')[1]!.querySelectorAll('th')).toHaveLength(8);
+    expect(c.textContent).not.toContain('Index containers');
     expect(c.textContent).toContain('CI minutes · last 10 min');
 
     const rows = [...c.querySelectorAll('tbody tr')] as HTMLElement[];
@@ -315,27 +317,19 @@ describe('organisations card', () => {
     expect(c.textContent).not.toMatch(/pool/i);
     const [std, pro] = [...c.querySelectorAll('tbody tr')] as HTMLElement[];
     const cells = (r: HTMLElement) => [...r.querySelectorAll('td')].map((td) => td.textContent);
-    // Organisation · Plan · CI · hosted · agent instances · index · …
-    expect(cells(std!).slice(1, 6)).toEqual([
+    // Organisation · Plan · CI · hosted · agent instances · … — no index column (MOTIR-12040).
+    expect(cells(std!).slice(1, 5)).toEqual([
       'Standard · 1 per person',
       '4 of 5',
       '1 of 1',
       '0 of 5',
-      '2',
     ]);
-    expect(cells(pro!).slice(1, 6)).toEqual([
-      'Pro · 5 per person',
-      '2 of 10',
-      '2 of 3',
-      '7 of 30',
-      '0',
-    ]);
+    expect(cells(pro!).slice(1, 5)).toEqual(['Pro · 5 per person', '2 of 10', '2 of 3', '7 of 30']);
+    expect(cells(std!)).toHaveLength(8);
     // At the figure the bar is full and takes the warning fill; under it, the accent.
     const hostedBar = std!.querySelectorAll('td')[3]!.querySelector('[data-at-figure]');
     expect(hostedBar!.className).toContain('bg-(--el-warning)');
     expect(std!.querySelectorAll('td')[2]!.querySelector('[data-at-figure]')).toBeNull();
-    // The index cell is a bare count, always.
-    expect(std!.querySelectorAll('td')[5]!.querySelector('[aria-hidden]')).toBeNull();
   });
 
   it('an exempt org reads No plan limit, an unknown plan names its key, and an override is marked', async () => {
@@ -356,14 +350,14 @@ describe('organisations card', () => {
     ] as HTMLElement[];
     const cells = (r: HTMLElement) => [...r.querySelectorAll('td')].map((td) => td.textContent);
 
-    expect(cells(meta!).slice(1, 6)).toEqual([fleet.orgs.plan.exempt, '42', '6', '3', '2']);
+    expect(cells(meta!).slice(1, 5)).toEqual([fleet.orgs.plan.exempt, '42', '6', '3']);
     expect(meta!.textContent).not.toContain(' of ');
-    for (const td of [...meta!.querySelectorAll('td')].slice(2, 6)) {
+    for (const td of [...meta!.querySelectorAll('td')].slice(2, 5)) {
       expect(td.querySelector('[aria-hidden]')).toBeNull();
     }
 
     expect(cells(legacy!)[1]).toBe(`Plan unknown · legacy_tier${fleet.orgs.plan.unknownNote}`);
-    expect(cells(legacy!).slice(2, 6)).toEqual(['42', '6', '3', '2']);
+    expect(cells(legacy!).slice(2, 5)).toEqual(['42', '6', '3']);
     expect(cells(unread!)[1]).toBe(`Plan unknown${fleet.orgs.plan.unknownNote}`);
 
     expect(cells(over!)[2]).toBe(`42 of 7${fleet.orgs.override}`);

@@ -228,12 +228,6 @@ async function OrgsCard({
                 >
                   {t('orgs.group.plan')}
                 </th>
-                <th
-                  scope="colgroup"
-                  className="border-b-2 border-l border-dashed border-(--el-border-strong) pb-1 pl-2 pt-2 text-center font-sans text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)"
-                >
-                  {t('orgs.group.uncapped')}
-                </th>
                 <th colSpan={3} />
               </tr>
               <tr className="border-b border-(--el-border) text-left">
@@ -242,9 +236,6 @@ async function OrgsCard({
                 <Th numeric>{t('orgs.col.ciRunner')}</Th>
                 <Th numeric>{t('orgs.col.hostedAgent')}</Th>
                 <Th numeric>{t('orgs.col.agentInstance')}</Th>
-                <Th numeric own>
-                  {t('orgs.col.index')}
-                </Th>
                 <Th numeric>{t('orgs.col.accrued', { minutes })}</Th>
                 <Th numeric>{t('orgs.col.credits')}</Th>
                 <Th>{t('orgs.col.verdict')}</Th>
@@ -302,8 +293,6 @@ async function OrgRow({ row, now }: { row: FleetOrgRowDTO; now: Date }) {
       />
       {/* The org's LIVE agents, running or asleep — what its figure counts (MOTIR-9954). */}
       <UsedOf n={row.agentsLive} figure={capped(row.plan)?.agentsPerOrg ?? null} />
-      {/* Indexing is held to no plan figure: a bare count, always. */}
-      <Count n={row.byWorkload.code_graph_index} own />
       <Td numeric>
         {row.accruedMinutesInWindow === 0 ? (
           <>
@@ -919,9 +908,9 @@ export function MiniStat({
   );
 }
 
-function Count({ n, own }: { n: number; own?: boolean }) {
+function Count({ n }: { n: number }) {
   return (
-    <Td numeric own={own} className="tabular-nums">
+    <Td numeric className="tabular-nums">
       <span className={n === 0 ? 'text-(--el-text-secondary)' : 'text-(--el-text)'}>{n}</span>
     </Td>
   );

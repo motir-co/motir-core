@@ -464,7 +464,9 @@ describe('an owner or admin reads every part of their own org', () => {
       ),
     });
 
-    expect(answer.indexJobs).toEqual({ kind: 'read', running: 1 });
+    expect(Object.keys(answer).sort()).toEqual(
+      ['agentInstances', 'ciJobs', 'hostedRuns', 'lastStop', 'motirStops', 'tiles'].sort(),
+    );
   });
 });
 
@@ -504,7 +506,6 @@ describe('two organisations: each read holds its own org only', () => {
     if (answer.ciJobs.kind !== 'read') throw new Error('CI jobs not read');
     expect(answer.ciJobs.rows.map((row) => row.id)).toEqual(mine.marks.intentIds);
     expect(answer.ciJobs.inFlight).toBe(1);
-    expect(answer.indexJobs).toEqual({ kind: 'read', running: 1 });
     if (answer.motirStops.kind !== 'read') throw new Error('stops not read');
     expect(answer.motirStops.entries).toHaveLength(2);
   });
@@ -593,21 +594,12 @@ describe('Motir’s stops', () => {
       waiting: { planLimit: 0, poolFull: 0, other: 0 },
       rows: [],
     });
-    expect(answer.indexJobs).toEqual({ kind: 'read', running: 0 });
     expect(answer.motirStops).toMatchObject({ kind: 'read', entries: [] });
   });
 });
 
 describe('each part fails alone', () => {
-  const PARTS = [
-    'tiles',
-    'hostedRuns',
-    'agentInstances',
-    'ciJobs',
-    'indexJobs',
-    'motirStops',
-    'lastStop',
-  ];
+  const PARTS = ['tiles', 'hostedRuns', 'agentInstances', 'ciJobs', 'motirStops', 'lastStop'];
 
   it.each([
     ['tiles', () => vi.spyOn(fleetUseService, 'readForOrganization')],
@@ -631,11 +623,10 @@ describe('each part fails alone', () => {
     );
   });
 
-  it('the index count not read is not_read — never 0 — and the tiles report counts not read', async () => {
+  it('the census not read leaves the tiles reporting counts not read — never 0', async () => {
     await seed(a);
     vi.spyOn(fleetCeilingService, 'orgCensus').mockRejectedValue(new Error('down'));
     const answer = await read(a);
-    expect(answer.indexJobs).toEqual({ kind: 'not_read' });
     if (answer.tiles.kind !== 'read') throw new Error('tiles not read');
     expect(answer.tiles.countsRead).toBe(false);
     expect(answer.tiles.figures.agentRunsInParallel.inUse).toBeNull();

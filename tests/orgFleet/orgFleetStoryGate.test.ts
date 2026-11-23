@@ -501,7 +501,6 @@ describe('the read, both ways', () => {
     if (fleet.ciJobs.kind !== 'read') throw new Error('CI not read');
     expect(fleet.ciJobs.rows.map((r) => r.id).sort()).toEqual(Object.values(mine.intents).sort());
     expect(fleet.ciJobs.inFlight).toBe(1);
-    expect(fleet.indexJobs).toEqual({ kind: 'read', running: 1 });
     // Motir's stops: the last 7 days only, newest first, time + kind + completed.
     if (fleet.motirStops.kind !== 'read') throw new Error('kills not read');
     expect(fleet.motirStops.entries).toEqual([
@@ -550,7 +549,6 @@ describe('the preview and Stop everything, both ways', () => {
       ciContainers: 1,
       hostedRuns: 1,
       runningAgents: 3,
-      indexContainers: 1,
     });
     expectNoLeak(preview, theirs);
     expect(await snapshot(theirs)).toBe(before);
