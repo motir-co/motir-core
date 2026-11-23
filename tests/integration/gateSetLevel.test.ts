@@ -414,8 +414,11 @@ describe("THE TRIGGER SEQUENCE — MOTIR-4910 / PR #2935's shape, with NO new CI
     );
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     await openLinked(item.identifier, 76, `subtask/${item.identifier}-76`);
-    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+    // Since MOTIR-12094 a green landing on `in_progress` promotes, so the verdict lands
+    // while the card waits at `blocked`; the row is put back as a fixture, no door.
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'blocked' } });
     await ci({ conclusion: 'success', headSha: 'sha-early', number: 76 });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
     expect(await awaitingKinds(item.id)).toEqual([]);
 
     // The flip, by hand, straight to review — the rung the CI-green latch does not

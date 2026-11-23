@@ -942,6 +942,12 @@ export interface ChangeRequestMergeability {
   mergeableState: string | null;
   /** The head the answer is about — a reading is only meaningful at this commit. */
   headSha: string | null;
+  /**
+   * Whether the host reports the change request a DRAFT, read off the same response
+   * (MOTIR-12094). Absent when the host did not say, and on a reading assembled from a
+   * payload that never carried it (the reconcile tick's).
+   */
+  draft?: boolean | null;
 }
 
 /**
