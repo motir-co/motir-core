@@ -15,6 +15,9 @@ vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
 }));
 
 const { planCapsService, _resetPlanCapsCache } = await import('@/lib/services/planCapsService');
+const { capsForPlanKey, HOST_PLAN_KEY } = await import('@/lib/billing/planCaps');
+const { wireFleetKindSwitch } = await import('@/lib/ciFleet/shardTargets');
+const { fleetShardRepository } = await import('@/lib/repositories/fleetShardRepository');
 const { aiPlanGateService } = await import('@/lib/services/aiPlanGateService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { createTestUser } = await import('../fixtures/userFixtures');
@@ -137,6 +140,31 @@ describe('planCapsService.capsFor — fail closed', () => {
       kind: 'plan_unknown',
       planKey: 'legacy_tier',
     });
+  });
+});
+
+describe('planCapsService.capsFor — an own-accounts plan whose account read fails', () => {
+  it('answers the plan’s floor, never a larger figure, and logs the failure', async () => {
+    const orgId = await seedOrg();
+    getOrgSubscriptionMock.mockResolvedValue(
+      subscription({ key: HOST_PLAN_KEY, name: 'Host', monthlyCreditAllotment: 1 }),
+    );
+    wireFleetKindSwitch('agent_instance', async () => true);
+    vi.spyOn(fleetShardRepository, 'listLiveOrgOwned').mockRejectedValue(new Error('db down'));
+    try {
+      expect(await planCapsService.capsFor(orgId)).toEqual({
+        kind: 'capped',
+        planKey: HOST_PLAN_KEY,
+        planName: 'Host',
+        caps: capsForPlanKey(HOST_PLAN_KEY),
+      });
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('could not read the own accounts'),
+        { organizationId: orgId, error: 'Error' },
+      );
+    } finally {
+      wireFleetKindSwitch('agent_instance', null);
+    }
   });
 });
 

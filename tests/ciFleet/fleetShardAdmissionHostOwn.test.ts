@@ -10,6 +10,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
 import {
   fleetShardAdmissionService,
+  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
   OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND,
   SHARD_CAPACITY_DETAIL,
 } from '@/lib/services/fleetShardAdmissionService';
@@ -377,6 +378,17 @@ describe('a full own account', () => {
         organizationId: host.organizationId,
       }),
     ).toBe(OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND.ci_runner);
+  });
+
+  it('with no live own account, the capacity words are the shared pool’s for each kind', async () => {
+    onPool();
+    const host = await seedTenant();
+    const words = async (fleetKind: FleetWorkloadKind) =>
+      fleetShardAdmissionService.capacityDetail({ fleetKind, organizationId: host.organizationId });
+
+    expect(await words('hosted_agent')).toBe(HOSTED_AGENT_SHARD_CAPACITY_DETAIL);
+    expect(await words('ci_runner')).toBe(SHARD_CAPACITY_DETAIL);
+    expect(await words('agent_instance')).toBe(SHARD_CAPACITY_DETAIL);
   });
 
   it("CI admission tells the org it waits for its own account's capacity", async () => {

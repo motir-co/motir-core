@@ -119,10 +119,9 @@ type ShardInFlightCounter = (
   tx: Prisma.TransactionClient,
 ) => Promise<number>;
 
-/** Each kind's per-account counter. CI, the agent runner (MOTIR-9421) and the
- *  agent hoster (MOTIR-9471) are wired here. A
- *  slot-backed kind counts its live fleet slots on the account, never another
- *  workload's. */
+/** Each kind's per-account counter: CI, the agent runner (MOTIR-9421) and the
+ *  agent hoster (MOTIR-9471). A slot-backed kind counts its live fleet slots on
+ *  the account, never another workload's. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
   ci_runner: (shardId, _now, tx) => intents.countInFlightForShardInTx(shardId, tx),
   hosted_agent: (shardId, now, tx) =>
@@ -266,11 +265,6 @@ export const fleetShardAdmissionService = {
     if (await this.installFleetTakesInTx(job, tx)) return { shardId: null, installFleet: true };
     if (!options.switchRead && !(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
 
-    const countInFlight = IN_FLIGHT_ON_SHARD[job.fleetKind];
-    if (!countInFlight) {
-      throw new Error(`fleet kind ${job.fleetKind} has no per-account in-flight count yet`);
-    }
-
     let best: { shardId: string; headroom: number } | null = null;
     const shards = await this.selectionSetInTx(job, tx);
     // The set is the org's own account or shared accounts, never a mix.
@@ -279,7 +273,8 @@ export const fleetShardAdmissionService = {
       if (options.exclude?.has(shard.id)) continue;
       if (shard.admissionPausedUntil && shard.admissionPausedUntil > now) continue;
       const ceiling = own ? await this.ownCeilingInTx(shard, tx) : this.effectiveCeiling(shard);
-      const headroom = ceiling - (await countInFlight(shard.id, now, tx));
+      const headroom =
+        ceiling - (await this.countInFlightOnShardInTx(job.fleetKind, shard.id, now, tx));
       if (headroom <= 0) continue;
       if (
         best === null ||
@@ -326,21 +321,6 @@ export const fleetShardAdmissionService = {
     );
     if (shard.fleetKind === 'agent_instance') return mergedAccountSplit(granted).agentCap;
     return shardAdmissionCeiling({ vcpuQuota: granted, machineLimit: null }) ?? 0;
-  },
-
-  /**
-   * Does the org's own account take this kind's jobs (MOTIR-9589) — the kind is
-   * on its pool and the org has a live own account of it. The same switch and
-   * live-own read `chooseInTx` places by, so a caller exempting the org from a
-   * shared bound can never disagree with where the job lands.
-   */
-  async ownAccountTakesInTx(
-    job: ShardPlacementJob,
-    tx: Prisma.TransactionClient,
-  ): Promise<boolean> {
-    if (!(await fleetKindOnPool(job.fleetKind))) return false;
-    const own = await this.ownAccountInTx(job, tx);
-    return own !== null && own !== 'plan_unknown';
   },
 
   /**
