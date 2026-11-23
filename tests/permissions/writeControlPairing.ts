@@ -327,6 +327,14 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
     kind: 'known-gap',
     card: 'MOTIR-6319',
   },
+  // A project-settings link's switch (MOTIR-12169) is rendered by the settings
+  // area layout only after `projectsService.resolveByKey` — browse-gated —
+  // found the named project; the action's own missing `project:browse` check
+  // is MOTIR-6319's to add.
+  'app/(authed)/settings/project/_components/ProjectLinkSwitch.tsx': {
+    kind: 'known-gap',
+    card: 'MOTIR-6319',
+  },
   'app/(authed)/items/[key]/_components/DevelopmentLinkControl.tsx': {
     kind: 'mounted-by',
     parents: ['app/(authed)/items/[key]/_components/LateSections.tsx'],
