@@ -17,13 +17,7 @@ import {
   type ReleaseHandle,
   type ReleaseLogLine,
 } from '../src/index';
-import {
-  IMAGE,
-  START,
-  awsHarness,
-  serverlessHarness,
-  type HostingHarness,
-} from './contract/hostingHarnesses';
+import { IMAGE, START, awsHarness, type HostingHarness } from './contract/hostingHarnesses';
 
 // THE PORT'S RUNTIME READS (Story MOTIR-9799 · MOTIR-12099) — `readLogs` and
 // `readHealth`, held on the fake exactly as a real adapter must answer them,
@@ -364,9 +358,9 @@ describe('the runtime reads in the call log and across processes', () => {
 });
 
 describe('the real adapters refuse both reads by name until their own cards build them', () => {
-  // Fly reads both since MOTIR-12102 (`flyHosting.test.ts`).
+  // Fly reads both since MOTIR-12102 (`flyHosting.test.ts`), serverless since
+  // MOTIR-12103 (`serverlessRuntimeReads.test.ts`).
   const REAL: ReadonlyArray<readonly [string, () => HostingHarness]> = [
-    ['serverless', serverlessHarness],
     ['aws', () => awsHarness('function')],
   ];
 

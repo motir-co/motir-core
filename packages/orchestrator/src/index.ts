@@ -54,6 +54,7 @@ export * from './hosting/names';
 export * from './hosting/usage';
 export * from './hosting/shape';
 export * from './hosting/originSecret';
+export * from './hosting/logWindow';
 export * from './adapters/fake/hosting';
 export * from './adapters/fake/hostingStore';
 export * from './adapters/fly/hosting';
