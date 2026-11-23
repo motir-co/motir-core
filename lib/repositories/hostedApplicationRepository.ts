@@ -84,6 +84,30 @@ export interface HostedApplicationTeardown {
   customDomainCount: number;
 }
 
+/** What the teardown reads select. */
+const TEARDOWN_SELECT = {
+  id: true,
+  projectRepositoryId: true,
+  target: true,
+  state: true,
+  slug: true,
+  productionAddress: true,
+  productionAppName: true,
+  currentReleaseId: true,
+  previousReleaseId: true,
+  databaseProjectId: true,
+  _count: { select: { customDomains: true } },
+} as const;
+
+function toTeardown(
+  row: Omit<HostedApplicationTeardown, 'customDomainCount'> & {
+    _count: { customDomains: number };
+  },
+): HostedApplicationTeardown {
+  const { _count, ...rest } = row;
+  return { ...rest, customDomainCount: _count.customDomains };
+}
+
 export const hostedApplicationRepository = {
   async findById(
     id: string,
@@ -310,23 +334,32 @@ export const hostedApplicationRepository = {
   ): Promise<HostedApplicationTeardown | null> {
     const row = await tx.hostedApplication.findUnique({
       where: { projectRepositoryId },
-      select: {
-        id: true,
-        projectRepositoryId: true,
-        target: true,
-        state: true,
-        slug: true,
-        productionAddress: true,
-        productionAppName: true,
-        currentReleaseId: true,
-        previousReleaseId: true,
-        databaseProjectId: true,
-        _count: { select: { customDomains: true } },
-      },
+      select: TEARDOWN_SELECT,
     });
-    if (!row) return null;
-    const { _count, ...rest } = row;
-    return { ...rest, customDomainCount: _count.customDomains };
+    return row ? toTeardown(row) : null;
+  },
+
+  /** The same teardown read, by the application's own id — what the stop at
+   *  the end of a grace window reads (MOTIR-12135). */
+  async findTeardownById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationTeardown | null> {
+    const row = await tx.hostedApplication.findUnique({ where: { id }, select: TEARDOWN_SELECT });
+    return row ? toTeardown(row) : null;
+  },
+
+  /**
+   * Forget the application's production database once the provider has deleted
+   * it (MOTIR-12135): the database project id and the encrypted URL, so a
+   * retried stop has no database left to delete and nothing can decrypt a URL
+   * to a database that no longer exists. Idempotent.
+   */
+  async clearDatabase(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.hostedApplication.updateMany({
+      where: { id },
+      data: { databaseProjectId: null, databaseUrlCiphertext: null },
+    });
   },
 
   /**
@@ -466,5 +499,15 @@ export const hostedApplicationRepository = {
    */
   async lockRollback(id: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hosted-application-rollback:${id}`}, 0))`;
+  },
+
+  /**
+   * Serialize the stops of ONE application (MOTIR-12135) — the sweep's and an
+   * admin's Stop now: a transaction-scoped advisory lock, released when `tx`
+   * ends, held across the provider calls and the final export, which the row
+   * lock must never be.
+   */
+  async lockStop(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hosted-application-stop:${id}`}, 0))`;
   },
 };

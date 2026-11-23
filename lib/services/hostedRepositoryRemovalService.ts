@@ -15,9 +15,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { hostInstallationIdOf } from '@/lib/services/projectRepoTakeoverService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
-import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
-import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
-import { getDatabasePort } from '@/lib/orchestrator/database';
+import { productionTeardownService } from '@/lib/services/productionTeardownService';
 import { repoDeletionClient } from '@/lib/github/repoDeletion';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
@@ -251,38 +249,8 @@ export const hostedRepositoryRemovalService = {
   /** Production's teardown. Each call is idempotent on a second run: a destroyed
    *  app returns no usage, a deleted database zero, a deleted row nothing. */
   async tearDownProduction(app: HostedApplicationTeardown, workspaceId: string): Promise<void> {
-    if (app.currentReleaseId) {
-      // Never throws: a usage the port cannot read is logged and skipped.
-      await hostedReleaseUsageService.settleReleaseUsage(app.currentReleaseId);
-    }
-    const port = getHostingDeployPort(app.target);
-    const appRef =
-      app.productionAppName ??
-      (app.currentReleaseId || app.previousReleaseId
-        ? (
-            await port.ensureApp({
-              repositoryId: app.projectRepositoryId,
-              environment: { kind: 'production' },
-            })
-          ).appRef
-        : null);
-    if (appRef) await port.destroyApp({ appRef });
-    // The app is gone: forget the releases and its name, so a retry after a
-    // later step fails neither re-settles usage (which re-resolves the app on
-    // the host) nor destroys it again.
-    if (app.currentReleaseId || app.previousReleaseId || app.productionAppName) {
-      await withWorkspaceServiceContext(workspaceId, (tx) =>
-        hostedApplicationRepository.clearProductionPointers(app.id, tx),
-      );
-    }
-    if (app.databaseProjectId) {
-      const databases = getDatabasePort();
-      await databases.deleteDatabase({
-        provider: databases.provider,
-        applicationRef: app.projectRepositoryId,
-        databaseRef: app.databaseProjectId,
-      });
-    }
+    await productionTeardownService.removeProductionApp(app, workspaceId);
+    await productionTeardownService.deleteProductionDatabase(app, workspaceId);
     await withWorkspaceServiceContext(workspaceId, (tx) =>
       hostedApplicationRepository.deleteById(app.id, tx),
     );

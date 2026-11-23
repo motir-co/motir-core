@@ -215,6 +215,40 @@ export class ExportFailedError extends Error {
   }
 }
 
+/** An application that cannot be stopped: it is neither in its grace window
+ *  nor already handed over (MOTIR-12135). Nothing was called. → 409 */
+export class ApplicationNotStoppableError extends Error {
+  readonly code = 'APPLICATION_NOT_STOPPABLE' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly state: string,
+  ) {
+    super(`Application ${applicationId} is ${state}, not in its grace window.`);
+    this.name = 'ApplicationNotStoppableError';
+  }
+}
+
+/** The step of a grace-window stop that failed (MOTIR-12135). */
+export type ApplicationStopStep = 'stop_serving' | 'final_export' | 'delete_database' | 'record';
+
+/**
+ * A grace-window stop stopped at `step`; the application is still `grace` and
+ * the next sweep or Stop now continues from that step. `detail` is the failing
+ * call's error code or class name only — never a provider body or a
+ * connection string. → 502
+ */
+export class ApplicationStopFailedError extends Error {
+  readonly code = 'APPLICATION_STOP_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly step: ApplicationStopStep,
+    readonly detail: string,
+  ) {
+    super(`Stopping ${applicationId} failed at ${step} (${detail}).`);
+    this.name = 'ApplicationStopFailedError';
+  }
+}
+
 /** The step of production enablement that failed (MOTIR-10027). */
 export type ProductionEnablementStep =
   | 'repository'

@@ -815,6 +815,10 @@ export interface JobEventDataMap {
    *  has passed. Cross-tenant by design: it visits every workspace holding a
    *  serverless or Fly application. */
   'system.hosted-application-export-expire': SystemScheduledData;
+  /** The grace-window stop sweep (Story MOTIR-9800 · MOTIR-12135) — stops each
+   *  `grace` serverless or Fly application whose `stopsAt` has passed, one step
+   *  per application. Cross-tenant by design. */
+  'system.hosting-application-grace-stop': SystemScheduledData;
   /** The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509) — deletes the
    *  public-hostname reservations whose hold has lapsed. Cross-tenant by design. */
   'system.public-hostname-reservation-sweep': SystemScheduledData;
@@ -941,8 +945,9 @@ export interface JobEventDataMap {
   'hosting.tenant-handover.advance': TenantHandoverAdvanceData;
   /** A serverless or Fly application's grace-window notice (Story MOTIR-9800):
    *  `transferred` is enqueued by `hostedApplicationHandoverService.startGrace`
-   *  when the repository's transfer is recorded (MOTIR-12132); the reminders and
-   *  the stop by the notices card. Ids only; keyed per application and kind. */
+   *  when the repository's transfer is recorded (MOTIR-12132), `stopped` by
+   *  `stopApplication` once the stop is recorded (MOTIR-12135); the reminders by
+   *  the notices card. Ids only; keyed per application and kind. */
   'hosting.application-grace.notice': ApplicationGraceNoticeData;
   /** An organisation admin's on-demand export of a grace-window application's
    *  database (Story MOTIR-9800 · MOTIR-12134): the dump, which outlives a

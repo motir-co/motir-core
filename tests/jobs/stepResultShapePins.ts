@@ -664,6 +664,17 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ code: "EXPORT_NOT_ALLOWED" | "EXPORT_NOT_FOUND" | "EXPORT_TARGET_UNSUPPORTED" | "ORG_FORBIDDEN"; exportId?: undefined; outcome: "refused" } | { code?: undefined; exportId: string; outcome: "stored" }',
   },
+  // MOTIR-12135 — the grace-window stop sweep: the due applications, then one
+  // stop per application, answered rather than thrown.
+  'list-grace-applications-due': {
+    file: 'lib/jobs/definitions/hostedApplicationGraceStop.ts',
+    shape: 'Array<string>',
+  },
+  '`grace-stop:${applicationId}`': {
+    file: 'lib/jobs/definitions/hostedApplicationGraceStop.ts',
+    shape:
+      '{ outcome: "already_stopped" | "stopped" } | { outcome: "failed" } | { outcome: "skipped" }',
+  },
   // MOTIR-12134 — the grace-window exports' expiry sweep.
   'sweep-expired-hosting-exports': {
     file: 'lib/jobs/definitions/hostedApplicationExport.ts',
