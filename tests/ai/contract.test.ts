@@ -45,6 +45,10 @@ const CANONICAL_ERROR_CODES = [
   // in `errorFromProblem` so nobody reads it as retryable.
   'model_unreachable',
   'internal_error',
+  // `codegraph_unavailable` (Story MOTIR-11870 — motir-ai MOTIR-12054, this side
+  // MOTIR-12055): 503, motir-ai could not reach motir-codegraph. The code-graph
+  // forward's one retryable answer; named in `errorFromProblem`.
+  'codegraph_unavailable',
 ] as const;
 
 // contract.md §2.3 — the jobKind enum. KEEP IN SYNC with motir-ai.
@@ -122,6 +126,7 @@ const EXPECTED_MAPPING: Record<string, new (...args: never[]) => MotirAiError> =
   model_unreachable: MotirAiBadRequestError, // 422 — a different model or a gateway fix, never a retry
   ai_job_abandoned: MotirAiUnavailableError, // 500 — same class as ai_job_failed; the DISCRIMINATION is the code, not the type
   internal_error: MotirAiUnavailableError,
+  codegraph_unavailable: MotirAiUnavailableError, // 503 — the code-graph forward retries it
 };
 
 function problemFor(code: string, status = 400): Problem {
@@ -138,7 +143,9 @@ describe('contract: error taxonomy (§5)', () => {
             ? 404
             : code === 'out_of_credits'
               ? 402
-              : 400;
+              : code === 'codegraph_unavailable'
+                ? 503
+                : 400;
       const err = errorFromProblem(problemFor(code, status));
       expect(err, `code ${code}`).toBeInstanceOf(EXPECTED_MAPPING[code]!);
     }
