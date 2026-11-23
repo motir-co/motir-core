@@ -289,13 +289,20 @@ function releaseUsage(until: Date, seconds = 3600) {
   );
 }
 
-/** Move an application's slices one day back — a day that has ended. */
+/**
+ * Move an application's slices into a UTC day that has ended. The windows end
+ * an hour after the release went live, so after 23:00 UTC that end is
+ * tomorrow, and one day back would still be today; a day and an hour back
+ * always lands before the start of today.
+ */
+const INTO_ENDED_DAY = DAY + HOUR;
+
 async function intoYesterday(applicationId: string): Promise<void> {
   await adminDb.$executeRaw`
     UPDATE "production_usage_slice"
-       SET "slice_start" = "slice_start" - (${DAY} * INTERVAL '1 millisecond'),
-           "slice_end" = "slice_end" - (${DAY} * INTERVAL '1 millisecond'),
-           "charge_day" = date_trunc('day', ("slice_end" - (${DAY} * INTERVAL '1 millisecond')) - INTERVAL '1 millisecond')
+       SET "slice_start" = "slice_start" - (${INTO_ENDED_DAY} * INTERVAL '1 millisecond'),
+           "slice_end" = "slice_end" - (${INTO_ENDED_DAY} * INTERVAL '1 millisecond'),
+           "charge_day" = date_trunc('day', ("slice_end" - (${INTO_ENDED_DAY} * INTERVAL '1 millisecond')) - INTERVAL '1 millisecond')
      WHERE "application_id" = ${applicationId}`;
 }
 
