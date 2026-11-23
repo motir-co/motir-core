@@ -82,6 +82,24 @@ export const publicAddressRepository = {
   },
 
   /**
+   * The customer domains BOUND to one application, by hostname — what a
+   * handover unbinds when Motir stops serving that application (Story MOTIR-9800
+   * · MOTIR-12129), and what its screen lists before the stop.
+   *
+   * Takes the caller's `tx`, the transaction that unbinds them: the read and
+   * the writes see the same rows.
+   */
+  async listCustomDomainsByApplication(
+    applicationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PublicAddress[]> {
+    return tx.publicAddress.findMany({
+      where: { applicationId, kind: 'custom_domain' },
+      orderBy: { hostname: 'asc' },
+    });
+  },
+
+  /**
    * Every address in one workspace — its live subdomain, its retained aliases,
    * and every customer domain it holds — INSIDE the caller's transaction.
    *
