@@ -1,11 +1,14 @@
-import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
+import {
+  OrchestratorApiError,
+  OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
+} from '../../errors';
 import {
   LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
   ReleaseRuntimeRefusedError,
-  RUNTIME_READ_NOT_BUILT,
   RuntimeHealthUnavailableError,
 } from '../../hosting/errors';
 import { hostingAppNames, pushNamespaceName } from '../../hosting/names';
@@ -20,6 +23,11 @@ import type {
   ReleaseDescription,
   ReleaseHandle,
   ReleaseIdlePolicy,
+  ReleaseLastExit,
+  ReleaseLogLine,
+  ReleaseLogPage,
+  ReleaseLogQuery,
+  ReleaseRuntimeHealth,
   ReleaseSize,
   ReleaseState,
   ReleaseSummary,
@@ -30,10 +38,13 @@ import {
   exitCodeOf,
   flyErrorDetail,
   flyGraphqlRequest,
+  flyLogsRequest,
   flyMachinesClientFor,
   flyRequest,
   readFlyJson,
   toFlyMachine,
+  type FlyLogEntry,
+  type FlyLogPage,
   type FlyMachine,
 } from './flyMachines';
 import { flyAppProvisioning } from './persistent';
@@ -404,6 +415,291 @@ export function runTransitionsOf(machine: FlyMachine): RunTransition[] {
     }
     return [];
   });
+}
+
+// ── The runtime reads (MOTIR-12102) ─────────────────────────────────────────
+
+type FlyMachineEvent = FlyMachine['events'][number];
+type DatedEvent = FlyMachineEvent & { timestamp: Date };
+
+/** Fly states of a Machine whose process is not running. */
+const DOWN_STATES = new Set(['stopped', 'stopping', 'suspended', 'suspending', 'failed']);
+
+function latestOf(
+  events: readonly DatedEvent[],
+  match: (event: DatedEvent) => boolean,
+): DatedEvent | null {
+  let latest: DatedEvent | null = null;
+  for (const event of events) {
+    if (match(event) && (latest === null || event.timestamp >= latest.timestamp)) latest = event;
+  }
+  return latest;
+}
+
+/**
+ * The release Machine → the runtime state the port reports (MOTIR-12102), from
+ * its state and its event log alone — no request, so every case is pinned by a
+ * recorded log.
+ *
+ * Only the events since the current release was put in place count: the latest
+ * `launch` or `update` (a deploy and a rollback are both an update of the one
+ * release Machine), else the Machine's creation. An exit is told apart by its
+ * exit event's `requested_stop`: an exit somebody ASKED for — Fly's proxy
+ * stopping or suspending an idle Machine, an update replacing the process — is
+ * not the process ending on its own. So:
+ *
+ * - `deploying` while the Machine is created, starting, replacing or updating,
+ *   since the update (or launch) that began it;
+ * - `running` while it is started, since its latest start, with `lastExit` the
+ *   newest unrequested exit Fly restarted it from (the exit event says
+ *   `restarting`, or a start follows it);
+ * - `suspended` while it is suspended, or stopped by a request, since the
+ *   suspend or stop;
+ * - `exited` (with its code) or `oom_killed` (the exit event's `oom_killed`)
+ *   while it is down after an exit nobody asked for, since that exit — and a
+ *   `failed` Machine is `exited` whatever its last exit was.
+ *
+ * Each `since` falls back to the update, then the Machine's `updated_at`, then
+ * its `created_at`, when Fly kept no event for it.
+ */
+export function runtimeHealthOf(machine: FlyMachine): ReleaseRuntimeHealth {
+  const dated = machine.events.filter((e): e is DatedEvent => e.timestamp !== null);
+  const put = latestOf(dated, (e) => e.type === 'launch' || e.type === 'update');
+  const from = put?.timestamp ?? machine.createdAt;
+  const current = from ? dated.filter((e) => e.timestamp >= from) : dated;
+  const fallback = from ?? machine.updatedAt ?? machine.createdAt ?? new Date(0);
+  const unrequestedExit = (e: DatedEvent) => e.type === 'exit' && !e.requestedStop;
+
+  if (machine.state === 'started') {
+    const start = latestOf(current, (e) => e.type === 'start');
+    const restarted = latestOf(
+      current,
+      (e) =>
+        unrequestedExit(e) &&
+        (e.restarting || current.some((s) => s.type === 'start' && s.timestamp > e.timestamp)),
+    );
+    const lastExit: ReleaseLastExit | null = restarted
+      ? { exitCode: restarted.exitCode, oomKilled: restarted.oomKilled, at: restarted.timestamp }
+      : null;
+    return {
+      state: 'running',
+      since: start?.timestamp ?? fallback,
+      ...(lastExit ? { lastExit } : {}),
+    };
+  }
+  if (DOWN_STATES.has(machine.state)) {
+    const exit = latestOf(current, (e) => e.type === 'exit');
+    const halt = latestOf(current, (e) => e.type === 'stop' || e.type === 'suspend');
+    const exitedOnItsOwn =
+      exit !== null && !exit.requestedStop && (halt === null || halt.timestamp <= exit.timestamp);
+    if (machine.state === 'failed' || exitedOnItsOwn) {
+      if (exit?.oomKilled) return { state: 'oom_killed', since: exit.timestamp };
+      return {
+        state: 'exited',
+        exitCode: exit?.exitCode ?? null,
+        since: exit?.timestamp ?? fallback,
+      };
+    }
+    return { state: 'suspended', since: halt?.timestamp ?? exit?.timestamp ?? fallback };
+  }
+  // `created`, `starting`, `replacing`, `updating` — and any state Fly adds
+  // that is none of the above, which is read as on its way rather than as down.
+  return { state: 'deploying', since: fallback };
+}
+
+/** A log read with no `since` reads this far back: Fly's own window for a read
+ *  with no cursor (24 hours). */
+export const FLY_LOG_DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** The newest slice a log read starts with; each older slice doubles it. */
+const FLY_LOG_FIRST_SLICE_NS = 5n * 60n * 1_000_000_000n;
+/** The narrowest slice — a slice this short that still overflows its pages is
+ *  read as far as its pages go. */
+const FLY_LOG_MIN_SLICE_NS = 1_000_000_000n;
+/** Pages read for one slice before it is narrowed. */
+export const FLY_LOG_PAGES_PER_SLICE = 10;
+/** Requests one `readLogs` may make before it answers what it has and a cursor
+ *  to the rest. */
+export const FLY_LOG_MAX_REQUESTS = 40;
+
+const NS_PER_MS = 1_000_000n;
+
+/** Where a log page stopped: lines strictly before `b` (ns), and the lines AT `b`
+ *  whose ids are not in `s` — those were already answered. */
+interface FlyLogCursor {
+  readonly b: bigint;
+  readonly s: readonly string[];
+}
+
+function encodeFlyLogCursor(cursor: FlyLogCursor): string {
+  return Buffer.from(JSON.stringify({ b: String(cursor.b), s: cursor.s })).toString('base64url');
+}
+
+function decodeFlyLogCursor(appRef: string, cursor: string): FlyLogCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+      b?: unknown;
+      s?: unknown;
+    };
+    if (
+      typeof parsed.b === 'string' &&
+      /^\d{1,30}$/.test(parsed.b) &&
+      Array.isArray(parsed.s) &&
+      parsed.s.every((id) => typeof id === 'string')
+    ) {
+      return { b: BigInt(parsed.b), s: parsed.s as string[] };
+    }
+  } catch {
+    // fall through to the refusal
+  }
+  throw new OrchestratorApiError('fly', 400, `app ${appRef}: "${cursor}" is not a log cursor`);
+}
+
+/** Newest first; at one instant, by id, so a page is the same on every read. */
+function newerLogFirst(a: FlyLogEntry, b: FlyLogEntry): number {
+  if (a.atNs !== b.atNs) return a.atNs > b.atNs ? -1 : 1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+function logLineOf(entry: FlyLogEntry): ReleaseLogLine {
+  return {
+    at: new Date(Number(entry.atNs / NS_PER_MS)),
+    stream: entry.provider === 'app' ? 'app' : 'platform',
+    message: entry.message,
+  };
+}
+
+/** One page of an app's logs after a token, or a typed failure. */
+export type FlyLogFetch = (app: string, nextToken: string) => Promise<FlyLogPage>;
+
+/**
+ * A release's logs, NEWEST FIRST, from an API that only pages FORWARD.
+ *
+ * Reading forward from `since` would spend the request budget on the oldest
+ * lines of a busy app and never reach the newest, which are the ones a person
+ * reads. So the window is read in SLICES from its newest end: the last five
+ * minutes first, then each older slice twice as long, each read forward to its
+ * end. A slice that overflows its {@link FLY_LOG_PAGES_PER_SLICE} pages is
+ * narrowed toward its newer end — to the part its pages did not reach, or to
+ * half when that is more — and read again, so a burst is never skipped for
+ * older lines.
+ * A slice already at {@link FLY_LOG_MIN_SLICE_NS} is read to its end whatever
+ * its pages. The read stops once more matching lines than the limit are in hand
+ * (so it knows a further page exists), the window is read, or the request
+ * budget is spent — then it answers what it has, with a cursor to the unread
+ * rest.
+ */
+export async function readFlyLogWindow(
+  app: string,
+  query: ReleaseLogQuery,
+  now: Date,
+  fetchPage: FlyLogFetch,
+): Promise<ReleaseLogPage> {
+  if (!Number.isInteger(query.limit) || query.limit < 1) {
+    throw new OrchestratorApiError('fly', 400, 'a log limit must be a positive integer');
+  }
+  const cursor = query.cursor ? decodeFlyLogCursor(app, query.cursor) : null;
+  const untilEnd = BigInt((query.until ?? now).getTime() + 1) * NS_PER_MS;
+  const lowest = query.since
+    ? BigInt(query.since.getTime()) * NS_PER_MS
+    : untilEnd - BigInt(FLY_LOG_DEFAULT_WINDOW_MS) * NS_PER_MS;
+  const needle = query.filter ? query.filter.toLowerCase() : null;
+  const answered = new Set(cursor?.s ?? []);
+  const keep = (e: FlyLogEntry) =>
+    (needle === null || e.message.toLowerCase().includes(needle)) &&
+    !(cursor !== null && e.atNs === cursor.b && answered.has(e.id));
+
+  let requests = FLY_LOG_MAX_REQUESTS;
+
+  /** The lines in [start, end), read forward at most `maxPages` pages (and
+   *  never past the request budget). `complete` is false when the pages ran
+   *  out before the slice's end; `pages` is how many were read. */
+  async function readSlice(
+    start: bigint,
+    end: bigint,
+    maxPages: number,
+  ): Promise<{ lines: FlyLogEntry[]; complete: boolean; pages: number }> {
+    const lines: FlyLogEntry[] = [];
+    // Fly answers the lines AFTER the token, so one nanosecond before `start`
+    // takes the lines at it too.
+    let token = start - 1n;
+    let pages = 0;
+    while (pages < maxPages && requests > 0) {
+      requests -= 1;
+      pages += 1;
+      const page = await fetchPage(app, String(token));
+      let passedEnd = false;
+      for (const entry of page.entries) {
+        if (entry.atNs >= end) passedEnd = true;
+        else if (entry.atNs >= start) lines.push(entry);
+      }
+      const next =
+        page.nextToken !== null && /^\d{1,30}$/.test(page.nextToken)
+          ? BigInt(page.nextToken)
+          : null;
+      if (passedEnd || page.entries.length === 0 || next === null || next <= token || next >= end) {
+        return { lines, complete: true, pages };
+      }
+      token = next;
+    }
+    return { lines, complete: false, pages };
+  }
+
+  const found = new Map<string, FlyLogEntry>();
+  let end = cursor ? (cursor.b + 1n < untilEnd ? cursor.b + 1n : untilEnd) : untilEnd;
+  let size = FLY_LOG_FIRST_SLICE_NS;
+  let unread = false;
+  while (end > lowest && found.size <= query.limit) {
+    if (requests <= 0) {
+      unread = true;
+      break;
+    }
+    const start = end - size > lowest ? end - size : lowest;
+    const narrowest = end - start <= FLY_LOG_MIN_SLICE_NS;
+    const slice = await readSlice(start, end, narrowest ? Infinity : FLY_LOG_PAGES_PER_SLICE);
+    if (!slice.complete && !narrowest && requests > 0) {
+      // Narrow toward the newer end: to the part the pages did not reach when
+      // that is under half the slice (a burst at its newer end), else to half.
+      const last = slice.lines[slice.lines.length - 1];
+      const half = (end - start) / 2n;
+      const rest = last ? end - last.atNs : half;
+      size = rest < half ? rest : half;
+      continue;
+    }
+    if (!slice.complete) {
+      // The budget ran out inside a slice. With lines in hand,
+      // leave the slice unread for the cursor; with none, answer its older
+      // part rather than a page that would never move.
+      unread = true;
+      if (found.size > 0) break;
+      for (const entry of slice.lines) if (keep(entry)) found.set(entry.id, entry);
+      end = start;
+      break;
+    }
+    for (const entry of slice.lines) if (keep(entry)) found.set(entry.id, entry);
+    size = (end - start) * 2n;
+    end = start;
+  }
+
+  const matching = [...found.values()].sort(newerLogFirst);
+  const page = matching.slice(0, query.limit);
+  const oldest = page[page.length - 1];
+  let next: FlyLogCursor | null = null;
+  if (oldest && matching.length > page.length) {
+    next = { b: oldest.atNs, s: page.filter((e) => e.atNs === oldest.atNs).map((e) => e.id) };
+  } else if (unread && end - 1n >= lowest) {
+    // The budget ran out: everything before `end` is unread.
+    next = { b: end - 1n, s: [] };
+  }
+  return { lines: page.map(logLineOf), cursor: next ? encodeFlyLogCursor(next) : null };
+}
+
+/** Why Fly could not answer a runtime read, without the provider's words. */
+function unavailableReason(error: unknown): string | null {
+  if (error instanceof OrchestratorTimeoutError) return 'the request timed out';
+  if (error instanceof OrchestratorApiError) {
+    return error.status === null ? 'the request failed' : `Fly answered HTTP ${error.status}`;
+  }
+  return null;
 }
 
 function defaultReleaseId(): string {
@@ -853,15 +1149,37 @@ export function createFlyHostingDeployPort(
       }
     },
 
-    // The runtime reads (MOTIR-12099) are this target's own cards; until each
-    // lands, a read is refused by name, and a caller shows the target's logs or
-    // health as unavailable rather than failing.
-    async readLogs() {
-      throw new LogsUnavailableError('fly', RUNTIME_READ_NOT_BUILT);
+    // The runtime reads (MOTIR-12102). The logs come from Fly's logs API for the
+    // whole app — it runs one release Machine, so its stream is the release's
+    // (the guard's lines included, as they come); the health from that Machine.
+    async readLogs(handle, query) {
+      const unavailable = (error: unknown): never => {
+        const reason = unavailableReason(error);
+        if (reason === null) throw error;
+        throw new LogsUnavailableError('fly', reason);
+      };
+      const live = await releaseMachines(handle.appRef).catch(unavailable);
+      if (!live.some((m) => m.state !== 'destroyed')) {
+        throw new ReleaseNotFoundError(handle.appRef);
+      }
+      return readFlyLogWindow(handle.appRef, query, now(), (app, next) =>
+        flyLogsRequest(app, next, token).catch(unavailable),
+      );
     },
 
-    async readHealth() {
-      throw new RuntimeHealthUnavailableError('fly', RUNTIME_READ_NOT_BUILT);
+    async readHealth(handle) {
+      let read: Awaited<ReturnType<typeof readMachine>>;
+      try {
+        read = await readMachine(handle.appRef, handle.providerRef);
+      } catch (error) {
+        const reason = unavailableReason(error);
+        if (reason === null) throw error;
+        throw new RuntimeHealthUnavailableError('fly', reason);
+      }
+      if (!read || read.machine.state === 'destroyed' || read.machine.state === 'destroying') {
+        throw new ReleaseNotFoundError(handle.appRef);
+      }
+      return runtimeHealthOf(read.machine);
     },
   };
 }
