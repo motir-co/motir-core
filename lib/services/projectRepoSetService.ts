@@ -48,9 +48,12 @@ import {
 } from '@/lib/projectRepos/vocabulary';
 import { seedEntryFitsRow } from '@/lib/projectRepos/seedMatching';
 import {
+  HOSTING_SHAPES,
   HOSTING_SIZES,
   HOSTING_TARGETS,
   HOSTING_USE_CASES,
+  SHAPED_HOSTING_TARGET,
+  isHostingShape,
   isHostingSize,
   isHostingTarget,
   type HostingTarget,
@@ -1260,23 +1263,29 @@ export const projectRepoSetService = {
   },
 
   /**
-   * Record where a Motir repo's app runs, what it is for and how big it is
-   * (MOTIR-9808) — the plan's hosting decision and build directly are the two
-   * callers. One locked transaction; returns the row's DTO.
+   * Record where a Motir repo's app runs, what it is for, how big it is
+   * (MOTIR-9808) and, on `aws`, which shape it takes (MOTIR-12093) — the plan's
+   * hosting decision and build directly are the two callers. One locked
+   * transaction; returns the row's DTO.
    *
    * Refuses, changing nothing: a value outside the vocabulary
-   * (`ProjectRepoInvalidFieldError` naming `target` / `useCase` / `size`), a
-   * customer row (`ProjectRepoNotMotirHostedError`, D1) and a row already on a
-   * DIFFERENT target (`ProjectRepoHostingTargetFixedError` — moving is a
-   * migration, D3). The same three values again are a no-op with no write; on
-   * the same target the use case and size may be revised.
+   * (`ProjectRepoInvalidFieldError` naming `target` / `useCase` / `size` /
+   * `shape`), a shape on any target but `aws` (`shape` again — no other adapter
+   * has shapes, so a stored one would be a fact nothing reads), a customer row
+   * (`ProjectRepoNotMotirHostedError`, D1) and a row already on a DIFFERENT
+   * target (`ProjectRepoHostingTargetFixedError` — moving is a migration, D3).
+   * The same values again are a no-op with no write; on the same target the use
+   * case, size and shape may be revised. An absent shape records none: an `aws`
+   * row without one is a decision not yet made, and its production release is
+   * refused by name (`ReleaseShapeRequiredError`) rather than given a guess.
    */
   async setHosting(
     rowId: string,
-    input: { target: string; useCase: string; size: string },
+    input: { target: string; useCase: string; size: string; shape?: string | null },
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
     const { target, useCase, size } = input;
+    const shape = input.shape ?? null;
     if (!isHostingTarget(target)) {
       throw new ProjectRepoInvalidFieldError(
         'target',
@@ -1292,6 +1301,18 @@ export const projectRepoSetService = {
     if (!isHostingSize(size)) {
       throw new ProjectRepoInvalidFieldError('size', `must be one of ${HOSTING_SIZES.join(', ')}.`);
     }
+    if (shape !== null && !isHostingShape(shape)) {
+      throw new ProjectRepoInvalidFieldError(
+        'shape',
+        `must be one of ${HOSTING_SHAPES.join(', ')}.`,
+      );
+    }
+    if (shape !== null && target !== SHAPED_HOSTING_TARGET) {
+      throw new ProjectRepoInvalidFieldError(
+        'shape',
+        `only the ${SHAPED_HOSTING_TARGET} target takes a shape.`,
+      );
+    }
     return inLockedRow(rowId, ctx, async (row, tx) => {
       if (isOrganizationSeedSource(row.seedSource)) throw new ProjectRepoNotMotirHostedError(rowId);
       if (row.hostingTarget !== null && row.hostingTarget !== target) {
@@ -1300,13 +1321,14 @@ export const projectRepoSetService = {
       if (
         row.hostingTarget === target &&
         row.hostingUseCase === useCase &&
-        row.hostingSize === size
+        row.hostingSize === size &&
+        row.hostingShape === shape
       ) {
         return toProjectRepoDto(row);
       }
       const updated = await projectRepoRepository.setHosting(
         rowId,
-        { hostingTarget: target, hostingUseCase: useCase, hostingSize: size },
+        { hostingTarget: target, hostingUseCase: useCase, hostingSize: size, hostingShape: shape },
         tx,
       );
       return toProjectRepoDto({

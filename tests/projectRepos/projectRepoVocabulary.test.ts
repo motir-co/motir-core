@@ -48,6 +48,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
+    hostingShape: null,
     previewPushNamespace: null,
     previewEnabledAt: null,
     previewCredentialExpiresAt: null,
