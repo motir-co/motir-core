@@ -3,10 +3,12 @@ import 'server-only';
 import type { TenantAppKeyDto, TenantAppKeyRevokeDto } from '@/lib/dto/tenantAppKey';
 import {
   GatewayAppKeyConfigError,
+  GatewayAppKeyInvalidInputError,
   GatewayAppKeyRefusedError,
   GatewayAppKeyUnavailableError,
 } from '@/lib/gateway/errors';
 import {
+  appKeyLimitsProblem,
   mintGatewayAppKey,
   revokeGatewayAppKey,
   revokeGatewayAppKeysForProject,
@@ -37,8 +39,11 @@ export interface TenantAppKeyMintInput {
   /** The organization that pays — the key's `coreOrganizationId`. */
   payingOrganizationId: string;
   expiresAt: Date;
-  /** Optional model allow-list, bare gateway ids. */
-  models?: string[];
+  /** Required: the key's spend ceiling, a positive safe integer in gateway quota
+   *  units. The caller chooses it and converts the units; no default exists. */
+  quota: number;
+  /** Required and non-empty: the key's model allow-list, bare gateway ids. */
+  models: string[];
 }
 
 /** What a revoke names: one key, or every live key of a project. */
@@ -47,6 +52,9 @@ export type TenantAppKeyRevokeTarget = { keyId: number } | { projectId: string }
 type FailureClass = typeof TenantAppKeyNotMintedError | typeof TenantAppKeyNotRevokedError;
 
 function failure<C extends FailureClass>(Failure: C, err: unknown): InstanceType<C> {
+  if (err instanceof GatewayAppKeyInvalidInputError) {
+    return new Failure('invalid_request', err.message) as InstanceType<C>;
+  }
   if (err instanceof GatewayAppKeyConfigError) {
     return new Failure('not_configured', err.message) as InstanceType<C>;
   }
@@ -69,8 +77,10 @@ function failure<C extends FailureClass>(Failure: C, err: unknown): InstanceType
 export const tenantAppKeyService = {
   /**
    * Mint a gateway key bound to `projectId` and billed to `payingOrganizationId`
-   * on the `app` lane. Throws {@link TenantAppKeyNotMintedError} on every failure;
-   * an empty id or an expiry not after `now` is refused with NO request.
+   * on the `app` lane, with the caller's `quota` and `models` unchanged. Throws
+   * {@link TenantAppKeyNotMintedError} on every failure; an empty id, an expiry not
+   * after `now`, or a quota or model list the gateway would refuse is refused with
+   * NO request.
    */
   async mintAppKey(input: TenantAppKeyMintInput, now: Date = new Date()): Promise<TenantAppKeyDto> {
     if (input.projectId.trim() === '' || input.payingOrganizationId.trim() === '') {
@@ -85,12 +95,17 @@ export const tenantAppKeyService = {
         'an app key must expire in the future',
       );
     }
+    const limitsProblem = appKeyLimitsProblem(input.quota, input.models);
+    if (limitsProblem !== null) {
+      throw new TenantAppKeyNotMintedError('invalid_request', limitsProblem);
+    }
     try {
       const minted = await mintGatewayAppKey({
         projectRef: input.projectId,
         coreOrganizationId: input.payingOrganizationId,
         expiresAt: input.expiresAt,
-        ...(input.models === undefined ? {} : { models: input.models }),
+        quota: input.quota,
+        models: input.models,
       });
       return {
         key: minted.key,
