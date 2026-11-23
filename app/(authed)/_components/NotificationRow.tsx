@@ -27,8 +27,8 @@ import { eventReasonMessage } from '@/lib/hosting/productionRuntimeWords';
 // in the event's hue (finding #54 — the palette, not grey) · the one-line
 // summary (actor + action + issue key, actor & key in --el-text-strong) with
 // the relative time pushed right (absolute on hover/title) · the denormalized
-// excerpt, single-line truncated. Read rows persist (greyed via --el-text-muted,
-// no dot).
+// excerpt, single-line truncated. Read rows persist (greyed via
+// --el-text-secondary, which clears AA on the hover surface too; no dot).
 //
 // ⚠️ No nested interactive elements (the portal-popover / nested-button
 // lessons): the whole row is ONE clickable deep-link `<Link>`, and the per-row
@@ -191,10 +191,15 @@ export function NotificationRow({
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
       : data.kind === 'production_app_crashed'
         ? // The Production panel selects the repository and opens the event
-          // (`event`, read by the page since MOTIR-12109).
+          // (`event`, read by the page since MOTIR-12109). `project` names the
+          // crash's own project, so a crash outside the active project opens
+          // there rather than on not-found (MOTIR-12170; the settings area
+          // switches to it, MOTIR-12169) — as the code-access row does.
           `/settings/project/production?repository=${encodeURIComponent(
             data.projectRepositoryId,
-          )}&event=${encodeURIComponent(data.eventId)}`
+          )}&event=${encodeURIComponent(data.eventId)}&project=${encodeURIComponent(
+            data.projectKey,
+          )}`
         : issueKey
           ? // A send-back lands on its own activity entry, whose findings open there — on the
             // All tab, since the default Comments tab does not draw it (MOTIR-10458).
@@ -286,7 +291,7 @@ export function NotificationRow({
           <span
             className={cn(
               'min-w-0 flex-1 text-[13px] leading-[1.4]',
-              read ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+              read ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
             )}
           >
             {summary}

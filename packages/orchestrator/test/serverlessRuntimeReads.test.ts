@@ -412,6 +412,20 @@ describe('the serverless line readers', () => {
     expect(lambdaRuntimeSignal('hello', T)).toBeNull();
   });
 
+  it('reads an exit line with trailing whitespace, and a hostile one in linear time', () => {
+    expect(lambdaRuntimeSignal('Runtime exited with error: exit status 2 \t\r\nnext', T)).toEqual({
+      kind: 'exit',
+      at: T,
+      exitCode: 2,
+      requestId: null,
+    });
+    // CodeQL js/polynomial-redos: the old lazy `(.+?)\s*$` backtracked on these.
+    const started = performance.now();
+    lambdaRuntimeSignal(`Runtime exited with error: a${'\t'.repeat(50_000)}x`, T);
+    lambdaRuntimeSignal('Runtime exited with error: a'.repeat(5_000), T);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it('tells Lambda’s lines from the app’s', () => {
     expect(serverlessStreamOf('END RequestId: r')).toBe('platform');
     expect(serverlessStreamOf('INIT_START Runtime Version: x')).toBe('platform');
