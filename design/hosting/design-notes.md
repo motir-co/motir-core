@@ -243,7 +243,7 @@ the address model and the Public address room; any customer-repository surface b
 
 ## Amendment 2026-11-23 — live app operations: Health, Crash events, Logs, When idle, Usage and the crash notification (MOTIR-12101 · Story MOTIR-9799)
 
-**Delta mock:** `production--live-app-ops.mock.html` (25 panels). It **amends** § _Elements (named once
+**Delta mock:** `production--live-app-ops.mock.html` (25 panels, revised 2026-11-23 for the full-width layout below). It **amends** § _Elements (named once
 each)_ and § _Panels and states_ above, and the mock `production.mock.html`, which stays as drawn. Every
 element MOTIR-10024 drew (the current release card, the release history, Roll back and its confirmation,
 the read-only note, the empty state, the not-found state) is composed unchanged from the shipped
@@ -267,6 +267,32 @@ scrolls its **Crash events** list to the event.
 Current release (shipped) → **Health** → **Crash events** → **Logs** → **When idle** → **Usage** →
 Release history (shipped). Each new section is its own `Card` with a serif `text-lg` heading, the
 Release history's heading grammar.
+
+### Width — the panel uses the whole content area (revision, Mo 2026-11-23)
+
+Mo's review: _"the design should utilize the width of the screen, logs can be long, don't just use the
+center of the screen."_ So this delta **changes the Production page's column**, which the base mock and
+`app/(authed)/settings/project/production/page.tsx` draw as `mx-auto max-w-[46rem]`:
+
+- **The page is full width**: `flex w-full flex-col gap-6`, the header, the repository picker and the
+  repository heading left-aligned at the top. No `max-w` on the page or on any section below.
+- **Paired summary cards** share a row from the `lg` breakpoint: `grid gap-6 lg:grid-cols-2` holds
+  **Current release | Health**, and **When idle | Usage**. Below `lg` they stack in the order above.
+- **Crash events, Logs and Release history span the full width**, each alone on its row.
+- **The Logs view is a tall, full-width viewport**: the lines sit in a scroll box (`overflow-auto`,
+  `max-h-[36rem]`, `--radius-card`, `--el-surface-soft`, `--el-border-soft`, `tabIndex=0`,
+  `aria-label="Log lines"`). **A long line keeps its shape** (`whitespace-pre`, the list `w-max
+min-w-full`) and the box scrolls sideways, so a JSON log line or a stack trace reads as one line.
+- **"Wrap long lines"** — a `Switch` at the end of the Logs toolbar, labelled by its visible text
+  (`font-sans text-sm`, ink `--el-text`), off by default. On, the message column wraps
+  (`break-words whitespace-pre-wrap`) inside the same viewport (panel 10a). The choice is per viewer and
+  is kept in the browser only.
+- A crash event's expanded last lines use the same no-wrap rows in their own short box (no `max-h`),
+  scrolling sideways when a line is long (panel 3).
+- The Roll back confirmation is the shipped `RollbackDialog`, unchanged; it is drawn in
+  `production.mock.html` (panels 8–10), so this delta no longer repeats it.
+
+New copy: `logs.wrap` — _Wrap long lines_.
 
 ### Elements (named once each — the code cards build them by these names)
 
@@ -349,13 +375,13 @@ The units and the out-of-credits behaviour are drawn from the decision page, quo
 | 1   | Unhealthy, a health-check-failed event on top                                                                                       | Health, Crash events                        |
 | 2   | Suspended, logs show the last lines before sleep, next request wakes it                                                             | Health, Logs                                |
 | 3   | Crashed (out of memory), last lines expanded, Roll back                                                                             | Health, Crash events                        |
-| 4   | Roll back from an event → the shipped confirmation                                                                                  | RollbackDialog                              |
 | 5   | Deploying beside the shipped Building row                                                                                           | Health, history                             |
 | 6   | Health probe unreachable                                                                                                            | Health                                      |
 | 7   | Crash recovered after Roll back; event kept as history, no Roll back on it                                                          | card, Health, Crash events, history         |
 | 8   | Logs filtered                                                                                                                       | Logs                                        |
 | 9   | Logs filtered, no match                                                                                                             | Logs                                        |
 | 10  | Logs with a masked secret                                                                                                           | Logs                                        |
+| 10a | Logs with Wrap long lines on                                                                                                        | Logs                                        |
 | 11  | Logs unavailable from the target                                                                                                    | Logs                                        |
 | 12  | Logs loading                                                                                                                        | Logs                                        |
 | 13  | No release yet: shipped empty state; When idle editable; Logs and Usage say they start with the first release; no Health, no events | empty state, When idle, Logs, Usage         |
