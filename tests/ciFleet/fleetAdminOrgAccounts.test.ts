@@ -187,6 +187,28 @@ describe('fleet-admin org-accounts', () => {
     ]);
   });
 
+  it('an AWS account carrying two rows prints each row with the account’s furthest state and its one raise', async () => {
+    const org = await seedOrg();
+    const [first, second] = await ownAccount(org, 'host-shared', ['ci_runner', 'hosted_agent'], {
+      quotaRequestedAt: NOW,
+    });
+    // One row reached live; the raise was filed on the other.
+    await adminDb.fleetShard.update({
+      where: { id: first!.id },
+      data: { grantedAt: NOW, liveAt: NOW, state: 'active' },
+    });
+    await raise(second!, 64, { status: 'approved', granted: 64 });
+
+    expect((await run('org-accounts', '--org', org)).out).toEqual([
+      `${org}  ci_runner  host-shared-ci_runner  live  requested 64  granted 64  (approved)`,
+      `${org}  hosted_agent  host-shared-hosted_agent  live  requested 64  granted 64  (approved)`,
+    ]);
+    // Under --kind, the listed row still reads the whole account.
+    expect((await run('org-accounts', '--org', org, '--kind', 'ci_runner')).out).toEqual([
+      `${org}  ci_runner  host-shared-ci_runner  live  requested 64  granted 64  (approved)`,
+    ]);
+  });
+
   it('--org and --kind narrow the listing; the merged figures hold under --kind', async () => {
     const org = await seedOrg();
     const other = await seedOrg();

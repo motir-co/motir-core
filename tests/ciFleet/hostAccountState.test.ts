@@ -6,6 +6,7 @@ import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { hostAccountPlan } from '@/lib/ciFleet/hostAccounts';
+import { FleetShardNotFoundError } from '@/lib/ciFleet/errors';
 import { deriveAccountState, LIVE_MIN_VCPU } from '@/lib/ciFleet/hostAccountState';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
@@ -394,6 +395,34 @@ describe('a failing account', () => {
     });
     for (const secret of Object.values(SECRETS)) expect(written).not.toContain(secret);
     expect(written).not.toContain('@motir.co');
+  });
+
+  it('an account whose settle throws is counted and logged by name, and the rest still settle', async () => {
+    const org = await hostOrg();
+    const ci = await rowOf(org.id, 'ci_runner');
+    const settle = hostAccountStateService.settleAccount.bind(hostAccountStateService);
+    vi.spyOn(hostAccountStateService, 'settleAccount').mockImplementation(async (id, deps) => {
+      // A non-Error throw: logged as UnknownError, never by its text.
+      if (id === ci.awsAccountId) throw `settle broke ${SECRETS.sessionSecret}`;
+      return settle(id, deps);
+    });
+
+    const summary = await pass(at(1));
+
+    expect(summary).toMatchObject({ ran: true, failures: 1, settled: 2 });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("an own account's state pass failed"),
+      { awsAccountId: ci.awsAccountId, error: 'UnknownError' },
+    );
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      SECRETS.sessionSecret,
+    );
+  });
+
+  it('settling an AWS account no own row names is refused as not found', async () => {
+    await expect(hostAccountStateService.settleAccount('999999999999')).rejects.toBeInstanceOf(
+      FleetShardNotFoundError,
+    );
   });
 
   it('a second run while one holds the pass does nothing', async () => {
