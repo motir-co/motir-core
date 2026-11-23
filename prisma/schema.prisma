@@ -1816,6 +1816,7 @@ model Workspace {
   previewDeployments          PreviewDeployment[]
   // Production hosting (Story MOTIR-9797 · MOTIR-10026).
   hostedApplications          HostedApplication[]          @relation("HostedApplicationWorkspace")
+  hostedApplicationExports    HostedApplicationExport[]    @relation("HostedApplicationExportWorkspace")
   hostedReleases              HostedRelease[]
   defaultApplication          HostedApplication?           @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
@@ -13102,28 +13103,64 @@ model HostAccountAttempt {
 /// column holds a credential or the member email (`hostingTenantAccountPlan`
 /// derives the email on demand). Platform-only, as `fleet_shard`.
 model HostingTenantAccount {
-  id              String       @id @default(cuid())
-  organizationId  String       @unique @map("organization_id")
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                  String                      @id @default(cuid())
+  organizationId      String                      @unique @map("organization_id")
+  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// Null until the create-or-find step finds or creates the account.
-  awsAccountId    String?      @map("aws_account_id")
-  /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`
-  /// (`HostingTenantAccountState`, `lib/ciFleet/hostingTenantAccounts.ts`).
-  state           String       @default("requested")
+  awsAccountId        String?                     @map("aws_account_id")
+  /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`, then the
+  /// takeover handover's `handing_over` | `awaiting_standalone` | `removing` |
+  /// `handed_over` (MOTIR-12126) (`HostingTenantAccountState`,
+  /// `lib/ciFleet/hostingTenantAccounts.ts`).
+  state               String                      @default("requested")
   /// Consecutive `CreateAccount` refusals — the reconcile's backoff reads it, so
   /// a restart never resets the wait.
-  refusedCount    Int          @default(0) @map("refused_count")
-  lastRefusedAt   DateTime?    @map("last_refused_at")
+  refusedCount        Int                         @default(0) @map("refused_count")
+  lastRefusedAt       DateTime?                   @map("last_refused_at")
   /// The `Tenants` organisational unit the account sits under, once known.
-  ouId            String?      @map("ou_id")
+  ouId                String?                     @map("ou_id")
   /// When the reconcile last brought a `ready` account's quota targets to target
   /// or a raise (MOTIR-12011); null until the first check, which is then due.
-  quotasCheckedAt DateTime?    @map("quotas_checked_at")
-  region          String
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
+  quotasCheckedAt     DateTime?                   @map("quotas_checked_at")
+  region              String
+  /// The takeover handover (Story MOTIR-9800 · MOTIR-12126): the email address
+  /// the administrator names to own the account, and the GitHub owner that
+  /// receives its repositories. Typed by a person and kept so a restarted
+  /// `move_email` step can resume; no column holds the account's derived member
+  /// email, a credential, a payment detail or a root credential. Never on a DTO.
+  handoverOwnerEmail  String?                     @map("handover_owner_email")
+  handoverGithubOwner String?                     @map("handover_github_owner")
+  createdAt           DateTime                    @default(now()) @map("created_at")
+  updatedAt           DateTime                    @updatedAt @map("updated_at")
+  handoverSteps       HostingTenantHandoverStep[]
 
   @@map("hosting_tenant_account")
+}
+
+/// One step of a tenant account's takeover handover (Story MOTIR-9800 ·
+/// MOTIR-12126): one row per `(tenant_account_id, step)`, its status, attempts,
+/// last error and the lease a worker holds while it runs the step, so a handover
+/// cut off at any step resumes at that step after a restart. `step` is one of
+/// `TENANT_HANDOVER_STEPS` and `status` one of `TENANT_HANDOVER_STEP_STATUSES`
+/// (`lib/ciFleet/hostingTenantAccounts.ts`). Platform-only, as its parent:
+/// `hosting_tenant_handover_step_system_only` on `app.system_admin`.
+model HostingTenantHandoverStep {
+  id              String               @id @default(cuid())
+  tenantAccountId String               @map("tenant_account_id")
+  tenantAccount   HostingTenantAccount @relation(fields: [tenantAccountId], references: [id], onDelete: Cascade)
+  step            String
+  status          String               @default("pending")
+  attempts        Int                  @default(0)
+  lastError       String?              @map("last_error")
+  leaseHolder     String?              @map("lease_holder")
+  leaseExpiresAt  DateTime?            @map("lease_expires_at")
+  startedAt       DateTime?            @map("started_at")
+  completedAt     DateTime?            @map("completed_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  @@unique([tenantAccountId, step])
+  @@map("hosting_tenant_handover_step")
 }
 
 /// Where a Host organisation's ask for more capacity stands (MOTIR-9583). Whether
@@ -13190,6 +13227,21 @@ enum HostingTarget {
 /// The life of one production release (Story MOTIR-9797 · MOTIR-10026). Mirrors
 /// `HOSTED_RELEASE_STATES` in `lib/hosting/vocabulary.ts`, whose edge table says
 /// which moves are legal.
+/// Where a hosted application stands at takeover (Story MOTIR-9800 ·
+/// MOTIR-12126). Mirrors `HOSTED_APPLICATION_STATES`.
+enum HostedApplicationState {
+  /// Motir serves it and deploys it.
+  live
+  /// A takeover is moving it off Motir: its deploy credentials are gone.
+  handing_over
+  /// A serverless or Fly app still served by Motir until `stopsAt`.
+  grace
+  /// Motir no longer serves it; the record is kept for the Production panel.
+  handed_over
+
+  @@map("hosted_application_state")
+}
+
 enum HostedReleaseState {
   building
   releasing
@@ -13220,46 +13272,87 @@ enum HostedReleaseCause {
 /// write from webhooks and jobs under `withSystemContext`, a member's session
 /// reads its own workspace's rows.
 model HostedApplication {
-  id                      String        @id @default(cuid())
-  workspaceId             String        @map("workspace_id")
-  projectId               String        @map("project_id")
-  projectRepositoryId     String        @unique @map("project_repository_id")
+  id                      String                 @id @default(cuid())
+  workspaceId             String                 @map("workspace_id")
+  projectId               String                 @map("project_id")
+  projectRepositoryId     String                 @unique @map("project_repository_id")
   target                  HostingTarget
   /// The application's label in its host, `<slug>--<workspace label>`; unique in
   /// the workspace (ADR public-tenant-addresses §8 AMENDMENT 4).
   slug                    String
   /// The production host without scheme, e.g. `shop--acme.motir.site`. Stored
   /// and looked up, never parsed; null while the workspace has no claimed label.
-  productionAddress       String?       @unique @map("production_address")
-  currentReleaseId        String?       @unique @map("current_release_id")
-  previousReleaseId       String?       @unique @map("previous_release_id")
+  productionAddress       String?                @unique @map("production_address")
+  currentReleaseId        String?                @unique @map("current_release_id")
+  previousReleaseId       String?                @unique @map("previous_release_id")
   /// The production database (written by the database card, MOTIR-10028). The
   /// URL is stored only encrypted, and no DTO carries it.
-  databaseProjectId       String?       @map("database_project_id")
-  databaseUrlCiphertext   String?       @map("database_url_ciphertext")
+  databaseProjectId       String?                @map("database_project_id")
+  databaseUrlCiphertext   String?                @map("database_url_ciphertext")
   /// Production switched on (MOTIR-10027): the Fly app (`mh-<rid>`), when it was
   /// first enabled, and when its deploy token was last minted (re-minted when
   /// fewer than 14 of its 90 days remain, ADR MOTIR-5769 §4). The token itself is
   /// never stored.
-  productionAppName       String?       @map("production_app_name")
-  productionEnabledAt     DateTime?     @map("production_enabled_at")
-  productionTokenMintedAt DateTime?     @map("production_token_minted_at")
-  createdAt               DateTime      @default(now()) @map("created_at")
-  updatedAt               DateTime      @updatedAt @map("updated_at")
+  productionAppName       String?                @map("production_app_name")
+  productionEnabledAt     DateTime?              @map("production_enabled_at")
+  productionTokenMintedAt DateTime?              @map("production_token_minted_at")
+  /// Its takeover handover (Story MOTIR-9800 · MOTIR-12126). `state` has a
+  /// database default, so the raw insert reads `live`. `stopsAt` is when a
+  /// `grace` app stops; `handedOverAt` when Motir stopped serving it; for an AWS
+  /// app, the address its own front door answers on without Motir
+  /// (`upstreamAddress`) and the account it left with (`handedOverAccountId`).
+  state                   HostedApplicationState @default(live)
+  stopsAt                 DateTime?              @map("stops_at")
+  handedOverAt            DateTime?              @map("handed_over_at")
+  upstreamAddress         String?                @map("upstream_address")
+  handedOverAccountId     String?                @map("handed_over_account_id")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
 
-  workspace         Workspace       @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
-  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectRepository ProjectRepo     @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
-  currentRelease    HostedRelease?  @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
-  previousRelease   HostedRelease?  @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
-  releases          HostedRelease[] @relation("HostedApplicationReleases")
-  defaultOf         Workspace?      @relation("WorkspaceDefaultApplication")
+  workspace         Workspace                 @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo               @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  currentRelease    HostedRelease?            @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
+  previousRelease   HostedRelease?            @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
+  releases          HostedRelease[]           @relation("HostedApplicationReleases")
+  defaultOf         Workspace?                @relation("WorkspaceDefaultApplication")
   /// The customer domains bound to this application (ADR MOTIR-9521 §1).
-  customDomains     PublicAddress[] @relation("HostedApplicationCustomDomains")
+  customDomains     PublicAddress[]           @relation("HostedApplicationCustomDomains")
+  /// Every database export taken of it (MOTIR-12126).
+  exports           HostedApplicationExport[]
 
   @@unique([workspaceId, slug])
   @@index([projectId])
   @@map("hosted_application")
+}
+
+/// One database export of a hosted application (Story MOTIR-9800 ·
+/// MOTIR-12126): an organisation admin's `on_demand` download during the grace
+/// window, or the `final` one the stop takes before it deletes the database.
+/// `requested_by_user_id` is a plain id, not a foreign key, so a user's erasure
+/// is never blocked; null means a system export. The dump itself lives at
+/// `storage_key` in private storage until `expires_at`.
+///
+/// RLS: `hosted_application_export_active_workspace` (FOR ALL); system code
+/// writes it under `withWorkspaceServiceContext`.
+model HostedApplicationExport {
+  id                String   @id @default(cuid())
+  workspaceId       String   @map("workspace_id")
+  applicationId     String   @map("application_id")
+  /// `on_demand` | `final` (`HOSTED_APPLICATION_EXPORT_KINDS`).
+  kind              String
+  requestedByUserId String?  @map("requested_by_user_id")
+  storageKey        String   @map("storage_key")
+  sizeBytes         BigInt   @map("size_bytes")
+  createdAt         DateTime @default(now()) @map("created_at")
+  expiresAt         DateTime @map("expires_at")
+
+  workspace   Workspace         @relation("HostedApplicationExportWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([applicationId, createdAt])
+  @@map("hosted_application_export")
 }
 
 /// One release of a commit on a hosted application. A config redeploy of the

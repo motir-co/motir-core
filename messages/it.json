@@ -15437,14 +15437,22 @@
           "creating": "In creazione",
           "bootstrapping": "Bootstrap in corso",
           "ready": "Pronto",
-          "refused": "Rifiutato"
+          "refused": "Rifiutato",
+          "handing_over": "In consegna",
+          "awaiting_standalone": "In attesa di autonomia",
+          "removing": "In uscita",
+          "handed_over": "Consegnato"
         },
         "notReady": {
           "requested": "Le quote vengono lette quando l’account è pronto. L’account non è ancora stato creato.",
           "creating": "Le quote vengono lette quando l’account è pronto. AWS sta creando l’account.",
           "bootstrapping": "Le quote vengono lette quando l’account è pronto. Il bootstrap sta configurando il ruolo di deploy, i tag e gli aumenti di quota.",
           "refused": "{count, plural, one {AWS ha rifiutato di creare l’account una volta, {age}.} other {AWS ha rifiutato di creare l’account # volte, l’ultima {age}.}} La riconciliazione riprova dopo l’attesa; le quote vengono lette quando l’account è pronto.",
-          "refusedNever": "Le quote vengono lette quando l’account è pronto. AWS ha rifiutato di creare l’account; la riconciliazione riprova dopo l’attesa."
+          "refusedNever": "Le quote vengono lette quando l’account è pronto. AWS ha rifiutato di creare l’account; la riconciliazione riprova dopo l’attesa.",
+          "handing_over": "Durante una consegna le quote non vengono lette. L’account viene consegnato alla sua organizzazione.",
+          "awaiting_standalone": "Durante una consegna le quote non vengono lette. L’organizzazione deve aggiungere i dati di fatturazione e un piano di supporto prima che l’account possa uscire.",
+          "removing": "Durante una consegna le quote non vengono lette. L’account sta uscendo dall’organizzazione AWS di Motir.",
+          "handed_over": "L’account ha lasciato Motir e appartiene alla sua organizzazione. Le sue quote non vengono più lette."
         },
         "col": {
           "quota": "Quota",

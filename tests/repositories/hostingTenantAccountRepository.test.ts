@@ -85,6 +85,53 @@ describe('hostingTenantAccountRepository', () => {
     expect(ready).toMatchObject({ awsAccountId: '111122223333', ouId: 'ou-ab12-tenants' });
   });
 
+  it('lists no row in a handover state as unready, so the bring-up never walks one (MOTIR-9800)', async () => {
+    const orgs = [
+      await seedOrg(),
+      await seedOrg(),
+      await seedOrg(),
+      await seedOrg(),
+      await seedOrg(),
+    ];
+    for (const org of orgs) await ensure(org.id);
+    const handover = ['handing_over', 'awaiting_standalone', 'removing', 'handed_over'] as const;
+    for (const [i, state] of handover.entries()) {
+      await withSystemContext((tx) => repo.setStateInTx(orgs[i]!.id, state, tx));
+    }
+    const unready = await withSystemContext((tx) => repo.listUnreadyInTx(tx));
+    expect(unready.map((r) => r.organizationId)).toEqual([orgs[4]!.id]);
+  });
+
+  it('records the handover owner on the row and returns it from ensure (MOTIR-9800)', async () => {
+    const org = await seedOrg();
+    const first = await ensure(org.id);
+    expect(first).toMatchObject({ handoverOwnerEmail: null, handoverGithubOwner: null });
+    const set = await withSystemContext((tx) =>
+      repo.setHandoverOwnerInTx(
+        org.id,
+        { ownerEmail: 'owner@acme.example', githubOwner: 'acme-co' },
+        tx,
+      ),
+    );
+    expect(set).toMatchObject({
+      handoverOwnerEmail: 'owner@acme.example',
+      handoverGithubOwner: 'acme-co',
+    });
+    expect(await ensure(org.id)).toMatchObject({
+      id: first.id,
+      handoverOwnerEmail: 'owner@acme.example',
+      handoverGithubOwner: 'acme-co',
+    });
+  });
+
+  it('refuses a state outside the nine at the database', async () => {
+    const org = await seedOrg();
+    await ensure(org.id);
+    await expect(
+      adminDb.$executeRaw`UPDATE "hosting_tenant_account" SET "state" = 'closed' WHERE "organization_id" = ${org.id}`,
+    ).rejects.toThrow();
+  });
+
   it('marks a row ready with its quota check time, and lists ready rows due a re-check (MOTIR-12011)', async () => {
     const [fresh, stale, never, unready] = [
       await seedOrg(),
@@ -133,10 +180,20 @@ describe('the record stays apart from the fleet', () => {
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   const model = /model HostingTenantAccount \{[\s\S]*?\n\}/.exec(schema)?.[0] ?? '';
 
-  it('has no relation to fleet_shard and no column for an email or a credential', () => {
+  it('has no relation to fleet_shard and no column for a derived email or a credential', () => {
     expect(model).not.toBe('');
     expect(model).not.toMatch(/FleetShard|fleet_shard/);
-    expect(model).not.toMatch(/email|secret|password|token|credential|key\b/i);
+    // The model's comments name what it must NOT hold, so only fields are read.
+    const fields = model
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !line.startsWith('///') && !line.startsWith('@@'));
+    // The one email the row holds is the handover owner's (MOTIR-9800): the
+    // address an administrator types, never the account's derived member email.
+    const emailFields = fields.filter((line) => /email/i.test(line));
+    expect(emailFields.map((line) => line.split(/\s+/)[0])).toEqual(['handoverOwnerEmail']);
+    const others = fields.filter((line) => !/^handoverOwnerEmail\b/.test(line));
+    expect(others.join('\n')).not.toMatch(/email|secret|password|token|credential|key\b/i);
     expect(model).toMatch(/organization\s+Organization\s+@relation/);
     expect(schema).toMatch(/hostingTenantAccount\s+HostingTenantAccount\?/);
   });

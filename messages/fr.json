@@ -15437,14 +15437,22 @@
           "creating": "En création",
           "bootstrapping": "Bootstrap en cours",
           "ready": "Prêt",
-          "refused": "Refusé"
+          "refused": "Refusé",
+          "handing_over": "Transfert en cours",
+          "awaiting_standalone": "En attente d’autonomie",
+          "removing": "Départ en cours",
+          "handed_over": "Transféré"
         },
         "notReady": {
           "requested": "Les quotas sont lus une fois le compte prêt. Le compte n’a pas encore été créé.",
           "creating": "Les quotas sont lus une fois le compte prêt. AWS est en train de créer le compte.",
           "bootstrapping": "Les quotas sont lus une fois le compte prêt. Le bootstrap configure son rôle de déploiement, ses tags et ses relèvements de quota.",
           "refused": "{count, plural, one {AWS a refusé de créer le compte une fois, {age}.} other {AWS a refusé de créer le compte # fois, la dernière {age}.}} La réconciliation réessaie après son délai ; les quotas sont lus une fois le compte prêt.",
-          "refusedNever": "Les quotas sont lus une fois le compte prêt. AWS a refusé de créer le compte ; la réconciliation réessaie après son délai."
+          "refusedNever": "Les quotas sont lus une fois le compte prêt. AWS a refusé de créer le compte ; la réconciliation réessaie après son délai.",
+          "handing_over": "Les quotas ne sont pas lus pendant un transfert. Le compte est transféré à son organisation.",
+          "awaiting_standalone": "Les quotas ne sont pas lus pendant un transfert. L’organisation doit ajouter ses informations de facturation et un plan de support avant que le compte puisse partir.",
+          "removing": "Les quotas ne sont pas lus pendant un transfert. Le compte quitte l’organisation AWS de Motir.",
+          "handed_over": "Le compte a quitté Motir et appartient à son organisation. Ses quotas ne sont plus lus."
         },
         "col": {
           "quota": "Quota",

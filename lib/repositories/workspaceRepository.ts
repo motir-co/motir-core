@@ -47,6 +47,24 @@ export const workspaceRepository = {
   },
 
   /**
+   * Clear the workspace's DEFAULT application, ONLY while it names
+   * `applicationId` (MOTIR-12126): the bare workspace host then falls back to
+   * *no application deployed yet* (Decision MOTIR-9790 §3). A default naming
+   * another application is never touched. Returns whether the row changed.
+   */
+  async clearDefaultApplicationIf(
+    id: string,
+    applicationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.workspace.updateMany({
+      where: { id, defaultApplicationId: applicationId },
+      data: { defaultApplicationId: null },
+    });
+    return count > 0;
+  },
+
+  /**
    * BINDABLE (MOTIR-2789). `workspace` is a tenant-root table with no public arm, so a
    * caller that knows the workspace must be able to bind it — the public project
    * overview reads the project's own workspace and got null otherwise.

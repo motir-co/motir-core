@@ -27,14 +27,23 @@ import {
 // from the add-shard's template and never stored. Pure: no `db`, no
 // `process.env` — the template is the caller's read.
 
-/** Where a tenant account stands. A state is written only after the step it
- *  names has succeeded (the reconcile, `hostingTenantAccountService`). */
+/** Where a tenant account stands. A bring-up state is written only after the
+ *  step it names has succeeded (the reconcile, `hostingTenantAccountService`).
+ *  The four handover states (Story MOTIR-9800 · MOTIR-12126) are the takeover
+ *  handover's: `handing_over` (its steps are running), `awaiting_standalone`
+ *  (waiting on AWS's own standalone steps, which the new owner completes),
+ *  `removing` (Motir's access is being removed and the account leaving the
+ *  Organization) and `handed_over` (it has left). */
 export type HostingTenantAccountState =
   | 'requested'
   | 'creating'
   | 'bootstrapping'
   | 'ready'
-  | 'refused';
+  | 'refused'
+  | 'handing_over'
+  | 'awaiting_standalone'
+  | 'removing'
+  | 'handed_over';
 
 export const HOSTING_TENANT_ACCOUNT_STATES: readonly HostingTenantAccountState[] = [
   'requested',
@@ -42,7 +51,66 @@ export const HOSTING_TENANT_ACCOUNT_STATES: readonly HostingTenantAccountState[]
   'bootstrapping',
   'ready',
   'refused',
+  'handing_over',
+  'awaiting_standalone',
+  'removing',
+  'handed_over',
 ];
+
+/** The states the reconcile walks towards `ready` — the account's bring-up. */
+export const TENANT_ACCOUNT_BRING_UP_STATES = [
+  'requested',
+  'creating',
+  'bootstrapping',
+  'refused',
+] as const satisfies readonly HostingTenantAccountState[];
+
+/** The takeover handover's states: the reconcile leaves an account in one alone. */
+export const TENANT_ACCOUNT_HANDOVER_STATES = [
+  'handing_over',
+  'awaiting_standalone',
+  'removing',
+  'handed_over',
+] as const satisfies readonly HostingTenantAccountState[];
+export type TenantAccountHandoverState = (typeof TENANT_ACCOUNT_HANDOVER_STATES)[number];
+
+export function isTenantAccountHandoverState(value: string): value is TenantAccountHandoverState {
+  return (TENANT_ACCOUNT_HANDOVER_STATES as readonly string[]).includes(value);
+}
+
+/**
+ * The takeover handover's steps, in the order they run (Story MOTIR-9800):
+ * destroy the previews, create the customer's GitHub-OIDC deploy role, open each
+ * production app's upstream to answer without Motir, move the account's primary
+ * email, wait on AWS's own standalone steps, remove Motir's access, leave the
+ * Organization, then transfer the repositories.
+ */
+export const TENANT_HANDOVER_STEPS = [
+  'destroy_previews',
+  'create_deploy_role',
+  'open_upstream',
+  'move_email',
+  'await_standalone',
+  'remove_access',
+  'leave_organization',
+  'transfer_repositories',
+] as const;
+export type TenantHandoverStep = (typeof TENANT_HANDOVER_STEPS)[number];
+
+/** Where one handover step stands. `waiting_on_you` is a step waiting on the new
+ *  owner (the email code, AWS's standalone steps). */
+export const TENANT_HANDOVER_STEP_STATUSES = [
+  'pending',
+  'running',
+  'waiting_on_you',
+  'done',
+  'failed',
+] as const;
+export type TenantHandoverStepStatus = (typeof TENANT_HANDOVER_STEP_STATUSES)[number];
+
+export function isTenantHandoverStep(value: string): value is TenantHandoverStep {
+  return (TENANT_HANDOVER_STEPS as readonly string[]).includes(value);
+}
 
 /** The tenant accounts' region, beside the fleet pools (MOTIR-9701). The one
  *  place to change it. */

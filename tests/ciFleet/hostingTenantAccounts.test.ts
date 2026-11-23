@@ -5,6 +5,12 @@ import {
   HOSTING_TENANT_ACCOUNT_STATES,
   hostingTenantAccountPlan,
   isHostingTenantAccountState,
+  isTenantAccountHandoverState,
+  isTenantHandoverStep,
+  TENANT_ACCOUNT_BRING_UP_STATES,
+  TENANT_ACCOUNT_HANDOVER_STATES,
+  TENANT_HANDOVER_STEP_STATUSES,
+  TENANT_HANDOVER_STEPS,
   TENANT_ACCOUNT_REGION,
   TENANT_OU_NAME,
   tenantAccountName,
@@ -52,15 +58,69 @@ describe('hostingTenantAccountPlan', () => {
     expect(TENANT_OU_NAME).toBe('Tenants');
   });
 
-  it('knows the five states and nothing else', () => {
+  it('knows the nine states and nothing else — the bring-up five and the handover four (MOTIR-9800)', () => {
     expect(HOSTING_TENANT_ACCOUNT_STATES).toEqual([
       'requested',
       'creating',
       'bootstrapping',
       'ready',
       'refused',
+      'handing_over',
+      'awaiting_standalone',
+      'removing',
+      'handed_over',
     ]);
     expect(isHostingTenantAccountState('ready')).toBe(true);
+    expect(isHostingTenantAccountState('handed_over')).toBe(true);
     expect(isHostingTenantAccountState('active')).toBe(false);
+  });
+
+  it('splits the states into the bring-up the reconcile walks and the handover it never touches', () => {
+    expect(TENANT_ACCOUNT_BRING_UP_STATES).toEqual([
+      'requested',
+      'creating',
+      'bootstrapping',
+      'refused',
+    ]);
+    expect(TENANT_ACCOUNT_HANDOVER_STATES).toEqual([
+      'handing_over',
+      'awaiting_standalone',
+      'removing',
+      'handed_over',
+    ]);
+    const covered = new Set<string>([
+      ...TENANT_ACCOUNT_BRING_UP_STATES,
+      ...TENANT_ACCOUNT_HANDOVER_STATES,
+      'ready',
+    ]);
+    expect([...covered].sort()).toEqual([...HOSTING_TENANT_ACCOUNT_STATES].sort());
+    for (const state of TENANT_ACCOUNT_HANDOVER_STATES) {
+      expect(isTenantAccountHandoverState(state)).toBe(true);
+    }
+    for (const state of [...TENANT_ACCOUNT_BRING_UP_STATES, 'ready', 'gone']) {
+      expect(isTenantAccountHandoverState(state)).toBe(false);
+    }
+  });
+
+  it('runs the handover steps in their fixed order, with five step statuses', () => {
+    expect(TENANT_HANDOVER_STEPS).toEqual([
+      'destroy_previews',
+      'create_deploy_role',
+      'open_upstream',
+      'move_email',
+      'await_standalone',
+      'remove_access',
+      'leave_organization',
+      'transfer_repositories',
+    ]);
+    expect(TENANT_HANDOVER_STEP_STATUSES).toEqual([
+      'pending',
+      'running',
+      'waiting_on_you',
+      'done',
+      'failed',
+    ]);
+    expect(isTenantHandoverStep('move_email')).toBe(true);
+    expect(isTenantHandoverStep('close_account')).toBe(false);
   });
 });

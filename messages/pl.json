@@ -15437,14 +15437,22 @@
           "creating": "Tworzenie",
           "bootstrapping": "Bootstrap w toku",
           "ready": "Gotowe",
-          "refused": "Odrzucone"
+          "refused": "Odrzucone",
+          "handing_over": "Przekazywanie",
+          "awaiting_standalone": "Czeka na samodzielność",
+          "removing": "Odłączanie",
+          "handed_over": "Przekazane"
         },
         "notReady": {
           "requested": "Limity są odczytywane, gdy konto jest gotowe. Konto nie zostało jeszcze utworzone.",
           "creating": "Limity są odczytywane, gdy konto jest gotowe. AWS tworzy konto.",
           "bootstrapping": "Limity są odczytywane, gdy konto jest gotowe. Bootstrap konfiguruje rolę wdrożeniową, tagi i podwyżki limitów.",
           "refused": "{count, plural, one {AWS raz odmówił utworzenia konta, {age}.} few {AWS # razy odmówił utworzenia konta, ostatnio {age}.} many {AWS # razy odmówił utworzenia konta, ostatnio {age}.} other {AWS # razy odmówił utworzenia konta, ostatnio {age}.}} Uzgadnianie ponowi próbę po okresie oczekiwania; limity są odczytywane, gdy konto jest gotowe.",
-          "refusedNever": "Limity są odczytywane, gdy konto jest gotowe. AWS odmówił utworzenia konta; uzgadnianie ponowi próbę po okresie oczekiwania."
+          "refusedNever": "Limity są odczytywane, gdy konto jest gotowe. AWS odmówił utworzenia konta; uzgadnianie ponowi próbę po okresie oczekiwania.",
+          "handing_over": "Podczas przekazania limity nie są odczytywane. Konto jest przekazywane swojej organizacji.",
+          "awaiting_standalone": "Podczas przekazania limity nie są odczytywane. Zanim konto będzie mogło odejść, organizacja musi dodać dane rozliczeniowe i plan wsparcia.",
+          "removing": "Podczas przekazania limity nie są odczytywane. Konto opuszcza organizację AWS Motir.",
+          "handed_over": "Konto opuściło Motir i należy do swojej organizacji. Jego limity nie są już odczytywane."
         },
         "col": {
           "quota": "Limit",

@@ -14388,5 +14388,13 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "platformAdmin.fleetStatus.tenants.state.handing_over": "Handing over",
+  "platformAdmin.fleetStatus.tenants.state.awaiting_standalone": "Waiting to stand alone",
+  "platformAdmin.fleetStatus.tenants.state.removing": "Leaving",
+  "platformAdmin.fleetStatus.tenants.state.handed_over": "Handed over",
+  "platformAdmin.fleetStatus.tenants.notReady.handing_over": "Quotas are not read during a handover. The account is being handed over to its organisation.",
+  "platformAdmin.fleetStatus.tenants.notReady.awaiting_standalone": "Quotas are not read during a handover. The organisation must add billing details and a support plan before the account can leave.",
+  "platformAdmin.fleetStatus.tenants.notReady.removing": "Quotas are not read during a handover. The account is leaving Motir’s AWS organisation.",
+  "platformAdmin.fleetStatus.tenants.notReady.handed_over": "The account has left Motir and belongs to its organisation. Its quotas are no longer read."
 }

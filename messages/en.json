@@ -15434,14 +15434,22 @@
           "creating": "Creating",
           "bootstrapping": "Bootstrapping",
           "ready": "Ready",
-          "refused": "Refused"
+          "refused": "Refused",
+          "handing_over": "Handing over",
+          "awaiting_standalone": "Waiting to stand alone",
+          "removing": "Leaving",
+          "handed_over": "Handed over"
         },
         "notReady": {
           "requested": "Quotas are read once the account is ready. The account has not been created yet.",
           "creating": "Quotas are read once the account is ready. AWS is creating the account.",
           "bootstrapping": "Quotas are read once the account is ready. The bootstrap is setting up its deploy role, tags and quota raises.",
           "refused": "{count, plural, one {AWS refused to create the account once, {age}.} other {AWS refused to create the account # times, last {age}.}} The reconcile tries again after its backoff; quotas are read once the account is ready.",
-          "refusedNever": "Quotas are read once the account is ready. AWS refused to create the account; the reconcile tries again after its backoff."
+          "refusedNever": "Quotas are read once the account is ready. AWS refused to create the account; the reconcile tries again after its backoff.",
+          "handing_over": "Quotas are not read during a handover. The account is being handed over to its organisation.",
+          "awaiting_standalone": "Quotas are not read during a handover. The organisation must add billing details and a support plan before the account can leave.",
+          "removing": "Quotas are not read during a handover. The account is leaving Motir’s AWS organisation.",
+          "handed_over": "The account has left Motir and belongs to its organisation. Its quotas are no longer read."
         },
         "col": {
           "quota": "Quota",

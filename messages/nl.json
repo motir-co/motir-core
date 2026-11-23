@@ -15437,14 +15437,22 @@
           "creating": "Wordt aangemaakt",
           "bootstrapping": "Bootstrap bezig",
           "ready": "Gereed",
-          "refused": "Geweigerd"
+          "refused": "Geweigerd",
+          "handing_over": "Wordt overgedragen",
+          "awaiting_standalone": "Wacht op zelfstandigheid",
+          "removing": "Vertrekt",
+          "handed_over": "Overgedragen"
         },
         "notReady": {
           "requested": "Quota worden gelezen zodra het account gereed is. Het account is nog niet aangemaakt.",
           "creating": "Quota worden gelezen zodra het account gereed is. AWS maakt het account aan.",
           "bootstrapping": "Quota worden gelezen zodra het account gereed is. De bootstrap richt de deployrol, de tags en de quotumverhogingen in.",
           "refused": "{count, plural, one {AWS weigerde het account één keer aan te maken, {age}.} other {AWS weigerde het account # keer aan te maken, laatst {age}.}} De reconciliatie probeert het opnieuw na de wachttijd; quota worden gelezen zodra het account gereed is.",
-          "refusedNever": "Quota worden gelezen zodra het account gereed is. AWS weigerde het account aan te maken; de reconciliatie probeert het opnieuw na de wachttijd."
+          "refusedNever": "Quota worden gelezen zodra het account gereed is. AWS weigerde het account aan te maken; de reconciliatie probeert het opnieuw na de wachttijd.",
+          "handing_over": "Tijdens een overdracht worden geen quota gelezen. Het account wordt overgedragen aan zijn organisatie.",
+          "awaiting_standalone": "Tijdens een overdracht worden geen quota gelezen. De organisatie moet factuurgegevens en een supportplan toevoegen voordat het account kan vertrekken.",
+          "removing": "Tijdens een overdracht worden geen quota gelezen. Het account verlaat de AWS-organisatie van Motir.",
+          "handed_over": "Het account heeft Motir verlaten en hoort bij zijn organisatie. De quota worden niet meer gelezen."
         },
         "col": {
           "quota": "Quotum",

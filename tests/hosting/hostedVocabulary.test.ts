@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { HostedReleaseCause, HostedReleaseState } from '@/generated/prisma/client';
+import {
+  HostedApplicationState,
+  HostedReleaseCause,
+  HostedReleaseState,
+} from '@/generated/prisma/client';
 import {
   applicationHost,
   applicationHostForWorkspaceHostname,
@@ -8,7 +12,11 @@ import {
 import { deployEligibilityRefusal, isDeployEligible } from '@/lib/hosting/deployEligibility';
 import {
   HOSTED_RELEASE_CAUSES,
+  HOSTED_APPLICATION_EXPORT_KINDS,
+  HOSTED_APPLICATION_STATES,
   HOSTED_RELEASE_STATES,
+  isHostedApplicationExportKind,
+  isHostedApplicationState,
   isHostedReleaseState,
   isLegalReleaseTransition,
   type HostedReleaseState as State,
@@ -67,6 +75,28 @@ describe('the release vocabulary', () => {
     for (const to of HOSTED_RELEASE_STATES) {
       expect(isLegalReleaseTransition('failed', to)).toBe(false);
     }
+  });
+});
+
+describe('the application handover vocabulary (MOTIR-9800)', () => {
+  it('is exactly the four application states, pinned to the Prisma enum', () => {
+    expect([...HOSTED_APPLICATION_STATES]).toEqual([
+      'live',
+      'handing_over',
+      'grace',
+      'handed_over',
+    ]);
+    expect([...HOSTED_APPLICATION_STATES].sort()).toEqual(
+      Object.values(HostedApplicationState).sort(),
+    );
+    expect(isHostedApplicationState('grace')).toBe(true);
+    expect(isHostedApplicationState('stopped')).toBe(false);
+  });
+
+  it('knows the two export kinds', () => {
+    expect([...HOSTED_APPLICATION_EXPORT_KINDS]).toEqual(['on_demand', 'final']);
+    expect(isHostedApplicationExportKind('final')).toBe(true);
+    expect(isHostedApplicationExportKind('nightly')).toBe(false);
   });
 });
 

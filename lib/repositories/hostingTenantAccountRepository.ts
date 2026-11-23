@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { HostingTenantAccount, Prisma } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import type { HostingTenantAccountState } from '@/lib/ciFleet/hostingTenantAccounts';
+import {
+  TENANT_ACCOUNT_BRING_UP_STATES,
+  type HostingTenantAccountState,
+} from '@/lib/ciFleet/hostingTenantAccounts';
 
 // An organisation's AWS hosting account record (Story MOTIR-9792 · MOTIR-9939):
 // one row per organisation — the account id once known, the state, the
@@ -35,14 +38,18 @@ export const hostingTenantAccountRepository = {
       DO UPDATE SET "organization_id" = EXCLUDED."organization_id"
       RETURNING "id", "organization_id" AS "organizationId", "aws_account_id" AS "awsAccountId",
         "state", "refused_count" AS "refusedCount", "last_refused_at" AS "lastRefusedAt",
-        "ou_id" AS "ouId", "quotas_checked_at" AS "quotasCheckedAt", "region", "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
+        "ou_id" AS "ouId", "quotas_checked_at" AS "quotasCheckedAt", "region",
+        "handover_owner_email" AS "handoverOwnerEmail", "handover_github_owner" AS "handoverGithubOwner",
+        "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
     return rows[0]!;
   },
 
-  /** Every row not yet `ready`, oldest first — what the reconcile walks. */
+  /** Every row still being brought up (`requested`, `creating`, `bootstrapping`,
+   *  `refused`), oldest first — what the reconcile walks. An account in a
+   *  takeover handover state is not unready, so it is never listed (MOTIR-12126). */
   async listUnreadyInTx(tx: Prisma.TransactionClient): Promise<HostingTenantAccount[]> {
     return tx.hostingTenantAccount.findMany({
-      where: { state: { not: 'ready' } },
+      where: { state: { in: [...TENANT_ACCOUNT_BRING_UP_STATES] } },
       orderBy: { createdAt: 'asc' },
     });
   },
@@ -137,6 +144,19 @@ export const hostingTenantAccountRepository = {
     return tx.hostingTenantAccount.update({
       where: { organizationId },
       data: { refusedCount: { increment: 1 }, lastRefusedAt: at },
+    });
+  },
+
+  /** The email address and GitHub owner the administrator names at takeover
+   *  (MOTIR-12126) — kept so a restarted handover resumes with them. */
+  async setHandoverOwnerInTx(
+    organizationId: string,
+    owner: { ownerEmail: string; githubOwner: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<HostingTenantAccount> {
+    return tx.hostingTenantAccount.update({
+      where: { organizationId },
+      data: { handoverOwnerEmail: owner.ownerEmail, handoverGithubOwner: owner.githubOwner },
     });
   },
 

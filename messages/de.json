@@ -15437,14 +15437,22 @@
           "creating": "Wird erstellt",
           "bootstrapping": "Bootstrap läuft",
           "ready": "Bereit",
-          "refused": "Abgelehnt"
+          "refused": "Abgelehnt",
+          "handing_over": "Wird übergeben",
+          "awaiting_standalone": "Wartet auf Eigenständigkeit",
+          "removing": "Wird gelöst",
+          "handed_over": "Übergeben"
         },
         "notReady": {
           "requested": "Kontingente werden gelesen, sobald das Konto bereit ist. Das Konto wurde noch nicht erstellt.",
           "creating": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS erstellt das Konto gerade.",
           "bootstrapping": "Kontingente werden gelesen, sobald das Konto bereit ist. Der Bootstrap richtet die Deploy-Rolle, die Tags und die Kontingentanhebungen ein.",
           "refused": "{count, plural, one {AWS hat die Erstellung des Kontos einmal abgelehnt, {age}.} other {AWS hat die Erstellung des Kontos # Mal abgelehnt, zuletzt {age}.}} Der Abgleich versucht es nach seiner Wartezeit erneut; Kontingente werden gelesen, sobald das Konto bereit ist.",
-          "refusedNever": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS hat die Erstellung des Kontos abgelehnt; der Abgleich versucht es nach seiner Wartezeit erneut."
+          "refusedNever": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS hat die Erstellung des Kontos abgelehnt; der Abgleich versucht es nach seiner Wartezeit erneut.",
+          "handing_over": "Während einer Übergabe werden keine Kontingente gelesen. Das Konto wird an seine Organisation übergeben.",
+          "awaiting_standalone": "Während einer Übergabe werden keine Kontingente gelesen. Die Organisation muss Zahlungsdaten und einen Supportplan hinterlegen, bevor das Konto austreten kann.",
+          "removing": "Während einer Übergabe werden keine Kontingente gelesen. Das Konto tritt aus der AWS-Organisation von Motir aus.",
+          "handed_over": "Das Konto hat Motir verlassen und gehört seiner Organisation. Seine Kontingente werden nicht mehr gelesen."
         },
         "col": {
           "quota": "Kontingent",

@@ -15437,14 +15437,22 @@
           "creating": "Em criação",
           "bootstrapping": "Em bootstrap",
           "ready": "Pronta",
-          "refused": "Recusada"
+          "refused": "Recusada",
+          "handing_over": "Em transferência",
+          "awaiting_standalone": "Aguardando autonomia",
+          "removing": "Saindo",
+          "handed_over": "Transferida"
         },
         "notReady": {
           "requested": "As cotas são lidas quando a conta fica pronta. A conta ainda não foi criada.",
           "creating": "As cotas são lidas quando a conta fica pronta. A AWS está criando a conta.",
           "bootstrapping": "As cotas são lidas quando a conta fica pronta. O bootstrap está configurando a função de deploy, as tags e os aumentos de cota.",
           "refused": "{count, plural, one {A AWS recusou criar a conta uma vez, {age}.} other {A AWS recusou criar a conta # vezes, a última {age}.}} A reconciliação tenta de novo após a espera; as cotas são lidas quando a conta fica pronta.",
-          "refusedNever": "As cotas são lidas quando a conta fica pronta. A AWS recusou criar a conta; a reconciliação tenta de novo após a espera."
+          "refusedNever": "As cotas são lidas quando a conta fica pronta. A AWS recusou criar a conta; a reconciliação tenta de novo após a espera.",
+          "handing_over": "As cotas não são lidas durante uma transferência. A conta está sendo transferida para a sua organização.",
+          "awaiting_standalone": "As cotas não são lidas durante uma transferência. A organização precisa adicionar os dados de faturamento e um plano de suporte antes que a conta possa sair.",
+          "removing": "As cotas não são lidas durante uma transferência. A conta está saindo da organização da AWS da Motir.",
+          "handed_over": "A conta saiu da Motir e pertence à sua organização. As cotas dela não são mais lidas."
         },
         "col": {
           "quota": "Cota",

@@ -54,6 +54,11 @@ export function toHostedApplicationDto(row: HostedApplicationWithReleases): Host
     currentRelease: row.currentRelease ? toHostedReleaseDto(row.currentRelease) : null,
     previousRelease: row.previousRelease ? toHostedReleaseDto(row.previousRelease) : null,
     hasDatabase: row.databaseProjectId !== null,
+    state: row.state,
+    stopsAt: row.stopsAt?.toISOString() ?? null,
+    handedOverAt: row.handedOverAt?.toISOString() ?? null,
+    upstreamAddress: row.upstreamAddress,
+    handedOverAccountId: row.handedOverAccountId,
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { HostingTarget, Prisma } from '@/generated/prisma/client';
+import type { HostedApplicationState, HostingTarget, Prisma } from '@/generated/prisma/client';
 import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicationMappers';
 
 // Single-op data access for `hosted_application` — one production home per Motir
@@ -40,11 +40,41 @@ export interface HostedApplicationInsert {
   productionAddress: string | null;
 }
 
+/** The tombstone prefix a released application's slug is rewritten to
+ *  (MOTIR-12126). `--` is reserved inside application labels by the address
+ *  decision, so the shipped slug derivation can never produce it, and the old
+ *  slug is free for another application in the workspace. */
+export const RELEASED_SLUG_PREFIX = 'released--';
+
+/** A released application's slug: `released--<id>`. */
+export const releasedSlugOf = (id: string) => `${RELEASED_SLUG_PREFIX}${id}`;
+
+/** What a handover state move may set beside the state (MOTIR-12126). */
+export interface HostedApplicationStateFields {
+  stopsAt?: Date | null;
+  handedOverAt?: Date | null;
+  handedOverAccountId?: string | null;
+}
+
+/** An AWS-target application of an organisation, as the handover reads it. */
+export interface HostedApplicationAwsRow {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  projectRepositoryId: string;
+  slug: string;
+  productionAddress: string | null;
+  state: HostedApplicationState;
+  upstreamAddress: string | null;
+  currentReleaseId: string | null;
+}
+
 /** The teardown read of {@link hostedApplicationRepository.findTeardownByProjectRepository}. */
 export interface HostedApplicationTeardown {
   id: string;
   projectRepositoryId: string;
   target: HostingTarget;
+  state: HostedApplicationState;
   slug: string;
   productionAddress: string | null;
   productionAppName: string | null;
@@ -82,6 +112,7 @@ export const hostedApplicationRepository = {
     productionAppName: string | null;
     currentReleaseId: string | null;
     productionAddress: string | null;
+    state: HostedApplicationState;
     /** Who may open it. No column holds it yet (MOTIR-9817 adds it), so it reads
      *  `null`, which `applicationAccessOf` treats as members only. */
     access: string | null;
@@ -96,6 +127,7 @@ export const hostedApplicationRepository = {
         productionAppName: true,
         currentReleaseId: true,
         productionAddress: true,
+        state: true,
       },
     });
     return row ? { ...row, access: null } : null;
@@ -272,6 +304,7 @@ export const hostedApplicationRepository = {
         id: true,
         projectRepositoryId: true,
         target: true,
+        state: true,
         slug: true,
         productionAddress: true,
         productionAppName: true,
@@ -305,6 +338,91 @@ export const hostedApplicationRepository = {
     await tx.hostedApplication.updateMany({
       where: { id },
       data: { currentReleaseId: null, previousReleaseId: null, productionAppName: null },
+    });
+  },
+
+  // ── The takeover handover (Story MOTIR-9800 · MOTIR-12126) ────────────────
+
+  /**
+   * Move the application's handover state to `to`, ONLY while it is in `from`,
+   * setting `fields` beside it. One conditional UPDATE, so a caller is
+   * look-before-act without a separate read; returns whether it wrote.
+   */
+  async setStateIfIn(
+    id: string,
+    from: readonly HostedApplicationState[],
+    to: HostedApplicationState,
+    fields: HostedApplicationStateFields,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostedApplication.updateMany({
+      where: { id, state: { in: [...from] } },
+      data: { state: to, ...fields },
+    });
+    return count === 1;
+  },
+
+  /** Record the address an AWS app's own front door answers on without Motir. */
+  async setUpstreamAddress(
+    id: string,
+    upstreamAddress: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.hostedApplication.update({ where: { id }, data: { upstreamAddress } });
+  },
+
+  /**
+   * Release a KEPT application's addresses when Motir stops serving it (the
+   * address decision §3): `productionAddress` cleared and `slug` rewritten to its
+   * tombstone, so both are free for another application. The row, its id and its
+   * state are kept. The UPDATE matches only while either is still held, so a
+   * second call changes nothing; returns whether it wrote.
+   */
+  async releaseAddresses(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const tombstone = releasedSlugOf(id);
+    const { count } = await tx.hostedApplication.updateMany({
+      where: { id, OR: [{ productionAddress: { not: null } }, { slug: { not: tombstone } }] },
+      data: { productionAddress: null, slug: tombstone },
+    });
+    return count === 1;
+  },
+
+  /** Every `grace` application whose `stopsAt` is at or before `before`, soonest
+   *  first — what the stop job walks. */
+  async listInGraceStoppingBy(
+    before: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; workspaceId: string; stopsAt: Date | null }[]> {
+    return tx.hostedApplication.findMany({
+      where: { state: 'grace', stopsAt: { lte: before } },
+      select: { id: true, workspaceId: true, stopsAt: true },
+      orderBy: { stopsAt: 'asc' },
+    });
+  },
+
+  /**
+   * The AWS-target applications of every workspace in the organisation — what
+   * the organisation-wide handover moves, read under the system context (the
+   * policy's system arm is on USING).
+   */
+  async listAwsByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationAwsRow[]> {
+    return tx.hostedApplication.findMany({
+      where: { target: 'aws', workspace: { organizationId } },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        projectRepositoryId: true,
+        slug: true,
+        productionAddress: true,
+        state: true,
+        upstreamAddress: true,
+        currentReleaseId: true,
+      },
+      orderBy: { createdAt: 'asc' },
     });
   },
 

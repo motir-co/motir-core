@@ -15437,14 +15437,22 @@
           "creating": "Creándose",
           "bootstrapping": "En bootstrap",
           "ready": "Lista",
-          "refused": "Rechazada"
+          "refused": "Rechazada",
+          "handing_over": "Traspasando",
+          "awaiting_standalone": "Esperando independencia",
+          "removing": "Saliendo",
+          "handed_over": "Traspasada"
         },
         "notReady": {
           "requested": "Las cuotas se leen cuando la cuenta está lista. La cuenta aún no se ha creado.",
           "creating": "Las cuotas se leen cuando la cuenta está lista. AWS está creando la cuenta.",
           "bootstrapping": "Las cuotas se leen cuando la cuenta está lista. El bootstrap está configurando su rol de despliegue, las etiquetas y los aumentos de cuota.",
           "refused": "{count, plural, one {AWS se negó a crear la cuenta una vez, {age}.} other {AWS se negó a crear la cuenta # veces, la última {age}.}} La reconciliación lo vuelve a intentar tras su espera; las cuotas se leen cuando la cuenta está lista.",
-          "refusedNever": "Las cuotas se leen cuando la cuenta está lista. AWS se negó a crear la cuenta; la reconciliación lo vuelve a intentar tras su espera."
+          "refusedNever": "Las cuotas se leen cuando la cuenta está lista. AWS se negó a crear la cuenta; la reconciliación lo vuelve a intentar tras su espera.",
+          "handing_over": "Durante un traspaso no se leen las cuotas. La cuenta se está traspasando a su organización.",
+          "awaiting_standalone": "Durante un traspaso no se leen las cuotas. La organización debe añadir sus datos de facturación y un plan de soporte antes de que la cuenta pueda salir.",
+          "removing": "Durante un traspaso no se leen las cuotas. La cuenta está saliendo de la organización de AWS de Motir.",
+          "handed_over": "La cuenta ha dejado Motir y pertenece a su organización. Sus cuotas ya no se leen."
         },
         "col": {
           "quota": "Cuota",

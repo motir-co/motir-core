@@ -15428,14 +15428,22 @@
           "creating": "创建中",
           "bootstrapping": "引导中",
           "ready": "就绪",
-          "refused": "被拒绝"
+          "refused": "被拒绝",
+          "handing_over": "移交中",
+          "awaiting_standalone": "等待独立",
+          "removing": "退出中",
+          "handed_over": "已移交"
         },
         "notReady": {
           "requested": "账户就绪后才会读取配额。该账户尚未创建。",
           "creating": "账户就绪后才会读取配额。AWS 正在创建该账户。",
           "bootstrapping": "账户就绪后才会读取配额。引导正在设置其部署角色、标签和配额提升请求。",
           "refused": "{count, plural, other {AWS 已拒绝创建该账户 # 次，最近一次在{age}。}}对账会在退避后重试；账户就绪后才会读取配额。",
-          "refusedNever": "账户就绪后才会读取配额。AWS 拒绝创建该账户；协调程序将在退避期后重试。"
+          "refusedNever": "账户就绪后才会读取配额。AWS 拒绝创建该账户；协调程序将在退避期后重试。",
+          "handing_over": "移交期间不读取配额。账户正在移交给其组织。",
+          "awaiting_standalone": "移交期间不读取配额。账户退出前，组织需要先添加账单信息和支持计划。",
+          "removing": "移交期间不读取配额。账户正在退出 Motir 的 AWS 组织。",
+          "handed_over": "账户已离开 Motir，归其组织所有。不再读取它的配额。"
         },
         "col": {
           "quota": "配额",
