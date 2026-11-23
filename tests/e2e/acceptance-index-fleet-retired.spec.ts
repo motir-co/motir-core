@@ -288,7 +288,9 @@ test.describe('The retired indexer on the fleet screens', () => {
       async () => {
         expect((await page.goto('/admin/fleet-status'))?.status()).toBe(200);
         const images = main(page).locator('section[aria-labelledby="images-heading"]');
-        await expect(images.getByRole('heading', { name: fs.images.title })).toBeVisible();
+        await expect(
+          images.getByRole('heading', { name: fs.images.title, exact: true }),
+        ).toBeVisible();
         for (const image of ['hosted', 'runner', 'sandbox'] as const) {
           const card = images.locator(`[data-image="${image}"]`);
           await expect(card).toBeVisible({ timeout: 60_000 });
