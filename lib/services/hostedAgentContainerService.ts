@@ -158,12 +158,14 @@ const DEFAULT_BOOT_DEADLINE_MS = 120_000;
 /** How soon after boot supervision first asks the provider about the container. */
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 
-/** The index loop's ceiling. The agent cadence may never be FASTER than it. */
-const INDEX_LOOP_MAX_POLL_INTERVAL_MS = 15_000;
+/** The floor under the agent's poll ceiling: 15 s, the ceiling the code-graph
+ *  index loop polled at until MOTIR-12037 retired it. The agent cadence may never
+ *  be FASTER than it. */
+const POLL_CEILING_FLOOR_MS = 15_000;
 
 /**
  * The ceiling the poll interval backs off to — ONE MINUTE, four times sparser
- * than the index loop's.
+ * than {@link POLL_CEILING_FLOOR_MS}.
  *
  * ⚠️ IT IS ALSO THE BOUND ON UNOBSERVED SPEND, which is why it is a minute and not
  * an hour. Every successful poll writes an absolute-to-date checkpoint, so a
@@ -210,7 +212,7 @@ export const HOSTED_AGENT_FLEET_TIME_BUDGETS = {
   bootDeadlineMs: DEFAULT_BOOT_DEADLINE_MS,
   pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
   maxPollIntervalMs: AGENT_MAX_POLL_INTERVAL_MS,
-  indexLoopMaxPollIntervalMs: INDEX_LOOP_MAX_POLL_INTERVAL_MS,
+  pollCeilingFloorMs: POLL_CEILING_FLOOR_MS,
   maxTimeoutMs: HOSTED_AGENT_MAX_TIMEOUT_MS,
   maxPollIterations: MAX_POLL_ITERATIONS,
   maxConsecutiveReadFailures: MAX_CONSECUTIVE_READ_FAILURES,

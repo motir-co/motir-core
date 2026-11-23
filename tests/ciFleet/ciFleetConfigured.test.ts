@@ -10,8 +10,8 @@ import { CI_RUNNER_PROVIDER_ENV_VAR, ciRunnerOnPool } from '@/lib/ciFleet/fleetK
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { adminDb } from '../helpers/adminDb';
 
-// THE CI RUNNER'S CONFIG GATE (Bug MOTIR-10625) — the CI twin of
-// `isIndexFleetConfigured()` (MOTIR-10568).
+// THE CI RUNNER'S CONFIG GATE (Bug MOTIR-10625) — the CI twin of what was
+// `isIndexFleetConfigured()` (MOTIR-10568) until MOTIR-12037 retired the index fleet.
 //
 // The gate used to be `isOrchestratorConfigured()`: the Fly fleet's three
 // variables. On AWS, with `MOTIR_FLEET_CI_RUNNER_PROVIDER=aws`, a CI job boots on

@@ -13,8 +13,6 @@ import {
   AWS_AMI_ID,
   AWS_HOSTED_ENV,
   AWS_HOSTED_IMAGE,
-  AWS_INDEXER_AMI_ID,
-  AWS_INDEX_SPEC_OVERRIDES,
   AWS_SHARD_TAG,
   AWS_SPEC,
 } from './contract/awsHarness';
@@ -36,11 +34,9 @@ const HOSTED_SPEC: ContainerSpec = {
   image: AWS_HOSTED_IMAGE,
   env: AWS_HOSTED_ENV,
 };
-const INDEX_SPEC: ContainerSpec = {
-  ...AWS_SPEC,
-  workload: 'code_graph_index',
-  ...AWS_INDEX_SPEC_OVERRIDES,
-};
+// The kind is retired (MOTIR-12037); its arm64 spec is still refused on the
+// architecture before anything else is read.
+const INDEX_SPEC: ContainerSpec = { ...AWS_SPEC, workload: 'code_graph_index' };
 
 let ec2: AwsEc2Fake;
 let callsBefore = 0;
@@ -52,7 +48,6 @@ function adapter(overrides: Partial<AwsOrchestratorConfig> = {}) {
     shardTag: AWS_SHARD_TAG,
     amiId: AWS_AMI_ID,
     arm64AmiId: ARM64_AMI_ID,
-    indexerAmiId: AWS_INDEXER_AMI_ID,
     spotInstanceTypes: ['m6i.large', 'm7i.large'],
     ...overrides,
   });
@@ -192,13 +187,5 @@ describe('every x86 launch is unchanged with an arm64 AMI configured', () => {
     const request = ec2.requestOf(handle.id);
     expect(request.instanceType).toBe(AWS_DEFAULT_INSTANCE_TYPE);
     expect(request.imageId).toBe(AWS_AMI_ID);
-  });
-
-  it('an index VM boots the x86 type from the indexer AMI', async () => {
-    const handle = await adapter().provision(INDEX_SPEC);
-
-    const request = ec2.requestOf(handle.id);
-    expect(request.instanceType).toBe(AWS_DEFAULT_INSTANCE_TYPE);
-    expect(request.imageId).toBe(AWS_INDEXER_AMI_ID);
   });
 });

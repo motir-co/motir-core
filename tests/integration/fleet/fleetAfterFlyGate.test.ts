@@ -770,10 +770,6 @@ const KEPT_ADAPTERS: ReadonlyArray<{ module: string; exports: readonly string[] 
     exports: ['flyPersistentOrchestrator', 'isFlyInstancesConfigured'],
   },
   {
-    module: 'packages/orchestrator/src/adapters/fly/indexImage.ts',
-    exports: ['flyIndexerImage', 'isFlyIndexerImageConfigured', 'INDEXER_IMAGE_ENV_VAR'],
-  },
-  {
     module: 'packages/orchestrator/src/adapters/neon/database.ts',
     exports: ['createNeonDatabasePort'],
   },

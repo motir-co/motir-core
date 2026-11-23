@@ -25,11 +25,7 @@ import {
 import { MOTIR_FLEET_ARM64_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
 import { CI_SPOT_ALLOWED_INSTANCE_TYPES } from '@/lib/ciFleet/ciSpotInstanceTypes';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
-import {
-  AWS_INDEXER_AMI_ENV_VAR,
-  AWS_RUNNER_AMI_ENV_VAR,
-  AWS_RUNNER_ARM64_AMI_ENV_VAR,
-} from '@/lib/orchestrator';
+import { AWS_RUNNER_AMI_ENV_VAR, AWS_RUNNER_ARM64_AMI_ENV_VAR } from '@/lib/orchestrator';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
@@ -139,8 +135,6 @@ const REGION = 'us-east-1';
 const ZONES = ['us-east-1a', 'us-east-1b'];
 const AMI_ID = 'ami-0123456789abcdef0';
 const ARM64_AMI_ID = 'ami-0a1b2c3d4e5f6a7b8';
-const INDEXER_AMI_ID = 'ami-0fedcba9876543210';
-const INDEX_IMAGE = `ghcr.io/motir-co/motir-indexer@sha256:${'b'.repeat(64)}`;
 const FAST = { bootDeadlineMs: 40, jobTimeoutMs: 400, pollIntervalMs: 1 } as const;
 const ARM64 = [MOTIR_ARM64_RUNNER_LABEL];
 const X86 = [MOTIR_RUNNER_LABEL];
@@ -431,7 +425,6 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_RUNNER_IMAGE', 'motir/ci-runner@sha256:test');
   vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, AMI_ID);
   vi.stubEnv(AWS_RUNNER_ARM64_AMI_ENV_VAR, ARM64_AMI_ID);
-  vi.stubEnv(AWS_INDEXER_AMI_ENV_VAR, INDEXER_AMI_ID);
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   installGithub();
@@ -782,27 +775,18 @@ describe('guard: the other workloads launch as they did before the story', () =>
     region: REGION,
   };
 
-  it('with the arm64 AMI pinned, a hosted agent is m6i.large on the x86 AMI and an index VM keeps its own image', async () => {
+  it('with the arm64 AMI pinned, a hosted agent is m6i.large on the x86 AMI', async () => {
+    // (The index VM this case also booted, on its own AMI, was retired with the
+    // index fleet in MOTIR-12037.)
     const { shard, ec2 } = await awsPool();
     const orchestrator = fleetShardOrchestratorService.forShardRow(shard);
 
     const hosted = await orchestrator.provision(base);
-    const index = await orchestrator.provision({
-      ...base,
-      workload: 'code_graph_index',
-      image: INDEX_IMAGE,
-      env: { MOTIR_INDEX_RUN_CREDENTIAL: 'run-cred', MOTIR_INDEX_PROJECT_ID: 'proj-1' },
-    });
 
     const hostedRequest = ec2.instances.get(hosted.id)!.request;
     expect(hostedRequest).toMatchObject({ instanceType: 'm6i.large', imageId: AMI_ID });
-    const indexRequest = ec2.instances.get(index.id)!.request;
-    expect(indexRequest).toMatchObject({ instanceType: 'm6i.large', imageId: INDEXER_AMI_ID });
-    expect(Buffer.from(indexRequest.userData, 'base64').toString('utf8')).toContain(INDEX_IMAGE);
-    for (const request of [hostedRequest, indexRequest]) {
-      expect(request.instanceType).not.toBe('m7g.large');
-      expect(request.imageId).not.toBe(ARM64_AMI_ID);
-    }
+    expect(hostedRequest.instanceType).not.toBe('m7g.large');
+    expect(hostedRequest.imageId).not.toBe(ARM64_AMI_ID);
   });
 
   it('an agent instance is still refused by the per-run AWS adapter, before any EC2 call', async () => {

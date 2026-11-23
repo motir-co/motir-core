@@ -10,34 +10,20 @@ import {
   type Ec2SdkClientFactory,
 } from '../src/index';
 import { AwsEc2Fake } from './contract/awsEc2Fake';
-import {
-  AWS_AMI_ID,
-  AWS_HOSTED_ENV,
-  AWS_HOSTED_IMAGE,
-  AWS_INDEXER_AMI_ID,
-  AWS_INDEX_SPEC_OVERRIDES,
-  AWS_SPEC,
-} from './contract/awsHarness';
+import { AWS_AMI_ID, AWS_HOSTED_ENV, AWS_HOSTED_IMAGE, AWS_SPEC } from './contract/awsHarness';
 import { testHostAgentConfig } from './contract/awsHostAgentFake';
 import { AWS_HOSTER_AMI_ID, AWS_PERSISTENT_SPEC } from './contract/awsPersistentHarness';
 
 // THE INSTALL FLEET'S SEAMS IN THE AWS ADAPTER (Story MOTIR-10792 · MOTIR-10794):
-// a network NAMED by configuration instead of found by the shard tag, the VM
-// profile by ARN on an index VM only, a tag-scoped inventory, and an EC2 client on
+// a network NAMED by configuration instead of found by the shard tag, no instance
+// profile on any launch (the index VM that took one was retired with
+// MOTIR-12037), a tag-scoped inventory, and an EC2 client on
 // the SDK's default chain — the process's own identity, no key, no assumed role.
 
 const TAG = 'motir-install-fleet';
-const PROFILE_ARN = 'arn:aws:iam::944842271421:instance-profile/motir-install-fleet-vm';
 const OTHER = 'some-other-network';
 
 let ec2: AwsEc2Fake;
-
-const INDEX_SPEC: ContainerSpec = {
-  ...AWS_SPEC,
-  ...AWS_INDEX_SPEC_OVERRIDES,
-  workload: 'code_graph_index',
-  workflowJobId: null,
-};
 
 const HOSTED_SPEC: ContainerSpec = {
   ...AWS_SPEC,
@@ -71,9 +57,7 @@ describe('the ephemeral adapter on a named network', () => {
       region: 'us-east-1',
       shardTag: TAG,
       amiId: AWS_AMI_ID,
-      indexerAmiId: AWS_INDEXER_AMI_ID,
       network: { subnetIds: namedSubnets(), securityGroupId: `sg-${OTHER}` },
-      indexInstanceProfileArn: PROFILE_ARN,
     });
   }
 
@@ -92,27 +76,11 @@ describe('the ephemeral adapter on a named network', () => {
     expect(launches()[0]!.tags).toContainEqual({ key: 'motir-shard', value: TAG });
   });
 
-  it('gives an index VM the VM profile by ARN, and an agent run none', async () => {
-    await adapter().provision(INDEX_SPEC);
+  it('launches an agent run with no instance profile', async () => {
     await adapter().provision(HOSTED_SPEC);
-    const [index, hosted] = launches();
-    expect(index).toMatchObject({ iamInstanceProfileArn: PROFILE_ARN });
-    expect(index!.iamInstanceProfileName).toBeUndefined();
+    const [hosted] = launches();
     expect(hosted!.iamInstanceProfileArn).toBeUndefined();
     expect(hosted!.iamInstanceProfileName).toBeUndefined();
-  });
-
-  it('a pool account with no ARN keeps its index profile by name', async () => {
-    ec2.seedShardNetwork('pool-1');
-    await createAwsOrchestrator({
-      ec2,
-      region: 'us-east-1',
-      shardTag: 'pool-1',
-      amiId: AWS_AMI_ID,
-      indexerAmiId: AWS_INDEXER_AMI_ID,
-    }).provision(INDEX_SPEC);
-    expect(launches()[0]!.iamInstanceProfileName).toBeDefined();
-    expect(launches()[0]!.iamInstanceProfileArn).toBeUndefined();
   });
 });
 
@@ -211,8 +179,10 @@ describe('the EC2 client on the default chain', () => {
       instanceInitiatedShutdownBehavior: 'terminate',
       blockDeviceMappings: [],
       tags: [],
-      iamInstanceProfileArn: PROFILE_ARN,
+      iamInstanceProfileArn: 'arn:aws:iam::123456789012:instance-profile/motir-agent',
     });
-    expect(sent[0]!.input['IamInstanceProfile']).toEqual({ Arn: PROFILE_ARN });
+    expect(sent[0]!.input['IamInstanceProfile']).toEqual({
+      Arn: 'arn:aws:iam::123456789012:instance-profile/motir-agent',
+    });
   });
 });

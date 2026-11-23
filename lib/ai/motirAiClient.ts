@@ -132,11 +132,11 @@ interface ClientConfig {
  * refuses when `MOTIR_AI_SERVICE_TOKEN` is unset and hands the token back beside
  * the url, so a caller that needs only the address cannot use it.
  *
- * ⚠️ IT IS NOT THE ADDRESS AN INDEX CONTAINER IS GIVEN — see
- * {@link motirAiContainerBaseUrl}, directly below, and read the two together.
- * This paragraph used to say the opposite in those words ("a fleet index
- * container is handed `MOTIR_AI_BASE_URL`…"), and the dispatcher did exactly
- * what it said. **CORRECTED (MOTIR-4518):** `MOTIR_AI_URL` is the address
+ * ⚠️ IT WAS NEVER THE ADDRESS AN INDEX CONTAINER WAS GIVEN. This paragraph once
+ * said the opposite ("a fleet index container is handed `MOTIR_AI_BASE_URL`…"),
+ * and the dispatcher did exactly what it said. **CORRECTED (MOTIR-4518):** the
+ * container got its own variable, `MOTIR_AI_CONTAINER_URL`, which left with the
+ * index container itself (MOTIR-12037). `MOTIR_AI_URL` is the address
  * motir-core reaches motir-ai at, which in production was a PRIVATE, org-scoped
  * 6PN name (`http://motir-ai.internal:8080`) from 2026-08-21 until 2026-10-02 —
  * and is motir-ai's PUBLIC origin since, because motir-ai's pool
@@ -152,59 +152,6 @@ interface ClientConfig {
 export function motirAiBaseUrl(): string {
   const url = process.env['MOTIR_AI_URL'];
   if (!url) throw new MotirAiConfigError('MOTIR_AI_URL is not set');
-  return url.replace(/\/+$/, '');
-}
-
-/**
- * The env var carrying the address an INDEX CONTAINER is given for motir-ai.
- * Exported so the preflight and its message name the same literal the accessor
- * reads (MOTIR-4518).
- */
-export const MOTIR_AI_CONTAINER_URL_ENV_VAR = 'MOTIR_AI_CONTAINER_URL';
-
-/**
- * motir-ai's base URL AS THE INDEX CONTAINER MUST REACH IT (MOTIR-4518) — the
- * value that becomes the container's `MOTIR_AI_BASE_URL`.
- *
- * ⚠️ WHY THIS IS A SECOND ACCESSOR AND NOT A SECOND CALL TO ITS TWIN. The two
- * callers are in DIFFERENT PLACES, so they are different values, and the code
- * has to be able to say so:
- *
- * | who is calling | from where | which address |
- * | --- | --- | --- |
- * | motir-core (this process) | the `moooon` organization | {@link motirAiBaseUrl} — `MOTIR_AI_URL`, the public origin in production (Amendment 9) |
- * | an index container | the FLEET's own organization | this accessor — `MOTIR_AI_CONTAINER_URL`, which must resolve from outside `moooon` |
- *
- * A `.internal` name is 6PN: the platform resolves it only for machines in the
- * SAME organization as the app it names, so it is unusable for the row below —
- * private-network addressing is scoped to a network, and the two callers are on
- * different ones. Both rows hold the public origin in production today, for
- * DIFFERENT reasons: the container because of the org boundary, motir-core
- * because motir-ai's pool sleeps and only the Fly proxy wakes it
- * (application-hosting.md Amendment 9, MOTIR-7407). They stay two variables
- * so the two callers can diverge again without one dragging the other.
- *
- * ⚠️ AND THERE IS NO FALLBACK TO `MOTIR_AI_URL`, DELIBERATELY. A default is what
- * turned the original mistake into two silent weeks: the container booted, ran
- * for nineteen minutes, built a 45 MB graph and threw it away at the upload
- * grant, while the ledger recorded success. Unset must be LOUD and must be loud
- * BEFORE a machine is billed — this throws inside `bootIndexContainer`'s
- * deployment gate, which releases the admission slot and records a failure
- * instead of a phantom index.
- *
- * The container's authority is unchanged and is not widened by this: it still
- * carries only a run-scoped credential, minted per (project, repo, run), and
- * motir-ai's container-facing routes are gated on it (`runCredentialAuth`) —
- * verified anonymously against the public host, which answers 401
- * `service_unauthorized` rather than serving anything.
- *
- * Read at CALL time, like everything else here.
- */
-export function motirAiContainerBaseUrl(): string {
-  const url = process.env[MOTIR_AI_CONTAINER_URL_ENV_VAR];
-  if (!url) {
-    throw new MotirAiConfigError(`${MOTIR_AI_CONTAINER_URL_ENV_VAR} is not set`);
-  }
   return url.replace(/\/+$/, '');
 }
 

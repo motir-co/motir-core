@@ -69,21 +69,16 @@ beforeEach(async () => {
   });
 });
 
-// ── Registry fixtures for the two pull paths (MOTIR-2030) ────────────────────
+// ── Registry fixtures for the pull paths (MOTIR-2030) ────────────────────────
 //
-// The runner pulls from ghcr.io (public, §1) and the indexer from
-// registry.fly.io (a mirror of a closed image, §5). Keeping them on DIFFERENT
-// hosts is what lets a test prove which path a verdict is about — a fixture
-// where both images were the same string would pass for a preflight that probed
-// the runner twice, which is the bug MOTIR-2030 fixes.
+// The runner and the hosted agent both pull from ghcr.io (public, §1), from
+// DIFFERENT repositories, which is what lets a test prove which path a verdict
+// is about — a fixture where both images were the same string would pass for a
+// preflight that probed the runner twice, which is the bug MOTIR-2030 fixed.
+// (The indexer's `registry.fly.io` path left with the index fleet, MOTIR-12037.)
 
 const RUNNER_REPO = 'motir-co/motir-ci-runner';
 const RUNNER_IMAGE = `ghcr.io/${RUNNER_REPO}@sha256:446c692d`;
-const INDEXER_REPO = 'motir-ci-fleet/motir-indexer';
-const INDEXER_IMAGE = `registry.fly.io/${INDEXER_REPO}@sha256:9f2c1ab4`;
-/** The address a deployment hands an index container for motir-ai (MOTIR-4518) —
- *  motir-ai's PUBLIC ingress, and deliberately not `MOTIR_AI_URL`. */
-const CONTAINER_AI_URL = 'https://ai-public.example.test';
 
 function jsonRes(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -188,6 +183,49 @@ describe('system.daily-health-check scheduled job', () => {
   });
 });
 
+// ── NO INDEXER CHECK IS LEFT (MOTIR-12037) ───────────────────────────────────
+//
+// The index fleet's three probes — its image's pull preflight, the container's
+// motir-ai address and the rebuild streak — left with the fleet. A deployment
+// that sets none of the old indexer settings is a clean one, and the check must
+// say so rather than ask production for settings that no longer mean anything.
+
+describe('the daily health check carries no indexer check', () => {
+  it('is GREEN on a CI deployment that sets none of the old indexer settings, and runs no index step', async () => {
+    await seedHealthyJobSchedules();
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+    for (const name of [
+      'MOTIR_INDEXER_IMAGE',
+      'MOTIR_INDEX_FLEET_PROVIDER',
+      'MOTIR_AWS_INDEXER_AMI_ID',
+    ]) {
+      vi.stubEnv(name, '');
+    }
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error, ctx } = await engine.execute();
+
+    expect(error).toBeUndefined();
+    expect(result).toMatchObject({ ok: true, fleet: { verdict: 'bootable' } });
+    for (const field of ['indexFleet', 'indexContainerAi', 'indexRebuildStreak']) {
+      expect(result).not.toHaveProperty(field);
+    }
+    const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+    for (const retired of [
+      'index-fleet-boot-preflight',
+      'index-container-ai-address',
+      'index-rebuild-streak',
+    ]) {
+      expect(stepIds).not.toContain(retired);
+    }
+    expect(stepIds).toContain('fleet-origins-v2');
+  });
+});
+
 // ── THE FLEET BOOT PREFLIGHT'S HUMAN-VISIBLE SURFACE (MOTIR-2006) ────────────
 //
 // §6.1 of `docs/decisions/fleet-image-pull.md` asks for a preflight that "fails
@@ -286,115 +324,10 @@ describe('the fleet boot preflight rides the daily health check', () => {
   });
 });
 
-// ── THE SECOND PULL PATH RIDES THE SAME SURFACE (MOTIR-2030) ─────────────────
-//
-// §5's third constraint on the indexer's mirror: "It is a second pull path. The
-// fleet then has two, and each needs §6's preflight independently." The tests
-// above cover the RUNNER's path and are unchanged; these cover the INDEXER's,
-// and the thing they most need to pin is that the two verdicts stay TOLD APART
-// — on the ledger row and, when it fails, in the message an operator reads.
-
-describe("the INDEXER image's preflight rides the same health check", () => {
-  /** A cloud deployment wired for CI, with the indexer optionally wired too. */
-  function stubFleet(indexerImage?: string) {
-    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
-    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', indexerImage ?? '');
-  }
-
-  it('records BOTH verdicts on a healthy tick, and they can differ', async () => {
-    // The ordinary cloud state today: CI is wired and indexing is not. A single
-    // merged verdict could not express it — and "the fleet is fine" would be
-    // true of a deployment that cannot index at all.
-    await seedHealthyJobSchedules();
-    stubFleet();
-    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
-
-    expect(result).toMatchObject({
-      ok: true,
-      fleet: { verdict: 'bootable', reference: RUNNER_IMAGE },
-      indexFleet: { verdict: 'not_applicable' },
-    });
-  });
-
-  it('FAILS the run naming the INDEXER image when its registry refuses — with CI perfectly healthy', async () => {
-    // ⚠️ THE CARD'S CENTRAL ASSERTION. The runner image is pullable throughout,
-    // so a preflight that still probed only one image would report a GREEN run
-    // while no index container could boot — the MOTIR-1980 shape, one workload
-    // over. The message must name the INDEXER's reference, because it is the
-    // whole of what the DLQ detail panel renders.
-    await seedHealthyJobSchedules();
-    stubFleet(INDEXER_IMAGE);
-    // Fly's registry has collected the mirrored digest (§5.2); ghcr.io still
-    // serves the runner.
-    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result, error } = (await engine.execute()) as {
-      result?: unknown;
-      error?: { message?: string };
-    };
-
-    expect(result).toBeUndefined();
-    expect(error?.message).toContain(INDEXER_IMAGE);
-    expect(error?.message).toContain('MOTIR_INDEXER_IMAGE');
-    // It names the INDEXER's failure and its likeliest cause — not the runner's
-    // image, and not GHCR visibility, which would send the fix to the wrong
-    // registry entirely.
-    expect(error?.message).not.toContain(RUNNER_IMAGE);
-    expect(error?.message).toContain('garbage-collects');
-    expect(error?.message).toContain('CI is unaffected');
-  });
-
-  it('does NOT fail the run when the indexer registry merely could not be REACHED', async () => {
-    // Same boundary the runner's path holds: a transport failure is not a claim
-    // about the image, and an alarm on registry uptime is one an operator learns
-    // to ignore.
-    await seedHealthyJobSchedules();
-    stubFleet(INDEXER_IMAGE);
-    // A deployment that indexes owes the container an address it can resolve
-    // (MOTIR-4518); without it the run fails on THAT probe instead, which is a
-    // different assertion from the one this test makes.
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
-        // The runner resolves; only Fly's registry is unreachable. Matched on
-        // the parsed HOST rather than a substring of the URL — the host is the
-        // thing that is actually unreachable, and a substring test would also
-        // fire for any other host carrying it in a path (CodeQL
-        // `js/incomplete-url-substring-sanitization`).
-        const host = new URL(String(rawUrl)).host;
-        if (host === 'registry.fly.io') {
-          throw new Error('getaddrinfo ENOTFOUND registry.fly.io');
-        }
-        // The container-address probe (MOTIR-4518) rides the same stubbed fetch.
-        if (host === new URL(CONTAINER_AI_URL).host) return new Response('ok', { status: 200 });
-        return serveManifest(rawUrl, init, [RUNNER_REPO]);
-      }),
-    );
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
-
-    expect(result).toMatchObject({
-      ok: true,
-      fleet: { verdict: 'bootable' },
-      indexFleet: { verdict: 'indeterminate', reference: INDEXER_IMAGE },
-      indexContainerAi: { verdict: 'reachable', address: CONTAINER_AI_URL },
-    });
-  });
-});
-
 // ── THE HOSTED-AGENT IMAGE RIDES THE SAME SURFACE (MOTIR-9420) ──────────────
 //
-// The third pull path, probed anonymously the way an agent-runner VM pulls it.
-// Its verdict is recorded beside the other two, and only a definite refusal is
+// The second pull path, probed anonymously the way an agent-runner VM pulls it.
+// Its verdict is recorded beside the runner's, and only a definite refusal is
 // loud, with a message naming the hosted-agent image and its variable.
 
 describe("the HOSTED-AGENT image's preflight rides the same health check", () => {
@@ -406,11 +339,10 @@ describe("the HOSTED-AGENT image's preflight rides the same health check", () =>
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
     vi.stubEnv('MOTIR_HOSTED_AGENT_IMAGE', hostedImage);
   }
 
-  it('records the verdict on a healthy tick, beside the fleet and indexer ones', async () => {
+  it('records the verdict on a healthy tick, beside the runner one', async () => {
     await seedHealthyJobSchedules();
     stubFleet(HOSTED_IMAGE);
     vi.stubGlobal('fetch', registryServing([RUNNER_REPO, HOSTED_REPO]));
@@ -421,7 +353,6 @@ describe("the HOSTED-AGENT image's preflight rides the same health check", () =>
     expect(result).toMatchObject({
       ok: true,
       fleet: { verdict: 'bootable', reference: RUNNER_IMAGE },
-      indexFleet: { verdict: 'not_applicable' },
       hostedAgentImage: { verdict: 'bootable', reference: HOSTED_IMAGE },
     });
   });
@@ -458,238 +389,20 @@ describe("the HOSTED-AGENT image's preflight rides the same health check", () =>
   });
 });
 
-// ── THE THIRD FAULT ON THE SAME SURFACE (MOTIR-4518) ─────────────────────────
+// ── THE LATER PROBES RIDE THE SAME SURFACE ───────────────────────────────────
 //
-// Both probes above ask whether a container can BOOT. Neither has ever asked
-// whether the booted container can REACH anything, and that is where the fleet
-// spent two weeks: pullable image, successful boot, repository downloaded, 45 MB
-// graph built, and then `getaddrinfo ENOTFOUND motir-ai.internal` one call before
-// it could be uploaded — because motir-core handed the container motir-core's own
-// private motir-ai address and the container runs in another organization. Both
-// image verdicts were green the whole time, correctly. These pin the probe that
-// asks the other question, and that the three verdicts stay TOLD APART.
+// The rebuild-streak probe (MOTIR-5027) that opened this block left with the
+// code-graph index fleet (MOTIR-12037); the probes after it keep its fixture.
 
-describe("the index container's motir-ai ADDRESS rides the same health check", () => {
-  function stubIndexingFleet() {
-    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
-    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', INDEXER_IMAGE);
-  }
-
-  /** Both registries serve, and the container address answers. */
-  function everythingServes() {
-    return vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
-      if (new URL(String(rawUrl)).host === new URL(CONTAINER_AI_URL).host) {
-        return new Response('ok', { status: 200 });
-      }
-      return serveManifest(rawUrl, init, [RUNNER_REPO, INDEXER_REPO]);
-    });
-  }
-
-  it('records the verdict on a healthy tick, beside the two image ones', async () => {
-    await seedHealthyJobSchedules();
-    stubIndexingFleet();
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
-    vi.stubGlobal('fetch', everythingServes());
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
-
-    expect(result).toMatchObject({
-      ok: true,
-      fleet: { verdict: 'bootable' },
-      indexFleet: { verdict: 'bootable' },
-      indexContainerAi: { verdict: 'reachable', address: CONTAINER_AI_URL, status: 200 },
-    });
-  });
-
-  it('FAILS the run when the container is given a PRIVATE address — with both images perfectly pullable', async () => {
-    // ⚠️ THE CARD'S GUARD, in the exact state that shipped. `MOTIR_AI_URL` is the
-    // private seam and stays that way; what is wrong is that the CONTAINER's
-    // variable carries it too. Note that no probe is involved: from this process
-    // the address resolves, which is precisely why the verdict has to be
-    // structural.
-    await seedHealthyJobSchedules();
-    stubIndexingFleet();
-    vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.internal:8080');
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', 'http://motir-ai.internal:8080');
-    vi.stubGlobal('fetch', everythingServes());
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result, error } = (await engine.execute()) as {
-      result?: unknown;
-      error?: { message?: string };
-    };
-
-    expect(result).toBeUndefined();
-    // The message sends an operator to the right system: a Fly SECRET on
-    // motir-core, not a registry. Sending them to re-run an image mirror for a
-    // name-resolution fault is what two weeks of green image probes already did.
-    expect(error?.message).toContain('motir-ai.internal');
-    expect(error?.message).toContain('MOTIR_AI_CONTAINER_URL');
-    expect(error?.message).not.toContain(INDEXER_IMAGE);
-    expect(error?.message).not.toContain('garbage-collects');
-  });
-
-  it('FAILS the run when a deployment that indexes has no container address at all', async () => {
-    await seedHealthyJobSchedules();
-    stubIndexingFleet();
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
-    vi.stubGlobal('fetch', everythingServes());
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result, error } = (await engine.execute()) as {
-      result?: unknown;
-      error?: { message?: string };
-    };
-
-    expect(result).toBeUndefined();
-    expect(error?.message).toContain('MOTIR_AI_CONTAINER_URL');
-    // And it says why there is no fallback, because "just point it at
-    // MOTIR_AI_URL" is the fix an operator would otherwise reach for — and is
-    // the defect.
-    expect(error?.message).toContain('MOTIR_AI_URL');
-  });
-
-  it('does NOT fail the run when this process merely could not REACH the address', async () => {
-    // Same boundary both image probes hold: a transport failure is a statement
-    // about motir-core's network, not about the address. It is on the row either
-    // way.
-    await seedHealthyJobSchedules();
-    stubIndexingFleet();
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
-        if (new URL(String(rawUrl)).host === new URL(CONTAINER_AI_URL).host) {
-          throw new Error('fetch failed');
-        }
-        return serveManifest(rawUrl, init, [RUNNER_REPO, INDEXER_REPO]);
-      }),
-    );
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
-
-    expect(result).toMatchObject({
-      ok: true,
-      indexFleet: { verdict: 'bootable' },
-      indexContainerAi: { verdict: 'indeterminate', address: CONTAINER_AI_URL },
-    });
-  });
-
-  it('is NOT_APPLICABLE on a deployment that does not index — the container variable is not owed', async () => {
-    await seedHealthyJobSchedules();
-    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
-    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
-    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
-
-    expect(result).toMatchObject({
-      ok: true,
-      fleet: { verdict: 'bootable' },
-      indexFleet: { verdict: 'not_applicable' },
-      indexContainerAi: { verdict: 'not_applicable' },
-    });
-  });
-});
-
-describe('the REBUILD-STREAK probe rides the same health check', () => {
-  /** A cloud deployment wired for CI only — the ordinary state, and the one in
-   *  which every other probe is green while the index rebuilds every run. */
+describe('the later probes ride the same health check', () => {
+  /** A cloud deployment wired for CI only — the ordinary state. */
   function stubCiFleet() {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
   }
 
-  // ── The FIFTH probe: the rebuild streak (MOTIR-5027) ───────────────────────
-  //
-  // The only probe here that reads the LEDGER, so its fixture is `job_run` rows
-  // rather than an env var and a stubbed registry. Rows are untenanted
-  // (`workspace_id IS NULL`) because that is what a `system.*` job writes and
-  // what the read's `withSystemContext` admits.
-
-  async function seedCodeGraphRuns(count: number, mode: 'sync' | 'rebuild') {
-    for (let i = 0; i < count; i += 1) {
-      await adminDb.jobRun.create({
-        data: {
-          workspaceId: null,
-          functionId: 'system.code-graph-refresh',
-          eventName: 'scheduled.system.code-graph-refresh',
-          eventId: `evt-cg-${mode}-${i}-${Date.now()}`,
-          lane: 'engine',
-          attempt: 1,
-          status: 'succeeded',
-          startedAt: new Date(Date.UTC(2026, 8, 1, 0, 0, i)),
-          output: {
-            indexed: true,
-            repoRef: 'moooon-B-V/motir-core',
-            projectsIndexed: 1,
-            indexModes: [{ projectId: 'p0', mode }],
-          },
-        },
-      });
-    }
-  }
-
-  it('records the streak verdict on a HEALTHY tick too — so the ledger answers "was it still incremental yesterday?"', async () => {
-    // The same reason every other verdict here is recorded on success: a green
-    // run that says `not_applicable` and one that says the index is syncing are
-    // very different states, and a field that only appeared on failure could not
-    // tell them apart.
-    await seedHealthyJobSchedules();
-    stubCiFleet();
-    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
-    await seedCodeGraphRuns(3, 'sync');
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result } = await engine.execute();
-
-    expect(result).toMatchObject({
-      ok: true,
-      indexRebuildStreak: { verdict: 'ok' },
-    });
-    // The boundary is on the recorded row, not only in the failure path.
-    expect(
-      (result as { indexRebuildStreak: { blindSpot: string } }).indexRebuildStreak.blindSpot,
-    ).toContain('OFFERED');
-  });
-
-  it('FAILS the run when a repository has rebuilt N consecutive times — with every OTHER probe green', async () => {
-    // ⚠️ THE CARD'S CENTRAL ASSERTION. The schedules are healthy, both images
-    // pull, the container address is fine — the exact state production was in
-    // for twenty days while the graph was rebuilt from scratch on every run and
-    // nothing said so. The message is the whole of what the DLQ panel renders,
-    // so it must name the repository, the fork, AND what it did not measure.
-    await seedHealthyJobSchedules();
-    stubCiFleet();
-    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
-    await seedCodeGraphRuns(6, 'rebuild');
-
-    const engine = new JobTestEngine({ function: dailyHealthCheck });
-    const { result, error } = (await engine.execute()) as {
-      result?: unknown;
-      error?: { message?: string };
-    };
-
-    expect(result).toBeUndefined();
-    expect(error?.message).toContain('moooon-B-V/motir-core');
-    expect(error?.message).toContain('MOTIR_INDEXER_IMAGE');
-    expect(error?.message).toContain('codegraphVersion');
-    // The blind spot travels into the DLQ row with the diagnosis.
-    expect(error?.message).toContain('OFFERED');
-  });
   // ── The SIXTH probe: monitor configuration (MOTIR-5831) ───────────────────
   //
   // The only probe here that asserts something about THIS PROCESS'S OWN
@@ -877,9 +590,6 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       for (const id of [
         'schedule-health',
         'fleet-boot-preflight',
-        'index-fleet-boot-preflight',
-        'index-container-ai-address',
-        'index-rebuild-streak',
         'monitor-config-preflight',
         'credential-expiry',
       ]) {
@@ -979,9 +689,6 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
         expect.arrayContaining([
           'schedule-health',
           'fleet-boot-preflight',
-          'index-fleet-boot-preflight',
-          'index-container-ai-address',
-          'index-rebuild-streak',
           'monitor-config-preflight',
           'credential-expiry',
           'hosted-run-probe',

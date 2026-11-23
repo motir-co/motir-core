@@ -42,8 +42,8 @@ import {
 // calls the function that builds what the machine is handed (or captures the
 // value where that output reaches a fake orchestrator), and holds every Motir
 // address in it to ONE checker: an https origin, on a host the classifier calls
-// public, equal to one of the three origins the motir-infra services stack
-// publishes (MOTIR_BASE_URL, MOTIR_AI_CONTAINER_URL, MOTIR_GATEWAY_RUN_URL).
+// public, equal to one of the origins the motir-infra services stack
+// publishes (MOTIR_BASE_URL, MOTIR_GATEWAY_RUN_URL).
 //
 //   kind           built by                                  Motir addresses
 //   CI runner      ciRunnerBootService.buildSpec             none
@@ -56,11 +56,10 @@ import {
 // (`agent_instance`).
 //
 // The source guard at the end reports a kind that starts carrying an address
-// outside the three, so that origin is added to the stack outputs.
+// outside the published ones, so that origin is added to the stack outputs.
 
 const PUBLISHED = {
   MOTIR_BASE_URL: 'https://app.motir.co',
-  MOTIR_AI_CONTAINER_URL: 'https://ai.motir.co',
   MOTIR_GATEWAY_RUN_URL: 'https://gateway-run.motir.co',
 } as const;
 
@@ -102,7 +101,7 @@ function assertPublishedOrigin(args: { kind: FleetKind; variable: string; value:
   if (url.protocol !== 'https:') return refuse('not https');
   const published = Object.values(PUBLISHED).map((p) => new URL(p).origin);
   if (!published.includes(url.origin) || value.replace(/\/+$/, '') !== url.origin) {
-    return refuse('unpublished host: not one of the three published origins');
+    return refuse('unpublished host: not one of the published origins');
   }
   return url.origin;
 }
@@ -436,7 +435,7 @@ describe('assertPublishedOrigin refuses every form a fleet machine cannot use', 
   });
 
   it.each(['https://motir-core-123.us-east-1.elb.amazonaws.com', 'https://app.example.com'])(
-    '%s — a public host that is not one of the three published origins',
+    '%s — a public host that is not one of the published origins',
     (value) => {
       expect(() => assertPublishedOrigin({ kind: 'hoster', variable: 'apiUrl', value })).toThrow(
         `hoster apiUrl=${value}: unpublished host`,

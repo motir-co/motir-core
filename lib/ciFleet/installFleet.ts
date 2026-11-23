@@ -170,7 +170,7 @@ export interface InstallFleetConfig {
 
 /**
  * The install fleet's network, profile and region — or the typed not-configured
- * error naming EVERY missing variable at once, as `indexFleetConfig` does: a
+ * error naming EVERY missing variable at once, as `hostedAgentFleetConfig` does: a
  * listed kind with no network is a misconfiguration to say loudly at the boot,
  * never a quiet fall back to a pool the admission did not count it against.
  */
