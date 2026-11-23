@@ -521,7 +521,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-11092, summary UNCHANGED: the description now names
     // `dismiss_review` as the way past a send-back at the same version, which says
     // nothing new about what this tool does.
-    descriptionFingerprint: 'e9d23121eb05',
+    // Re-pinned for Bug MOTIR-12147, summary UNCHANGED: the description adds the
+    // `REVIEW_NOT_YET_ASKED` refusal, which stores nothing and says nothing new about what
+    // the tool does when it accepts a verdict.
+    descriptionFingerprint: 'bbc74dfdb50b',
   },
   dismiss_review: {
     // MOTIR-11092 (`approval-gates.md` §12.15) — the counterpart of `submit_review_verdict`.
