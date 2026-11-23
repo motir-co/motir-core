@@ -633,13 +633,21 @@ describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
     expect(cls).toContain('text-(--el-text-secondary)');
   });
 
-  it('draws no tab while the plan is undecided', () => {
-    const { container } = renderWithIntl(<PlanItemNode item={blockedAdd()} crossBlocked />);
+  it('draws no outcome tab while the plan is undecided', () => {
+    const { container } = renderWithIntl(<PlanItemNode item={blockedAdd()} />);
     expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
     // The wrapper's first child is the frame itself: nothing hangs above it.
     expect((container.firstElementChild as HTMLElement).firstElementChild).toBe(
       screen.getByTestId('plan-item-node'),
     );
+  });
+
+  it('a decided blocked card keeps the outcome tab on its edge — one tab per edge (MOTIR-12158)', () => {
+    renderWithIntl(<PlanItemNode item={blockedAdd()} crossBlocked outcome="accepted" />);
+    expect(screen.getByTestId('plan-item-outcome-tab')).toBeTruthy();
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
+    // …and blocked stays in the row, as the short flag.
+    expect(within(tagRow()).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
   });
 });
 
@@ -656,23 +664,47 @@ describe('PlanItemNode — the outcome tab (MOTIR-11545)', () => {
 describe('PlanItemNode — the undecided tag row (MOTIR-11549)', () => {
   const tagRow = () => screen.getByTestId('plan-item-node').firstElementChild as HTMLElement;
 
-  it('an undecided blocked add with a difficulty gives way: op glyph, short tag, no difficulty', () => {
-    renderWithIntl(<PlanItemNode item={item({ op: 'add', difficulty: 'medium' })} crossBlocked />);
+  it('an undecided blocked add wears the BLOCKED TAB and keeps its words and difficulty (MOTIR-12158)', () => {
+    const { container } = renderWithIntl(
+      <PlanItemNode item={item({ op: 'add', difficulty: 'medium' })} crossBlocked />,
+    );
     const row = tagRow();
     // An undecided add has no key yet: the placeholder stays.
     expect(within(row).getByText('New')).toBeTruthy();
-    const op = within(row).getByTestId('plan-item-op-glyph');
-    expect(op.getAttribute('role')).toBe('img');
-    expect(op.getAttribute('aria-label')).toBe('add');
-    expect(op.getAttribute('title')).toBe('add');
-    expect(op.textContent).toBe('');
-    const flag = within(row).getByTestId('cross-blocked-flag');
-    expect(flag.textContent).toBe('blocked');
-    expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
-    expect(within(row).queryByTestId('plan-item-difficulty')).toBeNull();
-    // Still undecided: no tab, no spine.
+    // Blocked rides the card's top-edge tab — the roadmap's own `BlockedTab`, so
+    // the two canvases keep one language (design MOTIR-12157 § "Both canvases").
+    const tab = screen.getByTestId('blocked-tab');
+    expect(tab.textContent).toBe('blocked');
+    expect(tab.getAttribute('aria-label')).toBe('blocked elsewhere');
+    expect(tab.className).toContain('bg-(--el-danger)');
+    // Outside the frame, before it, in the wrapper.
+    expect(row.contains(tab)).toBe(false);
+    expect((container.firstElementChild as HTMLElement).firstElementChild).toBe(tab);
+    // The row is free: no flag in it, no give-way.
+    expect(within(row).queryByTestId('cross-blocked-flag')).toBeNull();
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
+    expect(within(row).getByText('add')).toBeTruthy();
+    expect(within(row).getByTestId('plan-item-difficulty').textContent).toContain('Medium');
+    // Still undecided: no outcome tab, no spine.
     expect(screen.queryByTestId('plan-item-outcome-tab')).toBeNull();
     expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
+  });
+
+  it('a stale blocked add keeps its Out of date tag in the row beside the tab', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'add',
+          stale: true,
+          staleReasons: [{ code: 'parent_removed', parentId: 'wi_gone' }],
+        })}
+        crossBlocked
+      />,
+    );
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
+    expect(within(tagRow()).getByTestId('stale-badge')).toBeTruthy();
+    // The stale badge is still a right-hand text tag: it gives way.
+    expect(within(tagRow()).getByTestId('plan-item-op-glyph')).toBeTruthy();
   });
 
   it('an undecided add that is not blocked keeps its words and its difficulty', () => {
@@ -720,12 +752,24 @@ describe('PlanItemNode — the undecided tag row (MOTIR-11549)', () => {
     expect(chip.textContent).toBe('');
   });
 
-  it('an undecided blocked add that supersedes a card leaves the Supersedes chip to the quick view', () => {
+  it('an undecided blocked add that supersedes a card keeps the Supersedes glyph in the row (MOTIR-12158)', () => {
+    // Blocked on the tab is no longer a text tag in the row, so the Supersedes
+    // chip keeps its place there, as the named glyph (it still gives way).
     renderWithIntl(<PlanItemNode item={supersedingNew()} crossBlocked />);
+    const row = tagRow();
+    expect(within(row).getByTestId('plan-item-supersedes').getAttribute('aria-label')).toBe(
+      'Supersedes 1',
+    );
+    expect(within(row).queryByTestId('cross-blocked-flag')).toBeNull();
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
+    expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
+  });
+
+  it('a decided blocked add that supersedes a card still leaves the Supersedes chip to the quick view', () => {
+    renderWithIntl(<PlanItemNode item={supersedingNew()} crossBlocked outcome="declined" />);
     const row = tagRow();
     expect(within(row).queryByTestId('plan-item-supersedes')).toBeNull();
     expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
-    expect(within(row).getByTestId('plan-item-op-glyph')).toBeTruthy();
   });
 
   it('an undecided modify of an In Progress target draws the status as the truncating slot', () => {
@@ -752,7 +796,7 @@ describe('PlanItemNode — the undecided tag row (MOTIR-11549)', () => {
     expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
   });
 
-  it('an undecided blocked modify drops its op chip and its status to their glyphs', () => {
+  it('an undecided blocked modify keeps its op chip and its status in words (MOTIR-12158)', () => {
     renderWithIntl(
       <PlanItemNode
         item={item({
@@ -766,12 +810,13 @@ describe('PlanItemNode — the undecided tag row (MOTIR-11549)', () => {
       />,
     );
     const row = tagRow();
-    expect(within(row).getByTestId('plan-item-op-glyph').getAttribute('aria-label')).toBe('change');
+    // Blocked rides the tab, so nothing in the row gives way.
+    expect(within(row).queryByTestId('plan-item-op-glyph')).toBeNull();
     const status = row.querySelector('[data-status="in_progress"]') as HTMLElement;
-    expect(status.getAttribute('role')).toBe('img');
-    expect(status.getAttribute('aria-label')).toBe('In Progress');
-    expect(status.textContent).toBe('');
-    expect(within(row).getByTestId('cross-blocked-flag').textContent).toBe('blocked');
+    expect(status.getAttribute('role')).toBeNull();
+    expect(status.textContent).toBe('In Progress');
+    expect(within(row).queryByTestId('cross-blocked-flag')).toBeNull();
+    expect(screen.getByTestId('blocked-tab').textContent).toBe('blocked');
   });
 });
 
@@ -1620,7 +1665,7 @@ describe('buildWorkItemLevel — a blocker the plan MOVES ONTO this level', () =
 
     expect(built.nodes.map((n) => n.id)).toEqual(['wi_committed']);
     renderWithIntl(<>{built.nodes[0]!.content}</>);
-    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
 
     // …and the node the reviewer ends up with is the PROPOSAL's, not a re-skinned
     // anchor: it carries the plan's parent and its own search text, where the
@@ -1641,7 +1686,7 @@ describe('buildWorkItemLevel — a blocker the plan MOVES ONTO this level', () =
     expect(built.deps).toEqual([{ from: 'wi_relocated', to: 'wi_committed', variant: 'cross' }]);
     expect(built.nodes.map((n) => n.id)).toEqual(['wi_committed', 'wi_relocated']);
     renderWithIntl(<>{built.nodes[0]!.content}</>);
-    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
   });
 
   it('is inert for a blocker that is already a committed child of the level', () => {
@@ -1775,7 +1820,7 @@ describe('buildWorkItemLevel — a card the plan MOVES OFF this level', () => {
 
     expect(built.deps).toEqual([{ from: 'wi_leaving', to: 'wi_stays', variant: 'cross' }]);
     renderWithIntl(<>{built.nodes[0]!.content}</>);
-    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
   });
 
   it('drops an edge whose BLOCKED end is the one departing', () => {
@@ -1888,10 +1933,10 @@ describe('mergePlanLevel — a proposal blocked by a card OFF this level (bug MO
     });
   }
 
-  /** Does this node's rendered content carry the "blocked elsewhere" chip? */
+  /** Does this node's rendered content carry the "blocked elsewhere" tab (MOTIR-12158)? */
   function flagged(node: ProjectCanvasNode | undefined): boolean {
     renderWithIntl(<>{node?.content}</>);
-    const hit = screen.queryByTestId('cross-blocked-flag') !== null;
+    const hit = screen.queryByTestId('blocked-tab') !== null;
     cleanup();
     return hit;
   }
@@ -1940,6 +1985,43 @@ describe('mergePlanLevel — a proposal blocked by a card OFF this level (bug MO
     expect(text).toContain('MOTIR-9');
     expect(text).toContain('The blocker under another story');
     expect(flagged(before.nodes.find((n) => n.id === 'pi_1'))).toBe(true);
+    // The blocked TAB rides its top edge on both sides of approve, so both canvases
+    // fan its top-side edges right of it (MOTIR-12158).
+    expect(after.nodes.find((n) => n.id === 'wi-new')!.topTab).toBe(true);
+    expect(before.nodes.find((n) => n.id === 'pi_1')!.topTab).toBe(true);
+    // The anchor wears no tab.
+    expect(before.nodes.find((n) => n.id === 'wi-x')!.topTab).toBeUndefined();
+  });
+
+  it('flags every card wearing a TAB — a decided outcome tab too, an unblocked undecided card not (MOTIR-12158)', () => {
+    const undecided = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [added({ blockedByNodeIds: [] })],
+      'wi-s',
+    );
+    expect(undecided.nodes.find((n) => n.id === 'pi_1')!.topTab).toBeUndefined();
+    const decided = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [added({ blockedByNodeIds: [] })],
+      'wi-s',
+      'accepted',
+    );
+    expect(decided.nodes.find((n) => n.id === 'pi_1')!.topTab).toBe(true);
+    // A re-skinned committed card takes the proposal's tab, not the committed one's.
+    const reskinned = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [
+        added({
+          planItemId: 'pi_mod',
+          nodeId: 'wi-a',
+          op: 'modify',
+          identifier: 'MOTIR-1',
+          blockedByNodeIds: [],
+        }),
+      ],
+      'wi-s',
+    );
+    expect(reskinned.nodes.find((n) => n.id === 'wi-a')!.topTab).toBe(false);
   });
 
   it('draws them for a MODIFY whose `patch.blockedByAdd` names an off-level card — on the re-skinned node', () => {
@@ -1955,7 +2037,7 @@ describe('mergePlanLevel — a proposal blocked by a card OFF this level (bug MO
     expect(anchorText(before, 'wi-x')).toContain('MOTIR-9');
     renderWithIntl(<>{before.nodes.find((n) => n.id === 'wi-a')?.content}</>);
     expect(screen.getByTestId('plan-item-node').getAttribute('data-op')).toBe('modify');
-    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
   });
 
   it('draws them for a card the plan RE-PARENTS here whose committed blocker stays elsewhere', () => {
@@ -2270,7 +2352,7 @@ describe('mergePlanLevel — projected edge disposition (MOTIR-6362)', () => {
     });
   const chip = (level: PlanCanvasLevel, id: string) => {
     renderWithIntl(<>{level.nodes.find((n) => n.id === id)!.content}</>);
-    const hit = screen.queryByTestId('cross-blocked-flag') !== null;
+    const hit = screen.queryByTestId('blocked-tab') !== null;
     cleanup();
     return hit;
   };

@@ -73,10 +73,11 @@ describe('a held story on the roadmap canvas', () => {
   it('blocked elsewhere keeps its own red flag and frame — the card never wears two flags', () => {
     const { container } = render(<WorkItemNode item={held} crossBlocked nextActions={ON} />);
     expect(frame(container).getAttribute('data-node-state')).toBe('cross-blocked');
-    expect(screen.getAllByTestId('cross-blocked-flag')).toHaveLength(1);
-    expect(screen.getByTestId('cross-blocked-flag').getAttribute('aria-label')).toBe(
-      'blocked elsewhere',
-    );
+    // Its red flag is the top-edge blocked TAB (MOTIR-12158), and the held flag
+    // does not join it in the row.
+    expect(screen.getAllByTestId('blocked-tab')).toHaveLength(1);
+    expect(screen.getByTestId('blocked-tab').getAttribute('aria-label')).toBe('blocked elsewhere');
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
     expect(screen.queryByTestId('to-plan-pill')).toBeNull();
     expect(screen.queryByTestId('node-next-action')).toBeNull();
   });

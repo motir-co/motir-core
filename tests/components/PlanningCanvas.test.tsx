@@ -119,38 +119,28 @@ describe('PlanningCanvas', () => {
     expect(onNodeActivate).toHaveBeenCalledWith('b');
   });
 
-  it('draws a cross-story edge as ONE path plus a flag badge in its own layer', () => {
+  it('draws a cross-story edge as ONE path and NO midpoint chip (MOTIR-12158)', () => {
+    // The "blocked elsewhere" chip used to sit at the cross edge's midpoint, in a
+    // layer painted ABOVE the cards (MOTIR-1583) — so it landed on whatever card
+    // the route passed under and read as THAT card's flag. Design MOTIR-12157
+    // moves the fact onto the blocked card's own top-edge tab (`BlockedTab`, drawn
+    // by the card, not the canvas), and the canvas draws no marker on the edge.
     const crossEdges: CanvasEdge[] = [
       { from: 'a', to: 'b' },
       { from: 'b', to: 'c', variant: 'cross' },
     ];
     render(<PlanningCanvas nodes={nodes} edges={crossEdges} renderNode={renderNode} />);
-    // the flag badge does NOT inflate the asserted edge-path count
+    // the edge <svg> path count is unchanged: one path per edge…
     expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
-    const flags = screen.getAllByTestId('cross-flag');
-    expect(flags).toHaveLength(1);
-    expect(flags[0]!.textContent).toContain('blocked elsewhere');
-  });
-
-  it('paints the cross-flag layer ABOVE the node layer, so the bad-plan signal is never occluded', () => {
-    // MOTIR-1583: both the cross-flag layer and the node layer are position:absolute
-    // with no z-index, so DOM paint order decides which wins. The flag chip sits at a
-    // cross edge's midpoint, which frequently lands over a card — so the cross-flag
-    // layer MUST come AFTER the node layer in the DOM to stay legible.
-    const crossEdges: CanvasEdge[] = [
-      { from: 'a', to: 'b' },
-      { from: 'b', to: 'c', variant: 'cross' },
-    ];
-    render(<PlanningCanvas nodes={nodes} edges={crossEdges} renderNode={renderNode} />);
-    const world = screen.getByTestId('canvas-world');
-    const crossFlags = screen.getByTestId('canvas-cross-flags');
-    // siblings in the same pan/zoom container…
-    expect(crossFlags.parentElement).toBe(world.parentElement);
-    // …with the cross-flag layer following the node layer, so it paints on top.
-    const rel = world.compareDocumentPosition(crossFlags);
-    expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // and the overlay must not intercept pointer events (drags/clicks pass through to cards).
-    expect(crossFlags.className).toContain('pointer-events-none');
+    // …the cross edge keeps its warning stroke…
+    const paths = [...screen.getByTestId('canvas-edges').querySelectorAll('path')];
+    expect(
+      paths.some((p) => (p.getAttribute('class') ?? '').includes('stroke-(--el-warning)')),
+    ).toBe(true);
+    // …and nothing is drawn at its midpoint: neither the chip nor its layer.
+    expect(screen.queryByTestId('cross-flag')).toBeNull();
+    expect(screen.queryByTestId('canvas-cross-flags')).toBeNull();
+    expect(screen.queryByText('blocked elsewhere')).toBeNull();
   });
 
   it('gives every edge a directional arrowhead (marker-end), markers in their own defs', () => {
@@ -185,9 +175,10 @@ describe('PlanningCanvas', () => {
     expect(dashed?.getAttribute('class')).toContain('stroke-(--el-accent-on-surface)');
   });
 
-  it('renders no cross-flag layer content when there are no cross edges', () => {
+  it('renders no cross-flag layer when there are no cross edges', () => {
     render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
     expect(screen.queryByTestId('cross-flag')).toBeNull();
+    expect(screen.queryByTestId('canvas-cross-flags')).toBeNull();
   });
 
   it('accepts focusNodeId / focusNonce without throwing (search-to-focus)', () => {
