@@ -47,11 +47,17 @@ import { recomputeWorkItemFixReason } from './fixReasonService';
 // ⚠️ ONLY `inherited` ROWS ARE EVER REMOVED. A row someone linked to an ancestor explicitly
 // is not derived from anything, so no reconcile reaches it — that is what the flag is for.
 //
-// Every card whose OWN delivery set the reconcile changed, and every card whose gate set it
-// changed through an ancestor (`withoutAncestorDeliveries` leaves out a pull request any
-// ancestor also delivers), is owed the set-change follow-up: the awaiting approve-and-merge
-// question is withdrawn as `set_changed` and re-asked over the new set, and the CI verdict and
-// the to-fix answer folded over that set are recomputed.
+// Every card whose delivery rows the reconcile changed is owed the set-change follow-up: the
+// CI verdict and the to-fix answer folded over its rows are recomputed, and an awaiting
+// approve-and-merge question that no longer names its current own set is withdrawn as
+// `set_changed` and re-asked.
+//
+// ⚠️ AN INHERITED ROW IS NOBODY'S QUESTION (Bug MOTIR-12091). The child asks about its own
+// pull request; the ancestor's inherited copy is what holds the ancestor's completion until
+// that pull request merges, and nothing more. `withoutAncestorDeliveries` leaves every
+// inherited row out of every card's own set — the holder's and its descendants' — so writing
+// or retracting one changes no card's gate set, and the settle below leaves a question that
+// still names the card's current own set exactly where it is.
 
 type Chain = { projectId: string; archived: boolean; ancestors: WorkItem[] };
 
@@ -154,8 +160,9 @@ export async function reconcileInheritedDeliveries(
   }
   if (changed.size === 0) return [];
 
-  // A holder whose ancestor's set changed has a different OWN set (`gateSetFor`), even
-  // though no row of its own moved.
+  // Every holder below a changed ancestor is settled too. An inherited row is in no card's
+  // own gate set (MOTIR-12091), so the settle leaves a holder still asked about its current
+  // set alone; one asked nothing — an archived child just restored — is asked what it owes.
   const affected = new Set(changed);
   for (const [holderId, chain] of chains) {
     if (chain.ancestors.some((ancestor) => changed.has(ancestor.id))) affected.add(holderId);
@@ -167,6 +174,11 @@ export async function reconcileInheritedDeliveries(
  * The set-change follow-up, per card, in order: withdraw the gate that asked about the old
  * set (it re-asks over the new one), then recompute the CI verdict and the to-fix answer
  * folded over it (MOTIR-5482 · MOTIR-5470 · MOTIR-6602). Each card is settled once.
+ *
+ * ⚠️ A QUESTION STILL ABOUT THE CARD'S CURRENT OWN SET IS LEFT STANDING (Bug MOTIR-12091). A
+ * change to the card's rows that its own set does not see — an inherited row written or
+ * retracted — must not withdraw its question (and cancel a review run) only to ask the same
+ * one again.
  *
  * ⚠️ AN ARCHIVED CARD IS ASKED NOTHING (Bug MOTIR-11917). `withdrawQuestionsOnArchive`
  * withdrew its questions as `pulled_back` when it was archived, and the re-ask half of the
@@ -180,7 +192,7 @@ export async function settleDeliverySetChanges(
 ): Promise<void> {
   for (const id of new Set(workItemIds)) {
     const item = await workItemRepository.findById(id, tx);
-    if (item && item.archivedAt === null) {
+    if (item && item.archivedAt === null && !(await stillAskedAboutOwnSet(id, tx))) {
       await withdrawPullRequestApprovalGateOnSetChange(id, tx);
     }
     await recomputeWorkItemCiState(id, tx);

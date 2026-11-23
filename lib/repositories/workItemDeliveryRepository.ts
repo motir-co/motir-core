@@ -447,11 +447,13 @@ export const workItemDeliveryRepository = {
   async listByPullRequests(
     githubPullRequestIds: readonly string[],
     tx: Prisma.TransactionClient,
-  ): Promise<Pick<WorkItemDelivery, 'githubPullRequestId' | 'workItemId' | 'workspaceId'>[]> {
+  ): Promise<
+    Pick<WorkItemDelivery, 'githubPullRequestId' | 'workItemId' | 'workspaceId' | 'inherited'>[]
+  > {
     if (githubPullRequestIds.length === 0) return [];
     return tx.workItemDelivery.findMany({
       where: { githubPullRequestId: { in: [...githubPullRequestIds] } },
-      select: { githubPullRequestId: true, workItemId: true, workspaceId: true },
+      select: { githubPullRequestId: true, workItemId: true, workspaceId: true, inherited: true },
       orderBy: [{ githubPullRequestId: 'asc' }, { createdAt: 'asc' }],
     });
   },
