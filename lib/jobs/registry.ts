@@ -85,6 +85,8 @@ import {
   hostedApplicationExportExpire,
 } from './definitions/hostedApplicationExport';
 import { hostedApplicationGraceStop } from './definitions/hostedApplicationGraceStop';
+import { hostedApplicationGraceNotice } from './definitions/hostedApplicationGraceNotice';
+import { hostedApplicationGraceNoticeSweep } from './definitions/hostedApplicationGraceNoticeSweep';
 import { publicHostnameReservationSweep } from './definitions/publicHostnameReservationSweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { runLivenessSweep } from './definitions/runLivenessSweep';
@@ -225,6 +227,8 @@ export const jobDefinitions = [
   hostedApplicationExport,
   hostedApplicationExportExpire,
   hostedApplicationGraceStop,
+  hostedApplicationGraceNotice,
+  hostedApplicationGraceNoticeSweep,
   publicHostnameReservationSweep,
   dispatchRunSweep,
   runLivenessSweep,

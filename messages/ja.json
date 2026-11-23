@@ -1090,6 +1090,19 @@
       "renew": "{date} より前に AI プランを更新すると、削除は取り消されます。それまではエージェントの作成や起動はできず、ストレージ料金は引き続き毎日発生します。",
       "openBilling": "AI プランを更新",
       "footer": "この組織でエージェントを所有しているため、このメールが送信されています。"
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} は {date} まで Motir で稼働します} seven_days {{repository} は 7 日後に Motir で停止します} one_day {{repository} は明日 Motir で停止します} other {{repository} は Motir で停止しました}}",
+      "preview": "{kind, select, stopped {{repository} の最終データベースエクスポートを 30 日以内にダウンロードしてください} other {{repository} は {date} に Motir で停止します}}",
+      "greeting": "{name} さん",
+      "lede": {
+        "transferred": "{repository} はあなた自身の GitHub アカウントに移管されました。アプリは {date} まで Motir で稼働し続けるため、ご自身のホスティング先にデプロイする時間があります。本番パネルからいつでもデータベースのエクスポートをダウンロードでき、準備ができたらアプリを早めに停止することもできます。",
+        "seven_days": "{repository} のアプリは {date}（7 日後）に Motir で停止します。それまでに、ご自身のホスティング先にリポジトリをデプロイし、データベースのエクスポートを復元して、ドメインをそちらに向けてください。",
+        "one_day": "{repository} のアプリは {date}（明日）に Motir で停止します。新しいホスティング先にまだ最新のデータがない場合は、今すぐ最新のデータベースエクスポートをダウンロードしてください。",
+        "stopped": "{repository} のアプリは Motir で停止し、アプリとデータベースは削除されました。アプリ停止後に作成された最終データベースエクスポートは、本番パネルから 30 日間ダウンロードできます。"
+      },
+      "openProduction": "本番パネルを開く",
+      "footer": "この組織のオーナーまたは管理者であるため、このメールが送信されています。"
     }
   },
   "auth": {
@@ -18796,6 +18809,14 @@
       "title": "ここにプレビューはありません",
       "body": "このアドレスは実行中のプレビューのものではありません。停止されたか、リンクが間違っている可能性があります。",
       "home": "Motir へ移動"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "引き渡し済みです。アプリは {date} まで Motir で稼働します。",
+      "seven_days": "アプリは 7 日後の {date} に Motir で停止します。",
+      "one_day": "アプリは明日 {date} に Motir で停止します。",
+      "stopped": "アプリは {date} に Motir で停止しました。最終データベースエクスポートを 30 日以内にダウンロードしてください。"
     }
   }
 }

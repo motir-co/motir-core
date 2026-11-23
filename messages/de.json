@@ -1090,6 +1090,19 @@
       "renew": "Wenn Sie den KI-Plan vor dem {date} verlängern, wird die Löschung abgebrochen. Bis dahin können Ihre Agents weder erstellt noch aufgeweckt werden, und ihr Speicher wird weiterhin täglich berechnet.",
       "openBilling": "KI-Plan verlängern",
       "footer": "Sie erhalten diese E-Mail, weil Sie Agents in dieser Organisation besitzen."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} läuft bis {date} weiter auf Motir} seven_days {{repository} wird in 7 Tagen auf Motir gestoppt} one_day {{repository} wird morgen auf Motir gestoppt} other {{repository} läuft nicht mehr auf Motir}}",
+      "preview": "{kind, select, stopped {Laden Sie den letzten Datenbankexport von {repository} innerhalb von 30 Tagen herunter} other {{repository} wird am {date} auf Motir gestoppt}}",
+      "greeting": "Hallo {name},",
+      "lede": {
+        "transferred": "{repository} ist in Ihr eigenes GitHub-Konto umgezogen. Die App läuft bis {date} weiter auf Motir, damit Sie Zeit haben, sie bei Ihrem eigenen Hoster bereitzustellen. Im Produktionsbereich können Sie jederzeit einen Datenbankexport herunterladen und die App vorzeitig stoppen, sobald Sie bereit sind.",
+        "seven_days": "Die App von {repository} wird am {date} auf Motir gestoppt, in 7 Tagen. Stellen Sie das Repository bis dahin bei Ihrem eigenen Hoster bereit, spielen Sie dort einen Datenbankexport ein und leiten Sie Ihre Domains dorthin um.",
+        "one_day": "Die App von {repository} wird am {date} auf Motir gestoppt, also morgen. Wenn Ihr neuer Hoster Ihre neuesten Daten noch nicht hat, laden Sie jetzt einen aktuellen Datenbankexport herunter.",
+        "stopped": "Die App von {repository} läuft nicht mehr auf Motir; App und Datenbank wurden gelöscht. Den letzten Datenbankexport, erstellt nach dem Stoppen der App, können Sie 30 Tage lang im Produktionsbereich herunterladen."
+      },
+      "openProduction": "Produktionsbereich öffnen",
+      "footer": "Sie erhalten diese E-Mail, weil Sie Inhaber oder Administrator der Organisation sind."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Hier gibt es keine Vorschau",
       "body": "Diese Adresse gehört zu keiner laufenden Vorschau. Sie wurde möglicherweise beendet, oder der Link ist falsch geschrieben.",
       "home": "Zu Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Übergeben. Die App läuft bis {date} weiter auf Motir.",
+      "seven_days": "Die App wird in 7 Tagen auf Motir gestoppt, am {date}.",
+      "one_day": "Die App wird morgen auf Motir gestoppt, am {date}.",
+      "stopped": "Die App wurde am {date} auf Motir gestoppt. Laden Sie den letzten Datenbankexport innerhalb von 30 Tagen herunter."
     }
   }
 }

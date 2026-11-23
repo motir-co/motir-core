@@ -14396,5 +14396,18 @@
   "platformAdmin.fleetStatus.tenants.notReady.handing_over": "Quotas are not read during a handover. The account is being handed over to its organisation.",
   "platformAdmin.fleetStatus.tenants.notReady.awaiting_standalone": "Quotas are not read during a handover. The organisation must add billing details and a support plan before the account can leave.",
   "platformAdmin.fleetStatus.tenants.notReady.removing": "Quotas are not read during a handover. The account is leaving Motir’s AWS organisation.",
-  "platformAdmin.fleetStatus.tenants.notReady.handed_over": "The account has left Motir and belongs to its organisation. Its quotas are no longer read."
+  "platformAdmin.fleetStatus.tenants.notReady.handed_over": "The account has left Motir and belongs to its organisation. Its quotas are no longer read.",
+  "email.hostedApplicationGrace.subject": "{kind, select, transferred {{repository} keeps running on Motir until {date}} seven_days {{repository} stops running on Motir in 7 days} one_day {{repository} stops running on Motir tomorrow} other {{repository} has stopped running on Motir}}",
+  "email.hostedApplicationGrace.preview": "{kind, select, stopped {Download the final database export of {repository} within 30 days} other {{repository} stops running on Motir on {date}}}",
+  "email.hostedApplicationGrace.greeting": "Hi {name},",
+  "email.hostedApplicationGrace.lede.transferred": "{repository} has moved to your own GitHub account. Its app keeps running on Motir until {date}, so you have time to deploy it on your own host. From the Production panel you can download a database export at any time, and stop the app early when you are ready.",
+  "email.hostedApplicationGrace.lede.seven_days": "The app of {repository} stops running on Motir on {date}, in 7 days. Before then, deploy the repository on your own host, restore a database export there and point your domains at it.",
+  "email.hostedApplicationGrace.lede.one_day": "The app of {repository} stops running on Motir on {date}, tomorrow. If your new host does not have your latest data yet, download a fresh database export now.",
+  "email.hostedApplicationGrace.lede.stopped": "The app of {repository} has stopped running on Motir, and its app and database have been deleted. The final database export, taken after the app stopped, can be downloaded from the Production panel for 30 days.",
+  "email.hostedApplicationGrace.openProduction": "Open the Production panel",
+  "email.hostedApplicationGrace.footer": "You are receiving this because you are the Owner or an Admin of the organization.",
+  "hosting.graceNotice.transferred": "Handed over. The app keeps running on Motir until {date}.",
+  "hosting.graceNotice.seven_days": "The app stops running on Motir in 7 days, on {date}.",
+  "hosting.graceNotice.one_day": "The app stops running on Motir tomorrow, on {date}.",
+  "hosting.graceNotice.stopped": "The app stopped running on Motir on {date}. Download the final database export within 30 days."
 }

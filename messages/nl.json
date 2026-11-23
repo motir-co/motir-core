@@ -1090,6 +1090,19 @@
       "renew": "Als je het AI-abonnement vóór {date} verlengt, wordt de verwijdering geannuleerd. Tot die tijd kunnen je agents niet worden aangemaakt of gewekt, en wordt hun opslag nog elke dag in rekening gebracht.",
       "openBilling": "AI-abonnement verlengen",
       "footer": "Je ontvangt dit omdat je agents in deze organisatie bezit."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} blijft tot {date} draaien op Motir} seven_days {{repository} stopt over 7 dagen op Motir} one_day {{repository} stopt morgen op Motir} other {{repository} draait niet meer op Motir}}",
+      "preview": "{kind, select, stopped {Download de laatste database-export van {repository} binnen 30 dagen} other {{repository} stopt op {date} op Motir}}",
+      "greeting": "Hoi {name},",
+      "lede": {
+        "transferred": "{repository} is verhuisd naar je eigen GitHub-account. De app blijft tot {date} draaien op Motir, zodat je tijd hebt om hem bij je eigen hostingprovider uit te rollen. Vanuit het Productiepaneel kun je op elk moment een database-export downloaden en de app eerder stoppen wanneer je klaar bent.",
+        "seven_days": "De app van {repository} stopt op {date} op Motir, over 7 dagen. Rol de repository vóór die datum uit bij je eigen hostingprovider, zet daar een database-export terug en laat je domeinen ernaar verwijzen.",
+        "one_day": "De app van {repository} stopt op {date} op Motir, dus morgen. Heeft je nieuwe hostingprovider je nieuwste gegevens nog niet? Download dan nu een verse database-export.",
+        "stopped": "De app van {repository} draait niet meer op Motir; de app en de database zijn verwijderd. De laatste database-export, gemaakt nadat de app was gestopt, kun je 30 dagen lang downloaden in het Productiepaneel."
+      },
+      "openProduction": "Productiepaneel openen",
+      "footer": "Je ontvangt dit omdat je de Eigenaar of een Beheerder van de organisatie bent."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Hier is geen preview",
       "body": "Dit adres hoort niet bij een draaiende preview. Mogelijk is die uitgeschakeld, of is de link verkeerd getypt.",
       "home": "Naar Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Overgedragen. De app blijft tot {date} draaien op Motir.",
+      "seven_days": "De app stopt over 7 dagen op Motir, op {date}.",
+      "one_day": "De app stopt morgen op Motir, op {date}.",
+      "stopped": "De app is op {date} gestopt op Motir. Download de laatste database-export binnen 30 dagen."
     }
   }
 }

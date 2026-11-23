@@ -1090,6 +1090,19 @@
       "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
       "openBilling": "续订 AI 套餐",
       "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} 将在 Motir 上继续运行至 {date}} seven_days {{repository} 将在 7 天后于 Motir 上停止运行} one_day {{repository} 将于明天在 Motir 上停止运行} other {{repository} 已在 Motir 上停止运行}}",
+      "preview": "{kind, select, stopped {请在 30 天内下载 {repository} 的最终数据库导出} other {{repository} 将于 {date} 在 Motir 上停止运行}}",
+      "greeting": "{name}，你好：",
+      "lede": {
+        "transferred": "{repository} 已转移到你自己的 GitHub 账户。它的应用将在 Motir 上继续运行至 {date}，让你有时间将其部署到自己的托管服务。在生产面板中，你可以随时下载数据库导出，并在准备就绪时提前停止该应用。",
+        "seven_days": "{repository} 的应用将于 {date}（7 天后）在 Motir 上停止运行。在此之前，请将仓库部署到自己的托管服务，在那里恢复数据库导出，并将你的域名指向它。",
+        "one_day": "{repository} 的应用将于 {date}（明天）在 Motir 上停止运行。如果新的托管服务还没有你的最新数据，请立即下载一份新的数据库导出。",
+        "stopped": "{repository} 的应用已在 Motir 上停止运行，应用及其数据库已被删除。应用停止后生成的最终数据库导出可在生产面板中下载，保留 30 天。"
+      },
+      "openProduction": "打开生产面板",
+      "footer": "你收到这封邮件，是因为你是该组织的所有者或管理员。"
     }
   },
   "auth": {
@@ -18790,6 +18803,14 @@
       "title": "这里没有预览",
       "body": "此地址不属于任何正在运行的预览。它可能已被关闭，或者链接输入有误。",
       "home": "前往 Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "已移交。该应用将在 Motir 上继续运行至 {date}。",
+      "seven_days": "该应用将在 7 天后（{date}）于 Motir 上停止运行。",
+      "one_day": "该应用将于明天（{date}）在 Motir 上停止运行。",
+      "stopped": "该应用已于 {date} 在 Motir 上停止运行。请在 30 天内下载最终数据库导出。"
     }
   }
 }

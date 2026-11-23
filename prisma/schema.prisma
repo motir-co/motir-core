@@ -1820,6 +1820,7 @@ model Workspace {
   hostedApplications               HostedApplication[]               @relation("HostedApplicationWorkspace")
   hostedApplicationExports         HostedApplicationExport[]         @relation("HostedApplicationExportWorkspace")
   hostedApplicationExportDownloads HostedApplicationExportDownload[] @relation("HostedApplicationExportDownloadWorkspace")
+  hostedApplicationNotices         HostedApplicationNotice[]         @relation("HostedApplicationNoticeWorkspace")
   hostedReleases                   HostedRelease[]
   defaultApplication               HostedApplication?                @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
@@ -13332,6 +13333,8 @@ model HostedApplication {
   customDomains     PublicAddress[]           @relation("HostedApplicationCustomDomains")
   /// Every database export taken of it (MOTIR-12126).
   exports           HostedApplicationExport[]
+  /// Every grace-window notice sent about it (MOTIR-12136).
+  notices           HostedApplicationNotice[]
 
   @@unique([workspaceId, slug])
   @@index([projectId])
@@ -13389,6 +13392,40 @@ model HostedApplicationExportDownload {
   @@index([workspaceId])
   @@index([exportId, createdAt])
   @@map("hosted_application_export_download")
+}
+
+/// One grace-window notice sent to an organisation's Owner and Admins about a
+/// hosted application (Story MOTIR-9800 · MOTIR-12136): at the transfer, 7 and
+/// 1 day before `stops_at`, and at the stop. One row per `(application_id,
+/// kind)`, written AFTER the notice's emails are enqueued, so each notice goes
+/// out once; the newest row is the banner the Production panel shows.
+///
+/// RLS: `hosted_application_notice_active_workspace` (FOR ALL); system code
+/// writes it under `withWorkspaceServiceContext`.
+model HostedApplicationNotice {
+  id            String                      @id @default(cuid())
+  workspaceId   String                      @map("workspace_id")
+  applicationId String                      @map("application_id")
+  kind          HostedApplicationNoticeKind
+  sentAt        DateTime                    @default(now()) @map("sent_at")
+
+  workspace   Workspace         @relation("HostedApplicationNoticeWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, kind])
+  @@index([workspaceId])
+  @@map("hosted_application_notice")
+}
+
+/// Which grace-window notice a `hosted_application_notice` row records
+/// (`GRACE_NOTICE_KINDS`).
+enum HostedApplicationNoticeKind {
+  transferred
+  seven_days
+  one_day
+  stopped
+
+  @@map("hosted_application_notice_kind")
 }
 
 /// One release of a commit on a hosted application. A config redeploy of the

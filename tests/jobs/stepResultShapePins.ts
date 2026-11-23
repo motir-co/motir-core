@@ -666,6 +666,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   // MOTIR-12135 — the grace-window stop sweep: the due applications, then one
   // stop per application, answered rather than thrown.
+  'send-grace-notice': {
+    file: 'lib/jobs/definitions/hostedApplicationGraceNotice.ts',
+    shape:
+      '{ outcome: "already_sent" } | { outcome: "not_applicable"; reason: "no_application" | "state_mismatch" } | { outcome: "sent"; recipients: number }',
+  },
+  'enqueue-due-grace-reminders': {
+    file: 'lib/jobs/definitions/hostedApplicationGraceNoticeSweep.ts',
+    shape: '{ enqueued: number }',
+  },
   'list-grace-applications-due': {
     file: 'lib/jobs/definitions/hostedApplicationGraceStop.ts',
     shape: 'Array<string>',
@@ -938,7 +947,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | "recipient_suppressed" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "page-comment-notification" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | "recipient_suppressed" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "hosted-application-grace" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "page-comment-notification" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',

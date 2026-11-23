@@ -1090,6 +1090,19 @@
       "renew": "Renovar el plan de IA antes del {date} cancela la eliminación. Hasta entonces, tus agentes no se pueden crear ni activar, y su almacenamiento se sigue cobrando cada día.",
       "openBilling": "Renovar el plan de IA",
       "footer": "Recibes este correo porque tienes agentes en esta organización."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} sigue funcionando en Motir hasta el {date}} seven_days {{repository} dejará de funcionar en Motir en 7 días} one_day {{repository} dejará de funcionar en Motir mañana} other {{repository} ha dejado de funcionar en Motir}}",
+      "preview": "{kind, select, stopped {Descarga la exportación final de la base de datos de {repository} en un plazo de 30 días} other {{repository} dejará de funcionar en Motir el {date}}}",
+      "greeting": "Hola, {name}:",
+      "lede": {
+        "transferred": "{repository} se ha trasladado a tu propia cuenta de GitHub. Su aplicación sigue funcionando en Motir hasta el {date}, para que tengas tiempo de desplegarla en tu propio proveedor. Desde el panel de Producción puedes descargar una exportación de la base de datos en cualquier momento y detener la aplicación antes cuando estés listo.",
+        "seven_days": "La aplicación de {repository} dejará de funcionar en Motir el {date}, dentro de 7 días. Antes de esa fecha, despliega el repositorio en tu propio proveedor, restaura allí una exportación de la base de datos y apunta tus dominios a él.",
+        "one_day": "La aplicación de {repository} dejará de funcionar en Motir el {date}, es decir, mañana. Si tu nuevo proveedor aún no tiene tus datos más recientes, descarga ahora una exportación actualizada de la base de datos.",
+        "stopped": "La aplicación de {repository} ha dejado de funcionar en Motir y se han eliminado la aplicación y su base de datos. La exportación final de la base de datos, tomada después de detener la aplicación, se puede descargar desde el panel de Producción durante 30 días."
+      },
+      "openProduction": "Abrir el panel de Producción",
+      "footer": "Recibes este correo porque eres el propietario o un administrador de la organización."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Aquí no hay ninguna vista previa",
       "body": "Esta dirección no pertenece a ninguna vista previa en ejecución. Puede que se haya apagado o que el enlace esté mal escrito.",
       "home": "Ir a Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Entregada. La aplicación sigue funcionando en Motir hasta el {date}.",
+      "seven_days": "La aplicación dejará de funcionar en Motir dentro de 7 días, el {date}.",
+      "one_day": "La aplicación dejará de funcionar en Motir mañana, el {date}.",
+      "stopped": "La aplicación dejó de funcionar en Motir el {date}. Descarga la exportación final de la base de datos en un plazo de 30 días."
     }
   }
 }

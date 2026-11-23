@@ -446,6 +446,53 @@ export const hostedApplicationRepository = {
     return rows.map((row) => row.workspaceId);
   },
 
+  /** What a grace-window notice reads of its application (MOTIR-12136): its
+   *  state, `stopsAt`, when it was handed over, and the repository it runs, by
+   *  name. */
+  async findForGraceNotice(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    id: string;
+    workspaceId: string;
+    projectRepositoryId: string;
+    state: HostedApplicationState;
+    stopsAt: Date | null;
+    handedOverAt: Date | null;
+    repositoryName: string;
+  } | null> {
+    const row = await tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectRepositoryId: true,
+        state: true,
+        stopsAt: true,
+        handedOverAt: true,
+        projectRepository: { select: { name: true } },
+      },
+    });
+    if (!row) return null;
+    const { projectRepository, ...rest } = row;
+    return { ...rest, repositoryName: projectRepository.name };
+  },
+
+  /** Every `grace` application whose `stopsAt` is after `after` and at or before
+   *  `before`, soonest first — what the grace-notice reminder sweep walks
+   *  (MOTIR-12136). */
+  async listInGraceStoppingBetween(
+    after: Date,
+    before: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; workspaceId: string; stopsAt: Date | null }[]> {
+    return tx.hostedApplication.findMany({
+      where: { state: 'grace', stopsAt: { gt: after, lte: before } },
+      select: { id: true, workspaceId: true, stopsAt: true },
+      orderBy: { stopsAt: 'asc' },
+    });
+  },
+
   /** Every `grace` application whose `stopsAt` is at or before `before`, soonest
    *  first — what the stop job walks. */
   async listInGraceStoppingBy(

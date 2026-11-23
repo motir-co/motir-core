@@ -1090,6 +1090,19 @@
       "renew": "Renouveler le forfait IA avant le {date} annule la suppression. D’ici là, vos agents ne peuvent être ni créés ni réveillés, et leur stockage reste facturé chaque jour.",
       "openBilling": "Renouveler le forfait IA",
       "footer": "Vous recevez cet e-mail parce que vous possédez des agents dans cette organisation."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} continue de tourner sur Motir jusqu’au {date}} seven_days {{repository} s’arrête sur Motir dans 7 jours} one_day {{repository} s’arrête sur Motir demain} other {{repository} ne tourne plus sur Motir}}",
+      "preview": "{kind, select, stopped {Téléchargez l’export final de la base de données de {repository} sous 30 jours} other {{repository} s’arrête sur Motir le {date}}}",
+      "greeting": "Bonjour {name},",
+      "lede": {
+        "transferred": "{repository} a été transféré vers votre propre compte GitHub. Son application continue de tourner sur Motir jusqu’au {date}, ce qui vous laisse le temps de la déployer chez votre propre hébergeur. Depuis le panneau Production, vous pouvez télécharger un export de la base de données à tout moment et arrêter l’application plus tôt lorsque vous êtes prêt.",
+        "seven_days": "L’application de {repository} s’arrête sur Motir le {date}, dans 7 jours. D’ici là, déployez le dépôt chez votre propre hébergeur, restaurez-y un export de la base de données et faites pointer vos domaines vers lui.",
+        "one_day": "L’application de {repository} s’arrête sur Motir le {date}, c’est-à-dire demain. Si votre nouvel hébergeur n’a pas encore vos données les plus récentes, téléchargez dès maintenant un nouvel export de la base de données.",
+        "stopped": "L’application de {repository} ne tourne plus sur Motir : l’application et sa base de données ont été supprimées. L’export final de la base de données, réalisé après l’arrêt de l’application, peut être téléchargé depuis le panneau Production pendant 30 jours."
+      },
+      "openProduction": "Ouvrir le panneau Production",
+      "footer": "Vous recevez cet e-mail parce que vous êtes propriétaire ou administrateur de l’organisation."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Il n’y a aucun aperçu ici",
       "body": "Cette adresse n’appartient à aucun aperçu en cours d’exécution. Il a peut-être été arrêté, ou le lien est mal saisi.",
       "home": "Aller sur Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Transférée. L’application continue de tourner sur Motir jusqu’au {date}.",
+      "seven_days": "L’application s’arrête sur Motir dans 7 jours, le {date}.",
+      "one_day": "L’application s’arrête sur Motir demain, le {date}.",
+      "stopped": "L’application s’est arrêtée sur Motir le {date}. Téléchargez l’export final de la base de données sous 30 jours."
     }
   }
 }

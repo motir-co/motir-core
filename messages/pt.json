@@ -1090,6 +1090,19 @@
       "renew": "Renovar o plano de IA antes de {date} cancela a exclusão. Até lá, seus agentes não podem ser criados nem ativados, e o armazenamento deles continua sendo cobrado todos os dias.",
       "openBilling": "Renovar o plano de IA",
       "footer": "Você está recebendo isto porque possui agentes nesta organização."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} continua em execução no Motir até {date}} seven_days {{repository} deixará de ser executado no Motir em 7 dias} one_day {{repository} deixará de ser executado no Motir amanhã} other {{repository} deixou de ser executado no Motir}}",
+      "preview": "{kind, select, stopped {Baixe a exportação final do banco de dados de {repository} em até 30 dias} other {{repository} deixará de ser executado no Motir em {date}}}",
+      "greeting": "Olá, {name},",
+      "lede": {
+        "transferred": "{repository} foi transferido para a sua própria conta do GitHub. O aplicativo continua em execução no Motir até {date}, para que você tenha tempo de implantá-lo na sua própria hospedagem. No painel Produção, você pode baixar uma exportação do banco de dados a qualquer momento e parar o aplicativo antes, quando estiver pronto.",
+        "seven_days": "O aplicativo de {repository} deixará de ser executado no Motir em {date}, daqui a 7 dias. Antes disso, implante o repositório na sua própria hospedagem, restaure lá uma exportação do banco de dados e aponte seus domínios para ele.",
+        "one_day": "O aplicativo de {repository} deixará de ser executado no Motir em {date}, ou seja, amanhã. Se a sua nova hospedagem ainda não tiver seus dados mais recentes, baixe agora uma nova exportação do banco de dados.",
+        "stopped": "O aplicativo de {repository} deixou de ser executado no Motir, e o aplicativo e o banco de dados foram excluídos. A exportação final do banco de dados, feita depois que o aplicativo parou, pode ser baixada no painel Produção por 30 dias."
+      },
+      "openProduction": "Abrir o painel Produção",
+      "footer": "Você está recebendo isto porque é o Proprietário ou um Administrador da organização."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Não há nenhuma prévia aqui",
       "body": "Este endereço não pertence a nenhuma prévia em execução. Ela pode ter sido desligada, ou o link pode estar digitado errado.",
       "home": "Ir para o Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Entregue. O aplicativo continua em execução no Motir até {date}.",
+      "seven_days": "O aplicativo deixará de ser executado no Motir em 7 dias, em {date}.",
+      "one_day": "O aplicativo deixará de ser executado no Motir amanhã, em {date}.",
+      "stopped": "O aplicativo parou de ser executado no Motir em {date}. Baixe a exportação final do banco de dados em até 30 dias."
     }
   }
 }

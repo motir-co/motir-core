@@ -658,6 +658,15 @@ export default defineConfig({
         'lib/jobs/definitions/organizationErasureSweep.ts',
         'lib/jobs/definitions/organizationRetentionPurge.ts',
         'app/api/organizations/**/deletion/route.ts',
+        // Story MOTIR-9800 · MOTIR-12136 — the grace-window notices, the hosting
+        // twin of the organisation-deletion notifier above and gated for the same
+        // reason: a customer loses a running app, then its database, on a date
+        // these mails are the only warning of. Pinned at 90 in `thresholds`.
+        'lib/services/hostedApplicationGraceNotifier.ts',
+        'lib/repositories/hostedApplicationNoticeRepository.ts',
+        'lib/emailTemplates/hostedApplicationGrace.tsx',
+        'lib/jobs/definitions/hostedApplicationGraceNotice.ts',
+        'lib/jobs/definitions/hostedApplicationGraceNoticeSweep.ts',
         'lib/repositories/publicFollowRepository.ts',
         'lib/services/publicFollowService.ts',
         'lib/services/publicFollowDigestService.ts',
@@ -5932,6 +5941,36 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/organizationRetentionPurgeService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/hostedApplicationGraceNotifier.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/hostedApplicationNoticeRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/emailTemplates/hostedApplicationGrace.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/hostedApplicationGraceNotice.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/hostedApplicationGraceNoticeSweep.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

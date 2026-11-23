@@ -1090,6 +1090,19 @@
       "renew": "{date} 전에 AI 요금제를 갱신하면 삭제가 취소됩니다. 그때까지 에이전트를 생성하거나 깨울 수 없으며, 저장 공간 요금은 매일 계속 부과됩니다.",
       "openBilling": "AI 요금제 갱신",
       "footer": "이 조직에 에이전트를 소유하고 있어 이 이메일을 받았습니다."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository}은(는) {date}까지 Motir에서 계속 실행됩니다} seven_days {{repository}은(는) 7일 후 Motir에서 중지됩니다} one_day {{repository}은(는) 내일 Motir에서 중지됩니다} other {{repository}은(는) Motir에서 중지되었습니다}}",
+      "preview": "{kind, select, stopped {{repository}의 최종 데이터베이스 내보내기를 30일 이내에 다운로드하세요} other {{repository}은(는) {date}에 Motir에서 중지됩니다}}",
+      "greeting": "{name} 님, 안녕하세요.",
+      "lede": {
+        "transferred": "{repository}이(가) 사용자의 GitHub 계정으로 이전되었습니다. 앱은 {date}까지 Motir에서 계속 실행되므로 직접 사용하는 호스팅에 배포할 시간이 있습니다. 프로덕션 패널에서 언제든지 데이터베이스 내보내기를 다운로드할 수 있으며, 준비가 되면 앱을 미리 중지할 수도 있습니다.",
+        "seven_days": "{repository}의 앱은 {date}, 즉 7일 후에 Motir에서 중지됩니다. 그 전에 직접 사용하는 호스팅에 저장소를 배포하고, 데이터베이스 내보내기를 복원한 뒤 도메인을 그쪽으로 연결하세요.",
+        "one_day": "{repository}의 앱은 {date}, 즉 내일 Motir에서 중지됩니다. 새 호스팅에 아직 최신 데이터가 없다면 지금 최신 데이터베이스 내보내기를 다운로드하세요.",
+        "stopped": "{repository}의 앱이 Motir에서 중지되었으며, 앱과 데이터베이스가 삭제되었습니다. 앱이 중지된 후 생성된 최종 데이터베이스 내보내기는 프로덕션 패널에서 30일 동안 다운로드할 수 있습니다."
+      },
+      "openProduction": "프로덕션 패널 열기",
+      "footer": "조직의 소유자 또는 관리자이므로 이 이메일을 받았습니다."
     }
   },
   "auth": {
@@ -18793,6 +18806,14 @@
       "title": "여기에는 미리보기가 없습니다",
       "body": "이 주소는 실행 중인 미리보기에 속하지 않습니다. 종료되었거나 링크를 잘못 입력했을 수 있습니다.",
       "home": "Motir로 이동"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "인계되었습니다. 앱은 {date}까지 Motir에서 계속 실행됩니다.",
+      "seven_days": "앱은 7일 후인 {date}에 Motir에서 중지됩니다.",
+      "one_day": "앱은 내일인 {date}에 Motir에서 중지됩니다.",
+      "stopped": "앱이 {date}에 Motir에서 중지되었습니다. 최종 데이터베이스 내보내기를 30일 이내에 다운로드하세요."
     }
   }
 }

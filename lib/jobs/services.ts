@@ -54,6 +54,7 @@ import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccount
 import { tenantAccountHandoverService } from '@/lib/services/tenantAccountHandoverService';
 import { hostedApplicationExportService } from '@/lib/services/hostedApplicationExportService';
 import { hostedApplicationHandoverService } from '@/lib/services/hostedApplicationHandoverService';
+import { hostedApplicationGraceNotifier } from '@/lib/services/hostedApplicationGraceNotifier';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
@@ -170,6 +171,8 @@ export const jobServices = {
   hostedApplicationExport: hostedApplicationExportService,
   // The stop at the end of a grace window (MOTIR-12135).
   hostedApplicationHandover: hostedApplicationHandoverService,
+  // The grace-window notices and their reminders (MOTIR-12136).
+  hostedApplicationGraceNotifier,
   // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
   previewEnablement: previewEnablementService,
   previewLifecycle: previewLifecycleService,

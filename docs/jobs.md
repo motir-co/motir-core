@@ -1243,15 +1243,16 @@ cluster bought nothing. The why is
 
 **Hourly**
 
-| job                                     | cron         |
-| --------------------------------------- | ------------ |
-| `system.abandoned-plan-sweep`           | `0 * * * *`  |
-| `system.filter-subscription-tick`       | `0 * * * *`  |
-| `system.organization-erasure-sweep`     | `0 * * * *`  |
-| `system.auto-plan-cadence-tick`         | `30 * * * *` |
-| `system.ci-actions-gate-sweep`          | `30 * * * *` |
-| `system.work-item-embedding-sweep`      | `17 * * * *` |
-| `system.hosting-application-grace-stop` | `35 * * * *` |
+| job                                            | cron         |
+| ---------------------------------------------- | ------------ |
+| `system.abandoned-plan-sweep`                  | `0 * * * *`  |
+| `system.filter-subscription-tick`              | `0 * * * *`  |
+| `system.organization-erasure-sweep`            | `0 * * * *`  |
+| `system.auto-plan-cadence-tick`                | `30 * * * *` |
+| `system.ci-actions-gate-sweep`                 | `30 * * * *` |
+| `system.work-item-embedding-sweep`             | `17 * * * *` |
+| `system.hosted-application-grace-notice-sweep` | `25 * * * *` |
+| `system.hosting-application-grace-stop`        | `35 * * * *` |
 
 **Every 6 hours (UTC)**
 

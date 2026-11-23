@@ -1,4 +1,5 @@
 import { agentsDeletionScheduledEmail } from '@/lib/emailTemplates/agentsDeletionScheduled';
+import { hostedApplicationGraceEmail } from '@/lib/emailTemplates/hostedApplicationGrace';
 import { automationRuleFailedEmail } from '@/lib/emailTemplates/automationRuleFailed';
 import { dataExportReadyEmail } from '@/lib/emailTemplates/dataExportReady';
 import { emailChangeEmail } from '@/lib/emailTemplates/emailChange';
@@ -152,6 +153,13 @@ export const EMAIL_TEMPLATE_FIXTURES: { [K in EmailTemplate]: TemplateData<K> } 
     agentNames: ['Builder'],
     billingUrl: `${URL}/settings/organization/billing`,
   },
+  'hosted-application-grace': {
+    kind: 'seven_days',
+    recipientName: 'Sam',
+    repositoryName: 'shop-web',
+    stopDate: '1 November 2026',
+    productionUrl: `${URL}/settings/project/production?repository=row-1`,
+  },
 };
 
 export const EMAIL_TEMPLATE_RENDERERS: {
@@ -176,6 +184,7 @@ export const EMAIL_TEMPLATE_RENDERERS: {
   'organization-deletion-reminder': organizationDeletionReminderEmail,
   'organization-erased': organizationErasedEmail,
   'agents-deletion-scheduled': agentsDeletionScheduledEmail,
+  'hosted-application-grace': hostedApplicationGraceEmail,
 };
 
 /** Render one template from its fixture, in `locale` when one is given. */

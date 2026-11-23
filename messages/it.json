@@ -1090,6 +1090,19 @@
       "renew": "Rinnovando il piano AI prima del {date} annulli l’eliminazione. Fino ad allora non è possibile creare o riattivare i tuoi agenti, e il loro spazio di archiviazione continua a essere addebitato ogni giorno.",
       "openBilling": "Rinnova il piano AI",
       "footer": "Ricevi questa email perché possiedi degli agenti in questa organizzazione."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} resta attivo su Motir fino al {date}} seven_days {{repository} verrà arrestato su Motir tra 7 giorni} one_day {{repository} verrà arrestato su Motir domani} other {{repository} non è più attivo su Motir}}",
+      "preview": "{kind, select, stopped {Scarica l’esportazione finale del database di {repository} entro 30 giorni} other {{repository} verrà arrestato su Motir il {date}}}",
+      "greeting": "Ciao {name},",
+      "lede": {
+        "transferred": "{repository} è stato trasferito nel tuo account GitHub. La sua app resta attiva su Motir fino al {date}, così hai il tempo di distribuirla sul tuo hosting. Dal pannello Produzione puoi scaricare un’esportazione del database in qualsiasi momento e arrestare l’app prima, quando sei pronto.",
+        "seven_days": "L’app di {repository} verrà arrestata su Motir il {date}, tra 7 giorni. Prima di allora, distribuisci il repository sul tuo hosting, ripristina lì un’esportazione del database e punta i tuoi domini verso di esso.",
+        "one_day": "L’app di {repository} verrà arrestata su Motir il {date}, cioè domani. Se il tuo nuovo hosting non ha ancora i dati più recenti, scarica subito una nuova esportazione del database.",
+        "stopped": "L’app di {repository} non è più attiva su Motir: l’app e il suo database sono stati eliminati. L’esportazione finale del database, effettuata dopo l’arresto dell’app, può essere scaricata dal pannello Produzione per 30 giorni."
+      },
+      "openProduction": "Apri il pannello Produzione",
+      "footer": "Ricevi questa email perché sei il proprietario o un amministratore dell’organizzazione."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Qui non c’è nessuna anteprima",
       "body": "Questo indirizzo non appartiene a un’anteprima in esecuzione. Potrebbe essere stata spenta, oppure il link potrebbe essere sbagliato.",
       "home": "Vai a Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Consegnata. L’app resta attiva su Motir fino al {date}.",
+      "seven_days": "L’app verrà arrestata su Motir tra 7 giorni, il {date}.",
+      "one_day": "L’app verrà arrestata su Motir domani, il {date}.",
+      "stopped": "L’app è stata arrestata su Motir il {date}. Scarica l’esportazione finale del database entro 30 giorni."
     }
   }
 }

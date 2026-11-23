@@ -1090,6 +1090,19 @@
       "renew": "Odnowienie planu AI przed {date} anuluje usunięcie. Do tego czasu nie można tworzyć ani wybudzać Twoich agentów, a za ich przestrzeń dyskową nadal naliczane są codzienne opłaty.",
       "openBilling": "Odnów plan AI",
       "footer": "Otrzymujesz tę wiadomość, ponieważ jesteś właścicielem agentów w tej organizacji."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} działa w Motir do {date}} seven_days {{repository} zostanie zatrzymane w Motir za 7 dni} one_day {{repository} zostanie zatrzymane w Motir jutro} other {{repository} nie działa już w Motir}}",
+      "preview": "{kind, select, stopped {Pobierz końcowy eksport bazy danych {repository} w ciągu 30 dni} other {{repository} zostanie zatrzymane w Motir {date}}}",
+      "greeting": "Cześć {name},",
+      "lede": {
+        "transferred": "{repository} zostało przeniesione na Twoje własne konto GitHub. Aplikacja działa w Motir do {date}, więc masz czas, aby wdrożyć ją u własnego dostawcy hostingu. W panelu Produkcja możesz w każdej chwili pobrać eksport bazy danych i wcześniej zatrzymać aplikację, gdy będziesz gotowy.",
+        "seven_days": "Aplikacja {repository} zostanie zatrzymana w Motir {date}, za 7 dni. Do tego czasu wdróż repozytorium u własnego dostawcy hostingu, przywróć tam eksport bazy danych i skieruj na nie swoje domeny.",
+        "one_day": "Aplikacja {repository} zostanie zatrzymana w Motir {date}, czyli jutro. Jeśli nowy dostawca hostingu nie ma jeszcze najnowszych danych, pobierz teraz świeży eksport bazy danych.",
+        "stopped": "Aplikacja {repository} nie działa już w Motir, a aplikacja i jej baza danych zostały usunięte. Końcowy eksport bazy danych, wykonany po zatrzymaniu aplikacji, można pobrać z panelu Produkcja przez 30 dni."
+      },
+      "openProduction": "Otwórz panel Produkcja",
+      "footer": "Otrzymujesz tę wiadomość, ponieważ jesteś właścicielem lub administratorem organizacji."
     }
   },
   "auth": {
@@ -18799,6 +18812,14 @@
       "title": "Tu nie ma żadnego podglądu",
       "body": "Ten adres nie należy do żadnego działającego podglądu. Mógł zostać wyłączony albo link zawiera literówkę.",
       "home": "Przejdź do Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Przekazano. Aplikacja działa w Motir do {date}.",
+      "seven_days": "Aplikacja zostanie zatrzymana w Motir za 7 dni, {date}.",
+      "one_day": "Aplikacja zostanie zatrzymana w Motir jutro, {date}.",
+      "stopped": "Aplikacja została zatrzymana w Motir {date}. Pobierz końcowy eksport bazy danych w ciągu 30 dni."
     }
   }
 }
