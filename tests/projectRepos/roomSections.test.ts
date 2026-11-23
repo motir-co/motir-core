@@ -189,6 +189,7 @@ function row(opts: {
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
+    hostingShape: null,
     position: 'a0',
     createdAt: '2026-08-19T00:00:00.000Z',
     hostedDeletionStartedAt: null,

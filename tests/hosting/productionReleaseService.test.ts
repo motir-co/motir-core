@@ -4,7 +4,7 @@
 // previous release serving, the environment merged with DATABASE_URL and never
 // leaked, one release in flight per application, and a failed build recorded.
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HostingTarget } from '@/generated/prisma/client';
+import type { HostingShape, HostingTarget } from '@/generated/prisma/client';
 import type { FakeHostingControls } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { environmentConfigCrypto } from '@/lib/environmentConfig/crypto';
@@ -90,7 +90,12 @@ async function workspace(identifier = 'ACME'): Promise<WorkItemFixture> {
 
 async function repo(
   fx: WorkItemFixture,
-  opts: { role?: 'web' | 'api'; target?: HostingTarget; seedSource?: string } = {},
+  opts: {
+    role?: 'web' | 'api';
+    target?: HostingTarget;
+    shape?: HostingShape;
+    seedSource?: string;
+  } = {},
 ): Promise<string> {
   const role = opts.role ?? 'web';
   const row = await projectRepoSetService.addRow(
@@ -105,6 +110,7 @@ async function repo(
       state: 'created',
       hostingTarget: opts.target ?? 'fly',
       hostingSize: 'medium',
+      hostingShape: opts.shape ?? null,
     },
   });
   return row.id;
@@ -382,6 +388,46 @@ describe('deployProductionRelease', () => {
 
     expect(done.state).toBe('live');
     expect((await application(web)).currentReleaseId).toBeNull();
+  });
+
+  // MOTIR-12093: the AWS port refuses a release with no shape, so production
+  // passes the row's recorded one — and a row with none is refused by name.
+  it.each(['function', 'container'] as const)(
+    'passes an aws row its recorded %s shape and goes live',
+    async (shape) => {
+      const fx = await workspace();
+      const id = await repo(fx, { target: 'aws', shape });
+
+      const done = await service.deployProductionRelease(release(id), deps(NO_DATABASE));
+
+      expect(done.state).toBe('live');
+      expect(done.failureReason).toBeNull();
+      expect((await application(id)).currentReleaseId).toBe(done.id);
+      const live = hosting('aws').app(`mh-${id}`)!.live!;
+      expect(live).toMatchObject({ shape, size: 'medium' });
+      expect(done.providerReleaseId).toBe(live.releaseId);
+    },
+  );
+
+  it('fails an aws release with no recorded shape by name, creating nothing at the provider', async () => {
+    const fx = await workspace();
+    const id = await repo(fx, { target: 'aws' });
+
+    const failed = await service.deployProductionRelease(release(id), deps(NO_DATABASE));
+
+    expect(failed.state).toBe('failed');
+    expect(failed.failureReason).toBe('deploy: HOSTING_SHAPE_REQUIRED');
+    expect(hosting('aws').app(`mh-${id}`)!.live).toBeNull();
+    expect((await application(id)).currentReleaseId).toBeNull();
+  });
+
+  it('passes no shape off aws, where the target has none', async () => {
+    const fx = await workspace();
+    const id = await repo(fx);
+
+    await service.deployProductionRelease(release(id), deps(NO_DATABASE));
+
+    expect(hosting().app(`mh-${id}`)!.live!.shape).toBeUndefined();
   });
 
   it('reads the manifest through the repository access by default', async () => {

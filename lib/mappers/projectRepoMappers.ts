@@ -97,6 +97,7 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     hostingTarget: row.hostingTarget,
     hostingUseCase: row.hostingUseCase,
     hostingSize: row.hostingSize,
+    hostingShape: row.hostingShape,
     hostedDeletionStartedAt: row.hostedDeletionStartedAt?.toISOString() ?? null,
     position: row.position,
     createdAt: row.createdAt.toISOString(),

@@ -177,11 +177,15 @@ async function deployProductionRelease(
         database,
       ),
     );
-    const size = await inStep(id, 'environment', async () => {
+    // The row's recorded hosting decision: its size, and on `aws` its SHAPE
+    // (MOTIR-12093, MOTIR-5769 §4). The shape is passed exactly as recorded and
+    // never inferred — an `aws` row with none is refused by the port by name
+    // (`deploy: HOSTING_SHAPE_REQUIRED`), and every other target ignores it.
+    const { size, shape } = await inStep(id, 'environment', async () => {
       const facts = await withSystemContext((tx) =>
         projectRepoRepository.findDeployFactsInTx(input.projectRepositoryId, tx),
       );
-      return facts?.hostingSize ?? 'small';
+      return { size: facts?.hostingSize ?? 'small', shape: facts?.hostingShape ?? null };
     });
 
     const port: HostingDeployPort = getHostingDeployPort(app.target);
@@ -236,6 +240,7 @@ async function deployProductionRelease(
         env,
         size,
         idle: { mode: 'always_on' },
+        ...(shape ? { shape } : {}),
       }),
     );
 

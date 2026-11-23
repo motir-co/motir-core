@@ -53,6 +53,7 @@ function row(
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
+    hostingShape: null,
     position: 'a0',
     ...over,
   };
