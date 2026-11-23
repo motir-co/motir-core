@@ -887,6 +887,95 @@ describe('planReviewService.getPlanReview', () => {
     expect(defaultPlanView(review)).toBe('canvas');
   });
 
+  it("counts a folder level's CHILD folders, as the canvas draws them beside its cards (Bug MOTIR-12161)", async () => {
+    // The card's reproduction: a root folder `Outer` holding 3 child folders and no
+    // filed cards; a plan with 2 epic adds filed into `Outer`. The canvas's folder
+    // level draws the 3 child folders + the 2 adds = 5, not the 2 adds alone.
+    const fx = await makeWorkItemFixture();
+    const outer = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Outer' },
+      fx.ctx,
+    );
+    for (const name of ['Inner A', 'Inner B', 'Inner C']) {
+      await foldersService.createFolder(
+        { projectId: fx.projectId, parentFolderId: outer.id, name },
+        fx.ctx,
+      );
+    }
+    // A grandchild folder is drawn behind its own parent, never on Outer's level.
+    const innerA = await adminDb.folder.findFirstOrThrow({
+      where: { projectId: fx.projectId, parentFolderId: outer.id, name: 'Inner A' },
+    });
+    await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: innerA.id, name: 'Deeper' },
+      fx.ctx,
+    );
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Outer ideas' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      ['Idea one', 'Idea two'].map((title) => ({
+        op: 'add' as const,
+        proposedFields: { title, kind: 'epic' as const },
+        parentRef: `folder:${outer.id}`,
+      })),
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(arrivalLevel(review.items, 'New')?.id).toBe(`folder:${outer.id}`);
+    // The canvas's own read of that level, so the size is pinned to what it draws.
+    const drawn = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      folders: true,
+      folderId: outer.id,
+    });
+    expect({ nodes: drawn.nodes.length, folders: drawn.folders?.length }).toEqual({
+      nodes: 0,
+      folders: 3,
+    });
+    expect(review.arrivalLevelSize).toBe(5);
+    // Folders are read whole and never truncated, so the total is the adds alone.
+    expect(review.arrivalLevelTotal).toBe(2);
+    expect(defaultPlanView(review)).toBe('canvas');
+  });
+
+  it("sends a folder-filed plan to the list when the folder's child folders fill the canvas (Bug MOTIR-12161)", async () => {
+    // A folder holding more child folders than the canvas can hold legibly: its
+    // cards and the plan's adds are few, but the level drawn is past the limit.
+    const fx = await makeWorkItemFixture();
+    const outer = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Outer' },
+      fx.ctx,
+    );
+    for (let i = 0; i < ARRIVAL_LEVEL_MAX_NODES; i += 1) {
+      await foldersService.createFolder(
+        { projectId: fx.projectId, parentFolderId: outer.id, name: `Inner ${i}` },
+        fx.ctx,
+      );
+    }
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Crowded' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add' as const,
+          proposedFields: { title: 'One more', kind: 'epic' as const },
+          parentRef: `folder:${outer.id}`,
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(arrivalLevel(review.items, 'New')?.id).toBe(`folder:${outer.id}`);
+    expect(review.arrivalLevelSize).toBe(ARRIVAL_LEVEL_MAX_NODES + 1);
+    expect(review.arrivalLevelTotal).toBe(1);
+    expect(defaultPlanView(review)).toBe('list');
+  });
+
   it('measures the ROOT a root plan opens on as the canvas draws it — filed cards behind their folder (Bug MOTIR-12148)', async () => {
     // The card's reproduction: 3 unfiled root epics and a folder holding more
     // filed cards than the canvas holds; a plan with 3 unfiled root adds and 2 adds

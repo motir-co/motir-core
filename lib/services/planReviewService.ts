@@ -682,7 +682,9 @@ async function countArrivalLevel(
  * ⚠️ A FOLDER IS A LEVEL (Bug MOTIR-12144; Bug MOTIR-5782), and so the ROOT is a
  * level WITH folders (Bug MOTIR-12148):
  * - `folder:<id>` — the cards FILED in that folder (always roots, since the CHECK
- *   keeps `parentId` and `folderId` apart). Its child folders are not counted yet
+ *   keeps `parentId` and `folderId` apart) plus one node per CHILD folder: the
+ *   canvas's folder-level read returns that folder's child folders as nodes beside
+ *   its cards, so a folder holding many sub-folders draws more than its cards
  *   (Bug MOTIR-12161).
  * - the root (`null`) — the UNFILED root cards (`excludeFiled`: a filed card is
  *   drawn behind its folder, not loose) plus one node per root folder. Counting
@@ -707,7 +709,8 @@ async function countCommittedLevelNodes(
       undefined,
       { kind: 'folder', folderId },
     );
-    return { workItems, folders: 0 };
+    const folders = await folderRepository.countLevel(projectId, workspaceId, folderId, tx);
+    return { workItems, folders };
   }
   if (levelKey !== null) {
     const workItems = await workItemRepository.countSiblingsInWorkspace(
