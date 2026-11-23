@@ -8564,7 +8564,15 @@
       "unlinkAria": "Remove the link to {target}",
       "unlinkConfirmBefore": "Remove the link to",
       "unlinkConfirmAfter": "? The pull request isn’t touched on GitHub — only the link.",
-      "unlinkAction": "Remove link"
+      "unlinkAction": "Remove link",
+      "access": {
+        "invited": "Your invitation to this repository is waiting on GitHub. <link>Accept the invitation</link>",
+        "invitedNoLink": "Your invitation to this repository is waiting on GitHub. <link>Go to Code access</link>",
+        "notInvited": "You don't have access to this repository's code yet. <link>Go to Code access</link>",
+        "roleCannotEdit": "Your role in this project doesn't include code access.",
+        "noGithubPreview": "Motir doesn't know your GitHub account yet, so you can't open the code. <tone>Review this change in the preview above.</tone>",
+        "noGithubNoPreview": "Motir doesn't know your GitHub account yet, so you can't open the code. <tone>No preview is available for this pull request.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "Disconnect {repo} from the organisation",

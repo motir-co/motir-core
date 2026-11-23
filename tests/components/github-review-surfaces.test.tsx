@@ -28,6 +28,7 @@ function pr(githubReview: LinkedPullRequestDto['githubReview']): LinkedPullReque
     url: 'https://github.com/moooon/motir-core/pull/131',
     githubReview,
     preview: null,
+    readerAccess: null,
     baseRef: 'main',
     conflicted: false,
   };

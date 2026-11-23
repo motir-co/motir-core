@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { arrivalLevel } from '@/lib/planning/planArrival';
+import { arrivalLevel, arrivalLevelId } from '@/lib/planning/planArrival';
+import { fullestContainer } from '@/lib/planning/planShape';
 import { planReviewItem } from '../helpers/planReview';
 
 // WHERE A PLAN LANDS — the direct unit (MOTIR-6162's coverage clause).
@@ -248,5 +249,100 @@ describe('a FOLDER is a level', () => {
     const arrival = arrivalLevel(items, 'New');
     expect(arrival?.id).toBe('a');
     expect(arrival?.trail.length).toBeGreaterThan(0);
+  });
+});
+
+describe('arrivalLevel — a plan that also marks finished work outdated (Bug MOTIR-12097)', () => {
+  // The dogfooded plan's shape: 3 proposed subtasks under the story it is about,
+  // and 4 mark-only `modify` items on the done subtasks of an older story.
+  const STORY_TRAIL = [{ id: 'wi_story', identifier: 'MOTIR-11023', title: 'The new story' }];
+  const OLD_TRAIL = [{ id: 'wi_old', identifier: 'MOTIR-7093', title: 'The finished story' }];
+
+  function marks(n: number) {
+    const base = planReviewItem();
+    return Array.from({ length: n }, (_, i) =>
+      planReviewItem({
+        planItemId: `pi_mark_${i}`,
+        nodeId: `wi_done_${i}`,
+        identifier: `MOTIR-${7117 + i}`,
+        op: 'modify',
+        parentNodeId: 'wi_old',
+        parentIdentifier: 'MOTIR-7093',
+        parentTitle: 'The finished story',
+        parentTrail: OLD_TRAIL,
+        proposal: {
+          ...base.proposal,
+          op: 'modify',
+          identifier: `MOTIR-${7117 + i}`,
+          changedFields: ['obsolescence', 'obsolescenceNote'],
+        },
+      }),
+    );
+  }
+
+  function adds(n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      planReviewItem({
+        planItemId: `pi_add_${i}`,
+        nodeId: `pi_add_${i}`,
+        op: 'add',
+        parentNodeId: 'wi_story',
+        parentIdentifier: 'MOTIR-11023',
+        parentTitle: 'The new story',
+        parentTrail: STORY_TRAIL,
+      }),
+    );
+  }
+
+  it('opens on the story holding the adds, not the finished story holding more marks', () => {
+    const arrival = arrivalLevel([...marks(4), ...adds(3)], 'New');
+
+    expect(arrival?.id).toBe('wi_story');
+    expect(arrival?.trail.map((c) => c.id)).toEqual(['wi_story']);
+  });
+
+  it('a plan of marks alone still opens on the container holding them', () => {
+    expect(arrivalLevel(marks(4), 'New')?.id).toBe('wi_old');
+  });
+});
+
+describe('arrivalLevelId — the ONE answer to "which level" (Bug MOTIR-12144)', () => {
+  const filedInto = (i: number) =>
+    planReviewItem({
+      planItemId: `f${i}`,
+      nodeId: `f${i}`,
+      folderId: 'F',
+      folderPath: ['Later'],
+      folderTrail: [{ id: 'F', name: 'Later' }],
+    });
+  const under = planReviewItem({
+    planItemId: 'e',
+    nodeId: 'e',
+    parentNodeId: 'wi_e',
+    parentIdentifier: 'MOTIR-1',
+    parentTitle: 'E',
+  });
+
+  it("names the folder the canvas opens on, where the folder-blind count named the root (the card's reproduction)", () => {
+    const items = [0, 1, 2].map(filedInto).concat(under);
+    // The count the review's size used to read: the folder-filed adds pile up at
+    // the ROOT, which then wins and spells itself `null`.
+    expect(fullestContainer(items)).toBeNull();
+    expect(arrivalLevel(items, 'New')?.id).toBe('folder:F');
+    expect(arrivalLevelId(items)).toBe('folder:F');
+  });
+
+  it('agrees with arrivalLevel on a parented, a folder-filed, a root-only and an empty plan', () => {
+    const root = planReviewItem({ planItemId: 'r', nodeId: 'r' });
+    const shapes = [
+      [under, planReviewItem({ planItemId: 'e2', nodeId: 'e2', parentNodeId: 'wi_e' }), root],
+      [filedInto(0), filedInto(1), under],
+      [root, planReviewItem({ planItemId: 'r2', nodeId: 'r2' })],
+      [],
+    ];
+    expect(shapes.map((items) => arrivalLevelId(items))).toEqual(['wi_e', 'folder:F', null, null]);
+    for (const items of shapes) {
+      expect(arrivalLevelId(items)).toBe(arrivalLevel(items, 'New')?.id ?? null);
+    }
   });
 });

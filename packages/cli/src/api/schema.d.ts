@@ -3137,6 +3137,8 @@ export interface components {
                     branch: string;
                     baseRef: string | null;
                     headSha: string | null;
+                    conflicted: boolean;
+                    outOfDate: boolean;
                 }[];
                 resume?: {
                     profile: string;
@@ -3239,6 +3241,8 @@ export interface components {
                         branch: string;
                         baseRef: string | null;
                         headSha: string | null;
+                        conflicted: boolean;
+                        outOfDate: boolean;
                     }[];
                     resume?: {
                         profile: string;

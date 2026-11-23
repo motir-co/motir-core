@@ -8567,7 +8567,15 @@
       "unlinkAria": "Verknüpfung mit {target} entfernen",
       "unlinkConfirmBefore": "Verknüpfung entfernen mit",
       "unlinkConfirmAfter": "? Der Pull Request auf GitHub bleibt unberührt – nur die Verknüpfung wird entfernt.",
-      "unlinkAction": "Verknüpfung entfernen"
+      "unlinkAction": "Verknüpfung entfernen",
+      "access": {
+        "invited": "Ihre Einladung zu diesem Repository wartet auf GitHub. <link>Einladung annehmen</link>",
+        "invitedNoLink": "Ihre Einladung zu diesem Repository wartet auf GitHub. <link>Zum Codezugriff</link>",
+        "notInvited": "Sie haben noch keinen Zugriff auf den Code dieses Repositorys. <link>Zum Codezugriff</link>",
+        "roleCannotEdit": "Ihre Rolle in diesem Projekt umfasst keinen Codezugriff.",
+        "noGithubPreview": "Motir kennt Ihr GitHub-Konto noch nicht, daher können Sie den Code nicht öffnen. <tone>Prüfen Sie diese Änderung in der Vorschau oben.</tone>",
+        "noGithubNoPreview": "Motir kennt Ihr GitHub-Konto noch nicht, daher können Sie den Code nicht öffnen. <tone>Für diesen Pull Request ist keine Vorschau verfügbar.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "{repo} von der Organisation trennen",

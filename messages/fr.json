@@ -8567,7 +8567,15 @@
       "unlinkAria": "Supprimer le lien vers {target}",
       "unlinkConfirmBefore": "Supprimer le lien vers",
       "unlinkConfirmAfter": " ? La pull request n'est pas modifiée sur GitHub — seul le lien est supprimé.",
-      "unlinkAction": "Supprimer le lien"
+      "unlinkAction": "Supprimer le lien",
+      "access": {
+        "invited": "Votre invitation à ce dépôt est en attente sur GitHub. <link>Accepter l’invitation</link>",
+        "invitedNoLink": "Votre invitation à ce dépôt est en attente sur GitHub. <link>Aller à Accès au code</link>",
+        "notInvited": "Vous n’avez pas encore accès au code de ce dépôt. <link>Aller à Accès au code</link>",
+        "roleCannotEdit": "Votre rôle dans ce projet n’inclut pas l’accès au code.",
+        "noGithubPreview": "Motir ne connaît pas encore votre compte GitHub, vous ne pouvez donc pas ouvrir le code. <tone>Examinez cette modification dans l’aperçu ci-dessus.</tone>",
+        "noGithubNoPreview": "Motir ne connaît pas encore votre compte GitHub, vous ne pouvez donc pas ouvrir le code. <tone>Aucun aperçu n’est disponible pour cette pull request.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "Déconnecter {repo} de l'organisation",

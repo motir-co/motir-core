@@ -428,14 +428,10 @@ describe('WITHDRAW — superseded when the set the gate asked about changes', ()
       { workItemId: item.id, projectId: s.project.id, owner: 'moooon', name: 'acme', number: 12 },
       s.ctx,
     );
-    // ⚠️ MOTIR-6971: the close pulled the card back to `in_progress`, and a card there is
-    // asked nothing, however green what is left — its status has to be set right first.
-    expect(await statusOf(item.id)).toBe('in_progress');
-    expect(await awaiting(item.id)).toEqual([]);
-
-    // The run settles it (`implemented`); the CI-green latch promotes it on the verdict
-    // it already has, and the question comes back over the smaller set, once.
-    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+    // The close pulled the card back to `in_progress` (MOTIR-6971). Since MOTIR-12094 an
+    // unlink that leaves the set green is itself an occasion to promote, and
+    // `in_progress` is a source: the card goes straight back to In Review, and the
+    // question comes back over the smaller set, once — no run has to settle it first.
     expect(await statusOf(item.id)).toBe('in_review');
     expect((await awaiting(item.id)).map((g) => g.subjectVersion)).toEqual([
       'moooon/acme#11@sha-a',

@@ -909,10 +909,15 @@ export const githubProvider: GitProvider = {
     const mergeable = pull?.['mergeable'];
     const mergeableState = pull?.['mergeable_state'];
     const headSha = objectOf(pull?.['head'])?.['sha'];
+    const draft = pull?.['draft'];
     return {
       mergeable: typeof mergeable === 'boolean' ? mergeable : null,
       mergeableState: typeof mergeableState === 'string' ? mergeableState : null,
       headSha: typeof headSha === 'string' ? headSha : null,
+      // The same response carries it, so the link door's hydration (MOTIR-12094) learns a
+      // placeholder row's draft-ness without a second read. Stated only when the host
+      // said: an absent flag is not an answer.
+      ...(typeof draft === 'boolean' ? { draft } : {}),
     };
   },
 

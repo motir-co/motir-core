@@ -21,6 +21,7 @@ export const CORE_PR: LinkedPullRequestDto = {
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
   preview: null,
+  readerAccess: null,
   baseRef: 'main',
   conflicted: false,
 };
@@ -36,6 +37,7 @@ export const GATEWAY_PR: LinkedPullRequestDto = {
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
   preview: null,
+  readerAccess: null,
   baseRef: 'main',
   conflicted: false,
 };

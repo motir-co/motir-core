@@ -2391,6 +2391,14 @@ export const dispatchRunSchema = z.object({
           branch: z.string(),
           baseRef: z.string().nullable(),
           headSha: z.string().nullable(),
+          /** The claim found it CONFLICTED with `baseRef` at `headSha` — the repair claim's
+           *  `conflicted`, recorded with its decision (Bug MOTIR-12096, contract 1.92.0).
+           *  False on a run recorded before the claim kept it. */
+          conflicted: z.boolean(),
+          /** The claim found it OUT OF DATE with a base that requires branches to be up to
+           *  date (`mergeable_state: behind`) — the repair claim's `outOfDate`. Either one
+           *  means: merge `baseRef` and push, even though its checks are green. */
+          outOfDate: z.boolean(),
         }),
       ),
       resume: z

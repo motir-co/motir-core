@@ -10,6 +10,7 @@ import {
   PlanTargetHeldError,
 } from '@/lib/workItems/errors';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { isPromotionStillWarranted } from '@/lib/services/ciPromotion';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, WorkflowStatusDto } from '@/lib/dto/workflows';
@@ -34,6 +35,9 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 //    self-corrects from the error text instead of guessing.
 
 export const TRANSITION_STATUS_TOOL_NAME = 'transition_status';
+
+/** The status a run reports when its pull request is open (`lib/workflows/defaultWorkflow.ts`). */
+const IMPLEMENTED_STATUS_KEY = 'implemented';
 
 const inputSchema = {
   key: workItemKeyField,
@@ -127,6 +131,18 @@ export async function runTransitionStatus(
     // status surfaces the service's UnknownStatusError (not a silent mismatch).
     const toKey = resolveStatusKey(workflow.statuses, args.status) ?? args.status;
     const fromStatus = item.status;
+    // ⚠️ A RUN'S LATE "IMPLEMENTED" IS ALREADY SATISFIED (MOTIR-12094 review). CI may
+    // have promoted the card past `implemented` before the run's last step landed.
+    // Moving it back would withdraw the question CI just raised and ask it again, so a
+    // report of `implemented` on a card CI still holds In Review (or that is approved)
+    // changes nothing. A person moving it back by hand still can — in the app.
+    if (toKey === IMPLEMENTED_STATUS_KEY && (await isPromotionStillWarranted(item.id, ctx))) {
+      return toolOk(
+        `${item.identifier}: already past "implemented" — CI promoted it to "${fromStatus}" ` +
+          'and its pull requests are still green, so this report changes nothing (no-op)',
+        derived(workItemWritePayload, presentMcpWorkItem(item)),
+      );
+    }
     const dto: WorkItemDto = await workItemsService.updateStatus(item.id, toKey, ctx);
     const moved =
       fromStatus === dto.status

@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { dispatchRunSchema } from '@/lib/api/v1/workLoop/schema';
 import { DispatchRunAgentBusyError } from '@/lib/dispatchRuns/errors';
 import { toDispatchRunRepairDto } from '@/lib/mappers/dispatchRunMappers';
 import { agentInstanceLifecycleService as lifecycle } from '@/lib/services/agentInstanceLifecycleService';
@@ -114,6 +115,45 @@ describe('openAgentRepair — the run the claim opens', () => {
       expect(typeof pr.number).toBe('number');
       expect(pr.url).toBeTruthy();
     }
+  });
+
+  it('records each pull request’s mergeability with the decision, and the run read serves it on the wire (Bug MOTIR-12096)', async () => {
+    const a = await agent('yue-claude');
+    const card = await createTestWorkItem(fx, { kind: 'task', title: `stale ${randomToken(4)}` });
+    await setStatus(card.id, 'implemented');
+    await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: fx.ownerId } });
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    const head = 'c'.repeat(40);
+    const green = { checks: { Vitest: 'success' as const } };
+    const behind = await deliveredPr(fx, card.id, repo, { headRef: 'subtask/behind', ...green });
+    const dirty = await deliveredPr(fx, card.id, repo, { headRef: 'subtask/dirty', ...green });
+    await adminDb.githubPullRequest.update({
+      where: { id: behind.id },
+      data: { mergeableState: 'behind', mergeableStateHeadSha: head },
+    });
+    await adminDb.githubPullRequest.update({
+      where: { id: dirty.id },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: head },
+    });
+
+    const claim = await press(card.identifier, a);
+    expect(claim).toMatchObject({ outcome: 'claimed', repairClass: 'ci' });
+
+    // The read a run ADOPTING it makes (`GET …/dispatch-runs/{id}`) — the same DTO the route
+    // answers with, held to the v1 schema so the two fields are on the wire, not only stored.
+    const run = await dispatchRunService.getRun(claim.runId!, fx.ctx);
+    const parsed = dispatchRunSchema.safeParse(JSON.parse(JSON.stringify(run)));
+    expect(parsed.success, JSON.stringify(parsed.error?.issues, null, 2)).toBe(true);
+    const byBranch = Object.fromEntries(
+      (parsed.data?.repair?.pullRequests ?? []).map((pr) => [
+        pr.branch,
+        { conflicted: pr.conflicted, outOfDate: pr.outOfDate },
+      ]),
+    );
+    expect(byBranch).toEqual({
+      'subtask/behind': { conflicted: false, outOfDate: true },
+      'subtask/dirty': { conflicted: true, outOfDate: false },
+    });
   });
 
   it('writes no status and no assignee on the card', async () => {

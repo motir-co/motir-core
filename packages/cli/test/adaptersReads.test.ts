@@ -424,7 +424,24 @@ describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () =
     branch: 'acme-12-fix',
     baseRef: 'main',
     headSha: 'abc123',
+    conflicted: false,
+    outOfDate: false,
   };
+
+  it('carries each pull request’s recorded mergeability — why a green one was handed over (Bug MOTIR-12096)', () => {
+    const stale = [
+      { ...pr, number: 8, branch: 'behind', outOfDate: true },
+      { ...pr, number: 9, branch: 'dirty', conflicted: true },
+    ];
+    const view = toDispatchRunView({
+      ...base,
+      repair: { repairClass: 'ci', title: 'Export button', pullRequests: stale, findings: null },
+    } as never);
+    expect(view.repair?.pullRequests.map((p) => [p.branch, p.conflicted, p.outOfDate])).toEqual([
+      ['behind', false, true],
+      ['dirty', true, false],
+    ]);
+  });
 
   it('maps the repair the claim decided — its class, pull requests and findings', () => {
     const findings = {

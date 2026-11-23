@@ -8,6 +8,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { reconcileInheritedDeliveries, settleDeliverySetChanges } from './inheritedDeliveryService';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
+import { promoteAfterDeliverySetChange } from './linkPromotionService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepoSetService } from './projectRepoSetService';
 import { toLinkedPullRequestDto, toPullRequestLinkCandidateDto } from '@/lib/mappers/githubMappers';
@@ -378,8 +379,8 @@ export const githubPullRequestService = {
         [...(alreadyDelivered ? [] : [currentItemId]), ...inheritanceChanged],
         tx,
       );
-      return toLinkedPullRequestDto(pr);
-    }).then(async (dto) => {
+      return { dto: toLinkedPullRequestDto(pr), changed: [currentItemId, ...inheritanceChanged] };
+    }).then(async ({ dto, changed }) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
       // on the next push. That immediacy is what makes "link it" an escape hatch
       // instead of an instruction to go and push something. POST-COMMIT and
@@ -387,6 +388,13 @@ export const githubPullRequestService = {
       // view of it, and a host that refuses the write must never turn a recorded
       // link into an error the caller sees.
       await refreshLinkCheckForPullRequest(pullRequestId);
+      // A pull request that is ALREADY green promotes its card now (MOTIR-12094): no
+      // CI event follows a link, because the verdict predates it. Run for the linked
+      // card whether or not this link was new — a re-link is a no-op there, because a
+      // promoted card is past every source status — and BEFORE the resync, so a card
+      // at In Progress goes straight to In Review rather than hopping through
+      // Implemented. Best-effort; it never fails the link.
+      await promoteAfterDeliverySetChange({ workItemIds: changed, pullRequestId }, ctx);
       // …and apply the sync the `opened` delivery could not, because at the
       // moment it arrived this link did not exist. See `resyncLinkedPullRequest`.
       await resyncLinkedPullRequest(pullRequestId);
@@ -620,12 +628,18 @@ export const githubPullRequestService = {
         link: toLinkedPullRequestDto(updated),
         created: existing === null,
         prId,
+        changed: [input.workItemId, ...inheritanceChanged],
       };
-    }).then(async ({ prId, ...result }) => {
+    }).then(async ({ prId, changed, ...result }) => {
       // MOTIR-3675 — the same post-commit refresh the sibling arm does, and this
       // is the arm that matters most: it is the one a RUN calls, seconds after
       // `gh pr create`, often before any delivery has arrived at all.
       await refreshLinkCheckForPullRequest(prId);
+      // The same post-commit promotion the sibling arm runs (MOTIR-12094), and here it
+      // is independent of `created`: a row this call CREATED is one no delivery has
+      // reached, which is exactly the row the promotion's host read is for — the
+      // `opened` delivery this door used to wait on may never come.
+      await promoteAfterDeliverySetChange({ workItemIds: changed, pullRequestId: prId }, ctx);
       // The arm a RUN calls, so the one where the delivery has almost always
       // already been and gone — and `created` is exactly how this arm knows.
       // A row this call CREATED means no delivery has arrived yet: there is
@@ -715,15 +729,17 @@ export const githubPullRequestService = {
       // The ancestors that inherited the pull request from this link lose it too,
       // and keep it only where it is still theirs — an explicit link of their
       // own, or another descendant still delivering it (MOTIR-11839).
-      return {
-        removed: count > 0 && (await settleUnlink(workItemId, pullRequestId, tx)),
-      };
+      const settled = count > 0 ? await settleUnlink(workItemId, pullRequestId, tx) : null;
+      return { removed: settled !== null, settled: settled ?? [] };
     }).then(async (result) => {
       // The mirror of the link arm (MOTIR-3675): removing the last delivery makes
       // the pull request unlinked again, and the check has to say so. Post-commit
       // and best-effort, for the same reason.
       if (result.removed) await refreshLinkCheckForPullRequest(pullRequestId);
-      return result;
+      // A set the removal left GREEN — the last red member retracted — promotes now
+      // (MOTIR-12094): nothing else will report about a pull request that left the set.
+      if (result.removed) await promoteAfterDeliverySetChange({ workItemIds: result.settled }, ctx);
+      return { removed: result.removed };
     });
   },
 
@@ -799,10 +815,8 @@ export const githubPullRequestService = {
       // recompute (MOTIR-5470) — all four link doors change the delivery set, so
       // all four re-decide the verdict folded over it.
       // The inherited rows follow, as on the sibling arm (MOTIR-11839).
-      return {
-        removed: count > 0 && (await settleUnlink(input.workItemId, pr.id, tx)),
-        pullRequestId: pr.id,
-      };
+      const settled = count > 0 ? await settleUnlink(input.workItemId, pr.id, tx) : null;
+      return { removed: settled !== null, pullRequestId: pr.id, settled: settled ?? [] };
     }).then(async (result) => {
       // The same post-commit refresh both other arms do (MOTIR-3675): removing the
       // LAST delivery makes the pull request unlinked again and its check has to
@@ -810,7 +824,9 @@ export const githubPullRequestService = {
       // it, and a host that refuses the write must never turn a recorded removal
       // into an error the caller sees.
       if (result.removed) await refreshLinkCheckForPullRequest(result.pullRequestId);
-      return result;
+      // The same post-commit promotion the sibling arm runs (MOTIR-12094).
+      if (result.removed) await promoteAfterDeliverySetChange({ workItemIds: result.settled }, ctx);
+      return { removed: result.removed, pullRequestId: result.pullRequestId };
     });
   },
 
@@ -934,15 +950,19 @@ function isUniqueViolation(err: unknown): boolean {
  * justifies (MOTIR-11839). Nothing's set changed then, so nothing is settled — settling
  * would only withdraw and re-ask an unchanged question — and the unlink answers
  * `removed: false` rather than a removal the card does not show.
+ *
+ * Answers the cards it settled — the ones the post-commit promotion asks again
+ * (MOTIR-12094) — or `null` when the card did not stop delivering it.
  */
 async function settleUnlink(
   workItemId: string,
   pullRequestId: string,
   tx: Prisma.TransactionClient,
-): Promise<boolean> {
+): Promise<string[] | null> {
   const changed = await reconcileInheritedDeliveries([pullRequestId], tx);
   const rows = await workItemDeliveryRepository.listByPullRequest(pullRequestId, tx);
-  if (rows.some((row) => row.workItemId === workItemId)) return false;
-  await settleDeliverySetChanges([workItemId, ...changed], tx);
-  return true;
+  if (rows.some((row) => row.workItemId === workItemId)) return null;
+  const settled = [workItemId, ...changed];
+  await settleDeliverySetChanges(settled, tx);
+  return settled;
 }

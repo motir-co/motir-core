@@ -385,6 +385,9 @@ describe('Fix in Motir agent — the run it starts', () => {
           branch: prs[0]!.pr.headRef,
           baseRef: prs[0]!.pr.baseRef,
           headSha: HEAD,
+          // The claim's mergeability, served with the decision (Bug MOTIR-12096).
+          conflicted: false,
+          outOfDate: false,
         },
       ],
       findings: {

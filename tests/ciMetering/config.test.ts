@@ -14,8 +14,11 @@ import {
 
 beforeEach(async () => {
   // The §5.1 gate reads the fleet account orgs too (MOTIR-8974); this file pins
-  // the provisioning-org arm, so no account row may answer for it.
-  await adminDb.fleetShard.deleteMany({});
+  // the provisioning-org arm, so no account row may answer for it. A TRUNCATE
+  // with CASCADE, not a `deleteMany`: a file that ran earlier on this worker's
+  // database can leave `agent_instance` rows on a shard (their foreign key is
+  // RESTRICT), and a plain delete then refuses with 23001 before any test runs.
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "fleet_shard" CASCADE');
   resetOwnedOrgCache();
 });
 

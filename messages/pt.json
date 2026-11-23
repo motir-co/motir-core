@@ -8567,7 +8567,15 @@
       "unlinkAria": "Remover o vínculo com {target}",
       "unlinkConfirmBefore": "Remover o vínculo com",
       "unlinkConfirmAfter": "? O pull request não é alterado no GitHub — apenas o vínculo.",
-      "unlinkAction": "Remover vínculo"
+      "unlinkAction": "Remover vínculo",
+      "access": {
+        "invited": "Seu convite para este repositório está aguardando no GitHub. <link>Aceitar o convite</link>",
+        "invitedNoLink": "Seu convite para este repositório está aguardando no GitHub. <link>Ir para Acesso ao código</link>",
+        "notInvited": "Você ainda não tem acesso ao código deste repositório. <link>Ir para Acesso ao código</link>",
+        "roleCannotEdit": "Sua função neste projeto não inclui acesso ao código.",
+        "noGithubPreview": "O Motir ainda não conhece sua conta do GitHub, então você não pode abrir o código. <tone>Revise esta alteração na prévia acima.</tone>",
+        "noGithubNoPreview": "O Motir ainda não conhece sua conta do GitHub, então você não pode abrir o código. <tone>Não há prévia disponível para este pull request.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "Desconectar {repo} da organização",

@@ -437,9 +437,12 @@ describe("MOTIR-5670 — the card's own status change re-asks", () => {
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     await openLinked(item.identifier, number);
     // The link may promote it; hold it below the band so the green lands on a card
-    // neither of `promoteDeliveredCardsOnGreen`'s populations contains.
-    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+    // neither of `promoteDeliveredCardsOnGreen`'s populations contains. Since
+    // MOTIR-12094 `in_progress` IS a source, so the green lands at `blocked`, and the
+    // row is put back at `in_progress` as a fixture — no door, so nothing re-asks.
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'blocked' } });
     await ci({ conclusion: 'success', headSha: 'sha-early', number });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
     expect(await awaitingKinds(item.id)).toEqual([]);
     return { s, item };
   }

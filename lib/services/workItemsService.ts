@@ -198,7 +198,12 @@ import {
   type PreviewDeploymentFacts,
 } from '@/lib/mappers/githubMappers';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
-import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
+import type {
+  LinkedPullRequestDto,
+  LinkedPullRequestReaderAccessDto,
+  WorkItemDeliveryDto,
+} from '@/lib/dto/github';
+import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { amendRepoDeliveryWithSet } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -1799,6 +1804,34 @@ async function recordBugFiledFinding(
  *  the pair `preview_deployment`'s unique constraint is on. */
 function previewKey(repoId: string, pullRequestNumber: number): string {
   return `${repoId}#${pullRequestNumber}`;
+}
+
+/**
+ * The CURRENT reader's access to the repositories of a card's pull-request rows (Story
+ * MOTIR-4881 · MOTIR-12115; design `design/github/design-notes.md` § 35), keyed by
+ * lower-cased `owner/name` — ONE batched resolution per read call, never per row.
+ *
+ * ⚠️ UNREADABLE IS NULL, NEVER AN ERROR. The access fact decorates rows the reader can
+ * already see; a failure to read it (a project they may not browse, a transient read
+ * error) must not cost them the rows. It is logged with the project and work item ids,
+ * and every row then reads `readerAccess: null` — the row exactly as it was before.
+ */
+async function readReaderAccess(
+  projectId: string | null,
+  workItemId: string,
+  repoRefs: readonly string[],
+  ctx: ServiceContext,
+): Promise<Map<string, LinkedPullRequestReaderAccessDto>> {
+  if (projectId === null || repoRefs.length === 0) return new Map();
+  try {
+    return await projectRepoAccessService.readReaderAccessForRepos(projectId, repoRefs, ctx);
+  } catch (err) {
+    console.error(
+      `[workItemsService] could not read the reader's code access for work item ${workItemId} in project ${projectId}:`,
+      err,
+    );
+    return new Map();
+  }
 }
 
 /**
@@ -7600,18 +7633,33 @@ export const workItemsService = {
     workItemId: string,
     ctx: ServiceContext,
   ): Promise<LinkedPullRequestDto[]> {
-    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
-      const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx);
-      const reviews = await readGithubReviewsForRows(rows, ctx.workspaceId, tx);
-      const previews = await readPreviewsForPullRequests(rows, tx);
-      return rows.map((row) =>
-        toLinkedPullRequestDto(
-          row,
-          reviews.get(row.id) ?? null,
-          previews.get(previewKey(row.repoId, row.number)) ?? null,
-        ),
-      );
-    });
+    const { rows, reviews, previews, projectId } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx);
+        const reviews = await readGithubReviewsForRows(rows, ctx.workspaceId, tx);
+        const previews = await readPreviewsForPullRequests(rows, tx);
+        const projectId =
+          rows.length > 0 ? await workItemRepository.findProjectIdById(workItemId, tx) : null;
+        return { rows, reviews, previews, projectId };
+      },
+    );
+    // The READER's access to each row's repository (MOTIR-12115), once for the card and
+    // outside the row read's transaction — it reads in its own workspace contexts.
+    const access = await readReaderAccess(
+      projectId,
+      workItemId,
+      rows.map((row) => `${row.repo.owner}/${row.repo.name}`),
+      ctx,
+    );
+    return rows.map((row) =>
+      toLinkedPullRequestDto(
+        row,
+        reviews.get(row.id) ?? null,
+        previews.get(previewKey(row.repoId, row.number)) ?? null,
+        access.get(`${row.repo.owner}/${row.repo.name}`.toLowerCase()) ?? null,
+      ),
+    );
   },
 
   /**
@@ -7641,36 +7689,52 @@ export const workItemsService = {
    * access-gated read has already resolved; this adds no tenancy gate of its own.
    */
   async listDeliverySet(workItemId: string, ctx: ServiceContext): Promise<WorkItemDeliveryDto[]> {
-    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
-      // READABLE members only (Bug MOTIR-8215): a member whose pull request or
-      // repository this reader's organisation cannot see is absent, not a null
-      // the mapper below would dereference.
-      const rows = await workItemDeliveryRepository.listReadableByWorkItemWithChecks(
-        workItemId,
-        tx,
-      );
-      // Each member's STANDING queue failure (MOTIR-5720), over ONE read for the set
-      // — the rule is `queueExitHoldsAtHead`, the same one the card's badge, the
-      // promotion hold and the repair claim read.
-      const byId = new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest]));
-      const held = await standingQueueFailures(byId, tx);
-      // …and its STANDING host merge refusal, with the host's own words (MOTIR-6735).
-      const refused = await standingMergeRefusals(byId, tx);
-      // …and its PREVIEW (MOTIR-10099): `mergePullRequestRows` draws a row from this
-      // set too, so a pull request linked only here still shows its preview.
-      const previews = await readPreviewsForPullRequests(
-        rows.map((row) => row.pullRequest),
-        tx,
-      );
-      return rows.map((row) =>
-        toWorkItemDeliveryDto(
-          row,
-          held.get(row.githubPullRequestId) ?? null,
-          refused.get(row.githubPullRequestId) ?? null,
-          previews.get(previewKey(row.pullRequest.repoId, row.pullRequest.number)) ?? null,
-        ),
-      );
-    });
+    const { rows, held, refused, previews, projectId } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        // READABLE members only (Bug MOTIR-8215): a member whose pull request or
+        // repository this reader's organisation cannot see is absent, not a null
+        // the mapper below would dereference.
+        const rows = await workItemDeliveryRepository.listReadableByWorkItemWithChecks(
+          workItemId,
+          tx,
+        );
+        // Each member's STANDING queue failure (MOTIR-5720), over ONE read for the set
+        // — the rule is `queueExitHoldsAtHead`, the same one the card's badge, the
+        // promotion hold and the repair claim read.
+        const byId = new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest]));
+        const held = await standingQueueFailures(byId, tx);
+        // …and its STANDING host merge refusal, with the host's own words (MOTIR-6735).
+        const refused = await standingMergeRefusals(byId, tx);
+        // …and its PREVIEW (MOTIR-10099): `mergePullRequestRows` draws a row from this
+        // set too, so a pull request linked only here still shows its preview.
+        const previews = await readPreviewsForPullRequests(
+          rows.map((row) => row.pullRequest),
+          tx,
+        );
+        const projectId =
+          rows.length > 0 ? await workItemRepository.findProjectIdById(workItemId, tx) : null;
+        return { rows, held, refused, previews, projectId };
+      },
+    );
+    // …and the READER's access to each member's repository (MOTIR-12115) — the SAME
+    // resolution `listLinkedPullRequests` makes, so a pull request in both lists carries
+    // an equal value in both.
+    const access = await readReaderAccess(
+      projectId,
+      workItemId,
+      rows.map((row) => `${row.repo.owner}/${row.repo.name}`),
+      ctx,
+    );
+    return rows.map((row) =>
+      toWorkItemDeliveryDto(
+        row,
+        held.get(row.githubPullRequestId) ?? null,
+        refused.get(row.githubPullRequestId) ?? null,
+        previews.get(previewKey(row.pullRequest.repoId, row.pullRequest.number)) ?? null,
+        access.get(`${row.repo.owner}/${row.repo.name}`.toLowerCase()) ?? null,
+      ),
+    );
   },
 
   /**

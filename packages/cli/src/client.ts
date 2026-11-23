@@ -1252,6 +1252,12 @@ export interface DispatchRunRepair {
     branch: string;
     baseRef: string | null;
     headSha: string | null;
+    /** The claim found it CONFLICTED with `baseRef` (Bug MOTIR-12096, contract 1.92.0) —
+     *  the terminal claim's `conflicted`, recorded with the decision. */
+    conflicted: boolean;
+    /** The claim found it OUT OF DATE with a base that requires branches to be up to date
+     *  — the terminal claim's `outOfDate`. */
+    outOfDate: boolean;
   }>;
   /**
    * The last agent run's profile and recorded session, for an agent-door repair to resume

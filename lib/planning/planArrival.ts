@@ -77,12 +77,24 @@ export function arrivalLevel(
    */
   proposedWord: string,
 ): { id: string; trail: CanvasCrumb[] } | null {
-  const container = fullestContainer(items, { folders: true });
-  if (!container?.parentNodeId) return null;
-  return {
-    id: container.parentNodeId,
-    trail: trailTo(items, container.parentNodeId, proposedWord),
-  };
+  const id = arrivalLevelId(items);
+  if (id === null) return null;
+  return { id, trail: trailTo(items, id, proposedWord) };
+}
+
+/**
+ * WHICH LEVEL the canvas opens on — {@link arrivalLevel}'s `id` without the
+ * breadcrumb: a work item's or proposal's node id, a folder's level
+ * (`folder:<id>`), or `null` for the top level (and for a plan with no items).
+ *
+ * The ONE answer to "which level", read by the canvas (through `arrivalLevel`) and
+ * by `getPlanReview`, which sizes this level for the derived list/canvas default
+ * (Bug MOTIR-12144). The size used to pick its own level with the folder-blind
+ * count, so a plan filed into a folder was measured on the project root while the
+ * canvas opened on the folder.
+ */
+export function arrivalLevelId(items: readonly PlanReviewItemDto[]): string | null {
+  return fullestContainer([...items], { folders: true })?.parentNodeId ?? null;
 }
 
 /**

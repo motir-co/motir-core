@@ -147,9 +147,13 @@ async function deadRunCard(email: string, number: number) {
   );
   await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
   await openLinked(item.identifier, number, `subtask/${item.identifier}-${number}`);
-  // The run never settled the card — the state MOTIR-6914 was in.
-  await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+  // The run never settled the card — the state MOTIR-6914 was in. Since MOTIR-12094 a
+  // green verdict landing on an `in_progress` card PROMOTES it, so the verdict lands
+  // while the card is parked at `blocked` (not a source), and the row is put back at
+  // `in_progress` as a fixture: a green set the CI edge never saw at a source.
+  await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'blocked' } });
   await ci('sha-dead', number);
+  await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
   return { s, item };
 }
 
@@ -165,7 +169,25 @@ afterAll(async () => {
 });
 
 describe('AC 1 — no gate outside In Review, from any door', () => {
-  it('a DEAD RUN — green set, card still `in_progress` — is asked nothing by CI or by the sweep', async () => {
+  it('a DEAD RUN — CI green on a card still `in_progress` — promotes it to In Review, and only there is it asked (MOTIR-12094)', async () => {
+    const s = await makeScenario('6971-dead-green@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A dead run, green' },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await openLinked(item.identifier, 10, `subtask/${item.identifier}-10`);
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+
+    await ci('sha-dead', 10);
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect((await gatesOf(item.id)).map((g) => [g.kind, g.state])).toEqual([
+      ['pull_request_approval', 'awaiting'],
+    ]);
+  });
+
+  it('a green set at `in_progress` the CI edge never saw is asked nothing by the sweep', async () => {
     const { s, item } = await deadRunCard('6971-dead@example.com', 11);
 
     expect(await statusOf(item.id)).toBe('in_progress');

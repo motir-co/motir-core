@@ -52,6 +52,9 @@ export interface DeliveredPullRequest {
   repoId: string;
   state: string;
   merged: boolean;
+  /** Whether the host reports it a draft; `null` when no delivery or host read has said
+   *  (MOTIR-5002). The promotion's draft hold reads it (MOTIR-12094). */
+  draft: boolean | null;
   /** The host's head (MOTIR-7005) — `lib/github/pullRequestHead.ts` reads it with
    *  `checkRuns`, so a member whose rows are at an older commit is not green. */
   headSha: string | null;

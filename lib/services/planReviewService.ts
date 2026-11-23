@@ -5,7 +5,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
-import { fullestContainer } from '@/lib/planning/planShape';
+import { arrivalLevelId } from '@/lib/planning/planArrival';
+import { proposalLevelKey } from '@/lib/planning/planShape';
+import { folderIdFromNodeId } from '@/lib/planning/projectCanvasModel';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
@@ -641,15 +643,37 @@ function placementWord(
  */
 async function countArrivalLevel(
   projectId: string,
-  arrivalParentId: string | null,
+  arrivalLevelKey: string | null,
   items: readonly PlanReviewItemDto[],
   workspaceId: string,
 ): Promise<number> {
+  // ⚠️ A FOLDER IS A LEVEL (Bug MOTIR-12144; Bug MOTIR-5782). The level may be a
+  // folder's, `folder:<id>`: its committed nodes are the cards FILED in that folder
+  // — always roots, since the CHECK keeps `parentId` and `folderId` apart — counted
+  // with the SAME predicate the canvas's folder-level read uses, and its proposed
+  // nodes are the root `add`s filed there (`proposalLevelKey`). The root and a
+  // parent level keep the shipped count.
+  const folderId = folderIdFromNodeId(arrivalLevelKey);
   const committed = await withWorkspaceServiceContext(workspaceId, (tx) =>
-    workItemRepository.countSiblingsInWorkspace(projectId, arrivalParentId, workspaceId, tx),
+    folderId !== null
+      ? workItemRepository.countProjectTreeLevel(
+          projectId,
+          workspaceId,
+          null,
+          null,
+          tx,
+          undefined,
+          {
+            kind: 'folder',
+            folderId,
+          },
+        )
+      : workItemRepository.countSiblingsInWorkspace(projectId, arrivalLevelKey, workspaceId, tx),
   );
   const proposed = items.filter(
-    (i) => i.op === 'add' && (i.parentNodeId ?? null) === arrivalParentId,
+    (i) =>
+      i.op === 'add' &&
+      (folderId !== null ? proposalLevelKey(i) : (i.parentNodeId ?? null)) === arrivalLevelKey,
   ).length;
   return committed + proposed;
 }
@@ -2305,23 +2329,25 @@ export const planReviewService = {
     // cards together?* BEFORE the canvas has drawn anything, and the answer is
     // about the level's COMMITTED neighbourhood, which the plan's own items say
     // nothing about. So it is read once, here, where the arrival container is
-    // already resolved — `fullestContainer` is the same function the arrival
-    // level itself reads, so the two cannot name different levels.
+    // already resolved — `arrivalLevelId` is the same function the canvas's
+    // `arrivalLevel` reads, so the two cannot name different levels. It counts
+    // with FOLDERS as levels (Bug MOTIR-12144): the folder-blind count put a plan
+    // filed into a folder at the project ROOT, and a large root then sent the plan
+    // to the list although the folder the canvas opens on was small.
     //
     // A container that is ITSELF a proposal has no committed children, and the
     // count comes back 0 without a special case: no work item carries that id.
     //
-    // ⚠️ A PLAN WITH NO ITEMS HAS NO ARRIVAL LEVEL (MOTIR-10739). `fullestContainer`
+    // ⚠️ A PLAN WITH NO ITEMS HAS NO ARRIVAL LEVEL (MOTIR-10739). `arrivalLevelId`
     // answers `null` for it, and `null` is also how the TOP level is spelled — so
     // the count used to read the project ROOT, a level this plan is not on, and a
     // large project's root sent every freshly started plan to the list. Both
     // numbers are 0 for an empty plan, and the root is not read at all.
-    const arrivalContainer = fullestContainer(items);
-    const arrivalParentId = arrivalContainer?.parentNodeId ?? null;
+    const arrivalLevelKey = arrivalLevelId(items);
     const arrivalLevelTotal =
       items.length === 0
         ? 0
-        : await countArrivalLevel(plan.projectId, arrivalParentId, items, ctx.workspaceId);
+        : await countArrivalLevel(plan.projectId, arrivalLevelKey, items, ctx.workspaceId);
     // What the canvas will actually DRAW: the level read is capped, so a level
     // past the cap draws the cap, not its total. Both numbers are carried because
     // the two arms of the rule read different ones — the legibility arm reads what

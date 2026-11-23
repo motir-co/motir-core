@@ -1032,6 +1032,13 @@ export const workItemRepository = {
     return client.workItem.findUnique({ where: { id } });
   },
 
+  /** The work item's project id, or null when there is no such row (MOTIR-12115) — one
+   *  column, for a read that needs only the project scope of an item it already resolved. */
+  async findProjectIdById(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
+    const row = await tx.workItem.findUnique({ where: { id }, select: { projectId: true } });
+    return row?.projectId ?? null;
+  },
+
   /**
    * Acquire a row-level lock on the work item inside the caller's transaction.
    * This is the guarding read for the update / move flow (workItemsService,

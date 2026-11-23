@@ -125,6 +125,13 @@ import {
  *  that MOTIR-5630's backfill gave an edge back into it. */
 const IMPLEMENTED_KEY = 'implemented';
 const PAST_IMPLEMENTED: ReadonlySet<string> = new Set(['in_review', 'approved']);
+/** The status a PERSON parks a card at, which a pull request opening, being marked ready
+ *  or being linked never lifts (MOTIR-12094). `blocked → implemented` is a declared edge
+ *  for a person unblocking the card by hand; the change-request lifecycle does not take
+ *  it on their behalf. Without this, linking a green pull request to a Blocked card moved
+ *  it to Implemented and the CI-green latch then asked a person to approve its merge —
+ *  the promotion the card says a Blocked card never gets. A merge still completes it. */
+const HELD_BELOW_IMPLEMENTED = 'blocked';
 
 const LIFECYCLE_TARGET: Record<
   ChangeRequestLifecycle,
@@ -160,6 +167,7 @@ export type ChangeRequestSyncResult = {
     | 'approval_pending' // an `awaiting` approval gate owns the target status — the merge waits for the decision (MOTIR-5526)
     | 'plan_held' // an UNDECIDED plan holds the item at `planning` — the merge moves nothing until the plan is decided (MOTIR-6265)
     | 'marked_held' // the item carries an OBSOLESCENCE mark, and a marked card stays finished — the merge never reopens it (MOTIR-6672)
+    | 'blocked_held' // the item is BLOCKED, and an open, ready or linked pull request does not lift a person's block (MOTIR-12094)
     | 'access_denied'
     | 'unknown_installation'
     | 'unknown_repo'
@@ -885,6 +893,9 @@ async function applyToDeliveredItem(
   // the workflow refused this move, and the outcome stays the one it produced.
   if (targetKey === IMPLEMENTED_KEY && PAST_IMPLEMENTED.has(decision.currentStatus))
     return { workItemId, outcome: 'illegal_transition', toStatus: targetKey };
+  // NOR LIFT A PERSON'S BLOCK (MOTIR-12094). See HELD_BELOW_IMPLEMENTED.
+  if (targetKey === IMPLEMENTED_KEY && decision.currentStatus === HELD_BELOW_IMPLEMENTED)
+    return { workItemId, outcome: 'blocked_held' };
 
   const refusalContext = {
     workItemId,

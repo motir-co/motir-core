@@ -8558,7 +8558,15 @@
       "unlinkAria": "移除与 {target} 的关联",
       "unlinkConfirmBefore": "移除与",
       "unlinkConfirmAfter": " 的关联吗？GitHub 上的拉取请求不会受到影响——只会移除此关联。",
-      "unlinkAction": "移除关联"
+      "unlinkAction": "移除关联",
+      "access": {
+        "invited": "此仓库的邀请正在 GitHub 上等待接受。<link>接受邀请</link>",
+        "invitedNoLink": "此仓库的邀请正在 GitHub 上等待接受。<link>前往代码访问</link>",
+        "notInvited": "还没有此仓库代码的访问权限。<link>前往代码访问</link>",
+        "roleCannotEdit": "你在此项目中的角色不包含代码访问权限。",
+        "noGithubPreview": "Motir 还不知道你的 GitHub 账号，因此无法打开代码。<tone>请在上方的预览中审阅此变更。</tone>",
+        "noGithubNoPreview": "Motir 还不知道你的 GitHub 账号，因此无法打开代码。<tone>此拉取请求没有可用的预览。</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "将 {repo} 从组织中断开连接",
