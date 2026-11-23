@@ -52,6 +52,7 @@ import { awsCostService } from '@/lib/services/awsCostService';
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
 import { tenantAccountHandoverService } from '@/lib/services/tenantAccountHandoverService';
+import { hostedApplicationExportService } from '@/lib/services/hostedApplicationExportService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
@@ -164,6 +165,8 @@ export const jobServices = {
   hostingTenantAccountReconcile: hostingTenantAccountService,
   // One turn of an AWS account's takeover handover (Story MOTIR-9800 · MOTIR-12131).
   tenantAccountHandover: tenantAccountHandoverService,
+  // A grace-window application's database export and its expiry (MOTIR-12134).
+  hostedApplicationExport: hostedApplicationExportService,
   // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
   previewEnablement: previewEnablementService,
   previewLifecycle: previewLifecycleService,

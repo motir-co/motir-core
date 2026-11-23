@@ -150,6 +150,71 @@ export class HostedApplicationHandoverError extends Error {
   }
 }
 
+// ── Database exports of a grace-window application (MOTIR-12134) ────────────
+
+/** An export of an application whose target keeps no database Motir can dump —
+ *  an AWS application's database leaves with its account. → 422 */
+export class ExportTargetUnsupportedError extends Error {
+  readonly code = 'EXPORT_TARGET_UNSUPPORTED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly target: string,
+  ) {
+    super(`Application ${applicationId} on ${target} has no database Motir can export.`);
+    this.name = 'ExportTargetUnsupportedError';
+  }
+}
+
+const EXPORT_NOT_ALLOWED_MESSAGES = {
+  not_in_grace: (id: string) => `Application ${id} is not in its grace window.`,
+  final_needs_system: (id: string) =>
+    `A final export of ${id} is taken by the stop, not by a person.`,
+  on_demand_needs_admin: (id: string) =>
+    `An on-demand export of ${id} is asked for by an organisation admin.`,
+} as const;
+
+/** The export is not allowed now: the application is not in its grace window, a
+ *  `final` export was asked for by a person rather than the stop, or an
+ *  on-demand one by no person at all. → 409 */
+export class ExportNotAllowedError extends Error {
+  readonly code = 'EXPORT_NOT_ALLOWED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly reason: 'not_in_grace' | 'final_needs_system' | 'on_demand_needs_admin',
+  ) {
+    super(EXPORT_NOT_ALLOWED_MESSAGES[reason](applicationId));
+    this.name = 'ExportNotAllowedError';
+  }
+}
+
+/** No such export or application, another organisation's, or an export past its
+ *  expiry — indistinguishable on purpose. → 404 */
+export class ExportNotFoundError extends Error {
+  readonly code = 'EXPORT_NOT_FOUND' as const;
+  constructor(readonly id: string) {
+    super(`No export or application ${id}.`);
+    this.name = 'ExportNotFoundError';
+  }
+}
+
+/** The dump or its upload failed; nothing was recorded and any partial object
+ *  was deleted. Carries only `pg_dump`'s exit code or the store's HTTP status —
+ *  never the connection string or a byte of `pg_dump`'s output. → 502 */
+export class ExportFailedError extends Error {
+  readonly code = 'EXPORT_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly stage: 'database' | 'dump' | 'upload',
+    readonly status: number | null,
+  ) {
+    super(
+      `Exporting ${applicationId} failed at ${stage}` +
+        (status === null ? '.' : ` (${stage === 'dump' ? 'exit code' : 'status'} ${status}).`),
+    );
+    this.name = 'ExportFailedError';
+  }
+}
+
 /** The step of production enablement that failed (MOTIR-10027). */
 export type ProductionEnablementStep =
   | 'repository'

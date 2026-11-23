@@ -36,6 +36,7 @@ import type {
 import type { MergeReleaseRequestedData } from '@/lib/services/productionMergeReleaseService';
 import type { ReleaseStatusRequestedData } from '@/lib/services/releaseDeploymentStatusService';
 import type { TenantHandoverAdvanceData } from '@/lib/services/tenantAccountHandoverService';
+import type { HostedApplicationExportRequestedData } from '@/lib/services/hostedApplicationExportService';
 import type { GraceNoticeKind } from '@/lib/hosting/vocabulary';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
@@ -809,6 +810,11 @@ export interface JobEventDataMap {
    *  deletes each archive's blob once its seven-day window has run out and
    *  moves the row to `expired`. Cross-tenant by design. */
   'system.data-export-expiry-sweep': SystemScheduledData;
+  /** The database-export expiry sweep (Story MOTIR-9800 · MOTIR-12134) —
+   *  deletes each grace-window export's dump, then its row, once `expires_at`
+   *  has passed. Cross-tenant by design: it visits every workspace holding a
+   *  serverless or Fly application. */
+  'system.hosted-application-export-expire': SystemScheduledData;
   /** The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509) — deletes the
    *  public-hostname reservations whose hold has lapsed. Cross-tenant by design. */
   'system.public-hostname-reservation-sweep': SystemScheduledData;
@@ -938,6 +944,11 @@ export interface JobEventDataMap {
    *  when the repository's transfer is recorded (MOTIR-12132); the reminders and
    *  the stop by the notices card. Ids only; keyed per application and kind. */
   'hosting.application-grace.notice': ApplicationGraceNoticeData;
+  /** An organisation admin's on-demand export of a grace-window application's
+   *  database (Story MOTIR-9800 · MOTIR-12134): the dump, which outlives a
+   *  request. Emitted by `hostedApplicationExportService.requestExport`; ids
+   *  only, keyed by the export's id. */
+  'hosting.application-export': HostedApplicationExportRequestedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;

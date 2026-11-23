@@ -397,6 +397,22 @@ export const hostedApplicationRepository = {
     return count === 1;
   },
 
+  /** The workspaces holding an application on one of `targets` — where the
+   *  export expiry sweep looks (MOTIR-12134), read under the system context
+   *  (the policy's system arm is on USING). */
+  async listWorkspaceIdsByTargets(
+    targets: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.hostedApplication.findMany({
+      where: { target: { in: targets as HostingTarget[] } },
+      select: { workspaceId: true },
+      distinct: ['workspaceId'],
+      orderBy: { workspaceId: 'asc' },
+    });
+    return rows.map((row) => row.workspaceId);
+  },
+
   /** Every `grace` application whose `stopsAt` is at or before `before`, soonest
    *  first — what the stop job walks. */
   async listInGraceStoppingBy(

@@ -10,6 +10,9 @@ import type { HostedApplicationExportKind } from '@/lib/hosting/vocabulary';
 // writer binds the application's workspace first.
 
 export interface HostedApplicationExportCreate {
+  /** The export's id, chosen by the caller: the stored object is named by it
+   *  before the row exists (MOTIR-12134). Generated when absent. */
+  id?: string;
   workspaceId: string;
   applicationId: string;
   kind: HostedApplicationExportKind;
@@ -55,5 +58,38 @@ export const hostedApplicationExportRepository = {
       where: { applicationId, kind: 'final' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+  },
+
+  /** The application's exports not yet past `expiresAt` at `now`, newest
+   *  first (MOTIR-12134). */
+  async listUnexpiredByApplication(
+    applicationId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationExport[]> {
+    return tx.hostedApplicationExport.findMany({
+      where: { applicationId, expiresAt: { gt: now } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** The workspace's exports past `expiresAt` at `now` — what the expiry sweep
+   *  deletes, oldest first (MOTIR-12134). */
+  async listExpired(
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; storageKey: string }[]> {
+    return tx.hostedApplicationExport.findMany({
+      where: { expiresAt: { lte: now } },
+      select: { id: true, storageKey: true },
+      orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** Delete one export; its download rows go with it (CASCADE). A row already
+   *  gone deletes nothing, so a re-run is harmless. */
+  async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.hostedApplicationExport.deleteMany({ where: { id } });
+    return count;
   },
 };

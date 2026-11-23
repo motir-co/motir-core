@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+// A STAND-IN `pg_dump` for the export service's suite (MOTIR-12134), put first on
+// PATH by that suite so its outcomes are deterministic on any runner. The real
+// binary is exercised by tests/hosting/hostedApplicationExportRestore.test.ts.
+//
+// It writes the custom-format magic, then what it was given — its arguments and
+// whether a password reached it through the environment — so the suite can see
+// that the password travelled in PGPASSWORD and never in argv. A `--dbname`
+// naming `export_fail` writes a partial dump and exits 1, as a dump of an
+// unreachable database does.
+const args = process.argv.slice(2);
+const dbname = (args.find((a) => a.startsWith('--dbname=')) ?? '').slice('--dbname='.length);
+process.stdout.write('PGDMP');
+process.stdout.write(
+  JSON.stringify({ args, password: process.env.PGPASSWORD ?? null, env: Object.keys(process.env) }),
+);
+if (dbname.includes('export_fail')) {
+  process.stderr.write(`pg_dump: error: connection to ${dbname} failed\n`);
+  process.exitCode = 1;
+}

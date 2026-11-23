@@ -658,6 +658,17 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "in_handover" | "not_requested" | "ready" | "refused" }>; quotaChecks: Array<{ organizationId: string; outcome: "at_target" | "failed" | "raise_filed" | "raise_pending" }>; ran: boolean }',
   },
+  // MOTIR-12134 — an organisation admin's database export of a grace-window app.
+  'take-export': {
+    file: 'lib/jobs/definitions/hostedApplicationExport.ts',
+    shape:
+      '{ code: "EXPORT_NOT_ALLOWED" | "EXPORT_NOT_FOUND" | "EXPORT_TARGET_UNSUPPORTED" | "ORG_FORBIDDEN"; exportId?: undefined; outcome: "refused" } | { code?: undefined; exportId: string; outcome: "stored" }',
+  },
+  // MOTIR-12134 — the grace-window exports' expiry sweep.
+  'sweep-expired-hosting-exports': {
+    file: 'lib/jobs/definitions/hostedApplicationExport.ts',
+    shape: '{ deleted: number; failed: number }',
+  },
   // MOTIR-12131 — one turn of a tenant account's takeover handover.
   'advance-tenant-handover': {
     file: 'lib/jobs/definitions/hostingTenantHandoverAdvance.ts',

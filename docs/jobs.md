@@ -1269,6 +1269,7 @@ cluster bought nothing. The why is
 | `system.code-graph-offboard-sweep`         | `0 5 * * *`  |
 | `system.data-export-expiry-sweep`          | `30 5 * * *` |
 | `system.public-hostname-reservation-sweep` | `45 5 * * *` |
+| `system.hosted-application-export-expire`  | `50 5 * * *` |
 | `system.job-run-reap`                      | `0 6 * * *`  |
 | `system.job-queue-retention`               | `15 6 * * *` |
 | `system.dispatch-run-sweep`                | `30 6 * * *` |

@@ -26,7 +26,9 @@ const SCANNED_ROOTS = [join('packages', 'orchestrator', 'src'), 'lib', 'app'];
  */
 const BLOB_STORE = {
   dir: join('lib', 'blob'),
-  modules: new Set(['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner']),
+  // `lib-storage` is the S3 multipart `Upload` a streamed private upload uses
+  // (MOTIR-12134: a database export, never buffered whole) — S3 still.
+  modules: new Set(['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner', '@aws-sdk/lib-storage']),
 };
 
 /**
