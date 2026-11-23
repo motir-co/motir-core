@@ -191,10 +191,15 @@ export function NotificationRow({
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
       : data.kind === 'production_app_crashed'
         ? // The Production panel selects the repository and opens the event
-          // (`event`, read by the page since MOTIR-12109).
+          // (`event`, read by the page since MOTIR-12109). `project` names the
+          // crash's own project, so a crash outside the active project opens
+          // there rather than on not-found (MOTIR-12170; the settings area
+          // switches to it, MOTIR-12169) — as the code-access row does.
           `/settings/project/production?repository=${encodeURIComponent(
             data.projectRepositoryId,
-          )}&event=${encodeURIComponent(data.eventId)}`
+          )}&event=${encodeURIComponent(data.eventId)}&project=${encodeURIComponent(
+            data.projectKey,
+          )}`
         : issueKey
           ? // A send-back lands on its own activity entry, whose findings open there — on the
             // All tab, since the default Comments tab does not draw it (MOTIR-10458).

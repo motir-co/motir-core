@@ -245,7 +245,7 @@ describe('NotificationDrawer — the production-crash row', () => {
     );
     const row = await screen.findByRole('link', { name: /acme-shop/ });
     expect(row.getAttribute('href')).toBe(
-      '/settings/project/production?repository=row%2F1&event=ev-9',
+      '/settings/project/production?repository=row%2F1&event=ev-9&project=ACME',
     );
     fireEvent.click(row);
     await waitFor(() =>
