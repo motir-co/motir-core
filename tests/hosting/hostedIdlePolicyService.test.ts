@@ -12,6 +12,7 @@ import {
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import {
+  ApplicationNotFoundError,
   CustomerRepositoryNotDeployableError,
   IdlePolicyApplyFailedError,
   IdlePolicyNotPermittedError,
@@ -24,10 +25,12 @@ import type { HostingManifest } from '@/lib/hosting/manifest';
 import type { HostingShape, HostingTarget } from '@/lib/hosting/vocabulary';
 import { resetDatabaseFakes } from '@/lib/orchestrator/database';
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
+import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedIdlePolicyService as service } from '@/lib/services/hostedIdlePolicyService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
@@ -441,6 +444,57 @@ describe('who may change it', () => {
 
     expect(spy).not.toHaveBeenCalled();
     expect(await application(id)).toMatchObject({ idleMode: 'suspend' });
+  });
+
+  it('refuses someone outside the workspace as not permitted, not as a missing project', async () => {
+    const fx = await workspace();
+    const id = await repo(fx);
+    await deploy(id, SHA_A);
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const spy = spyDeploys();
+
+    await expect(
+      service.setIdlePolicy({ projectRepositoryId: id, policy: ALWAYS_ON, actor: other.ctx }),
+    ).rejects.toBeInstanceOf(IdlePolicyNotPermittedError);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(await application(id)).toMatchObject({ idleMode: 'suspend' });
+  });
+
+  it('lets a failure of the access check itself through untouched', async () => {
+    const fx = await workspace();
+    const id = await repo(fx);
+    await deploy(id, SHA_A);
+    const boom = new Error('access store down');
+    vi.spyOn(projectAccessService, 'assertPermission').mockRejectedValueOnce(boom);
+
+    await expect(
+      service.setIdlePolicy({ projectRepositoryId: id, policy: ALWAYS_ON, actor: fx.ctx }),
+    ).rejects.toBe(boom);
+  });
+
+  it('refuses a repository that does not exist', async () => {
+    const fx = await workspace();
+    await expect(
+      service.setIdlePolicy({
+        projectRepositoryId: 'c0000000000000000000000000',
+        policy: ALWAYS_ON,
+        actor: fx.ctx,
+      }),
+    ).rejects.toBeInstanceOf(ApplicationNotFoundError);
+  });
+
+  it('refuses an application removed before its row could be locked', async () => {
+    const fx = await workspace();
+    const id = await repo(fx);
+    await deploy(id, SHA_A);
+    vi.spyOn(hostedApplicationRepository, 'lockForUpdate').mockResolvedValueOnce(false);
+    const spy = spyDeploys();
+
+    await expect(
+      service.setIdlePolicy({ projectRepositoryId: id, policy: ALWAYS_ON, actor: fx.ctx }),
+    ).rejects.toBeInstanceOf(ApplicationNotFoundError);
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('reads the policy with editable only for an administrator, and names the refused mode', async () => {

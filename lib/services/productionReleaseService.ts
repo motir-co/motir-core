@@ -1,6 +1,11 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { OrchestratorApiError, type ReleaseEnvVar } from '@motir/orchestrator';
+import {
+  OrchestratorApiError,
+  type HostingDeployPort,
+  type ReleaseEnvVar,
+} from '@motir/orchestrator';
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
+import { resolveEnvironment } from '@/lib/environmentConfig/resolveEnvironment';
 import {
   ApplicationNotFoundError,
   ReleaseDeployFailedError,
@@ -14,13 +19,15 @@ import {
   type HostedIdlePolicy,
 } from '@/lib/hosting/idlePolicy';
 import type { HostingManifest } from '@/lib/hosting/manifest';
+import { mergeProductionEnvironment } from '@/lib/hosting/releaseEnvironment';
 import type { HostedReleaseCause } from '@/lib/hosting/vocabulary';
+import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
-import { productionDeployInputService } from '@/lib/services/productionDeployInputService';
 import { productionDatabaseService } from '@/lib/services/productionDatabaseService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -35,8 +42,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //      release while one is in flight, create the row and move it to
 //      `releasing`. The lock is NOT held across the migration or the deploy.
 //   2. The manifest of the exact commit, the production database (created on
-//      the first release that needs one), and the environment
-//      (`productionDeployInputService`, shared with the idle-policy switch).
+//      the first release that needs one), and the environment.
 //   3. The manifest's migration, as a one-off run of the release image, BEFORE
 //      the deploy: a failed or timed-out migration fails the release and the
 //      deploy is never called, so the previous release keeps serving.
@@ -172,14 +178,42 @@ async function deployProductionRelease(
   const id = release.id;
 
   try {
-    const { manifest, needsDatabase, env, size, shape, port, appRef } =
-      await productionDeployInputService.assembleProductionDeploy(
-        app,
-        input.projectRepositoryId,
-        input.commitSha,
-        readManifest,
-        (step, fn) => inStep(id, step, fn),
+    const manifest = await inStep(id, 'manifest', () =>
+      readManifest(input.projectRepositoryId, input.commitSha),
+    );
+    const needsDatabase = manifest.database.kind === 'postgres';
+    const database = needsDatabase
+      ? await inStep(id, 'database', async () => {
+          await productionDatabaseService.ensureProductionDatabase(app.id);
+          return productionDatabaseService.getProductionDatabaseEnv(app.id);
+        })
+      : null;
+    const env = await inStep(id, 'environment', async () =>
+      mergeProductionEnvironment(
+        await resolveEnvironment(input.projectRepositoryId, 'production', {
+          workspaceId: app.workspaceId,
+        }),
+        database,
+      ),
+    );
+    // The row's recorded hosting decision: its size, and on `aws` its SHAPE
+    // (MOTIR-12093, MOTIR-5769 §4). The shape is passed exactly as recorded and
+    // never inferred — an `aws` row with none is refused by the port by name
+    // (`deploy: HOSTING_SHAPE_REQUIRED`), and every other target ignores it.
+    const { size, shape } = await inStep(id, 'environment', async () => {
+      const facts = await withSystemContext((tx) =>
+        projectRepoRepository.findDeployFactsInTx(input.projectRepositoryId, tx),
       );
+      return { size: facts?.hostingSize ?? 'small', shape: facts?.hostingShape ?? null };
+    });
+
+    const port: HostingDeployPort = getHostingDeployPort(app.target);
+    const { appRef } = await inStep(id, 'app', () =>
+      port.ensureApp({
+        repositoryId: input.projectRepositoryId,
+        environment: { kind: 'production' },
+      }),
+    );
     const artifact = { kind: 'image', ref: input.artifactRef } as const;
 
     const migrateCommand = needsDatabase ? manifest.database.migrateCommand : undefined;

@@ -73,6 +73,10 @@ const MEASURED = [
   'lib/services/releaseDeploymentStatusService.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/route.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/rollback/route.ts',
+  // Story MOTIR-9799 — MOTIR-12107's idle policy per application.
+  'lib/hosting/idlePolicy.ts',
+  'lib/services/hostedIdlePolicyService.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/idle-policy/route.ts',
 ];
 
 /**
@@ -110,6 +114,7 @@ export const SHARED_NOT_FLOORED = [
   // Types only — nothing executes, so nothing to floor.
   'lib/dto/hostedApplications.ts',
   'lib/dto/productionPanel.ts',
+  'lib/dto/idlePolicy.ts',
   // Argv and console around `productionEnablementService`, which IS floored.
   'scripts/backfill-production-enablement.ts',
 ];
@@ -165,6 +170,8 @@ export default defineConfig({
       'tests/github/repoDeployments.test.ts',
       // MOTIR-11981 — the hosted-repository delete's teardown read and delete.
       'tests/hosting/hostedApplicationTeardown.test.ts',
+      // MOTIR-12107 — the idle policy's service, and its errors in errors.ts.
+      'tests/hosting/hostedIdlePolicyService.test.ts',
     ],
     coverage: {
       provider: 'v8',
