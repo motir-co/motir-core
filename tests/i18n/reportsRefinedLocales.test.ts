@@ -66,11 +66,20 @@ const FINDINGS_NAMES = [
   'platformAdmin.plannerFindings.bug.placeholder',
 ];
 const FINDINGS_BUG_KEY = 'platformAdmin.plannerFindings.status.bugWithKey';
+// The idle policy names an AWS app's shape (MOTIR-12107); « container » is the
+// word Italian and Dutch use as well.
+const IDLE_SHAPE_CONTAINER = 'settings.production.idle.shape.container';
 const SAME_WORD: Record<string, string[]> = {
   zh: [...FINDINGS_NAMES],
   ko: [...FINDINGS_NAMES],
   ja: [...FINDINGS_NAMES],
-  it: [...FINDINGS_NAMES, FINDINGS_BUG_KEY, 'platformAdmin.plannerFindings.attribution.corpus'],
+  it: [
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.attribution.corpus',
+    // The idle policy's shape (MOTIR-12107): Italian says « container » too.
+    IDLE_SHAPE_CONTAINER,
+  ],
   fr: [
     'reports.workload.tableTotal', // « Total »
     'platformAdmin.jobs.pageLabel', // « Page {page} »
@@ -132,6 +141,7 @@ const SAME_WORD: Record<string, string[]> = {
   ],
   nl: [
     ...JOBS_STATUS,
+    IDLE_SHAPE_CONTAINER, // « container »
     DNS_TYPE,
     ...FINDINGS_NAMES,
     FINDINGS_BUG_KEY,

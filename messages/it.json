@@ -4785,7 +4785,7 @@
           "unsupported": "Su {target}, un {shape} può solo restare sempre attivo, quindi non può sospendersi quando è inattivo."
         },
         "shape": {
-          "function": "function",
+          "function": "funzione",
           "container": "container"
         }
       }
