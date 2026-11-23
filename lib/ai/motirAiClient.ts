@@ -724,7 +724,7 @@ export async function debitAgentStorage(
  * unreachable, a non-2xx, an older motir-ai that does not serve the route, a body
  * that is not a verdict — returns `null`. `null` means "could not ask", and the
  * DISPATCHER decides what that means (it boots: see
- * `codeGraphIndexDispatchService.askIndexAllowance`). That is also what lets the
+ * `codeGraphIndexAllowanceService.askIndexAllowance`). That is also what lets the
  * two repositories' pull requests merge in either order.
  */
 export async function checkIndexAllowance(

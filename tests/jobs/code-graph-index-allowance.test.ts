@@ -8,6 +8,7 @@ import { askIndexAllowanceUnlessBooted } from '@/lib/jobs/indexFleetSteps';
 import { jobServices } from '@/lib/jobs/services';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
+import { codeGraphIndexAllowanceService } from '@/lib/services/codeGraphIndexAllowanceService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
@@ -264,7 +265,7 @@ describe('"could not ask" boots (the rollout, and a motir-ai blip)', () => {
       organizationId: 'org-resume',
       anchorProjectId,
     };
-    const ask = vi.spyOn(codeGraphIndexDispatchService, 'askIndexAllowance');
+    const ask = vi.spyOn(codeGraphIndexAllowanceService, 'askIndexAllowance');
 
     await adminDb.jobStep.create({
       data: {
@@ -396,7 +397,7 @@ describe('the pause bookkeeping NEVER fails a run (MOTIR-4544 top-up)', () => {
       new Error('memo table down'),
     );
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const ask = vi.spyOn(codeGraphIndexDispatchService, 'askIndexAllowance');
+    const ask = vi.spyOn(codeGraphIndexAllowanceService, 'askIndexAllowance');
     const target = {
       indexed: true as const,
       repoRef: INDEX_REPO_REF,
