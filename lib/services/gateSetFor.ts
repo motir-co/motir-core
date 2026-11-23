@@ -136,6 +136,7 @@ export async function gateSetFor(
     pageDecision,
     latestAgentSendBack,
     latestDismissal,
+    latestRecordedAnswer,
   ] = await Promise.all([
     designEvidenceRepository.findCurrentByWorkItem(item.id, tx),
     approvalGateRepository.findLatestByWorkItem(item.id, 'design_result', tx),
@@ -166,6 +167,9 @@ export async function gateSetFor(
     // A person's DISMISSAL of a send-back (MOTIR-10334; §12.15) — the predicate is handed
     // its version to tell whether the send-back there still stands.
     reviewDismissalRepository.findLatestByWorkItem(item.id, tx),
+    // A GATE-OFF review ANSWER, pass or send-back (Bug MOTIR-12147) — the review at its
+    // version, so the predicate never raises a review gate over a version already answered.
+    reviewVerdictRecordRepository.findLatestRecordedAnswer(item.id, tx),
   ]);
 
   // ⚠️ A PULL REQUEST AN ANCESTOR ALSO DELIVERS IS THE ANCESTOR'S (Bug MOTIR-11624). A
@@ -303,6 +307,7 @@ export async function gateSetFor(
     latestAgentReviewGate,
     agentSendBackVersion: latestAgentSendBack?.subjectVersion ?? null,
     dismissedSendBackVersion: latestDismissal?.subjectVersion ?? null,
+    recordedReviewAnswer: latestRecordedAnswer,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     // By the literal KEY, as the status ladder compares it (MOTIR-6971): the merge
     // question is asked only of a card the run has settled into review.

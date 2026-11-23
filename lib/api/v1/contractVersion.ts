@@ -1344,5 +1344,19 @@
  *   this version ignores them; the `motir` CLI built with this change requires them.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.92.0` after `1.91.0` above.
+ *
+ * - `1.93.0` — Bug MOTIR-12147 adds the refusal `REVIEW_NOT_YET_ASKED` (409) to
+ *   `POST …/work-items/{key}/review-verdict`, and the MCP `submit_review_verdict` through the
+ *   same service. With the project's review gate ON, a verdict sent while no `agent_review`
+ *   gate is awaiting at the card's current version — its pull requests not green and in
+ *   review yet, or the question raised late — used to be stored as the gate-off review
+ *   record, which answered the version: the gate raised later refused every verdict as
+ *   `REVIEW_VERDICT_SECOND` and no agent could decide it. It is now refused and stores
+ *   nothing, so the verdict can be sent again once the review is asked.
+ *
+ *   Additive: a new error code on an existing operation, inside its declared 409 (§8's allowed
+ *   list). A client older than this version reads it as any other 409 refusal.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.93.0` after `1.92.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.92.0';
+export const V1_CONTRACT_VERSION = '1.93.0';
