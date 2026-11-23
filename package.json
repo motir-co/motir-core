@@ -33,6 +33,7 @@
     "db:backfill:code-graph-index": "tsx --tsconfig tsconfig.node.json scripts/backfill-code-graph-index.ts",
     "hosting:deploy-check": "tsx --tsconfig tsconfig.node.json scripts/hosting-deploy-check-main.ts",
     "db:backfill:pull-requests": "tsx --tsconfig tsconfig.node.json scripts/backfill-historical-pull-requests.ts",
+    "codegraph:report-open-pull-requests": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts report-open-pull-requests",
     "db:backfill:pr-base-ref": "tsx --tsconfig tsconfig.node.json scripts/backfill-pull-request-base-ref.ts",
     "db:backfill:ci-state": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-ci-state",
     "db:backfill:fix-reason": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-fix-reason",
