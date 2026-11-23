@@ -229,7 +229,7 @@ beforeEach(async () => {
   const staff = await createTestUser({ email: `fleet-pools-${seq++}@example.com` });
   await adminDb.user.update({ where: { id: staff.id }, data: { platformRole: 'superadmin' } });
   currentPrincipal = { userId: staff.id, email: staff.email, role: 'superadmin' };
-  process.env.MOTIR_INSTALL_FLEET_KINDS = 'code_graph_index,agent_instance,hosted_agent';
+  process.env.MOTIR_INSTALL_FLEET_KINDS = 'agent_instance,hosted_agent';
   process.env.MOTIR_CLOUD = 'true';
   setAwsEc2OverrideForTests(throwing as never);
   unregisterProvider = registerShardProvisioningProvider({
@@ -249,7 +249,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  for (const kind of ['ci_runner', 'hosted_agent', 'code_graph_index', 'agent_instance'] as const)
+  for (const kind of ['ci_runner', 'hosted_agent', 'agent_instance'] as const)
     wireFleetKindSwitch(kind, null);
   setAwsEc2OverrideForTests(null);
   unregisterProvider();
@@ -267,9 +267,8 @@ afterAll(async () => {
 });
 
 describe('fleetStatusPoolsService.readInstallFleet', () => {
-  it('reads 1 running with its machine’s vCPU for a meta-org index, an awake instance and a hosted run, and the CI runners on the install fleet', async () => {
-    process.env.MOTIR_INSTALL_FLEET_KINDS =
-      'ci_runner,code_graph_index,agent_instance,hosted_agent';
+  it('reads 1 running with its machine’s vCPU for an awake meta-org instance and a hosted run, and the CI runners on the install fleet', async () => {
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'ci_runner,agent_instance,hosted_agent';
     const meta = await tenant(true);
     const other = await tenant(false);
     // Two meta-org CI runners on the install fleet (MOTIR-11232) — a provisioning
@@ -281,12 +280,11 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
     await ciJob(meta, ciPool.id);
     await ciJob(meta, null, { installFleet: true, status: 'completed' });
     await ciJob(other, null, { installFleet: true });
-    await slot(meta, 'code_graph_index');
     await slot(meta, 'agent_instance');
     await slot(meta, 'hosted_agent');
     // Not the install fleet: another org, a slot placed on an account, an expired slot.
-    const shard = await account('cgi-iad-1', { fleetKind: 'code_graph_index' });
-    await slot(other, 'code_graph_index');
+    const shard = await account('agent-iad-1', { fleetKind: 'hosted_agent' });
+    await slot(other, 'hosted_agent');
     await slot(meta, 'hosted_agent', { shardId: shard.id });
     await slot(meta, 'agent_instance', { expiresAt: earlier(MIN) });
     // Hibernated on the install fleet counts beside, never in, the running figure.
@@ -329,15 +327,6 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
         sharePercent: 1,
       },
       {
-        fleetKind: 'code_graph_index',
-        enabled: true,
-        running: 1,
-        hibernated: null,
-        machineVcpu: 2,
-        vcpu: 2,
-        sharePercent: 1,
-      },
-      {
         fleetKind: 'agent_instance',
         enabled: true,
         running: 1,
@@ -348,7 +337,7 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
       },
     ]);
     expect(block.quota).toEqual({ status: 'ok', vcpu: 384, readAt: NOW.toISOString() });
-    expect(block).toMatchObject({ usedVcpu: 10, percent: 3, nearQuota: false, leftVcpu: 374 });
+    expect(block).toMatchObject({ usedVcpu: 8, percent: 2, nearQuota: false, leftVcpu: 376 });
 
     // One audit row, and the mark records WHEN only.
     const [audit, ...rest] = await audits();
@@ -367,12 +356,12 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
 
   it('counts any org’s unplaced slots with cloud off, and only the kinds the install fleet takes', async () => {
     process.env.MOTIR_CLOUD = 'false';
-    process.env.MOTIR_INSTALL_FLEET_KINDS = 'code_graph_index, ci_runner, nonsense';
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'hosted_agent, ci_runner, nonsense';
     const a = await tenant(false);
     const b = await tenant(false);
-    await slot(a, 'code_graph_index');
-    await slot(b, 'code_graph_index');
     await slot(a, 'hosted_agent');
+    await slot(b, 'hosted_agent');
+    await slot(a, 'agent_instance');
     await instance(a, 'hibernated');
     await ciJob(b, null, { installFleet: true });
 
@@ -381,8 +370,7 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
     );
     expect(block.pools).toEqual([
       expect.objectContaining({ fleetKind: 'ci_runner', running: 1, vcpu: 2 }),
-      { fleetKind: 'hosted_agent', enabled: false },
-      expect.objectContaining({ fleetKind: 'code_graph_index', running: 2, vcpu: 4 }),
+      expect.objectContaining({ fleetKind: 'hosted_agent', running: 2, vcpu: 4 }),
       { fleetKind: 'agent_instance', enabled: false },
     ]);
     expect(block).toMatchObject({ usedVcpu: 6, percent: 60, nearQuota: false, leftVcpu: 4 });
@@ -390,11 +378,11 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
 
   it('counts nothing on cloud with no meta org, and nothing is enabled with the variable unset', async () => {
     const plain = await tenant(false);
-    await slot(plain, 'code_graph_index');
+    await slot(plain, 'hosted_agent');
     let block = okInstall(
       await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(32) }),
     );
-    expect(block.pools.find((p) => p.fleetKind === 'code_graph_index')).toMatchObject({
+    expect(block.pools.find((p) => p.fleetKind === 'hosted_agent')).toMatchObject({
       running: 0,
     });
 
@@ -417,7 +405,7 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
 
   it('keeps the counts when AWS does not answer: the quota is Not read with its last read, every figure from it Not available', async () => {
     const meta = await tenant(true);
-    await slot(meta, 'code_graph_index');
+    await slot(meta, 'hosted_agent');
 
     // Never read: no last read.
     let block = okInstall(
@@ -437,7 +425,7 @@ describe('fleetStatusPoolsService.readInstallFleet', () => {
       status: 'notRead',
       lastReadAt: earlier(120 * MIN).toISOString(),
     });
-    expect(block.pools.find((p) => p.fleetKind === 'code_graph_index')).toMatchObject({
+    expect(block.pools.find((p) => p.fleetKind === 'hosted_agent')).toMatchObject({
       running: 1,
       vcpu: 2,
       sharePercent: null,
@@ -491,10 +479,10 @@ describe('judgeInstallBlock', () => {
     const installFleet = await import('@/lib/ciFleet/installFleet');
     vi.spyOn(installFleet, 'installFleetMachineVcpu').mockReturnValue(null);
     const block = judgeInstallBlock(
-      { running: new Map([['code_graph_index', 3]]), hibernated: 0 },
+      { running: new Map([['hosted_agent', 3]]), hibernated: 0 },
       { status: 'ok', vcpu: 0, readAt: NOW.toISOString() },
     );
-    expect(block.pools.find((p) => p.fleetKind === 'code_graph_index')).toMatchObject({
+    expect(block.pools.find((p) => p.fleetKind === 'hosted_agent')).toMatchObject({
       running: 3,
       machineVcpu: null,
       vcpu: null,
@@ -567,7 +555,7 @@ describe('fleetStatusPoolsService.readAddShard', () => {
       okShard(block)
         .pools.filter((p) => p.provider === 'fly')
         .map((p) => p.fleetKind),
-    ).toEqual(['hosted_agent', 'code_graph_index', 'agent_instance']);
+    ).toEqual(['hosted_agent', 'agent_instance']);
     expect(throwing).not.toHaveBeenCalled();
   });
 
@@ -597,16 +585,16 @@ describe('fleetStatusPoolsService.readAddShard', () => {
 
   it('flags near size at 70% and at size at 100%', async () => {
     wireFleetKindSwitch('ci_runner', () => true);
-    wireFleetKindSwitch('code_graph_index', () => true);
+    wireFleetKindSwitch('hosted_agent', () => true);
     const fx = await tenant(false);
     const ci = await account('ci-iad-1', { granted: 8 }); // 4 machines
     for (let i = 0; i < 4; i += 1) await ciJob(fx, ci.id);
-    const cgi = await account('cgi-iad-1', { granted: 20, fleetKind: 'code_graph_index' }); // 10
-    for (let i = 0; i < 7; i += 1) await slot(fx, 'code_graph_index', { shardId: cgi.id });
+    const agents = await account('agent-iad-1', { granted: 20, fleetKind: 'hosted_agent' }); // 10
+    for (let i = 0; i < 7; i += 1) await slot(fx, 'hosted_agent', { shardId: agents.id });
 
     const block = await service.readAddShard(currentPrincipal, { now: NOW });
     expect(awsPool(block, 'ci_runner')).toMatchObject({ percent: 100, flag: 'atSize' });
-    expect(awsPool(block, 'code_graph_index')).toMatchObject({ percent: 70, flag: 'near' });
+    expect(awsPool(block, 'hosted_agent')).toMatchObject({ percent: 70, flag: 'near' });
     expect(okShard(block).nearCount).toBe(2);
   });
 
@@ -826,14 +814,14 @@ describe('fleetStatusPoolsService.readAddShard — CI Spot use', () => {
 
   it('puts no ciSpot on a pool other than the CI runner’s', async () => {
     wireFleetKindSwitch('ci_runner', () => true);
-    wireFleetKindSwitch('code_graph_index', () => true);
+    wireFleetKindSwitch('hosted_agent', () => true);
     await account('ci-iad-1', { granted: 64 });
-    await account('cgi-iad-1', { granted: 64, fleetKind: 'code_graph_index' });
+    await account('agent-iad-1', { granted: 64, fleetKind: 'hosted_agent' });
     const block = await service.readAddShard(currentPrincipal, { now: NOW });
     expect(awsPool(block, 'ci_runner')).toHaveProperty('ciSpot');
-    const cgi = awsPool(block, 'code_graph_index');
-    expect(cgi).not.toHaveProperty('ciSpot');
-    expect(cgi.accounts[0]).not.toHaveProperty('ciSpot');
+    const agents = awsPool(block, 'hosted_agent');
+    expect(agents).not.toHaveProperty('ciSpot');
+    expect(agents.accounts[0]).not.toHaveProperty('ciSpot');
   });
 });
 
@@ -858,7 +846,7 @@ describe('judgeCiSpot', () => {
 
 describe('fleetStatusPoolsService.readInstallFleet — CI Spot use', () => {
   it('counts the install fleet’s launches of the install’s own orgs, and no other pool carries it', async () => {
-    process.env.MOTIR_INSTALL_FLEET_KINDS = 'ci_runner,code_graph_index';
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'ci_runner,hosted_agent';
     const meta = await tenant(true);
     const other = await tenant(false);
     const shard = await account('ci-iad-1', { fleetKind: 'ci_runner' });
@@ -889,9 +877,7 @@ describe('fleetStatusPoolsService.readInstallFleet — CI Spot use', () => {
         allFellBack: false,
       },
     });
-    expect(block.pools.find((p) => p.fleetKind === 'code_graph_index')).not.toHaveProperty(
-      'ciSpot',
-    );
+    expect(block.pools.find((p) => p.fleetKind === 'hosted_agent')).not.toHaveProperty('ciSpot');
   });
 
   it('is unavailable alone when the count fails, and absent when the install fleet takes no CI runner', async () => {
@@ -914,7 +900,7 @@ describe('fleetStatusPoolsService.readInstallFleet — CI Spot use', () => {
       ciSpot: { status: 'unavailable', setting: 'off' },
     });
 
-    process.env.MOTIR_INSTALL_FLEET_KINDS = 'code_graph_index';
+    process.env.MOTIR_INSTALL_FLEET_KINDS = 'hosted_agent';
     block = okInstall(
       await service.readInstallFleet(currentPrincipal, { now: NOW, reader: quota(64) }),
     );

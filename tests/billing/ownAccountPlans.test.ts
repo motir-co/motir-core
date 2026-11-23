@@ -113,8 +113,20 @@ describe('hostAccountPlan', () => {
       const atHost = hostAccountPlan('org_A', slot, hostMonthlyPlanCredits());
       const atTop = hostAccountPlan('org_A', slot, poolOf('pool_2400k'));
       expect(atTop.account).toEqual(atHost.account);
-      expect(atTop.sharedRow).toEqual(atHost.sharedRow);
       expect(atTop.raiseTargetVcpu).toBe(ownAccountRaiseTargetVcpu(slot, poolOf('pool_2400k')));
     }
+  });
+
+  // MOTIR-12038 — every slot is ONE row; the merged slot is the agent_instance
+  // row alone, keeping the index-suffixed name its AWS member email came from.
+  it('gives every slot one row, the merged slot an agent_instance row under its index name', () => {
+    for (const slot of HOST_ACCOUNT_SLOTS) {
+      const plan = hostAccountPlan('org_A', slot, hostMonthlyPlanCredits());
+      expect(Object.keys(plan).sort()).toEqual(['account', 'raiseTargetVcpu', 'slot']);
+    }
+    expect(hostAccountPlan('Org_A', 'merged', hostMonthlyPlanCredits()).account).toEqual({
+      name: 'host-org-a-index',
+      fleetKind: 'agent_instance',
+    });
   });
 });

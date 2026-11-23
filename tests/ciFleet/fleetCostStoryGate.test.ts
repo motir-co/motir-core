@@ -143,9 +143,9 @@ describe('the INTEGRATION SEAM — the real rollup through the real formatter (A
   it('renders exactly the fields the service returns, for a META and a TENANT org in one period', async () => {
     const tenant = await seedOrg();
     const meta = await seedOrg({ isMeta: true });
-    await recordContainer(tenant, 'code_graph_index', 1840, '0.058210330160');
+    await recordContainer(tenant, 'agent_instance', 1840, '0.058210330160');
     await recordContainer(tenant, 'ci_runner', 240, '0.007592651760');
-    await recordContainer(meta, 'code_graph_index', 3600, '0.113889776400');
+    await recordContainer(meta, 'agent_instance', 3600, '0.113889776400');
 
     const readout = await buildFleetCostReadout({
       organizationId: tenant.organizationId,
@@ -176,7 +176,7 @@ describe('the INTEGRATION SEAM — the real rollup through the real formatter (A
       expect(typeof line.costUsd).toBe('string');
       expect(printedRow(readout.text, line), JSON.stringify(line)).toBe(true);
     }
-    expect(serviceOrg.map((line) => line.workload).sort()).toEqual(['ci', 'index']);
+    expect(serviceOrg.map((line) => line.workload).sort()).toEqual(['ci', 'instance']);
     expect(readout.text).toContain("META (Motir's own)");
     expect(readout.text).toContain('TENANT (paying orgs)');
   });
@@ -185,15 +185,15 @@ describe('the INTEGRATION SEAM — the real rollup through the real formatter (A
 describe('MONEY never becomes a float — through the database, not a fixture (AC 6)', () => {
   it('prints a cost whose decimal expansion a float would change, digit for digit', async () => {
     const tenant = await seedOrg();
-    await recordContainer(tenant, 'code_graph_index', 60, UNFLOATABLE_COST);
+    await recordContainer(tenant, 'agent_instance', 60, UNFLOATABLE_COST);
 
     const readout = await buildFleetCostReadout({
       organizationId: tenant.organizationId,
       at: STOPPED_AT,
     });
-    const index = readout.input?.org?.lines.find((line) => line.workload === 'index');
+    const instance = readout.input?.org?.lines.find((line) => line.workload === 'instance');
 
-    expect(new Prisma.Decimal(index!.costUsd).equals(new Prisma.Decimal(UNFLOATABLE_COST))).toBe(
+    expect(new Prisma.Decimal(instance!.costUsd).equals(new Prisma.Decimal(UNFLOATABLE_COST))).toBe(
       true,
     );
     expect(readout.text).toContain(UNFLOATABLE_COST);
@@ -227,7 +227,7 @@ describe('the readout WRITES NOTHING (AC 4)', () => {
   it('every database transaction the readout opens is READ ONLY, and Postgres would refuse a write', async () => {
     const tenant = await seedOrg();
     const meta = await seedOrg({ isMeta: true });
-    await recordContainer(tenant, 'code_graph_index', 120, '0.003796325880');
+    await recordContainer(tenant, 'agent_instance', 120, '0.003796325880');
     await recordContainer(meta, 'ci_runner', 60, '0.001898162940');
 
     const realSystem = workspaceContext.withSystemContext;
@@ -353,7 +353,7 @@ describe('the callable readout’s own branches (MOTIR-4544 top-up)', () => {
 
   it('without an organisation it renders only the platform-wide split', async () => {
     const tenant = await seedOrg();
-    await recordContainer(tenant, 'code_graph_index', 60, '0.001898162940');
+    await recordContainer(tenant, 'agent_instance', 60, '0.001898162940');
     const readout = await buildFleetCostReadout({ at: STOPPED_AT });
     expect(readout.input?.org).toBeUndefined();
     expect(readout.input?.metaSplit.length).toBe(1);

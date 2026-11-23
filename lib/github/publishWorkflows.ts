@@ -431,30 +431,6 @@ export const publishWorkflowsClient = {
     return [...bySha.values()].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
   },
 
-  /**
-   * When the newest MERGED pull request from `branch` merged (ISO 8601), or
-   * null when none has. The indexer pin's band reads it to tell "queued" from
-   * "rolling" (MOTIR-10986).
-   */
-  async mergedFromBranchAt(
-    repo: RepoRef,
-    branch: string,
-    token: string | null,
-  ): Promise<string | null> {
-    const { status, body } = await call(
-      'GET',
-      `${repoPath(repo)}/pulls?state=closed&head=${encodeURIComponent(`${repo.owner}:${branch}`)}&sort=updated&direction=desc&per_page=10`,
-      token,
-    );
-    if (!Array.isArray(body)) throw new PublishWorkflowError(status, 'pull list was not a list');
-    let newest: string | null = null;
-    for (const pull of body) {
-      const merged = asRecord(pull)?.['merged_at'];
-      if (typeof merged === 'string' && (newest === null || merged > newest)) newest = merged;
-    }
-    return newest;
-  },
-
   /** Every tag whose name starts with `prefix`, peeled to its commit. */
   async tagsWithPrefix(repo: RepoRef, prefix: string, token: string | null): Promise<TagCommit[]> {
     const { status, body } = await call(

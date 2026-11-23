@@ -111,6 +111,12 @@ export const DOCS_GUARD_SPECS = [
   // or the AMENDMENT 5 record goes missing. Split out of the tool's DB-backed
   // spec, as `catch-up-disposition-adr` was; imports nothing from `lib/`.
   'tests/mcp/update-coding-convention-docs.test.ts',
+  // ── tests/integration/ — the indexer retirement's architecture guard ──────
+  // Reads every tracked `.md`, `docs/**` included, and fails when one names the
+  // retired index fleet kind or its variables outside `docs/decisions/`
+  // (MOTIR-12042). Split out of the DB-backed retirement gate, as
+  // `catch-up-disposition-adr` was; imports nothing from `lib/`.
+  'tests/integration/code-graph-index-retirement-architecture.test.ts',
   // ── tests/permissions/ — the inventory, from THREE sides ──────────────────
   // All three open `docs/decisions/permission-inventory.md`, which maps every
   // user-initiated operation to the permission that governs it. `catalog`

@@ -10,7 +10,6 @@ import {
   GitCommitHorizontal,
   HardDrive,
   Info,
-  Network,
   Package,
   Server,
   Settings,
@@ -23,13 +22,10 @@ import { Spinner } from '@/components/ui/Spinner';
 import type {
   FleetImageBuildDTO,
   FleetImageKey,
-  FleetImagePartNotReadDTO,
   FleetImagePublishDTO,
   FleetImageReadSource,
   HostedImageReadDTO,
   HostedImageRowDTO,
-  IndexerImageReadDTO,
-  IndexerImageRowDTO,
   RunnerImageReadDTO,
   RunnerImageRowDTO,
   SandboxImageReadDTO,
@@ -46,8 +42,7 @@ import { ago, CardHead, InsetState } from '../../monitoring/_components/FleetSec
 import { PublishControl, type PublishControlProps } from './PublishControl';
 
 // THE IMAGE CARDS of /admin/fleet-status (MOTIR-10886; design MOTIR-10885
-// § Elements and Panels 1–6, 9, 12–13; the Indexer image card MOTIR-10986,
-// design MOTIR-10987). Server components: every word and figure is rendered
+// § Elements and Panels 1–6, 9, 12–13). Server components: every word and figure is rendered
 // here from the row; the one island is the Publish row.
 
 type T = Awaited<ReturnType<typeof getTranslations<'platformAdmin.fleetStatus'>>>;
@@ -61,7 +56,6 @@ export const AUDIT_LOG_HREF = '/admin/audit-log?action=fleet.image.publish';
 const ICONS: Record<FleetImageKey, ReactNode> = {
   hosted: <Bot className="h-4 w-4" />,
   runner: <Server className="h-4 w-4" />,
-  indexer: <Network className="h-4 w-4" />,
   sandbox: <Package className="h-4 w-4" />,
 };
 
@@ -401,27 +395,20 @@ function PublishBand({
   publish,
   workflowLabel,
   doneText,
-  stageText,
   x,
 }: {
   publish: FleetImagePublishDTO;
   workflowLabel: string;
   doneText: string;
-  /** The words of a two-stage publish's current stage (the indexer pin). */
-  stageText?: (stage: 'queued' | 'rolling') => { title: string; body: string };
   x: Tools;
 }) {
   const { t } = x;
   const { progress, record } = publish;
   if (progress.state === 'running') {
-    const words =
-      progress.stage && stageText
-        ? stageText(progress.stage)
-        : { title: t('progress.title'), body: t('progress.body') };
     return (
       <Band tone="info">
-        <span data-stage={progress.stage}>
-          <strong className="font-semibold">{words.title}</strong> {words.body}
+        <span>
+          <strong className="font-semibold">{t('progress.title')}</strong> {t('progress.body')}
         </span>
         <span className="flex flex-wrap items-center gap-x-2 text-xs">
           <RunLink publish={publish} label={workflowLabel} x={x} />
@@ -917,239 +904,6 @@ function AmiBox({ row, x }: { row: RunnerImageReadDTO; x: Tools }) {
         </>
       )}
     </div>
-  );
-}
-
-// ── Indexer ──────────────────────────────────────────────────────────────────
-
-/** Panel 10 — one part of the indexer card nobody answered for: its tile's own
- *  frame, its label, the Not-read mark and one sentence. Never a figure. */
-function NotReadTile({
-  label,
-  title,
-  body,
-  t,
-}: {
-  label: string;
-  title: string;
-  body: string;
-  t: T;
-}) {
-  return (
-    <div
-      data-element="not-read"
-      className="flex min-w-0 flex-col gap-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) p-(--spacing-card-padding-12)"
-    >
-      <span className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-sans text-xs font-semibold uppercase tracking-wide text-(--el-text-secondary)">
-          {label}
-        </span>
-        <Pill tone="awaiting" aria-label={t('verdict.notRead')}>
-          <CircleQuestionMark aria-hidden className="h-3 w-3" />
-          {t('verdict.notRead')}
-        </Pill>
-      </span>
-      <span className="flex items-start gap-1.5 font-sans text-sm text-(--el-text)">
-        <TriangleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-(--el-warning)" />
-        <span>
-          <strong className="font-semibold">{title}</strong> {body}
-        </span>
-      </span>
-    </div>
-  );
-}
-
-/** A part's read's own words go to the server log, never to the page. */
-function logPart(part: string, read: FleetImagePartNotReadDTO) {
-  console.error('[admin] fleet status indexer part could not be read', {
-    part,
-    source: read.source,
-    detail: read.detail,
-  });
-}
-
-export async function IndexerImageCard({
-  row,
-  actorEmail,
-}: {
-  row: IndexerImageRowDTO;
-  actorEmail: string;
-}) {
-  if (row.status === 'not_read')
-    return <NotReadCard image="indexer" source={row.source} detail={row.detail} />;
-  if (row.status === 'unset')
-    return (
-      <UnsetCard image="indexer" variable={row.variable} body={(t) => t('unset.indexerBody')} />
-    );
-  const x = await tools();
-  return <IndexerBody row={row} x={x} actorEmail={actorEmail} />;
-}
-
-function IndexerBody({
-  row,
-  x,
-  actorEmail,
-}: {
-  row: IndexerImageReadDTO;
-  x: Tools;
-  actorEmail: string;
-}) {
-  const { t } = x;
-  const verdict = imageVerdict(row);
-  const tag = (version: string) => `indexer-v${version}`;
-  const pinned = row.pinned.state === 'read' ? row.pinned.value : null;
-  const newest = row.newest.state === 'read' ? row.newest.value : null;
-  const pinnedTag = pinned?.version ? tag(pinned.version) : null;
-  const newestTag = newest ? tag(newest.version) : null;
-  if (row.pinned.state === 'not_read') logPart('pin', row.pinned);
-  if (row.newest.state === 'not_read') logPart('newest', row.newest);
-  if (row.history.state === 'not_read') logPart('history', row.history);
-  const tileLine = (label: string | null, b: FleetImageBuildDTO) =>
-    [label ?? shortDigest(b.digest), shortCommit(b.commit), x.date(b.createdAt)]
-      .filter(Boolean)
-      .join(' · ');
-  const gapRest =
-    row.indexerCommits === null
-      ? ''
-      : row.releasesBetween
-        ? t('gap.indexer', {
-            tags: row.releasesBetween.join(', '),
-            days: row.daysBehind ?? 0,
-            commits: row.indexerCommits,
-          })
-        : t('gap.indexerNoTags', { days: row.daysBehind ?? 0, commits: row.indexerCommits });
-  const strong = (c: ReactNode) => <strong className="font-semibold">{c}</strong>;
-  const newestNotRead =
-    row.newest.state === 'not_read' && row.newest.source === 'aws' ? 'newestEcr' : 'newest';
-  return (
-    <ImageCard
-      image="indexer"
-      t={t}
-      verdict={verdict}
-      footer={<AuditLine publish={row.publish} x={x} />}
-    >
-      <div className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {pinned ? (
-            <CompareTile
-              label={t('compare.pinned')}
-              value={pinnedTag ?? t('compare.unknownRelease')}
-              digest={shortDigest(pinned.digest)}
-              build={pinned}
-              same={false}
-              repo="motir-ai"
-              x={x}
-            />
-          ) : (
-            <NotReadTile
-              label={t('compare.pinned')}
-              title={t('notRead.pin.title')}
-              body={t('notRead.pin.body')}
-              t={t}
-            />
-          )}
-          {newest && newestTag ? (
-            <CompareTile
-              label={t('compare.newestRelease')}
-              value={newestTag}
-              digest={shortDigest(newest.digest)}
-              build={newest}
-              same={pinned !== null && !row.behind}
-              repo="motir-ai"
-              x={x}
-            />
-          ) : (
-            <NotReadTile
-              label={t('compare.newestRelease')}
-              title={t(`notRead.${newestNotRead}.title`)}
-              body={t(`notRead.${newestNotRead}.body`)}
-              t={t}
-            />
-          )}
-        </div>
-        {row.behind ? (
-          <GapLine
-            t={t}
-            strong={
-              row.releasesBetween
-                ? t('verdict.releasesBehind', { count: row.releasesBetween.length })
-                : t('verdict.daysBehind', { count: row.daysBehind ?? 0 })
-            }
-            rest={gapRest}
-            href={row.compareUrl}
-          />
-        ) : null}
-        {row.history.state === 'not_read' ? (
-          <div data-element="history-not-read">
-            <InsetState
-              icon={<TriangleAlert className="h-5 w-5" />}
-              title={t('notRead.history.title')}
-              tone="error"
-              level={4}
-            >
-              {t('notRead.history.body')}
-            </InsetState>
-          </div>
-        ) : null}
-        {row.unreleased.length > 0 && newestTag && row.nextTag ? (
-          <Unreleased
-            changes={row.unreleased}
-            newestTag={newestTag}
-            nextTag={row.nextTag}
-            count={t('unreleased.indexerCount', { count: row.unreleased.length })}
-            note={(rich) => t.rich('releaseNeededIndexer', rich)}
-            repo="motir-ai"
-            x={x}
-          />
-        ) : null}
-        <PublishControl
-          {...publishProps({
-            image: 'indexer',
-            publish: row.publish,
-            enabledNote: t('publish.note.indexer', { release: newestTag ?? '' }),
-            idleNote:
-              row.publish.blocked === 'not_read'
-                ? t('publish.note.indexerNotRead')
-                : row.publish.blocked === 'release_needed'
-                  ? t('publish.note.indexerReleaseNeeded')
-                  : t('publish.note.indexerCurrent'),
-            band: (
-              <PublishBand
-                publish={row.publish}
-                workflowLabel={t('workflow.indexer')}
-                doneText={t('done.pin', {
-                  to: pinnedTag ?? shortDigest(pinned?.digest ?? null),
-                  digest: shortDigest(pinned?.digest ?? null),
-                })}
-                stageText={(stage) =>
-                  stage === 'rolling'
-                    ? {
-                        title: t('progress.indexerRolling.title'),
-                        body: t('progress.indexerRolling.body', {
-                          release: newestTag ?? pinnedTag ?? '',
-                        }),
-                      }
-                    : {
-                        title: t('progress.indexerQueued.title'),
-                        body: t('progress.indexerQueued.body'),
-                      }
-                }
-                x={x}
-              />
-            ),
-            confirm: {
-              title: t('confirm.runnerTitle', { release: newestTag ?? '' }),
-              from: pinned ? tileLine(pinnedTag, pinned) : '',
-              to: newest ? tileLine(newestTag, newest) : '',
-              body: t.rich('confirm.indexerBody', { release: newestTag ?? '', strong }),
-              confirmLabel: t('publish.button'),
-              audited: t('confirm.audited', { email: actorEmail }),
-            },
-            t,
-          })}
-        />
-      </div>
-    </ImageCard>
   );
 }
 

@@ -1477,7 +1477,6 @@ jobs:
         run: >-
           pnpm vitest run
           tests/ciFleet/awsPoolDeferral.test.ts
-          tests/ciFleet/awsIndexPoolSeam.test.ts
           tests/ciFleet/fleetGrowthIntegration.test.ts
           tests/ciFleet/fleetGrowthWalk.test.ts
           tests/ciFleet/fleetPoolGrowthService.test.ts
@@ -1488,7 +1487,6 @@ jobs:
           tests/ciFleet/fleetAttributionAws.test.ts
           tests/ciFleet/fleetAttributionHoster.test.ts
           tests/ciFleet/fleetAttributionOrgOwned.test.ts
-          tests/ciFleet/codeGraphIndexAwsE2E.test.ts
           tests/agentInstances/agentHosterCharging.test.ts
 
   coverage:

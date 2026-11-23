@@ -306,7 +306,11 @@ describe('pool-status', () => {
   it('with no kind prints every kind', async () => {
     onPool = false;
     const result = await run('pool-status');
-    expect(result.out.split('\n')).toHaveLength(4);
+    expect(result.out.split('\n')).toEqual([
+      'ci_runner: fly (no growth)',
+      'hosted_agent: fly (no growth)',
+      'agent_instance: fly (no growth)',
+    ]);
   });
 });
 

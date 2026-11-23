@@ -99,6 +99,31 @@ export function proposalLevelKey(
   return item.folderId != null && !item.folderMissing ? folderNodeId(item.folderId) : null;
 }
 
+/**
+ * The node ids a plan TOUCHES — the rows the plan review canvas keeps on the road
+ * at the root rather than folding into the "Not in epic" group (Part XVI decision
+ * 2, the grouping's third conjunct).
+ *
+ * Every proposal's own node id (a `modify` / `remove` keys by its TARGET, a
+ * materialized `add` by the card it became; a pending `add`'s id is its
+ * `planItemId`, which no committed row carries, so it is inert), plus a pending
+ * `add`'s PARENT: grouping that row away would file the proposal behind a door the
+ * reviewer cannot open.
+ *
+ * ONE definition for the two readers that must agree on it: the canvas, which
+ * groups by it, and the review read's arrival-level size, which counts the group
+ * as the one node the canvas draws (Bug MOTIR-12162).
+ */
+export function planTouchedNodeIds(
+  items: readonly Pick<PlanReviewItemDto, 'nodeId' | 'op' | 'parentNodeId'>[],
+): Set<string> {
+  const ids = new Set(items.map((i) => i.nodeId));
+  for (const i of items) {
+    if (i.op === 'add' && i.parentNodeId !== null) ids.add(i.parentNodeId);
+  }
+  return ids;
+}
+
 /** How many folder crumbs stand above a proposal's committed chain. `?? []`: a
  *  payload older than MOTIR-5798 carries no trail and reads as "no folder". */
 function folderCrumbCount(item: PlanReviewItemDto): number {

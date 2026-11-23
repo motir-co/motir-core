@@ -20,8 +20,7 @@ import { clock, fleet, fx, MIN, setUpHarness, tearDownHarness } from '../agentIn
  * CENSUS SEAM and THE RECONCILER HAND-OFF, against a real Postgres.
  *
  * Two organisations, each holding Motir-hosted repositories with live workflow
- * runs, CI containers, a hosted-agent slot, an index slot and running agent
- * instances. A superadmin previews and stops org A; the claims are about rows
+ * runs, CI containers, a hosted-agent slot and running agent instances. A superadmin previews and stops org A; the claims are about rows
  * one service wrote and another read:
  *
  *   · the preview's counts are exactly what the stop then reports;
@@ -204,7 +203,7 @@ function fakeGithubRuns(): void {
 }
 
 /** One org's whole fleet: 2 repos with 1 live run each, 2 CI containers, a hosted
- *  run, an index container and 2 running agents. */
+ *  run and 2 running agents. */
 async function seedBusyOrg(t: WorkItemFixture, tag: string) {
   await seedHostedRepo(t, `${tag}-web`);
   await seedHostedRepo(t, `${tag}-api`);
@@ -213,7 +212,6 @@ async function seedBusyOrg(t: WorkItemFixture, tag: string) {
   const intents = [await seedCiContainer(t), await seedCiContainer(t)];
   const hostedRun = `run-${tag}`;
   await seedSlot(t, 'hosted_agent', hostedRunDispatchId(hostedRun));
-  await seedSlot(t, 'code_graph_index', `index-${tag}`);
   const instances = [
     await runningInstance(t, `${tag}-agent-1`),
     await runningInstance(t, `${tag}-agent-2`),
@@ -311,7 +309,6 @@ describe('preview → stop → census (AC3)', () => {
       ci_runner: 2,
       hosted_agent: 1,
       agent_instance: 2,
-      code_graph_index: 1,
     });
     const bBefore = await snapshotOrg(orgB, b.repos);
     expect(bBefore.census.byWorkload).toMatchObject({ ci_runner: 2, agent_instance: 2 });
@@ -330,7 +327,6 @@ describe('preview → stop → census (AC3)', () => {
       ciContainers: 2,
       hostedRuns: 1,
       agentInstances: 2,
-      indexContainers: 1,
     });
     expect(result).toEqual({
       runsCancelled: preview.ciRuns,
@@ -340,11 +336,10 @@ describe('preview → stop → census (AC3)', () => {
       failures: { ci: 0, hosted: 0, instances: 0 },
     });
 
-    // A's census: no CI runner, no agent instance. Index containers are never stopped.
+    // A's census: no CI runner, no agent instance.
     expect((await census(fx)).byWorkload).toMatchObject({
       ci_runner: 0,
       agent_instance: 0,
-      code_graph_index: 1,
     });
     for (const { id } of a.intents) {
       expect(

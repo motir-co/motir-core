@@ -96,10 +96,10 @@ const SHARD_TEST_MATCH = legTestMatch(process.env['E2E_SHARD'] ?? '');
 // executor — it is the ONLY one now (MOTIR-3418); export `E2E_JOB_WORKER=0` to
 // run the suite without it, which means no background job runs at all.
 process.env['E2E_JOB_WORKER'] ??= '1';
-// ⚠️ THE INDEX-WRITER SEAM, ON THE WORKER AND NOWHERE ELSE (MOTIR-3564). Its two
-// boundaries — motir-ai's run-credential mint and GitHub's tarball redirect — are
-// crossed only by the index SUPERVISOR, which is a job, so the process that makes
-// both calls is the worker. This flag is what `job-worker-process.ts` reads to
+// ⚠️ THE INDEX-WRITER SEAM, ON THE WORKER AND NOWHERE ELSE (MOTIR-3564). Its
+// boundaries — GitHub's tarball redirect and motir-ai's handoff routes (the
+// run-credential mint left with MOTIR-12036) — are crossed only by the index
+// job, so the process that makes those calls is the worker. This flag is what `job-worker-process.ts` reads to
 // decide whether to hand the child `E2E_TEST_CODE_GRAPH` + the two credentials;
 // setting those HERE would leak them to the app webServer (a runner variable is
 // inherited unless `webServer.env` overrides it), and `lib/ai/availability.ts`

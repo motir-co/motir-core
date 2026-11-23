@@ -102,9 +102,8 @@ export function awsPoolDefinitionFromEnv(env: Env, fleetKind: string): AwsPoolDe
  *
  * `agent_instance` accounts host persistent instances (hibernate, wake, rewrite
  * their config, delete their disk), so their runners take the hoster policy. An
- * account reaps untagged instances when asked to (a Host organisation's own
- * account) or when it is an indexer account, whose attribution pass reaps
- * untagged VMs (MOTIR-9450).
+ * account reaps untagged instances only when asked to (a Host organisation's own
+ * account); the indexer pool that also did is retired (MOTIR-12041).
  */
 export function awsPoolStackOverrides(input: {
   shardName: string;
@@ -116,7 +115,7 @@ export function awsPoolStackOverrides(input: {
   return {
     [names.shardTag]: input.shardName,
     [names.runnerPolicy]: input.fleetKind === 'agent_instance' ? 'hoster' : 'runner',
-    [names.reapUntagged]: String(input.reapUntagged || input.fleetKind === 'code_graph_index'),
+    [names.reapUntagged]: String(input.reapUntagged),
     [names.requestedVcpuQuota]: String(input.requestedVcpuQuota),
   };
 }

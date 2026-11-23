@@ -3,11 +3,8 @@ import {
   ciDockerVolumeGb,
   DEFAULT_CI_DOCKER_VOLUME_GB,
   DEFAULT_FLEET_SLOT_TTL_SECONDS,
-  DEFAULT_INDEX_IN_FLIGHT_CAP,
   fleetKillSwitchEngaged,
   fleetSlotTtlSeconds,
-  indexInFlightCap,
-  orgIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
 
 // The gate's CONFIGURATION half (Story MOTIR-1916 · MOTIR-1922, re-cut by
@@ -42,21 +39,6 @@ describe('MOTIR_FLEET_MAX_IN_FLIGHT is the KILL SWITCH and nothing else', () => 
     // A typo must NOT read as 0 — the safety mechanism must not cause the outage.
     expect(fleetKillSwitchEngaged()).toBe(false);
     expect(warn).toHaveBeenCalled();
-  });
-});
-
-// §7: the index share is per ORGANISATION, derived as ceil(global / 2).
-describe('the index share is per ORGANISATION, derived from the global cap', () => {
-  it('is 3 at the default global of 6', () => {
-    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '');
-    expect(indexInFlightCap()).toBe(DEFAULT_INDEX_IN_FLIGHT_CAP);
-    expect(orgIndexInFlightCap(indexInFlightCap())).toBe(3);
-  });
-
-  it('rounds up, so a global of 1 still lets one org index', () => {
-    expect(orgIndexInFlightCap(1)).toBe(1);
-    expect(orgIndexInFlightCap(10)).toBe(5);
-    expect(orgIndexInFlightCap(0)).toBe(0);
   });
 });
 

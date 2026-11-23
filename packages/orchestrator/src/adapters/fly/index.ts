@@ -58,7 +58,6 @@ export const FLEET_METADATA_KEY = 'motir_fleet';
  */
 export const FLEET_METADATA_VALUES: Record<FleetWorkloadKind, string> = {
   ci_runner: 'ci-runner',
-  code_graph_index: 'code-graph-index',
   hosted_agent: 'hosted-agent',
   agent_instance: 'agent-instance',
 };
@@ -105,7 +104,6 @@ export const FLEET_METADATA_INTENT_KEY = 'motir_intent_id';
  */
 const FLEET_MACHINE_NAME_PREFIXES: Record<FleetWorkloadKind, string> = {
   ci_runner: 'motir-runner',
-  code_graph_index: 'motir-index',
   hosted_agent: 'motir-agent',
   agent_instance: 'motir-instance',
 };

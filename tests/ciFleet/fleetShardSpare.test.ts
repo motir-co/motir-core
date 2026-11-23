@@ -71,8 +71,8 @@ describe('at most one ready spare per fleet kind', () => {
     await insert();
     await expect(insert({ fleetKind: 'hosted_agent' })).resolves.toBeTruthy();
 
-    await insert({ fleetKind: 'code_graph_index', state: 'disabled' });
-    await expect(insert({ fleetKind: 'code_graph_index' })).resolves.toBeTruthy();
+    await insert({ fleetKind: 'agent_instance', state: 'disabled' });
+    await expect(insert({ fleetKind: 'agent_instance' })).resolves.toBeTruthy();
 
     // An unready spare (its raise pending) does not count: growth may create the
     // next account as a spare while the kind has one still waiting for quota.

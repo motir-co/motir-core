@@ -2056,6 +2056,16 @@ rather than repeat. The token guarantees that only the LIVE claim's outcome is r
 and the release stay scoped to `claimed_by`: both act on every claim the worker holds, which is what
 they mean.
 
+## §19 — The index admission this record amends is RETIRED (MOTIR-12041, 2026-11-23)
+
+§16.6 and §16.6a describe the indexer's admission: `index-admit:` and `index-admit-try:` steps, the
+`pool_full` deferral and the `no_index_account` answer. Those steps, and the two capacity pause reasons
+they recorded, left motir-core with Story MOTIR-11026 (MOTIR-12036); its fleet kind followed in
+MOTIR-12041. Indexing is handed to motir-ai and motir-codegraph, and a repository row still storing
+one of the two pause reasons is re-asked by the catch-up sweep like any other pause. §16.6a's lesson
+about the pool — a wait for capacity is a `run_at`, never a slot held — stands for every workload that
+remains.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484

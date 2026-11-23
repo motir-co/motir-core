@@ -50,8 +50,8 @@ async function seed(): Promise<Fixture> {
   });
   const slot = await adminDb.fleetInFlightSlot.create({
     data: {
-      workload: 'code_graph_index',
-      ref: 'index-run-1',
+      workload: 'hosted_agent',
+      ref: 'hosted-run-1',
       organizationId: workspace.organizationId,
       workspaceId: workspace.id,
       expiresAt: EXPIRES_AT,
@@ -149,12 +149,12 @@ describe('fleet_in_flight_slot RLS — system context only', () => {
   });
 
   // The system context — the ONLY reach every caller of this table has, since
-  // CI admission, the index dispatch and Epic 9's agent dispatch all run under
+  // CI admission and Epic 9's agent dispatch run under
   // `withSystemContext` with no session and no active workspace.
   it('the system_admin GUC sees and mutates slots', async () => {
     const fx = await seed();
     const rows = await asAppRole({ systemAdmin: true }, (tx) => tx.fleetInFlightSlot.findMany());
-    expect(rows.map((r) => r.ref)).toEqual(['index-run-1']);
+    expect(rows.map((r) => r.ref)).toEqual(['hosted-run-1']);
 
     const deleted = await asAppRole({ systemAdmin: true }, (tx) =>
       tx.fleetInFlightSlot.deleteMany({ where: { id: fx.slotId } }),

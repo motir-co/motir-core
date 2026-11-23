@@ -28,7 +28,6 @@ import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlo
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { fleetMachineKillRepository } from '@/lib/repositories/fleetMachineKillRepository';
 import { ciRunnerBootService, FLEET_TIME_BUDGETS } from '@/lib/services/ciRunnerBootService';
-import { indexSlotRef } from '@/lib/services/codeGraphIndexAdmissionService';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
@@ -130,7 +129,6 @@ async function listWithOneRetry<T>(read: () => Promise<T>, delayMs: number): Pro
 
 const CI_RUNNER: FleetWorkloadKind = 'ci_runner';
 const HOSTED_AGENT: FleetWorkloadKind = 'hosted_agent';
-const CODE_GRAPH_INDEX: FleetWorkloadKind = 'code_graph_index';
 const AGENT_INSTANCE: FleetWorkloadKind = 'agent_instance';
 
 /** The kill row's `machineName` for a deleted hoster DISK — the row is the
@@ -757,12 +755,22 @@ export const fleetAttributionService = {
       );
     }
 
-    // ── Hosted-agent run or index container: a checkpoint + an unexpired slot ──
+    // ── Hosted-agent run: a checkpoint + an unexpired slot ──
     const usage = await withSystemContext((tx) =>
       ciContainerUsageRepository.findLatestByHandle(provider, machine.machineId, tx),
     );
-    if (usage && (usage.workload === 'agent' || usage.workload === 'index')) {
-      const workload = usage.workload === 'agent' ? HOSTED_AGENT : CODE_GRAPH_INDEX;
+    // A leftover index container (the `index` cost line of the retired code-graph
+    // index kind, MOTIR-12041): nothing writes its slot any more, so its record
+    // has ended — at its stop, else at the checkpoint's own creation. It names no
+    // workload: the kind left `FleetWorkloadKind`.
+    if (usage && usage.workload === 'index') {
+      return kill('record_ended', usage.containerStoppedAt ?? usage.containerCreatedAt, {
+        recordRef: usage.id,
+        organizationId: usage.organizationId,
+      });
+    }
+    if (usage && usage.workload === 'agent') {
+      const workload = HOSTED_AGENT;
       const recordRef = usage.dispatchRunId ?? usage.id;
       if (usage.containerStoppedAt) {
         return kill('record_ended', usage.containerStoppedAt, {
@@ -771,14 +779,7 @@ export const fleetAttributionService = {
           organizationId: usage.organizationId,
         });
       }
-      const ref =
-        workload === HOSTED_AGENT
-          ? usage.dispatchRunId
-            ? hostedRunDispatchId(usage.dispatchRunId)
-            : null
-          : usage.projectId && usage.repoFullName
-            ? indexSlotRef(usage.projectId, usage.repoFullName)
-            : null;
+      const ref = usage.dispatchRunId ? hostedRunDispatchId(usage.dispatchRunId) : null;
       const slot = ref
         ? await withSystemContext((tx) => fleetInFlightSlotRepository.findByRef(workload, ref, tx))
         : null;
@@ -792,7 +793,7 @@ export const fleetAttributionService = {
         recordRef,
         organizationId: usage.organizationId,
         // A hosted run is settled, charged and ended through the port (MOTIR-6524).
-        settle: workload === HOSTED_AGENT,
+        settle: true,
       });
     }
 

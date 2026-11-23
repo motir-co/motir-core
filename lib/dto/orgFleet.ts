@@ -110,8 +110,6 @@ export interface OrgFleetDTO {
     waiting: FleetUseWaitingDTO;
     rows: OrgFleetCiJobDTO[];
   }>;
-  /** Not charged and not stopped here: a count only. */
-  indexJobs: OrgFleetPart<{ running: number }>;
   /** The last seven days, newest first. */
   motirStops: OrgFleetPart<{ since: string; entries: OrgFleetMotirStopDTO[] }>;
   /** Null inside `read` when no owner or admin has stopped anything yet. */

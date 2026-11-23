@@ -58,8 +58,8 @@ import type { CodeGraphRefreshData } from '../types';
 //      *"calling `step.sleep`, `step.sleepUntil`, `step.waitForEvent`, or
 //      `step.invoke` does not count towards capacity limits."*
 //
-//      This loop waits with `ctx.step.sleep` (`indexFleetSteps.ts`,
-//      `index-wait:<pid>:<n>`), so between polls it holds NOTHING. A
+//      This loop waited with `ctx.step.sleep` (the deleted `indexFleetSteps.ts`,
+//      `index-wait:<pid>:<n>`), so between polls it held NOTHING. A
 //      `concurrency: N` here would bound N concurrent POLLS, not N live
 //      containers — so the conclusion below is unchanged and its reason is now
 //      the true one rather than a plausible one.
@@ -86,10 +86,9 @@ import type { CodeGraphRefreshData } from '../types';
 //   3. ITS ORIGINAL REASON IS GONE. The bytes moved to the containers; what
 //      remains in-process is one short credential mint.
 //
-// The cap lives where the containers are — `codeGraphIndexAdmissionService`, a
-// global bound read from `MOTIR_INDEX_MAX_IN_FLIGHT` plus a per-workspace bound
-// of `ceil(global / 2)` — which is also the only place that can see the OTHER
-// workloads sharing the invoice (MOTIR-1997).
+// The cap lived where the containers were — the index admission service,
+// deleted with the indexer fleet (MOTIR-12036). The build now runs in
+// motir-codegraph, which owns its own capacity.
 //
 // ⚠️ AND WHAT PROTECTS EVERY OTHER FUNCTION, since the absence of a cap here is
 // exactly the thing that used to look alarming (MOTIR-3247). The reasoning above

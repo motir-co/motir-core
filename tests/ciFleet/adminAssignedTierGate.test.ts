@@ -8,7 +8,6 @@ import {
   AI_PLAN_REQUIRED_ESTABLISH_MESSAGE,
 } from '@/lib/services/aiPlanGateService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
-import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
@@ -165,23 +164,6 @@ describe('an admin-assigned paid tier with no subscription is NOT a paid plan â€
       where: { id: intent.id },
     });
     expect(after.status).toBe('pending');
-  });
-
-  it('index admission defers ai_plan_required and takes no slot', async () => {
-    const verdict = await codeGraphIndexAdmissionService.admit(
-      {
-        projectId: fx.projectId,
-        repoRef: 'moooon/acme',
-        dispatchId: 'run-1',
-        workspaceId: fx.workspaceId,
-        organizationId: fx.workspace.organizationId,
-        containerTimeoutMs: 600_000,
-      },
-      NOW,
-    );
-
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'ai_plan_required' });
-    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
   });
 
   it('a hosted-agent pool reservation defers ai_plan_required and takes no slot', async () => {
