@@ -1,4 +1,8 @@
 import type { UsingProjectDto } from '@/lib/dto/organizationRepos';
+import type {
+  ProjectRepoAccessStateDto,
+  ProjectRepoMemberAccessReasonDto,
+} from '@/lib/dto/projectRepos';
 
 // DTOs for the GitHub integration (Story 7.10 · MOTIR-1498). What crosses the
 // API boundary for a member's GitHub identity — deliberately WITHOUT the access
@@ -108,6 +112,18 @@ export interface LinkedPullRequestPreviewDto {
   url: string;
 }
 
+/**
+ * One reader's access to one Motir-created repository, as the pull-request row
+ * reads it (MOTIR-12115) — the per-member cell of `ProjectRepoMemberAccessDto`,
+ * narrowed to the three facts the row draws. `invitationUrl` is set only while
+ * `state` is `invited`.
+ */
+export interface LinkedPullRequestReaderAccessDto {
+  state: ProjectRepoAccessStateDto;
+  reason: ProjectRepoMemberAccessReasonDto;
+  invitationUrl: string | null;
+}
+
 export interface LinkedPullRequestDto {
   /**
    * Motir's own id for the pull-request row (MOTIR-5005) — what the REMOVE
@@ -195,6 +211,26 @@ export interface LinkedPullRequestDto {
    * preview* and *the producer forgot to answer* cannot be the same value.
    */
   preview: LinkedPullRequestPreviewDto | null;
+  /**
+   * THE CURRENT READER'S ACCESS to this pull request's repository (Story MOTIR-4881 ·
+   * MOTIR-12115; design `design/github/design-notes.md` § 35) — what the row's code
+   * link-out and its access line are drawn from.
+   *
+   * NON-NULL ONLY on a repository Motir CREATED for the card's project (a set row in
+   * state `created` whose repository still exists): those are the only repositories
+   * where Motir manages collaborators and so actually knows the answer. It is
+   * `listTeamAccess`'s cell for the one reader, and the two halves are INDEPENDENT —
+   * an ineligible member keeps a real `accepted` state and gains a reason — so a
+   * non-null `reason` WINS over `state`.
+   *
+   * NULL for a `connected` repository (the customer's own), a repository in no row of
+   * the project's set, a reader outside the access candidate set, and a read that
+   * failed. Null draws the row exactly as before; it is never an error.
+   *
+   * REQUIRED and nullable like `preview`, so *no access fact* and *the producer forgot
+   * to answer* cannot be the same value.
+   */
+  readerAccess: LinkedPullRequestReaderAccessDto | null;
   /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the
    * "linked manually" suffix it fed. It said the link was DECLARED rather than
    * inferred by the MOTIR-892 auto-resolver, and MOTIR-3674 deleted that

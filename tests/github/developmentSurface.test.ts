@@ -199,6 +199,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         githubReview: null,
         // MOTIR-10099: no preview record, so the row draws no preview line.
         preview: null,
+        readerAccess: null,
         // MOTIR-5916: the branch it targets, and whether the host reports it conflicted AT
         // its head — nothing has read its mergeability, so it is not.
         baseRef: 'main',
@@ -259,6 +260,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         url: 'https://github.com/moooon/acme/pull/7',
         githubReview: null, // MOTIR-5602 — nobody reviewed it
         preview: null,
+        readerAccess: null,
         baseRef: 'main', // MOTIR-5916 — see the sibling case above
         conflicted: false,
       },

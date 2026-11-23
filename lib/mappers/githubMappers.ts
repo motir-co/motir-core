@@ -13,6 +13,7 @@ import type {
   GithubWebhookDeliveryDTO,
   LinkedPullRequestDto,
   LinkedPullRequestPreviewDto,
+  LinkedPullRequestReaderAccessDto,
   PullRequestLinkCandidateDto,
   PullRequestMergeRecordDto,
   WorkItemDeliveryDto,
@@ -100,10 +101,15 @@ export function toLinkedPullRequestDto(
   /** This pull request's preview record, already read by the caller in one batched
    *  read for the card (MOTIR-10099) — or null when it has none. */
   preview: PreviewDeploymentFacts | null = null,
+  /** The CURRENT reader's access to this row's repository, already resolved by the caller
+   *  once for the card (MOTIR-12115) — null off a Motir-created repository, and on every
+   *  path that never reaches the row. Set verbatim. */
+  readerAccess: LinkedPullRequestReaderAccessDto | null = null,
 ): LinkedPullRequestDto {
   return {
     githubReview,
     preview: preview ? toLinkedPullRequestPreviewDto(preview) : null,
+    readerAccess,
     id: row.id,
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,
@@ -171,6 +177,9 @@ export function toWorkItemDeliveryDto(
   } | null,
   /** The pull request's preview record, read once for the set (MOTIR-10099). */
   preview: PreviewDeploymentFacts | null = null,
+  /** The CURRENT reader's access to the member's repository (MOTIR-12115), resolved once
+   *  for the set by the caller. */
+  readerAccess: LinkedPullRequestReaderAccessDto | null = null,
 ): WorkItemDeliveryDto {
   return {
     pullRequest: toLinkedPullRequestDto(
@@ -181,6 +190,7 @@ export function toWorkItemDeliveryDto(
       },
       null,
       preview,
+      readerAccess,
     ),
     defaultBranch: row.repo.defaultBranch,
     baseRef: row.pullRequest.baseRef,
