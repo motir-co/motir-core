@@ -95,6 +95,7 @@ const MEASURED = [
   'lib/repositories/productionUsageSliceRepository.ts',
   'lib/services/productionUsageMeterService.ts',
   'lib/services/productionUsageService.ts',
+  'lib/services/productionCreditBalanceService.ts',
   'lib/jobs/definitions/productionUsageAccrual.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/usage/route.ts',
 ];
@@ -207,6 +208,7 @@ export default defineConfig({
       'tests/hosting/productionRates.test.ts',
       'tests/hosting/productionUsageMeter.test.ts',
       'tests/hosting/productionUsageRead.test.ts',
+      'tests/hosting/productionCreditBalance.test.ts',
     ],
     coverage: {
       provider: 'v8',

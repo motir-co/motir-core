@@ -15,8 +15,9 @@ import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAc
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
 import {
   EXHAUSTED_SUSPEND_AFTER_MS,
-  productionUsageService as usage,
-} from '@/lib/services/productionUsageService';
+  productionCreditBalanceService,
+} from '@/lib/services/productionCreditBalanceService';
+import { productionUsageService as usage } from '@/lib/services/productionUsageService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -249,7 +250,7 @@ describe('credits exhausted', () => {
       data: { creditsExhaustedSince: null },
     });
     expect((await usage.getCurrentPeriod(live.app.id, { now: NOW })).state).toBe('ok');
-    expect(await usage.isBelowZero(live.organizationId, null)).toEqual({
+    expect(await productionCreditBalanceService.isBelowZero(live.organizationId, null)).toEqual({
       below: false,
       balance: null,
     });
