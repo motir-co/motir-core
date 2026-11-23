@@ -238,3 +238,202 @@ markup the Environment room already uses.
 Routes, error codes and the data shape; logs, health, usage or credits (the running-an-app story); the
 Environment room (it is linked, not redrawn); the deploy-a-ref entry point itself (only its history row);
 the address model and the Public address room; any customer-repository surface beyond its absence.
+
+## Amendment 2026-11-23 — the takeover handover (MOTIR-12125, Story MOTIR-9800)
+
+**Design system.** Re-read for this amendment: `package.json` depends on `@motir/design-system`
+(`workspace:*`, installed 0.24.1 per `packages/design-system/package.json`) and `app/globals.css` imports
+`@motir/design-system/theme.css` — **both checks hold: Motir Design.** The axes are the ones this area
+already draws at (`warm-editorial` · `motir` · `motir`, light), read from `app/layout.tsx`'s applied
+`data-style` / `data-palette` / `data-type`. Version 0.24.1 exports `@motir/design-system/mock`, so both
+delta mocks are **rendered with `renderMock`** from the package's parts on a full-width board; neither
+carries a script, so both render on the design card's sandboxed frame.
+
+**What this amendment draws, and where.** Two delta mocks, each beside the base it amends. This section
+is the one spec for both (the result publishes one note file); `design/repository-set/design-notes.md`
+§ _Amendment 2026-11-23_ points here.
+
+| Delta mock                                               | Amends                                                                                                                       | Panels |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `design/repository-set/takeover--aws-handover.mock.html` | the take-it-over flow, `design/repository-set/takeover.mock.html` (MOTIR-1938, done; no published result) — notes §14        | 25     |
+| `design/hosting/production--handover.mock.html`          | the Production panel, `design/hosting/production.mock.html` (MOTIR-10024, published 2026-10-29) — this file's sections above | 21     |
+
+Neither base mock is edited. Each is a record of its moment; the shipped code is what these deltas were
+drawn against: `app/(authed)/settings/project/repositories/_components/TakeoverRow.tsx` and
+`TakeoverModal.tsx` for the room and the Move dialog, and
+`app/(authed)/settings/project/production/` for the panel.
+
+### Base elements composed unchanged
+
+- **From the take-it-over flow:** the Repositories room header and lede; the `Hosted by Motir` section
+  label; the row shape (`flex gap-3 rounded-(--radius-card) border p-(--spacing-card-padding)` on the
+  hosted `--el-success-surface` tint) with its role `Pill`, `Created` state word, repository link and
+  the `Move to my GitHub` action; the Move dialog's chrome (`Modal` size `lg`, `SectionLabel` eyebrow,
+  serif title, pinned footer with one primary); its `Notice` boxes (`--el-notice-info-bg`, soft
+  `--el-surface-soft`). The **target picker, the costs step and the row states of §14.5 are unchanged**
+  and still serve serverless and Fly repositories, and any AWS repository after its handover.
+- **From the Production panel:** the room title and lede, the panel header with the repository's name,
+  the repository picker (not redrawn; it is unchanged), the current release card's eyebrow, commit,
+  address and Copy, the member note box, the loading shape and `ErrorState`, and the alert-dialog
+  confirmation shape. The `live` state is the shipped panel exactly (panel 1 points at it).
+
+### Elements (by the names the waiting work builds to)
+
+1. **Entry affordance** — `Take over AWS hosting` (`Button secondary sm`, lucide `Cloud`) in the row's
+   action strip of every **AWS-target** row, for an **organisation admin** only (takeover panel 1); and
+   the take-it-over flow's own start: `Move to my GitHub` on an AWS row of an organisation with no other
+   AWS repository opens the shipped Move dialog with an explanation and `Take over AWS hosting` as its one
+   primary, instead of the target picker (panel 2). **Absent, not disabled,** for anyone who is not an
+   organisation admin, and for serverless and Fly rows; the AWS row then says in its helper line that an
+   organisation admin hands the account over (panel 3).
+2. **Single-repository refusal** — the Move dialog when the organisation's AWS account holds other
+   repositories (`TAKEOVER_SHARED_AWS_ACCOUNT`): the other repositories named with their project, why
+   they move together (one AWS account per organisation, it leaves whole), the offer `Take over AWS
+hosting`, and a status line **"Nothing has changed."** (panel 4). A non-admin sees `Close` in place of
+   the offer.
+3. **Handover step** — a two-step `Modal`. Step 1 (panels 5–7): **Owner email** (`Input type=email`),
+   **GitHub owner** (`Input`), the list **Handed over together**, and the soft note that AWS's own steps
+   are done in AWS. Step 2 (panels 8–10): the restatement, the three consequences (previews deleted and
+   deploys stop; apps keep running; irreversible once the account has left), `Start handover`, its busy
+   state and its refused state.
+4. **Handover checklist** — a durable card at the top of the Repositories room, **`AWS hosting
+handover`**, with the account id, the count of repositories, who started it and an overall pill, and
+   an ordered list of eight rows (panels 11–21). It lives on the room, not in the dialog, for the reason
+   §14.5 gives: it outlives the dialog, survives a reload and must be re-enterable for days.
+5. **Upstream addresses list** — **Where your apps answer without Motir**, below the checklist: per
+   application its own address with Copy, and per customer domain the address it must point at, with
+   Copy; the note that `…motir.site` addresses stop answering when Motir's access is removed (panels
+   22–25).
+6. **Production panel states** (production delta) — **handing-over notice** (panels 2–5); **Grace panel**
+   with `Runs until <date>`, **Download export** and the list of past exports, **Stop now** and the **Stop
+   now confirmation**, and the **Grace notice banner** in its three moments (panels 6–15); the
+   **Handed-over panel** for AWS and for serverless/Fly (panels 16–21).
+
+### The checklist rows — one shape, five treatments
+
+Rows in this order, matching `TENANT_HANDOVER_STEPS`:
+
+| #   | Row label                             | Step (`TENANT_HANDOVER_STEPS`) | Row body when it needs one                                   |
+| --- | ------------------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| 1   | Previews removed                      | `destroy_previews`             | —                                                            |
+| 2   | Deploy role for your CI created       | `create_deploy_role`           | —                                                            |
+| 3   | Apps reachable without Motir          | `open_upstream`                | — (the Upstream addresses list sits below the card)          |
+| 4   | Account email moved                   | `move_email`                   | **waiting on you:** the one-time code field + `Confirm code` |
+| 5   | AWS's own steps                       | `await_standalone`             | **waiting on you:** what to do in AWS + `Check again`        |
+| 6   | Motir's access removed                | `remove_access`                | —                                                            |
+| 7   | Account left Motir's AWS Organization | `leave_organization`           | —                                                            |
+| 8   | Each repository transferred           | `transfer_repositories`        | one line per repository with its own state                   |
+
+| Status (`TENANT_HANDOVER_STEP_STATUSES`) | Word           | Glyph                                   | Row fill               | Word ink                   |
+| ---------------------------------------- | -------------- | --------------------------------------- | ---------------------- | -------------------------- |
+| `pending`                                | Pending        | lucide `Circle`, `--el-icon-muted`      | `--el-card`            | `--el-text-strong`         |
+| `running`                                | Running        | `Spinner sm`                            | `--el-notice-info-bg`  | `--el-text-strong`         |
+| `waiting_on_you`                         | Waiting on you | lucide `Hand`, `--el-warning`           | `--el-warning-surface` | `--el-text-strong`         |
+| `done`                                   | Done           | lucide `CircleCheckBig`, `--el-success` | `--el-card`            | `--el-text-strong`         |
+| `failed`                                 | Failed         | lucide `TriangleAlert`, `--el-danger`   | `--el-danger-surface`  | `--el-danger-surface-text` |
+
+Every state pairs a glyph with a word (no state rests on colour). The row running or waiting carries
+`aria-current="step"`. A **failed** row shows the step's `lastError` in words and **Retry**
+(`Button secondary sm`, `RefreshCw`), which resumes **at that step**; done rows stay done (panel 18).
+Panel 21 draws the one row in all five treatments side by side, so it renders from one component.
+
+**The two rows that wait on the new owner.** _Account email moved_ takes the one-time code AWS mails to
+the new address: one `Input` (`inputmode=numeric`, `autocomplete=one-time-code`) and `Confirm code`,
+nothing else; a refused code (`HANDOVER_EMAIL_CODE_REFUSED`) is the field's error, the row still waiting
+(panels 14–15). _AWS's own steps_ lists what the owner does in AWS (root sign-in and password, payment
+method, contact details, customer agreement), links AWS's sign-in page in a new tab, and offers **Check
+again**; still not ready shows the step's `missing` list in plain words (panels 16–17).
+
+### No payment detail, no root credential — anywhere
+
+**No element on any panel of either mock accepts a payment detail or a root credential.** The only
+inputs are Owner email, GitHub owner and the one-time code. The handover step's note and the AWS's-own-
+steps row both say, in words, that those things are done in AWS and that Motir never asks for them. The
+one-time code is passed to AWS and never stored (`lib/dto/tenantAccountHandover.ts`); the copy says so
+under the field.
+
+### The permission rule
+
+- **Take over AWS hosting, the handover step, the checklist's answers (code, Check again, Retry):**
+  organisation **owner and admin** only — the route's `TENANT_HANDOVER_ADMIN_ONLY` stays the authority;
+  hiding is presentation (hide-or-disable rule, `design/projects/design-notes.md` § Amendment 2026-08-08).
+- **Download export, the past exports' Download links, Stop now, the final export's Download:**
+  organisation admins only. A project member who is not one sees the window, the date, the list
+  read-only and a member note saying who can act — **no** Download, **no** Stop now (production panels
+  10, 18).
+- **No deploy, redeploy, rollback or deploy-a-ref control** appears in the handing-over, grace or
+  handed-over state, for anyone: the current release card loses Roll back, and the Grace and
+  Handed-over panels carry none. The shipped refusal of every deploy of a taken-over repository
+  (MOTIR-12127) remains the authority.
+
+### Production panel — the three handover states
+
+| Application state (`HostedApplicationState`) | What the panel shows                                                                                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `live`                                       | the shipped panel, unchanged (production delta panel 1 → `production.mock.html` panels 3–19)                                                                                                      |
+| `handing_over`                               | the **handing-over notice** (info, `role=status`) above the current release card without Roll back; an admin's notice links to the handover in Repositories                                       |
+| `grace`                                      | the **Grace notice banner** (newest recorded notice), then the **Grace panel**: `Runs until` with the date and time, `Grace window` pill, Database exports, Stop it early                         |
+| `handed_over`                                | the **Handed-over panel**: AWS → account id + upstream address, each with Copy; serverless/Fly → `Stopped` with the date, the final export kept 30 days, Download for admins, or the expired line |
+
+**The Grace notice banner, three moments:** `transferred` — info (`--el-notice-info-bg`, `Info`);
+`seven_days` — warning (`--el-warning-surface`, `Clock`); `one_day` — warning (`TriangleAlert`). The
+`stopped` notice is not a banner: the Handed-over panel is the stop's own record.
+
+### Every drawn state and the data it shows
+
+| Mock · panels          | State                                                                                                                                                    | Data, from the work that defines it                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| takeover 1–3           | Entry affordance (admin, flow start, absent for non-admin; absent on serverless/Fly)                                                                     | the row's hosting target (MOTIR-9791 vocabulary) and the viewer's organisation role                                                                         |
+| takeover 4             | Single-repository refusal                                                                                                                                | `SharedTenantAccountError.repositories` — MOTIR-12131                                                                                                       |
+| takeover 5–7           | Handover step: empty, invalid email, GitHub owner not found                                                                                              | `TenantHandoverInputError` field `ownerEmail` / `githubOwner` — MOTIR-12131; the repositories of the tenant account — MOTIR-12131                           |
+| takeover 8–10          | confirmation, submitting, start refused                                                                                                                  | `TENANT_ACCOUNT_NOT_READY`, `TENANT_HANDOVER_ALREADY_STARTED` — MOTIR-12131                                                                                 |
+| takeover 11–21         | checklist: loading, all pending, running, waiting (code, wrong code, AWS steps, still not ready), failed + Retry, transferring, all done, five-state row | `TenantAccountHandoverDto.steps[]` (`step`, `status`, `lastError`, `missing`) and `awsAccountId` — MOTIR-12131; step and status values — MOTIR-12126        |
+| takeover 22–25         | Upstream addresses: loading, no customer domains, customer domains, error                                                                                | `TenantAccountHandoverDto.applications[]` (`upstreamAddress`, `customerDomains[].host/upstreamAddress`) — MOTIR-12131, MOTIR-12129                          |
+| production 2–5         | handing over: admin, member, loading, error                                                                                                              | `HostedApplication.state = handing_over` — MOTIR-12126                                                                                                      |
+| production 6–10, 14–15 | grace: three banner moments, exports none / some / in progress / failed, non-admin, loading, error                                                       | `state = grace`, `stopsAt` — MOTIR-12126, MOTIR-12132; `latestGraceNotice` — MOTIR-12136; `HostedApplicationExportDto[]` and the export route — MOTIR-12134 |
+| production 11–13       | Stop now confirmation, stopping, stop failed                                                                                                             | `stopApplication`, `APPLICATION_STOP_FAILED` with its step — MOTIR-12135                                                                                    |
+| production 16          | handed over, AWS                                                                                                                                         | `awsAccountId`, the application's `upstreamAddress` — MOTIR-12131                                                                                           |
+| production 17–19       | handed over, serverless/Fly: admin, member, final export expired                                                                                         | `handedOverAt` — MOTIR-12135; the `final` export and its `expiresAt` — MOTIR-12134                                                                          |
+| production 20–21       | handed over: loading, error                                                                                                                              | —                                                                                                                                                           |
+
+### Tokens and parts added by this amendment
+
+| Element                          | Part                                                                                                   | Colour (`--el-*`)                                                                                                                               | Shape                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Take over AWS hosting            | `Button secondary sm` + `Cloud`                                                                        | package                                                                                                                                         | package                                                 |
+| Handover dialogs                 | `Modal` (`lg`; the confirmation an `alertdialog`)                                                      | `--el-page-bg`, `--el-border`                                                                                                                   | `--radius-modal`, `--shadow-modal`                      |
+| Fields                           | `Input` with label, helper and error                                                                   | package                                                                                                                                         | `--radius-input`, `--height-input`                      |
+| Handed over together list        | list in a bordered box                                                                                 | `--el-card`, `--el-border`, rows `--el-border-soft`                                                                                             | `--radius-card`, `--spacing-control-x/y`                |
+| Handover card                    | `Card`-shaped section + `SectionLabel` + `Pill`                                                        | `--el-card`, `--el-border`                                                                                                                      | `--radius-card`, `--spacing-card-padding`               |
+| Checklist row                    | `<li>` (table above)                                                                                   | table above; detail `--el-text-secondary`                                                                                                       | `--spacing-card-padding-12`                             |
+| Code field / Check again / Retry | `Input` / `Button secondary sm`                                                                        | package                                                                                                                                         | package                                                 |
+| Addresses                        | `<code>` + Copy (`Button`-shaped, `sm`)                                                                | `--el-text-identifier`; Copy border `--el-button-border`                                                                                        | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm` |
+| Notices and banners              | `Notice` (the shipped takeover recipe)                                                                 | info `--el-notice-info-bg`; warning `--el-warning-surface`; soft `--el-surface-soft`; danger `--el-danger-surface` + `--el-danger-surface-text` | `--radius-card`, `--spacing-card-padding`               |
+| Grace / handed-over pills        | `Pill severity="warning"` / `tone="neutral"`                                                           | package tints + `--el-text-strong`                                                                                                              | `--radius-badge`                                        |
+| Stop now                         | `Button secondary sm` + `OctagonX`, ink `--el-danger-on-surface`; the dialog's primary `Button danger` | `--el-danger-on-surface`; `--el-danger` / `--el-danger-text` only on the danger fill                                                            | package                                                 |
+| Exports rows                     | list rows + `Download` link                                                                            | `--el-link`; meta `--el-text-secondary`                                                                                                         | `--spacing-control-x-12`, `--spacing-control-y-8`       |
+
+Captions and helpers are `--el-text-secondary` throughout; `--el-text-muted` and `--el-text-faint` are
+not used. **Parts the package lacks:** none — the checklist row and the handover card are product-local
+compositions of `Card`, `Pill`, `Spinner`, `Input` and `Button`.
+
+### Copy (English; the build card adds the keys and their translations)
+
+Entry `Take over AWS hosting`. Refusal title `<repo> moves with <n> other repositories`, status
+`Nothing has changed. <repo> is still hosted by Motir, and so are the others.` Step titles `Hand
+<org>'s AWS account over` / `Start the handover?`; fields `Owner email` (helper `The address that will
+own the AWS account. AWS emails a one-time code here.`) and `GitHub owner` (helper `The GitHub account or
+organisation that receives the repositories.`); errors `Enter an email address, like name@acme.com.`,
+`No GitHub account or organisation is called <login>.` Checklist words `Pending · Running · Waiting on
+you · Done · Failed`; `Code from AWS`, `Confirm code`, `AWS didn't accept that code.`; `Check again`,
+`Not ready yet — AWS still needs:`; `Retry`. Addresses heading `Where your apps answer without Motir`.
+Production: `This app is being handed over`; `Runs until`; `Grace window`; `Database exports`;
+`Download export` / `Exporting…`; `No exports yet.`; `Stop it early`; `Stop now`; `Stop <repo> now?`;
+`Stopping…`; `Handed over`; `Stopped`; `Final database export`. Banner lines as drawn in panels 6–8,
+matching the `hosting.graceNotice.*` keys MOTIR-12136 shipped.
+
+### What this amendment does not draw
+
+The serverless and Fly takeover before the transfer (the shipped take-it-over flow, unchanged); emails
+(MOTIR-12136 ships them); routes, services and jobs; the customer's own DNS; the story's browser test and
+acceptance video.

@@ -2868,3 +2868,21 @@ Only `--el-*` and shape tokens.
 - **The Hosted by Motir rows** — unchanged; `motir-studio` writes them.
 - **Settings → Account → Git** — untouched: a person's GitHub link is not involved in a hosted run.
 - **The run section's other states** — MOTIR-684.
+
+## Amendment 2026-11-23 — AWS hosting handover (MOTIR-12125, Story MOTIR-9800)
+
+**Amends § 14 (the take-it-over flow) and its mock `design/repository-set/takeover.mock.html`**, which
+stays as drawn. The change is drawn in the delta mock
+**`design/repository-set/takeover--aws-handover.mock.html`** (25 panels): the **Entry affordance** (`Take
+over AWS hosting` on an AWS-target row and at the flow's start, organisation admins only), the
+**Single-repository refusal**, the two-step **Handover step**, the durable **Handover checklist** card at
+the top of this room, and the **Upstream addresses list**.
+
+§14.4's placement holds: the room is still `/settings/project/repositories`, and the §14.5 split still
+decides what is a dialog (the handover step) and what lives on the room (the checklist, which outlives
+the dialog). Serverless and Fly rows keep § 14's flow unchanged.
+
+The full specification — elements, the checklist's row and state table, the permission rule, the
+no-payment-detail / no-root-credential rule, the state-to-data map by card key, tokens and copy — is in
+**`design/hosting/design-notes.md` § Amendment 2026-11-23 — the takeover handover**, which also covers the
+Production panel delta drawn for the same card.
