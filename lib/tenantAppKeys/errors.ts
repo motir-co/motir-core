@@ -7,7 +7,8 @@
 
 /** Why an app key could not be minted or revoked. */
 export type TenantAppKeyFailureReason =
-  /** The request was refused before anything was sent (an empty id, a past expiry). */
+  /** The request was refused before anything was sent (an empty id, a past expiry,
+   *  a quota that is not a positive integer, or an empty or malformed model list). */
   | 'invalid_request'
   /** This deployment lacks `MOTIR_GATEWAY_URL` or `MOTIR_APP_KEY_MINT_SECRET`. */
   | 'not_configured'
