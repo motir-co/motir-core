@@ -157,6 +157,8 @@ export const GITHUB_CALLERS = [
   'pullRequestBaseRefBackfill',
   /** The historical merged-pull-request backfill's page walk. */
   'historicalPullRequestBackfill',
+  /** The one-time open-pull-request report's page walk (MOTIR-12057). */
+  'openPullRequestReport',
   /** The `pull_request` webhook's changed-path capture. */
   'webhook.changedPaths',
   /** The decision-document capture's changed-path read. */

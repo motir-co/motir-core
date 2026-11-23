@@ -71,6 +71,7 @@ export const DATA_SCRIPTS = {
   'backfill-run-discrepancy': () => import('./backfill-run-discrepancy-records'),
   'backfill-aws-costs': () => import('./backfill-aws-costs'),
   'first-index-pass': () => import('./first-index-pass'),
+  'report-open-pull-requests': () => import('./report-open-pull-requests'),
 } satisfies Record<string, () => Promise<DataScript>>;
 
 export type DataScriptName = keyof typeof DATA_SCRIPTS;

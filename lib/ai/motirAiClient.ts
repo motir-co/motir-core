@@ -34,6 +34,7 @@ import {
   MotirAiConfigError,
   MotirAiConflictError,
   MotirAiInsufficientBalanceError,
+  MotirAiUnauthorizedError,
   MotirAiUnavailableError,
   PlatformLessonNotFoundError,
   PlannerFindingNotFoundError,
@@ -1983,6 +1984,137 @@ export async function readCodeGraphIndexStatus(input: {
       failedAt: isStr,
     }),
   };
+}
+
+// ── The code-graph FORWARD: pull-request state and branch retire (MOTIR-12055 ·
+// story MOTIR-11870) ──
+//
+// motir-core relays what GitHub reports about a repository's non-default branches —
+// a pull request opened, reopened or closed, a branch deleted — to motir-ai, which
+// turns each into motir-codegraph's pull-request-state or retire call through its
+// mapping (motir-ai `docs/contract.md`, both routes). The `system.code-graph-forward`
+// job sends one and keeps sending it until the answer is settled.
+//
+// ⚠️ THESE TWO CALLS MAP STATUSES THEMSELVES, NOT THROUGH `errorFromProblem`. That
+// function throws a `MotirAiBadRequestError` for every refusal, the erased
+// organisation's 409 included, and the job needs refusals back as DATA: a refusal is
+// an answer about the branch, final and quiet. The split is:
+//
+//   200 + a known outcome           → `{ kind: 'settled', outcome }`
+//   transport failure · deadline ·
+//   any 5xx (503 codegraph_unavailable included) · 429
+//                                   → throws `MotirAiUnavailableError` (retry)
+//   401                             → throws `MotirAiUnauthorizedError` (our own
+//                                     service token is wrong: loud, never a no-op)
+//   every other 4xx                 → `{ kind: 'refused', status, code }` (final)
+
+/** A pull request's state, as GitHub reports it and motir-ai's route takes it. */
+export type CodeGraphPullRequestState = 'open' | 'closed' | 'merged';
+
+/** One forward's scope: motir-core's organisation and the repository, `owner/name`. */
+export interface CodeGraphForwardScope {
+  coreOrganizationId: string;
+  repoRef: string;
+}
+
+/** One pull request's state on one branch. `mergedAt` exactly when `state` is `merged`. */
+export interface CodeGraphPullRequestStateInput extends CodeGraphForwardScope {
+  ref: string;
+  pullRequestNumber: number;
+  state: CodeGraphPullRequestState;
+  mergedAt?: string;
+  /** When GitHub reported it: the service keeps the newest report per pull request. */
+  reportedAt: string;
+}
+
+/** One deleted branch. */
+export interface CodeGraphRetireInput extends CodeGraphForwardScope {
+  ref: string;
+}
+
+/** The settled answers of a state report; each is final. */
+export const CODE_GRAPH_PULL_REQUEST_STATE_OUTCOMES = [
+  'recorded',
+  'stale',
+  'unknown_ref',
+  'default_branch',
+] as const;
+export type CodeGraphPullRequestStateOutcome =
+  (typeof CODE_GRAPH_PULL_REQUEST_STATE_OUTCOMES)[number];
+
+/** The settled answers of a retire; each is final. */
+export const CODE_GRAPH_RETIRE_OUTCOMES = ['retired', 'already_done', 'default_branch'] as const;
+export type CodeGraphRetireOutcome = (typeof CODE_GRAPH_RETIRE_OUTCOMES)[number];
+
+/** A forward's answer: settled by the service, or refused by motir-ai's route. */
+export type CodeGraphForwardAnswer<O extends string> =
+  | { kind: 'settled'; outcome: O }
+  | { kind: 'refused'; status: number; code: string };
+
+/** The one exchange both forwards share, with the status split above. */
+async function forwardToCodeGraph<O extends string>(
+  route: 'pull-request-state' | 'retire',
+  body: Record<string, unknown>,
+  outcomes: readonly O[],
+): Promise<CodeGraphForwardAnswer<O>> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/code-graph/${route}`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(body),
+  });
+  if (res.ok) {
+    const answer = (await res.json().catch(() => null)) as { outcome?: unknown } | null;
+    const outcome = answer?.outcome;
+    if (typeof outcome !== 'string' || !(outcomes as readonly string[]).includes(outcome)) {
+      throw new MotirAiUnavailableError(
+        `motir-ai returned a malformed 'outcome' from POST /v1/code-graph/${route}`,
+      );
+    }
+    return { kind: 'settled', outcome: outcome as O };
+  }
+  const problem = await readProblem(res);
+  if (res.status >= 500 || res.status === 429) {
+    throw new MotirAiUnavailableError(problem.detail ?? problem.title);
+  }
+  if (res.status === 401) throw new MotirAiUnauthorizedError(problem.detail ?? problem.title);
+  return { kind: 'refused', status: res.status, code: problem.code };
+}
+
+/**
+ * POST /v1/code-graph/pull-request-state — one pull request's state on one branch.
+ * The body is built from the named fields only, so nothing else an input object
+ * carries travels.
+ */
+export function forwardPullRequestState(
+  input: CodeGraphPullRequestStateInput,
+): Promise<CodeGraphForwardAnswer<CodeGraphPullRequestStateOutcome>> {
+  return forwardToCodeGraph(
+    'pull-request-state',
+    {
+      coreOrganizationId: input.coreOrganizationId,
+      repoRef: input.repoRef,
+      ref: input.ref,
+      pullRequestNumber: input.pullRequestNumber,
+      state: input.state,
+      ...(input.state === 'merged' && input.mergedAt !== undefined
+        ? { mergedAt: input.mergedAt }
+        : {}),
+      reportedAt: input.reportedAt,
+    },
+    CODE_GRAPH_PULL_REQUEST_STATE_OUTCOMES,
+  );
+}
+
+/** POST /v1/code-graph/retire — one deleted branch, from the named fields only. */
+export function forwardRetire(
+  input: CodeGraphRetireInput,
+): Promise<CodeGraphForwardAnswer<CodeGraphRetireOutcome>> {
+  return forwardToCodeGraph(
+    'retire',
+    { coreOrganizationId: input.coreOrganizationId, repoRef: input.repoRef, ref: input.ref },
+    CODE_GRAPH_RETIRE_OUTCOMES,
+  );
 }
 
 /**

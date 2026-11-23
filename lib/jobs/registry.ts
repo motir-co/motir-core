@@ -36,6 +36,7 @@ import { billingSeatSync } from './definitions/billingSeatSync';
 import { platformMeterReport } from './definitions/platformMeterReport';
 import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { codeGraphRefresh } from './definitions/codeGraphRefresh';
+import { codeGraphForward } from './definitions/codeGraphForward';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
 import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
 import { monitorBugEnrichBackfill } from './definitions/monitorBugEnrichBackfill';
@@ -167,6 +168,7 @@ export const jobDefinitions = [
   platformMeterReport,
   codeGraphIndex,
   codeGraphRefresh,
+  codeGraphForward,
   outwardBugTelemetryOnCreated,
   monitorBugEnrichOnCreated,
   monitorBugEnrichBackfill,
