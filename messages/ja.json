@@ -4792,6 +4792,85 @@
           "function": "関数",
           "container": "コンテナ"
         }
+      },
+      "health": {
+        "heading": "ヘルス",
+        "state": {
+          "healthy": "正常",
+          "unhealthy": "異常",
+          "suspended": "停止中",
+          "crashed": "クラッシュ",
+          "deploying": "デプロイ中"
+        },
+        "since": "{state}（{duration}）",
+        "line": {
+          "healthy": "{path} のヘルスチェックに応答しています。",
+          "unhealthy": "{path} のヘルスチェックが 2 回連続で失敗しました。",
+          "suspended": "リクエストがないためスリープしています。次のリクエストで起動します。",
+          "crashed": "プロセスが停止しました。{target} が再起動しています。",
+          "crashedOom": "メモリ不足でプロセスが停止しました。{target} が再起動しています。",
+          "deploying": "リリース {commit} を展開中です。公開されるまで現在のリリースが引き続き応答します。",
+          "deployingUnnamed": "新しいリリースを展開中です。公開されるまで現在のリリースが引き続き応答します。"
+        },
+        "unreachable": "Motir は {address} に接続して確認できません。これは Motir が最後に確認した状態です。アプリ自体は正常に動作している可能性があります。",
+        "unreachableNoAddress": "Motir はこのアプリに接続して確認できません。これは Motir が最後に確認した状態です。アプリ自体は正常に動作している可能性があります。",
+        "pending": "Motir はまだこのアプリを確認していません。リリースが公開されてから 1 分以内に最初の確認が行われます。",
+        "loading": "ヘルスを確認しています…",
+        "failed": "このアプリのヘルスを読み込めませんでした。",
+        "retry": "再試行"
+      },
+      "events": {
+        "heading": "クラッシュイベント",
+        "empty": "このアプリのクラッシュは記録されていません。",
+        "reason": {
+          "exit": "コード {code} で終了",
+          "exited": "終了",
+          "oom": "メモリ不足",
+          "http": "ヘルスチェック失敗：HTTP {status}",
+          "timeout": "ヘルスチェック失敗：タイムアウト"
+        },
+        "release": "リリース <code>{commit}</code>",
+        "rolledBackSince": "その後ロールバック済み",
+        "showLines": "{count, plural, other {直前の # 行を表示}}",
+        "hideLines": "直前の行を隠す"
+      },
+      "logs": {
+        "heading": "ログ",
+        "order": "新しい順",
+        "range": {
+          "label": "期間",
+          "15m": "15 分",
+          "1h": "1 時間",
+          "24h": "24 時間",
+          "7d": "7 日"
+        },
+        "rangeSpan": {
+          "15m": "15 分",
+          "1h": "1 時間",
+          "24h": "24 時間",
+          "7d": "7 日"
+        },
+        "filter": "行を絞り込む",
+        "stream": {
+          "app": "アプリ",
+          "platform": "プラットフォーム"
+        },
+        "linesLabel": "ログの行",
+        "line": {
+          "expand": "行全体を表示",
+          "collapse": "この行を折りたたむ"
+        },
+        "more": "さらに前の行を表示",
+        "moreError": "前の行を読み込めませんでした。もう一度お試しください。",
+        "masked": "このアプリの環境変数のシークレット値はすべて *** と表示されます。",
+        "asleep": "アプリがスリープする直前の行です。",
+        "noMatch": "過去 {range} に「{filter}」に一致する行はありません。",
+        "empty": "過去 {range} の行はありません。",
+        "unavailable": "{target} からこのアプリのログが返されませんでした。これは {target} のログサービスの問題で、アプリの問題ではありません。アプリは正常に動作している可能性があります。古い行を現在のものとして表示することはありません。",
+        "failed": "このアプリのログを読み込めませんでした。",
+        "retry": "再試行",
+        "loading": "行を読み込んでいます…",
+        "noRelease": "最初のリリースが公開されると、ここにログが表示されます。"
       }
     },
     "workspaceAddress": {

@@ -4792,6 +4792,85 @@
           "function": "função",
           "container": "contêiner"
         }
+      },
+      "health": {
+        "heading": "Saúde",
+        "state": {
+          "healthy": "Saudável",
+          "unhealthy": "Com falhas",
+          "suspended": "Em repouso",
+          "crashed": "Travou",
+          "deploying": "Implantando"
+        },
+        "since": "{state} há {duration}",
+        "line": {
+          "healthy": "Respondendo à verificação de saúde em {path}.",
+          "unhealthy": "A verificação de saúde em {path} falhou duas vezes seguidas.",
+          "suspended": "Em repouso porque nada a solicitou. A próxima requisição a desperta.",
+          "crashed": "O processo parou. {target} está reiniciando-o.",
+          "crashedOom": "O processo foi interrompido: ficou sem memória. {target} está reiniciando-o.",
+          "deploying": "A versão {commit} está sendo implantada. A versão atual continua no ar até que ela entre no ar.",
+          "deployingUnnamed": "Uma nova versão está sendo implantada. A versão atual continua no ar até que ela entre no ar."
+        },
+        "unreachable": "O Motir não consegue acessar {address} para verificá-la. Este é o último estado que o Motir viu; o app em si pode estar funcionando bem.",
+        "unreachableNoAddress": "O Motir não consegue acessar este app para verificá-lo. Este é o último estado que o Motir viu; o app em si pode estar funcionando bem.",
+        "pending": "O Motir ainda não verificou este app. A primeira verificação ocorre até um minuto depois de a versão entrar no ar.",
+        "loading": "Verificando a saúde…",
+        "failed": "Não foi possível ler a saúde deste app.",
+        "retry": "Tentar novamente"
+      },
+      "events": {
+        "heading": "Travamentos",
+        "empty": "Nenhum travamento registrado para este app.",
+        "reason": {
+          "exit": "Encerrado com o código {code}",
+          "exited": "Encerrado",
+          "oom": "Sem memória",
+          "http": "Falha na verificação de saúde: HTTP {status}",
+          "timeout": "Falha na verificação de saúde: tempo esgotado"
+        },
+        "release": "Versão <code>{commit}</code>",
+        "rolledBackSince": "Revertida depois",
+        "showLines": "{count, plural, one {Mostrar a última linha antes} other {Mostrar as últimas # linhas antes}}",
+        "hideLines": "Ocultar as últimas linhas"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Mais recentes primeiro",
+        "range": {
+          "label": "Período",
+          "15m": "15 min",
+          "1h": "1 hora",
+          "24h": "24 horas",
+          "7d": "7 dias"
+        },
+        "rangeSpan": {
+          "15m": "últimos 15 minutos",
+          "1h": "última hora",
+          "24h": "últimas 24 horas",
+          "7d": "últimos 7 dias"
+        },
+        "filter": "Filtrar linhas",
+        "stream": {
+          "app": "app",
+          "platform": "plataforma"
+        },
+        "linesLabel": "Linhas de log",
+        "line": {
+          "expand": "Mostrar a linha inteira",
+          "collapse": "Recolher esta linha"
+        },
+        "more": "Mostrar linhas anteriores",
+        "moreError": "Não foi possível carregar as linhas anteriores. Tente novamente.",
+        "masked": "Todo valor secreto do ambiente deste app aparece como ***.",
+        "asleep": "As últimas linhas antes de o app entrar em repouso.",
+        "noMatch": "Nenhuma linha corresponde a “{filter}” em: {range}.",
+        "empty": "Nenhuma linha em: {range}.",
+        "unavailable": "{target} não retornou os logs deste app. É o serviço de logs de {target}, não o app: ele pode estar funcionando bem. Nenhuma linha antiga é mostrada como atual.",
+        "failed": "Não foi possível carregar os logs deste app.",
+        "retry": "Tentar novamente",
+        "loading": "Carregando linhas…",
+        "noRelease": "Os logs aparecem aqui assim que a primeira versão entrar no ar."
       }
     },
     "workspaceAddress": {

@@ -4792,6 +4792,85 @@
           "function": "función",
           "container": "contenedor"
         }
+      },
+      "health": {
+        "heading": "Estado",
+        "state": {
+          "healthy": "Correcta",
+          "unhealthy": "Con fallos",
+          "suspended": "En reposo",
+          "crashed": "Caída",
+          "deploying": "Desplegando"
+        },
+        "since": "{state} desde hace {duration}",
+        "line": {
+          "healthy": "Responde a su comprobación de estado en {path}.",
+          "unhealthy": "Su comprobación de estado en {path} ha fallado dos veces seguidas.",
+          "suspended": "En reposo porque nadie la ha solicitado. La próxima solicitud la despierta.",
+          "crashed": "El proceso se detuvo. {target} lo está reiniciando.",
+          "crashedOom": "El proceso se detuvo: se quedó sin memoria. {target} lo está reiniciando.",
+          "deploying": "La versión {commit} se está desplegando. La versión actual sigue en servicio hasta que esté en vivo.",
+          "deployingUnnamed": "Se está desplegando una nueva versión. La versión actual sigue en servicio hasta que esté en vivo."
+        },
+        "unreachable": "Motir no puede acceder a {address} para comprobarla. Es el último estado que vio Motir; puede que la aplicación funcione bien.",
+        "unreachableNoAddress": "Motir no puede acceder a esta aplicación para comprobarla. Es el último estado que vio Motir; puede que la aplicación funcione bien.",
+        "pending": "Motir todavía no ha comprobado esta aplicación. La primera comprobación se hace en el minuto siguiente a que la versión esté en vivo.",
+        "loading": "Comprobando el estado…",
+        "failed": "No se pudo leer el estado de esta aplicación.",
+        "retry": "Reintentar"
+      },
+      "events": {
+        "heading": "Caídas",
+        "empty": "No hay caídas registradas para esta aplicación.",
+        "reason": {
+          "exit": "Terminó con el código {code}",
+          "exited": "Terminó",
+          "oom": "Sin memoria",
+          "http": "Falló la comprobación de estado: HTTP {status}",
+          "timeout": "Falló la comprobación de estado: tiempo agotado"
+        },
+        "release": "Versión <code>{commit}</code>",
+        "rolledBackSince": "Revertida desde entonces",
+        "showLines": "{count, plural, one {Mostrar la última línea anterior} other {Mostrar las # últimas líneas anteriores}}",
+        "hideLines": "Ocultar las últimas líneas"
+      },
+      "logs": {
+        "heading": "Registros",
+        "order": "Más recientes primero",
+        "range": {
+          "label": "Intervalo",
+          "15m": "15 min",
+          "1h": "1 hora",
+          "24h": "24 horas",
+          "7d": "7 días"
+        },
+        "rangeSpan": {
+          "15m": "últimos 15 minutos",
+          "1h": "última hora",
+          "24h": "últimas 24 horas",
+          "7d": "últimos 7 días"
+        },
+        "filter": "Filtrar líneas",
+        "stream": {
+          "app": "app",
+          "platform": "plataforma"
+        },
+        "linesLabel": "Líneas de registro",
+        "line": {
+          "expand": "Mostrar la línea completa",
+          "collapse": "Contraer esta línea"
+        },
+        "more": "Mostrar líneas anteriores",
+        "moreError": "No se pudieron cargar las líneas anteriores. Vuelve a intentarlo.",
+        "masked": "Cada valor secreto del entorno de esta aplicación se muestra como ***.",
+        "asleep": "Las últimas líneas antes de que la aplicación entrara en reposo.",
+        "noMatch": "Ninguna línea coincide con “{filter}” en: {range}.",
+        "empty": "No hay líneas en: {range}.",
+        "unavailable": "{target} no devolvió los registros de esta aplicación. Es el servicio de registros de {target}, no la aplicación: puede que siga funcionando bien. No se muestran líneas antiguas como actuales.",
+        "failed": "No se pudieron cargar los registros de esta aplicación.",
+        "retry": "Reintentar",
+        "loading": "Cargando líneas…",
+        "noRelease": "Los registros aparecen aquí en cuanto la primera versión esté en vivo."
       }
     },
     "workspaceAddress": {

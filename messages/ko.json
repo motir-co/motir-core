@@ -4792,6 +4792,85 @@
           "function": "함수",
           "container": "컨테이너"
         }
+      },
+      "health": {
+        "heading": "상태",
+        "state": {
+          "healthy": "정상",
+          "unhealthy": "비정상",
+          "suspended": "일시 중지됨",
+          "crashed": "충돌",
+          "deploying": "배포 중"
+        },
+        "since": "{state} · {duration}째",
+        "line": {
+          "healthy": "{path}에서 상태 확인에 응답하고 있습니다.",
+          "unhealthy": "{path}의 상태 확인이 두 번 연속 실패했습니다.",
+          "suspended": "요청이 없어 잠자고 있습니다. 다음 요청이 오면 깨어납니다.",
+          "crashed": "프로세스가 중지되었습니다. {target}에서 다시 시작하고 있습니다.",
+          "crashedOom": "메모리가 부족해 프로세스가 중지되었습니다. {target}에서 다시 시작하고 있습니다.",
+          "deploying": "릴리스 {commit}을(를) 배포하고 있습니다. 라이브가 될 때까지 현재 릴리스가 계속 서비스합니다.",
+          "deployingUnnamed": "새 릴리스를 배포하고 있습니다. 라이브가 될 때까지 현재 릴리스가 계속 서비스합니다."
+        },
+        "unreachable": "Motir가 {address}에 연결해 확인할 수 없습니다. Motir가 마지막으로 확인한 상태이며, 앱 자체는 정상일 수 있습니다.",
+        "unreachableNoAddress": "Motir가 이 앱에 연결해 확인할 수 없습니다. Motir가 마지막으로 확인한 상태이며, 앱 자체는 정상일 수 있습니다.",
+        "pending": "Motir가 아직 이 앱을 확인하지 않았습니다. 릴리스가 라이브가 된 후 1분 안에 첫 확인이 실행됩니다.",
+        "loading": "상태를 확인하는 중…",
+        "failed": "이 앱의 상태를 읽지 못했습니다.",
+        "retry": "다시 시도"
+      },
+      "events": {
+        "heading": "충돌 이벤트",
+        "empty": "이 앱에 기록된 충돌이 없습니다.",
+        "reason": {
+          "exit": "코드 {code}(으)로 종료됨",
+          "exited": "종료됨",
+          "oom": "메모리 부족",
+          "http": "상태 확인 실패: HTTP {status}",
+          "timeout": "상태 확인 실패: 시간 초과"
+        },
+        "release": "릴리스 <code>{commit}</code>",
+        "rolledBackSince": "이후 롤백됨",
+        "showLines": "{count, plural, other {직전 #줄 보기}}",
+        "hideLines": "직전 줄 숨기기"
+      },
+      "logs": {
+        "heading": "로그",
+        "order": "최신순",
+        "range": {
+          "label": "기간",
+          "15m": "15분",
+          "1h": "1시간",
+          "24h": "24시간",
+          "7d": "7일"
+        },
+        "rangeSpan": {
+          "15m": "15분",
+          "1h": "1시간",
+          "24h": "24시간",
+          "7d": "7일"
+        },
+        "filter": "줄 필터링",
+        "stream": {
+          "app": "앱",
+          "platform": "플랫폼"
+        },
+        "linesLabel": "로그 줄",
+        "line": {
+          "expand": "전체 줄 보기",
+          "collapse": "이 줄 접기"
+        },
+        "more": "이전 줄 보기",
+        "moreError": "이전 줄을 불러오지 못했습니다. 다시 시도하세요.",
+        "masked": "이 앱 환경의 모든 비밀 값은 ***로 표시됩니다.",
+        "asleep": "앱이 잠들기 전 마지막 줄입니다.",
+        "noMatch": "지난 {range} 동안 “{filter}”와(과) 일치하는 줄이 없습니다.",
+        "empty": "지난 {range} 동안의 줄이 없습니다.",
+        "unavailable": "{target}에서 이 앱의 로그를 반환하지 않았습니다. 앱이 아니라 {target}의 로그 서비스 문제이며, 앱은 정상적으로 실행 중일 수 있습니다. 이전 줄을 현재 것처럼 보여주지 않습니다.",
+        "failed": "이 앱의 로그를 불러오지 못했습니다.",
+        "retry": "다시 시도",
+        "loading": "줄을 불러오는 중…",
+        "noRelease": "첫 릴리스가 라이브가 되면 여기에 로그가 표시됩니다."
       }
     },
     "workspaceAddress": {

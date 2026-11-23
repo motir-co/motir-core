@@ -4792,6 +4792,85 @@
           "function": "Function",
           "container": "Container"
         }
+      },
+      "health": {
+        "heading": "Zustand",
+        "state": {
+          "healthy": "Gesund",
+          "unhealthy": "Gestört",
+          "suspended": "Pausiert",
+          "crashed": "Abgestürzt",
+          "deploying": "Wird bereitgestellt"
+        },
+        "since": "{state} seit {duration}",
+        "line": {
+          "healthy": "Beantwortet die Zustandsprüfung unter {path}.",
+          "unhealthy": "Die Zustandsprüfung unter {path} ist zweimal in Folge fehlgeschlagen.",
+          "suspended": "Schläft, weil nichts sie angefragt hat. Die nächste Anfrage weckt sie.",
+          "crashed": "Der Prozess wurde beendet. {target} startet ihn neu.",
+          "crashedOom": "Der Prozess wurde beendet: Der Arbeitsspeicher war erschöpft. {target} startet ihn neu.",
+          "deploying": "Release {commit} wird ausgerollt. Das aktuelle Release bedient weiter, bis es live ist.",
+          "deployingUnnamed": "Ein neues Release wird ausgerollt. Das aktuelle Release bedient weiter, bis es live ist."
+        },
+        "unreachable": "Motir erreicht {address} nicht, um es zu prüfen. Dies ist der letzte Zustand, den Motir gesehen hat; die App selbst läuft möglicherweise einwandfrei.",
+        "unreachableNoAddress": "Motir erreicht diese App nicht, um sie zu prüfen. Dies ist der letzte Zustand, den Motir gesehen hat; die App selbst läuft möglicherweise einwandfrei.",
+        "pending": "Motir hat diese App noch nicht geprüft. Die erste Prüfung läuft innerhalb einer Minute, nachdem das Release live ist.",
+        "loading": "Zustand wird geprüft…",
+        "failed": "Der Zustand dieser App konnte nicht gelesen werden.",
+        "retry": "Erneut versuchen"
+      },
+      "events": {
+        "heading": "Absturzereignisse",
+        "empty": "Für diese App sind keine Abstürze verzeichnet.",
+        "reason": {
+          "exit": "Mit Code {code} beendet",
+          "exited": "Beendet",
+          "oom": "Arbeitsspeicher erschöpft",
+          "http": "Zustandsprüfung fehlgeschlagen: HTTP {status}",
+          "timeout": "Zustandsprüfung fehlgeschlagen: Zeitüberschreitung"
+        },
+        "release": "Release <code>{commit}</code>",
+        "rolledBackSince": "Seitdem zurückgesetzt",
+        "showLines": "{count, plural, one {Die letzte Zeile davor anzeigen} other {Die letzten # Zeilen davor anzeigen}}",
+        "hideLines": "Letzte Zeilen ausblenden"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Neueste zuerst",
+        "range": {
+          "label": "Zeitraum",
+          "15m": "15 Min.",
+          "1h": "1 Stunde",
+          "24h": "24 Stunden",
+          "7d": "7 Tage"
+        },
+        "rangeSpan": {
+          "15m": "15 Minuten",
+          "1h": "Stunde",
+          "24h": "24 Stunden",
+          "7d": "7 Tage"
+        },
+        "filter": "Zeilen filtern",
+        "stream": {
+          "app": "App",
+          "platform": "Plattform"
+        },
+        "linesLabel": "Logzeilen",
+        "line": {
+          "expand": "Ganze Zeile anzeigen",
+          "collapse": "Zeile einklappen"
+        },
+        "more": "Frühere Zeilen anzeigen",
+        "moreError": "Frühere Zeilen konnten nicht geladen werden. Versuchen Sie es erneut.",
+        "masked": "Jeder geheime Wert aus der Umgebung dieser App wird als *** angezeigt.",
+        "asleep": "Die letzten Zeilen, bevor die App eingeschlafen ist.",
+        "noMatch": "Keine Zeilen passen zu „{filter}“ in den letzten {range}.",
+        "empty": "Keine Zeilen in den letzten {range}.",
+        "unavailable": "{target} hat die Logs dieser App nicht geliefert. Das betrifft den Logdienst von {target}, nicht die App: Sie läuft möglicherweise einwandfrei. Ältere Zeilen werden nicht als aktuell angezeigt.",
+        "failed": "Die Logs dieser App konnten nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "loading": "Zeilen werden geladen…",
+        "noRelease": "Logs erscheinen hier, sobald das erste Release live ist."
       }
     },
     "workspaceAddress": {

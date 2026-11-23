@@ -69,11 +69,23 @@ const FINDINGS_BUG_KEY = 'platformAdmin.plannerFindings.status.bugWithKey';
 // The idle policy names an AWS app's shape (MOTIR-12107); « container » is the
 // word Italian and Dutch use as well.
 const IDLE_SHAPE_CONTAINER = 'settings.production.idle.shape.container';
+// The Production panel's live app operations (MOTIR-12109) use words several
+// languages spell as English does: « 15 min » (the minute's abbreviation), « app »
+// (French, Spanish, Italian, Dutch and Portuguese), « Logs » (German, Dutch and
+// Portuguese), « platform » (Dutch) and « Release {commit} » (German and Dutch,
+// the word their catalogues already use for a release).
+const LIVE_OPS = 'settings.production.logs.';
+const LIVE_OPS_RANGE = `${LIVE_OPS}range.15m`;
+const LIVE_OPS_APP = `${LIVE_OPS}stream.app`;
+const LIVE_OPS_LOGS = `${LIVE_OPS}heading`;
+const LIVE_OPS_RELEASE = 'settings.production.events.release';
 const SAME_WORD: Record<string, string[]> = {
   zh: [...FINDINGS_NAMES],
   ko: [...FINDINGS_NAMES],
   ja: [...FINDINGS_NAMES],
   it: [
+    LIVE_OPS_RANGE,
+    LIVE_OPS_APP,
     ...FINDINGS_NAMES,
     FINDINGS_BUG_KEY,
     'platformAdmin.plannerFindings.attribution.corpus',
@@ -81,6 +93,8 @@ const SAME_WORD: Record<string, string[]> = {
     IDLE_SHAPE_CONTAINER,
   ],
   fr: [
+    LIVE_OPS_RANGE,
+    LIVE_OPS_APP,
     'reports.workload.tableTotal', // « Total »
     'platformAdmin.jobs.pageLabel', // « Page {page} »
     DNS_TYPE,
@@ -108,6 +122,8 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.promote.fieldType',
   ],
   es: [
+    LIVE_OPS_RANGE,
+    LIVE_OPS_APP,
     'reports.workload.tableTotal', // « Total »
     'reports.cvr.seriesLabel', // « Series »
     ...FINDINGS_NAMES,
@@ -120,6 +136,9 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.usage.failed.confirm.error',
   ],
   pt: [
+    LIVE_OPS_LOGS,
+    LIVE_OPS_RANGE,
+    LIVE_OPS_APP,
     'reports.workload.tableTotal', // « Total »
     'platformAdmin.shell.navJobs',
     'platformAdmin.jobs.title',
@@ -129,6 +148,8 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.attribution.corpus',
   ],
   de: [
+    LIVE_OPS_RELEASE,
+    LIVE_OPS_LOGS,
     ...JOBS_STATUS,
     'settings.customDomains.dialog.label',
     'settings.customDomains.records.name',
@@ -140,6 +161,11 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.triage.title',
   ],
   nl: [
+    LIVE_OPS_RELEASE,
+    LIVE_OPS_LOGS,
+    LIVE_OPS_RANGE,
+    LIVE_OPS_APP,
+    `${LIVE_OPS}stream.platform`,
     ...JOBS_STATUS,
     IDLE_SHAPE_CONTAINER, // « container »
     DNS_TYPE,
@@ -159,6 +185,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.promote.fieldType',
   ],
   pl: [
+    LIVE_OPS_RANGE,
     ...JOBS_STATUS,
     ...FINDINGS_NAMES,
     FINDINGS_BUG_KEY,

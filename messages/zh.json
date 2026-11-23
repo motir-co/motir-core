@@ -4792,6 +4792,85 @@
           "function": "函数",
           "container": "容器"
         }
+      },
+      "health": {
+        "heading": "健康状况",
+        "state": {
+          "healthy": "健康",
+          "unhealthy": "异常",
+          "suspended": "已休眠",
+          "crashed": "已崩溃",
+          "deploying": "部署中"
+        },
+        "since": "{state}已 {duration}",
+        "line": {
+          "healthy": "正在响应 {path} 的健康检查。",
+          "unhealthy": "{path} 的健康检查已连续两次失败。",
+          "suspended": "因没有请求而休眠。下一个请求会唤醒它。",
+          "crashed": "进程已停止。{target} 正在重启它。",
+          "crashedOom": "进程因内存耗尽而被停止。{target} 正在重启它。",
+          "deploying": "发布 {commit} 正在上线。在它上线之前，当前发布继续提供服务。",
+          "deployingUnnamed": "新的发布正在上线。在它上线之前，当前发布继续提供服务。"
+        },
+        "unreachable": "Motir 无法连接 {address} 进行检查。这是 Motir 最后看到的状态；应用本身可能运行正常。",
+        "unreachableNoAddress": "Motir 无法连接此应用进行检查。这是 Motir 最后看到的状态；应用本身可能运行正常。",
+        "pending": "Motir 尚未检查此应用。发布上线后一分钟内会进行首次检查。",
+        "loading": "正在检查健康状况…",
+        "failed": "无法读取此应用的健康状况。",
+        "retry": "重试"
+      },
+      "events": {
+        "heading": "崩溃事件",
+        "empty": "此应用没有崩溃记录。",
+        "reason": {
+          "exit": "以代码 {code} 退出",
+          "exited": "已退出",
+          "oom": "内存耗尽",
+          "http": "健康检查失败：HTTP {status}",
+          "timeout": "健康检查失败：超时"
+        },
+        "release": "发布 <code>{commit}</code>",
+        "rolledBackSince": "之后已回滚",
+        "showLines": "{count, plural, other {显示之前的最后 # 行}}",
+        "hideLines": "隐藏最后几行"
+      },
+      "logs": {
+        "heading": "日志",
+        "order": "最新的在前",
+        "range": {
+          "label": "时间范围",
+          "15m": "15 分钟",
+          "1h": "1 小时",
+          "24h": "24 小时",
+          "7d": "7 天"
+        },
+        "rangeSpan": {
+          "15m": "15 分钟",
+          "1h": "1 小时",
+          "24h": "24 小时",
+          "7d": "7 天"
+        },
+        "filter": "筛选行",
+        "stream": {
+          "app": "应用",
+          "platform": "平台"
+        },
+        "linesLabel": "日志行",
+        "line": {
+          "expand": "显示整行",
+          "collapse": "收起此行"
+        },
+        "more": "显示更早的行",
+        "moreError": "无法加载更早的行。请重试。",
+        "masked": "此应用环境中的每个机密值都显示为 ***。",
+        "asleep": "应用休眠前的最后几行。",
+        "noMatch": "最近 {range} 内没有与“{filter}”匹配的行。",
+        "empty": "最近 {range} 内没有日志行。",
+        "unavailable": "{target} 没有返回此应用的日志。这来自 {target} 的日志服务，而不是应用：应用可能仍在正常运行。不会把更早的行当作当前日志显示。",
+        "failed": "无法加载此应用的日志。",
+        "retry": "重试",
+        "loading": "正在加载行…",
+        "noRelease": "第一个发布上线后，日志会显示在这里。"
       }
     },
     "workspaceAddress": {

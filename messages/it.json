@@ -4792,6 +4792,85 @@
           "function": "funzione",
           "container": "container"
         }
+      },
+      "health": {
+        "heading": "Stato",
+        "state": {
+          "healthy": "Funzionante",
+          "unhealthy": "Con errori",
+          "suspended": "Sospesa",
+          "crashed": "Arrestata",
+          "deploying": "In distribuzione"
+        },
+        "since": "{state} da {duration}",
+        "line": {
+          "healthy": "Risponde al controllo di stato su {path}.",
+          "unhealthy": "Il controllo di stato su {path} non è riuscito due volte di seguito.",
+          "suspended": "Sospesa perché nessuno l’ha richiesta. La prossima richiesta la riattiva.",
+          "crashed": "Il processo si è arrestato. {target} lo sta riavviando.",
+          "crashedOom": "Il processo è stato arrestato: ha esaurito la memoria. {target} lo sta riavviando.",
+          "deploying": "Il rilascio {commit} è in distribuzione. Il rilascio attuale resta in servizio finché non è online.",
+          "deployingUnnamed": "Un nuovo rilascio è in distribuzione. Il rilascio attuale resta in servizio finché non è online."
+        },
+        "unreachable": "Motir non riesce a raggiungere {address} per controllarla. Questo è l’ultimo stato visto da Motir; l’app potrebbe funzionare correttamente.",
+        "unreachableNoAddress": "Motir non riesce a raggiungere questa app per controllarla. Questo è l’ultimo stato visto da Motir; l’app potrebbe funzionare correttamente.",
+        "pending": "Motir non ha ancora controllato questa app. Il primo controllo avviene entro un minuto da quando il rilascio è online.",
+        "loading": "Controllo dello stato…",
+        "failed": "Impossibile leggere lo stato di questa app.",
+        "retry": "Riprova"
+      },
+      "events": {
+        "heading": "Arresti anomali",
+        "empty": "Nessun arresto anomalo registrato per questa app.",
+        "reason": {
+          "exit": "Terminata con codice {code}",
+          "exited": "Terminata",
+          "oom": "Memoria esaurita",
+          "http": "Controllo di stato non riuscito: HTTP {status}",
+          "timeout": "Controllo di stato non riuscito: tempo scaduto"
+        },
+        "release": "Rilascio <code>{commit}</code>",
+        "rolledBackSince": "Annullato in seguito",
+        "showLines": "{count, plural, one {Mostra l’ultima riga precedente} other {Mostra le ultime # righe precedenti}}",
+        "hideLines": "Nascondi le ultime righe"
+      },
+      "logs": {
+        "heading": "Log",
+        "order": "Prima i più recenti",
+        "range": {
+          "label": "Intervallo",
+          "15m": "15 min",
+          "1h": "1 ora",
+          "24h": "24 ore",
+          "7d": "7 giorni"
+        },
+        "rangeSpan": {
+          "15m": "ultimi 15 minuti",
+          "1h": "ultima ora",
+          "24h": "ultime 24 ore",
+          "7d": "ultimi 7 giorni"
+        },
+        "filter": "Filtra le righe",
+        "stream": {
+          "app": "app",
+          "platform": "piattaforma"
+        },
+        "linesLabel": "Righe di log",
+        "line": {
+          "expand": "Mostra la riga intera",
+          "collapse": "Comprimi questa riga"
+        },
+        "more": "Mostra righe precedenti",
+        "moreError": "Impossibile caricare le righe precedenti. Riprova.",
+        "masked": "Ogni valore segreto dell’ambiente di questa app viene mostrato come ***.",
+        "asleep": "Le ultime righe prima che l’app venisse sospesa.",
+        "noMatch": "Nessuna riga corrisponde a “{filter}” in: {range}.",
+        "empty": "Nessuna riga in: {range}.",
+        "unavailable": "{target} non ha restituito i log di questa app. Si tratta del servizio di log di {target}, non dell’app: potrebbe funzionare correttamente. Nessuna riga più vecchia viene mostrata come attuale.",
+        "failed": "Impossibile caricare i log di questa app.",
+        "retry": "Riprova",
+        "loading": "Caricamento delle righe…",
+        "noRelease": "I log compaiono qui non appena il primo rilascio è online."
       }
     },
     "workspaceAddress": {

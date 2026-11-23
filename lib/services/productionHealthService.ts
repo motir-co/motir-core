@@ -419,6 +419,7 @@ function toEventDto(row: HostedApplicationEventRow) {
     reason: row.reason,
     lastLogLines: toLogLines(row.lastLogLines),
     releaseId: row.releaseId,
+    release: row.release ? { commitSha: row.release.commitSha, state: row.release.state } : null,
   };
 }
 
@@ -440,7 +441,7 @@ async function getHealthForRepository(
     actor.workspaceId,
     projectRepositoryId,
   );
-  if (!app) return { state: null, since: null, condition: null, events: [] };
+  if (!app) return { state: null, since: null, condition: null, healthCheckPath: null, events: [] };
   return withWorkspaceServiceContext(actor.workspaceId, async (tx) => {
     const health = app.currentRelease
       ? await hostedApplicationHealthRepository.findForApplication(app.id, tx)
@@ -454,6 +455,7 @@ async function getHealthForRepository(
       state: health?.state ?? null,
       since: health ? health.since.toISOString() : null,
       condition: health?.condition ?? null,
+      healthCheckPath: health?.healthCheckPath ?? null,
       events: events.map(toEventDto),
     };
   });

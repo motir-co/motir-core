@@ -1,4 +1,5 @@
 import type { ReleaseLogStream } from '@motir/orchestrator';
+import type { HostedReleaseState } from '@/generated/prisma/client';
 import type {
   HostedApplicationEventKind,
   HostedHealthCondition,
@@ -29,6 +30,9 @@ export interface ProductionHealthEventDto {
   /** The release it happened on — what a Roll back from it leaves; null when
    *  that release is gone. */
   releaseId: string | null;
+  /** That release's commit and its state now (a `rolled_back` one reads
+   *  "Rolled back since"); null when it is gone. */
+  release: { commitSha: string; state: HostedReleaseState } | null;
 }
 
 export interface ProductionHealthDto {
@@ -37,5 +41,8 @@ export interface ProductionHealthDto {
   /** ISO 8601; null with no state. */
   since: string | null;
   condition: HostedHealthCondition | null;
+  /** The path the health probe asks, from the running release's manifest;
+   *  null before it has been read. */
+  healthCheckPath: string | null;
   events: ProductionHealthEventDto[];
 }

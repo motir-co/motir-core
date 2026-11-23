@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
+import type { ProductionHealthDto } from '@/lib/dto/productionHealth';
 import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
 import { ProductionPanel } from '@/components/hosting/ProductionPanel';
 import { ProductionError } from '@/components/hosting/ProductionError';
@@ -83,6 +84,27 @@ function deferred() {
   return { promise, resolve };
 }
 
+const HEALTH: ProductionHealthDto = {
+  state: 'healthy',
+  since: NOW.toISOString(),
+  condition: null,
+  healthCheckPath: '/api/health',
+  events: [],
+};
+
+/** The panel's own routes go to `mock`. Health and Logs (MOTIR-12109) read on
+ *  their own and are answered here, so a call count is the release routes' alone;
+ *  `tests/components/productionRuntime.test.tsx` owns those two. */
+function stubPanelFetch(mock: (url: string, init?: RequestInit) => Promise<Response>) {
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    if (String(url).startsWith(`${BASE}/health`)) return Promise.resolve(respond(200, HEALTH));
+    if (String(url).startsWith(`${BASE}/logs`)) {
+      return Promise.resolve(respond(200, { lines: [], cursor: null, state: 'ok' }));
+    }
+    return mock(url, init);
+  });
+}
+
 function render(initial: ProductionPanelDto) {
   return renderWithIntl(
     <ProductionPanel
@@ -90,6 +112,7 @@ function render(initial: ProductionPanelDto) {
       repositoryId="row-1"
       repositoryName="shop"
       initial={initial}
+      initialHealth={initial.application ? HEALTH : null}
     />,
     { now: NOW },
   );
@@ -105,6 +128,7 @@ beforeEach(() => {
   n = 0;
   push.mockReset();
   refresh.mockReset();
+  stubPanelFetch((url) => Promise.reject(new Error(`unexpected fetch: ${url}`)));
 });
 
 afterEach(() => {
@@ -334,7 +358,7 @@ describe('the release history', () => {
     const third = release();
     const page = deferred();
     const fetchMock = vi.fn(() => page.promise);
-    vi.stubGlobal('fetch', fetchMock);
+    stubPanelFetch(fetchMock);
     render(initial);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show more releases' }));
@@ -356,10 +380,7 @@ describe('the release history', () => {
   });
 
   it('says so when the next page cannot be read, and keeps Show more', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => respond(500, {})),
-    );
+    stubPanelFetch(vi.fn(async () => respond(500, {})));
     render(panel({ nextCursor: 'c1' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show more releases' }));
     await flush();
@@ -451,7 +472,7 @@ describe('rolling back', () => {
     const restored = initial.previousRelease!;
     const answer = deferred();
     const fetchMock = vi.fn(() => answer.promise);
-    vi.stubGlobal('fetch', fetchMock);
+    stubPanelFetch(fetchMock);
     render(initial);
     const dialog = await openDialog();
 
@@ -516,8 +537,7 @@ describe('rolling back', () => {
     [403, 'rollback_not_permitted', 'Only project administrators can roll back.'],
     [404, 'repository_not_found', 'This repository is no longer available to you.'],
   ])('a %i %s refusal shows its own message', async (status, code, message) => {
-    vi.stubGlobal(
-      'fetch',
+    stubPanelFetch(
       vi.fn(async () =>
         respond(status, { error: { code, message: 'provider said postgres://u:p@h/db' } }),
       ),
@@ -543,7 +563,7 @@ describe('rolling back', () => {
         respond(502, { error: { code: 'rollback_failed', message: 'fly: 500 internal' } }),
       )
       .mockRejectedValueOnce(new TypeError('network'));
-    vi.stubGlobal('fetch', fetchMock);
+    stubPanelFetch(fetchMock);
     render(initial);
     const dialog = await openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Roll back' }));
@@ -572,7 +592,7 @@ describe('rolling back', () => {
     const fetchMock = vi.fn((url: string) =>
       url.endsWith('/rollback') ? rollback.promise : more.promise,
     );
-    vi.stubGlobal('fetch', fetchMock);
+    stubPanelFetch(fetchMock);
     render(initial);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show more releases' }));
@@ -611,10 +631,7 @@ describe('productionRefusalKey', () => {
   });
 
   it('answers the design’s error when a 200 carries no JSON', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('<html>', { status: 200 })),
-    );
+    stubPanelFetch(vi.fn(async () => new Response('<html>', { status: 200 })));
     const { productionPanelClient } = await import('@/lib/hosting/productionPanelClient');
     expect(await productionPanelClient.read('ACME', 'row-1')).toEqual({
       ok: false,

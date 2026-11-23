@@ -4792,6 +4792,85 @@
           "function": "funkcja",
           "container": "kontener"
         }
+      },
+      "health": {
+        "heading": "Stan",
+        "state": {
+          "healthy": "Sprawna",
+          "unhealthy": "Niesprawna",
+          "suspended": "Uśpiona",
+          "crashed": "Awaria",
+          "deploying": "Wdrażanie"
+        },
+        "since": "{state} od {duration}",
+        "line": {
+          "healthy": "Odpowiada na kontrolę stanu pod {path}.",
+          "unhealthy": "Kontrola stanu pod {path} nie powiodła się dwa razy z rzędu.",
+          "suspended": "Uśpiona, bo nic jej nie wywołało. Następne żądanie ją obudzi.",
+          "crashed": "Proces się zatrzymał. {target} uruchamia go ponownie.",
+          "crashedOom": "Proces został zatrzymany: zabrakło mu pamięci. {target} uruchamia go ponownie.",
+          "deploying": "Wydanie {commit} jest wdrażane. Bieżące wydanie działa, dopóki nowe nie trafi na produkcję.",
+          "deployingUnnamed": "Nowe wydanie jest wdrażane. Bieżące wydanie działa, dopóki nowe nie trafi na produkcję."
+        },
+        "unreachable": "Motir nie może połączyć się z {address}, aby ją sprawdzić. To ostatni stan, jaki widział Motir; sama aplikacja może działać poprawnie.",
+        "unreachableNoAddress": "Motir nie może połączyć się z tą aplikacją, aby ją sprawdzić. To ostatni stan, jaki widział Motir; sama aplikacja może działać poprawnie.",
+        "pending": "Motir jeszcze nie sprawdził tej aplikacji. Pierwsza kontrola nastąpi w ciągu minuty od wejścia wydania na produkcję.",
+        "loading": "Sprawdzanie stanu…",
+        "failed": "Nie udało się odczytać stanu tej aplikacji.",
+        "retry": "Spróbuj ponownie"
+      },
+      "events": {
+        "heading": "Awarie",
+        "empty": "Brak zarejestrowanych awarii tej aplikacji.",
+        "reason": {
+          "exit": "Zakończono z kodem {code}",
+          "exited": "Zakończono",
+          "oom": "Brak pamięci",
+          "http": "Kontrola stanu nie powiodła się: HTTP {status}",
+          "timeout": "Kontrola stanu nie powiodła się: przekroczono czas"
+        },
+        "release": "Wydanie <code>{commit}</code>",
+        "rolledBackSince": "Później wycofane",
+        "showLines": "{count, plural, one {Pokaż ostatni wiersz przed awarią} few {Pokaż ostatnie # wiersze przed awarią} many {Pokaż ostatnie # wierszy przed awarią} other {Pokaż ostatnie # wiersza przed awarią}}",
+        "hideLines": "Ukryj ostatnie wiersze"
+      },
+      "logs": {
+        "heading": "Logi",
+        "order": "Najnowsze najpierw",
+        "range": {
+          "label": "Zakres czasu",
+          "15m": "15 min",
+          "1h": "1 godz.",
+          "24h": "24 godz.",
+          "7d": "7 dni"
+        },
+        "rangeSpan": {
+          "15m": "ostatnich 15 minutach",
+          "1h": "ostatniej godzinie",
+          "24h": "ostatnich 24 godzinach",
+          "7d": "ostatnich 7 dniach"
+        },
+        "filter": "Filtruj wiersze",
+        "stream": {
+          "app": "aplikacja",
+          "platform": "platforma"
+        },
+        "linesLabel": "Wiersze logu",
+        "line": {
+          "expand": "Pokaż cały wiersz",
+          "collapse": "Zwiń ten wiersz"
+        },
+        "more": "Pokaż wcześniejsze wiersze",
+        "moreError": "Nie udało się wczytać wcześniejszych wierszy. Spróbuj ponownie.",
+        "masked": "Każda tajna wartość ze środowiska tej aplikacji jest wyświetlana jako ***.",
+        "asleep": "Ostatnie wiersze przed uśpieniem aplikacji.",
+        "noMatch": "Żaden wiersz nie pasuje do „{filter}” w {range}.",
+        "empty": "Brak wierszy w {range}.",
+        "unavailable": "{target} nie zwrócił logów tej aplikacji. To usługa logów {target}, nie aplikacja: może ona nadal działać poprawnie. Starsze wiersze nie są pokazywane jako bieżące.",
+        "failed": "Nie udało się wczytać logów tej aplikacji.",
+        "retry": "Spróbuj ponownie",
+        "loading": "Wczytywanie wierszy…",
+        "noRelease": "Logi pojawią się tutaj, gdy pierwsze wydanie trafi na produkcję."
       }
     },
     "workspaceAddress": {

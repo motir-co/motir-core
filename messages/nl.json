@@ -4792,6 +4792,85 @@
           "function": "functie",
           "container": "container"
         }
+      },
+      "health": {
+        "heading": "Status",
+        "state": {
+          "healthy": "Gezond",
+          "unhealthy": "Ongezond",
+          "suspended": "Gepauzeerd",
+          "crashed": "Gecrasht",
+          "deploying": "Wordt uitgerold"
+        },
+        "since": "{state} sinds {duration}",
+        "line": {
+          "healthy": "Beantwoordt de statuscontrole op {path}.",
+          "unhealthy": "De statuscontrole op {path} is twee keer achter elkaar mislukt.",
+          "suspended": "Slaapt omdat niets erom vroeg. Het volgende verzoek maakt de app wakker.",
+          "crashed": "Het proces is gestopt. {target} start het opnieuw.",
+          "crashedOom": "Het proces is gestopt: het geheugen raakte op. {target} start het opnieuw.",
+          "deploying": "Release {commit} wordt uitgerold. De huidige release blijft draaien tot deze live is.",
+          "deployingUnnamed": "Een nieuwe release wordt uitgerold. De huidige release blijft draaien tot deze live is."
+        },
+        "unreachable": "Motir kan {address} niet bereiken om te controleren. Dit is de laatste status die Motir zag; de app zelf werkt mogelijk prima.",
+        "unreachableNoAddress": "Motir kan deze app niet bereiken om te controleren. Dit is de laatste status die Motir zag; de app zelf werkt mogelijk prima.",
+        "pending": "Motir heeft deze app nog niet gecontroleerd. De eerste controle volgt binnen een minuut nadat de release live is.",
+        "loading": "Status controleren…",
+        "failed": "Kon de status van deze app niet lezen.",
+        "retry": "Opnieuw proberen"
+      },
+      "events": {
+        "heading": "Crashes",
+        "empty": "Geen crashes vastgelegd voor deze app.",
+        "reason": {
+          "exit": "Gestopt met code {code}",
+          "exited": "Gestopt",
+          "oom": "Geheugen vol",
+          "http": "Statuscontrole mislukt: HTTP {status}",
+          "timeout": "Statuscontrole mislukt: time-out"
+        },
+        "release": "Release <code>{commit}</code>",
+        "rolledBackSince": "Inmiddels teruggedraaid",
+        "showLines": "{count, plural, one {De laatste regel ervoor tonen} other {De laatste # regels ervoor tonen}}",
+        "hideLines": "Laatste regels verbergen"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Nieuwste eerst",
+        "range": {
+          "label": "Periode",
+          "15m": "15 min",
+          "1h": "1 uur",
+          "24h": "24 uur",
+          "7d": "7 dagen"
+        },
+        "rangeSpan": {
+          "15m": "15 minuten",
+          "1h": "uur",
+          "24h": "24 uur",
+          "7d": "7 dagen"
+        },
+        "filter": "Regels filteren",
+        "stream": {
+          "app": "app",
+          "platform": "platform"
+        },
+        "linesLabel": "Logregels",
+        "line": {
+          "expand": "Hele regel tonen",
+          "collapse": "Deze regel inklappen"
+        },
+        "more": "Eerdere regels tonen",
+        "moreError": "Kon eerdere regels niet laden. Probeer het opnieuw.",
+        "masked": "Elke geheime waarde uit de omgeving van deze app wordt getoond als ***.",
+        "asleep": "De laatste regels voordat de app ging slapen.",
+        "noMatch": "Geen regels komen overeen met ‘{filter}’ in het laatste {range}.",
+        "empty": "Geen regels in het laatste {range}.",
+        "unavailable": "{target} gaf de logs van deze app niet terug. Dat is de logdienst van {target}, niet de app: die draait mogelijk prima. Oudere regels worden niet als actueel getoond.",
+        "failed": "Kon de logs van deze app niet laden.",
+        "retry": "Opnieuw proberen",
+        "loading": "Regels laden…",
+        "noRelease": "Logs verschijnen hier zodra de eerste release live is."
       }
     },
     "workspaceAddress": {

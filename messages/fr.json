@@ -4792,6 +4792,85 @@
           "function": "fonction",
           "container": "conteneur"
         }
+      },
+      "health": {
+        "heading": "État",
+        "state": {
+          "healthy": "Opérationnelle",
+          "unhealthy": "Défaillante",
+          "suspended": "En veille",
+          "crashed": "Plantée",
+          "deploying": "En déploiement"
+        },
+        "since": "{state} depuis {duration}",
+        "line": {
+          "healthy": "Répond à sa vérification d’état sur {path}.",
+          "unhealthy": "Sa vérification d’état sur {path} a échoué deux fois de suite.",
+          "suspended": "En veille, car personne ne l’a sollicitée. La prochaine requête la réveille.",
+          "crashed": "Le processus s’est arrêté. {target} le redémarre.",
+          "crashedOom": "Le processus a été arrêté : il a manqué de mémoire. {target} le redémarre.",
+          "deploying": "La version {commit} est en cours de déploiement. La version actuelle reste servie jusqu’à ce qu’elle soit en ligne.",
+          "deployingUnnamed": "Une nouvelle version est en cours de déploiement. La version actuelle reste servie jusqu’à ce qu’elle soit en ligne."
+        },
+        "unreachable": "Motir ne parvient pas à joindre {address} pour la vérifier. C’est le dernier état observé par Motir ; l’application elle-même fonctionne peut-être.",
+        "unreachableNoAddress": "Motir ne parvient pas à joindre cette application pour la vérifier. C’est le dernier état observé par Motir ; l’application elle-même fonctionne peut-être.",
+        "pending": "Motir n’a pas encore vérifié cette application. La première vérification a lieu dans la minute qui suit la mise en ligne de la version.",
+        "loading": "Vérification de l’état…",
+        "failed": "Impossible de lire l’état de cette application.",
+        "retry": "Réessayer"
+      },
+      "events": {
+        "heading": "Plantages",
+        "empty": "Aucun plantage enregistré pour cette application.",
+        "reason": {
+          "exit": "Arrêtée avec le code {code}",
+          "exited": "Arrêtée",
+          "oom": "Mémoire insuffisante",
+          "http": "Échec de la vérification d’état : HTTP {status}",
+          "timeout": "Échec de la vérification d’état : délai dépassé"
+        },
+        "release": "Version <code>{commit}</code>",
+        "rolledBackSince": "Annulée depuis",
+        "showLines": "{count, plural, one {Afficher la dernière ligne avant} other {Afficher les # dernières lignes avant}}",
+        "hideLines": "Masquer les dernières lignes"
+      },
+      "logs": {
+        "heading": "Journaux",
+        "order": "Plus récentes d’abord",
+        "range": {
+          "label": "Période",
+          "15m": "15 min",
+          "1h": "1 heure",
+          "24h": "24 heures",
+          "7d": "7 jours"
+        },
+        "rangeSpan": {
+          "15m": "15 dernières minutes",
+          "1h": "dernière heure",
+          "24h": "dernières 24 heures",
+          "7d": "7 derniers jours"
+        },
+        "filter": "Filtrer les lignes",
+        "stream": {
+          "app": "app",
+          "platform": "plateforme"
+        },
+        "linesLabel": "Lignes de journal",
+        "line": {
+          "expand": "Afficher la ligne entière",
+          "collapse": "Replier cette ligne"
+        },
+        "more": "Afficher les lignes précédentes",
+        "moreError": "Impossible de charger les lignes précédentes. Réessayez.",
+        "masked": "Chaque valeur secrète de l’environnement de cette application s’affiche sous la forme ***.",
+        "asleep": "Les dernières lignes avant la mise en veille de l’application.",
+        "noMatch": "Aucune ligne ne correspond à « {filter} » sur la période : {range}.",
+        "empty": "Aucune ligne sur la période : {range}.",
+        "unavailable": "{target} n’a pas renvoyé les journaux de cette application. Il s’agit du service de journaux de {target}, pas de l’application : elle fonctionne peut-être. Aucune ligne plus ancienne n’est présentée comme actuelle.",
+        "failed": "Impossible de charger les journaux de cette application.",
+        "retry": "Réessayer",
+        "loading": "Chargement des lignes…",
+        "noRelease": "Les journaux apparaissent ici dès que la première version est en ligne."
       }
     },
     "workspaceAddress": {

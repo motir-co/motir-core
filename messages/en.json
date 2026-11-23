@@ -4792,6 +4792,85 @@
           "function": "function",
           "container": "container"
         }
+      },
+      "health": {
+        "heading": "Health",
+        "state": {
+          "healthy": "Healthy",
+          "unhealthy": "Unhealthy",
+          "suspended": "Suspended",
+          "crashed": "Crashed",
+          "deploying": "Deploying"
+        },
+        "since": "{state} for {duration}",
+        "line": {
+          "healthy": "Answering its health check at {path}.",
+          "unhealthy": "Its health check at {path} has failed twice in a row.",
+          "suspended": "Asleep because nothing has asked for it. The next request wakes it.",
+          "crashed": "The process stopped. {target} is restarting it.",
+          "crashedOom": "The process was stopped: it ran out of memory. {target} is restarting it.",
+          "deploying": "Release {commit} is rolling out. The current release keeps serving until it is live.",
+          "deployingUnnamed": "A new release is rolling out. The current release keeps serving until it is live."
+        },
+        "unreachable": "Motir can’t reach {address} to check it. This is the last state Motir saw; the app itself may be fine.",
+        "unreachableNoAddress": "Motir can’t reach this app to check it. This is the last state Motir saw; the app itself may be fine.",
+        "pending": "Motir hasn’t checked this app yet. Its first check runs within a minute of the release going live.",
+        "loading": "Checking health…",
+        "failed": "Couldn’t read this app’s health.",
+        "retry": "Try again"
+      },
+      "events": {
+        "heading": "Crash events",
+        "empty": "No crashes recorded for this app.",
+        "reason": {
+          "exit": "Exited with code {code}",
+          "exited": "Exited",
+          "oom": "Out of memory",
+          "http": "Health check failed: HTTP {status}",
+          "timeout": "Health check failed: timed out"
+        },
+        "release": "Release <code>{commit}</code>",
+        "rolledBackSince": "Rolled back since",
+        "showLines": "{count, plural, one {Show the last line before it} other {Show the last # lines before it}}",
+        "hideLines": "Hide the last lines"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Newest first",
+        "range": {
+          "label": "Time range",
+          "15m": "15 min",
+          "1h": "1 hour",
+          "24h": "24 hours",
+          "7d": "7 days"
+        },
+        "rangeSpan": {
+          "15m": "15 minutes",
+          "1h": "hour",
+          "24h": "24 hours",
+          "7d": "7 days"
+        },
+        "filter": "Filter lines",
+        "stream": {
+          "app": "app",
+          "platform": "platform"
+        },
+        "linesLabel": "Log lines",
+        "line": {
+          "expand": "Show the full line",
+          "collapse": "Collapse this line"
+        },
+        "more": "Show earlier lines",
+        "moreError": "Couldn’t load earlier lines. Try again.",
+        "masked": "Every secret value from this app’s Environment is shown as ***.",
+        "asleep": "The last lines before the app went to sleep.",
+        "noMatch": "No lines match “{filter}” in the last {range}.",
+        "empty": "No lines in the last {range}.",
+        "unavailable": "{target} didn’t return this app’s logs. That is {target}’s log service, not the app: it may still be running fine. No older lines are shown as current.",
+        "failed": "Couldn’t load this app’s logs.",
+        "retry": "Try again",
+        "loading": "Loading lines…",
+        "noRelease": "Logs appear here once the first release is live."
       }
     },
     "workspaceAddress": {
