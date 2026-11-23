@@ -519,17 +519,18 @@ describe('the ARRIVAL edge’s reconcile is best-effort — it never costs the c
     expect(await statusOf(card.id)).toBe('in_review');
   });
 
-  it('asks nothing at all for a card that is not at Implemented', async () => {
+  it('asks nothing at all for a card that is not at a source status', async () => {
     // The pre-pass is there to make the ARRIVAL edge honest, and a card that has
     // not arrived is not its business — asking the host for one would pay a
-    // round trip for a verdict that is about to be declined anyway.
+    // round trip for a verdict that is about to be declined anyway. Since
+    // MOTIR-12094 `in_progress` is a source too, so the card waits at `blocked`.
     const s = await makeScenario('edge2-not-implemented@example.com');
     const card = await cardWithPr(s, 'still being worked on', 123);
     await seedRows(
       123,
       THE_THREE.map((n) => [n, 'success'] as [string, 'success']),
     );
-    await workItemsService.updateStatus(card.id, 'in_progress', s.ctx);
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'blocked' } });
 
     const asked: string[] = [];
     const promoted = await promoteIfCiAlreadyGreen(card.id, s.ctx, async (args) => {
@@ -539,7 +540,7 @@ describe('the ARRIVAL edge’s reconcile is best-effort — it never costs the c
 
     expect(asked).toEqual([]);
     expect(promoted).toBe(false);
-    expect(await statusOf(card.id)).toBe('in_progress');
+    expect(await statusOf(card.id)).toBe('blocked');
   });
 
   it('asks nothing for a member whose recorded set is still PENDING', async () => {
