@@ -64,9 +64,10 @@ export type LambdaRuntimeSignal =
  *  (`START`, `END`, an `INIT_REPORT` that succeeded, the app's own output). */
 export function lambdaRuntimeSignal(message: string, at: Date): LambdaRuntimeSignal | null {
   const requestId = /RequestId: ([0-9A-Za-z-]+)/.exec(message)?.[1] ?? null;
-  const exited = /Runtime exited with error: (.+?)\s*$/m.exec(message);
-  if (exited) {
-    const how = exited[1]!;
+  // The rest of the line, trimmed in code: a lazy `(.+?)\s*$` here backtracks
+  // polynomially on a long run of whitespace (CodeQL js/polynomial-redos).
+  const how = /Runtime exited with error: ([^\n\r\u2028\u2029]*)/.exec(message)?.[1]?.trimEnd();
+  if (how) {
     if (/signal: killed/.test(how)) return { kind: 'oom', at, requestId };
     const status = /exit status (-?\d+)/.exec(how);
     return { kind: 'exit', at, exitCode: status ? Number(status[1]) : null, requestId };
