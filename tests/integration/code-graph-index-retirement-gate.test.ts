@@ -1061,7 +1061,8 @@ const KEPT_HITS: Record<string, string> = {
   'tests/ciFleet/retiredFleetKind.test.ts': 'names the retirement migration directory it runs',
   'tests/integration/code-graph-index-retirement-gate.test.ts':
     'this guard and its past-history seeds',
-  'tests/e2e/acceptance-indexer-retired.spec.ts': 'the story E2E’s search for the retired names',
+  'tests/e2e/acceptance-index-fleet-retired.spec.ts':
+    'the story E2E’s search for the retired names',
 };
 
 interface SourceFile {
@@ -1158,11 +1159,9 @@ describe('the architecture guard', () => {
     expect(literalViolations(tracked)).toEqual([]);
   });
 
-  it('every kept hit still exists or is the story E2E, so the list cannot rot silently', () => {
+  it('every kept hit still exists, so the list cannot rot silently', () => {
     const paths = new Set(tracked.map((f) => f.path));
-    const missing = Object.keys(KEPT_HITS).filter(
-      (p) => !paths.has(p) && p !== 'tests/e2e/acceptance-indexer-retired.spec.ts',
-    );
+    const missing = Object.keys(KEPT_HITS).filter((p) => !paths.has(p));
     expect(missing).toEqual([]);
   });
 
