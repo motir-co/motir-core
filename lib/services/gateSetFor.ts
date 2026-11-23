@@ -92,11 +92,14 @@ export interface GateSetForResult extends GateSet {
    */
   readonly deliversPullRequests: boolean;
   /**
-   * Whether EVERY pull request linked to the card is also an ancestor's (Bug MOTIR-11624) —
-   * a child riding its parent run's branch. Such a card owes no merge question, and
-   * {@link reconcileGatesFor} withdraws one it still holds as `set_changed`.
+   * Whether the card has linked pull requests and OWNS NONE of them — a child riding its
+   * parent run's branch (Bug MOTIR-11624), or a card whose every row is an `inherited` copy
+   * of a descendant's link (Bug MOTIR-12091). Such a card owes no merge question, and
+   * {@link reconcileGatesFor} withdraws one it still holds as `set_changed`: a story asked
+   * over an inherited-only set before MOTIR-12091 loses that question on the next
+   * reconcile, the sweep's included, while its child is asked its own.
    */
-  readonly ridesAncestorPullRequestsOnly: boolean;
+  readonly ownsNoLinkedPullRequest: boolean;
   readonly blockedMembers: ReadonlyArray<{
     pullRequestId: string;
     state: string;
@@ -170,11 +173,7 @@ export async function gateSetFor(
   // it as well used to be asked the merge question the moment CI promoted it — an Approve
   // that merges the whole story from one child. Every input below reads the card's OWN
   // members only, so such a child is, for the gates, a card that delivers nothing.
-  const { own: deliveries, ancestorOwned } = await withoutAncestorDeliveries(
-    item,
-    linkedDeliveries,
-    tx,
-  );
+  const { own: deliveries } = await withoutAncestorDeliveries(item, linkedDeliveries, tx);
 
   const members: GateSetMember[] = [];
   const blockedMembers: GateSetForResult['blockedMembers'][number][] = [];
@@ -328,7 +327,7 @@ export async function gateSetFor(
     ...set,
     blockedMembers,
     deliversPullRequests: deliveries.length > 0,
-    ridesAncestorPullRequestsOnly: deliveries.length === 0 && ancestorOwned > 0,
+    ownsNoLinkedPullRequest: deliveries.length === 0 && linkedDeliveries.length > 0,
   };
 }
 
@@ -376,8 +375,8 @@ export async function reconcileGatesFor(
   // included.
   if (item.status !== IN_REVIEW_STATUS_KEY) {
     await withdrawMergeQuestionOffReview(item, tx, set);
-  } else if (set.ridesAncestorPullRequestsOnly) {
-    await withdrawMergeQuestionOfAncestorSet(item, tx);
+  } else if (set.ownsNoLinkedPullRequest) {
+    await withdrawMergeQuestionOfUnownedSet(item, tx);
   }
   // ⚠️ THE REVIEW'S HOLD ON THE PRIMARIES (Bug MOTIR-11992; `approval-gates.md` §12.20). A
   // second cause every caller can see, for the same reason the status axis is one: it is the
@@ -512,14 +511,15 @@ export async function withdrawPrimariesHeldByReview(
 }
 
 /**
- * WITHDRAW THE MERGE QUESTION FROM A CHILD WHOSE EVERY PULL REQUEST IS AN ANCESTOR'S (Bug
- * MOTIR-11624) — its awaiting `pull_request_approval` and the `agent_review` in front of
- * it, superseded as `set_changed`: the card's OWN set is empty, because every member it
- * was linked to belongs to the parent run. It retires a gate raised before the rule (and
- * one raised before the ancestor's link landed) on the next reconcile, the 30-minute
- * sweep's included. A DECIDED gate is never touched.
+ * WITHDRAW THE MERGE QUESTION FROM A CARD THAT OWNS NONE OF ITS LINKED PULL REQUESTS —
+ * its awaiting `pull_request_approval` and the `agent_review` in front of it, superseded as
+ * `set_changed`: the card's OWN set is empty, because every member it was linked to belongs
+ * to the parent run (Bug MOTIR-11624) or is an `inherited` copy of a descendant's link
+ * (Bug MOTIR-12091, whose child is asked its own question over that pull request). It
+ * retires a gate raised before either rule (and one raised before the ancestor's link
+ * landed) on the next reconcile, the sweep's included. A DECIDED gate is never touched.
  */
-async function withdrawMergeQuestionOfAncestorSet(
+async function withdrawMergeQuestionOfUnownedSet(
   item: WorkItem,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
@@ -533,10 +533,13 @@ async function withdrawMergeQuestionOfAncestorSet(
     );
   }
   if (withdrawn > 0) {
-    console.warn("[gateSetFor] merge question withdrawn: every pull request is an ancestor's", {
-      workItemId: item.id,
-      withdrawn,
-    });
+    console.warn(
+      '[gateSetFor] merge question withdrawn: the card owns none of its linked pull requests',
+      {
+        workItemId: item.id,
+        withdrawn,
+      },
+    );
   }
 }
 

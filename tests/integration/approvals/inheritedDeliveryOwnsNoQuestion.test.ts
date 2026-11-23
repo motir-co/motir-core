@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { ownDeliverySetVersion } from '@/lib/agentReview/ownVersion';
 import { listOwnDeliveriesWithChecks } from '@/lib/approvalGates/ownDeliveries';
 import { withoutAncestorDeliveriesForCards } from '@/lib/approvalGates/ownDeliveriesForCards';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { linkPrByIdentifier } from '../../helpers/prLink';
@@ -412,5 +413,48 @@ describe('a card already stuck this way (MOTIR-12063, MOTIR-12062)', () => {
       ['pull_request_approval', 'moooon/acme#66@sha-66'],
     ]);
     expect(await gatesOf(parent.id)).toEqual([]);
+  });
+
+  it('a story asked over an inherited-only set under the old rule loses that question, and the child is asked its own', async () => {
+    const s = await makeScenario('12091-standing@example.com');
+    const {
+      parent,
+      kids: [child],
+    } = await story(s, 1);
+    await childOnItsOwnBranch(s, child!, 70, 'sha-70');
+    // The state the old rule left on a story at In Review: the merge question over the
+    // child's pull request hangs off the STORY, through its inherited row, and the child
+    // is asked nothing.
+    const [asked] = await awaitingOf(child!.id);
+    expect(asked).toMatchObject({
+      kind: 'pull_request_approval',
+      subjectVersion: 'moooon/acme#70@sha-70',
+    });
+    await adminDb.approvalGate.update({
+      where: { id: asked!.id },
+      data: { workItemId: parent.id },
+    });
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { status: 'in_review' } });
+    expect(
+      await adminDb.workItemDelivery.findMany({
+        where: { workItemId: parent.id },
+        select: { inherited: true },
+      }),
+    ).toEqual([{ inherited: true }]);
+
+    const parentRow = await adminDb.workItem.findUniqueOrThrow({ where: { id: parent.id } });
+    const childRow = await adminDb.workItem.findUniqueOrThrow({ where: { id: child!.id } });
+    await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, s.workspace.id);
+      expect(await reconcileGatesFor(parentRow, tx)).toEqual([]);
+      expect(await reconcileGatesFor(childRow, tx)).toEqual(['pull_request_approval']);
+    });
+
+    expect((await gatesOf(parent.id)).map((g) => [g.kind, g.state, g.supersededCause])).toEqual([
+      ['pull_request_approval', 'superseded', 'set_changed'],
+    ]);
+    expect((await awaitingOf(child!.id)).map((g) => [g.kind, g.subjectVersion])).toEqual([
+      ['pull_request_approval', 'moooon/acme#70@sha-70'],
+    ]);
   });
 });
