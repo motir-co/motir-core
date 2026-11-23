@@ -209,6 +209,26 @@ export class ReviewNothingToReviewError extends Error {
 }
 
 /**
+ * 409 — the project's review gate is ON and this card's review has not been ASKED yet at
+ * its current version (Bug MOTIR-12147): no `agent_review` gate is awaiting there — its
+ * pull requests are not green and in review yet, or the question has not been raised — so
+ * there is nothing for a verdict to decide. Nothing was stored, so the version stays
+ * unanswered and the verdict can be sent again once the review is waiting.
+ */
+export class ReviewNotYetAskedError extends Error {
+  readonly code = 'REVIEW_NOT_YET_ASKED';
+  constructor(
+    readonly workItemKey: string,
+    readonly subjectVersion: string,
+  ) {
+    super(
+      `${workItemKey}'s review has not been asked yet: the project's review gate is on, and no review is waiting at this version (its pull requests are not green and in review yet). Nothing was stored. Submit the verdict again once the review is waiting.`,
+    );
+    this.name = 'ReviewNotYetAskedError';
+  }
+}
+
+/**
  * 409 — a LATE verdict (§12.13): it names a version that is not the card's current
  * delivery-set version. It was STORED as `late` and decided nothing.
  */

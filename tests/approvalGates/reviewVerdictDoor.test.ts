@@ -53,6 +53,7 @@ const { reviewDismissalService, currentDeliverySetVersion } =
   await import('@/lib/services/reviewDismissalService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const {
+  ReviewNotYetAskedError,
   ReviewNothingToReviewError,
   ReviewTargetNotRunTargetError,
   ReviewVerdictInvalidError,
@@ -68,6 +69,10 @@ const { PermissionDeniedError } = await import('@/lib/projects/errors');
 const { runSubmitReviewVerdict, registerSubmitReviewVerdict, SUBMIT_REVIEW_VERDICT_TOOL_NAME } =
   await import('@/lib/mcp/tools/submitReviewVerdict');
 const verdictRoute = await import('@/app/api/v1/work-items/[key]/review-verdict/route');
+const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
+const { agentReviewHoldsMerge } = await import('@/lib/services/mergeGates');
+const { workItemRepository } = await import('@/lib/repositories/workItemRepository');
+const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 const MODEL = 'claude-opus-5-5';
 const AI = 'https://ai.test';
@@ -712,6 +717,125 @@ describe('gate OFF — the verdict is the record', () => {
       ['late', versionOf(85, 'sha-old')],
     ]);
     expect((await gateRow(approval.id)).state).toBe('awaiting');
+  });
+});
+
+// ── A verdict before the review is asked (Bug MOTIR-12147) ────────────────────
+
+/** The reconcile sweep's repair for one card: lock it, then raise what it is owed. */
+const sweepRepair = (ctx: { userId: string; workspaceId: string }, workItemId: string) =>
+  withWorkspaceContext(ctx, async (tx) => {
+    await workItemRepository.lockById(workItemId, tx);
+    const row = await workItemRepository.findById(workItemId, tx);
+    return reconcileGatesFor(row!, tx);
+  });
+
+/** Whether the review holds a carried merge — the carry's own read of the standing. */
+const reviewHoldsMerge = (ctx: { userId: string; workspaceId: string }, workItemId: string) =>
+  withWorkspaceContext(ctx, async (tx) =>
+    agentReviewHoldsMerge((await workItemRepository.findById(workItemId, tx))!, tx),
+  );
+
+describe('a verdict before the review gate asks (Bug MOTIR-12147)', () => {
+  it('gate ON, no review awaiting yet: refused NOT YET ASKED, nothing stored, and the review raised later is decided by the next verdict', async () => {
+    // The card's review was owed and is not awaiting — a lost check webhook, a stuck gate
+    // set (MOTIR-12091), anything a later sweep repairs. Withdraw the raised one to get there.
+    const { s, item, review } = await reviewing('not-asked', 141);
+    await adminDb.approvalGate.update({
+      where: { id: review.id },
+      data: { state: 'superseded', supersededCause: 'ci_rerunning' },
+    });
+
+    const refused = await reviewVerdictService
+      .submit(s.project.id, item.identifier, input(versionOf(141)), s.ctx)
+      .catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(ReviewNotYetAskedError);
+    expect(refused).toMatchObject({
+      code: 'REVIEW_NOT_YET_ASKED',
+      subjectVersion: versionOf(141),
+    });
+    expect(await recordsOf(item.id), 'nothing answers the version').toEqual([]);
+    expect(await reviewHoldsMerge(s.ctx, item.id), 'the review is still owed').toBe(true);
+
+    // The repair raises the review at the same version, and the verdict now decides it.
+    expect(await sweepRepair(s.ctx, item.id)).toEqual([REVIEW]);
+    const [raised] = await awaitingOf(item.id, REVIEW);
+    expect(raised?.subjectVersion).toBe(versionOf(141));
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      input(versionOf(141)),
+      s.ctx,
+    );
+    expect(dto).toMatchObject({ outcome: 'decided', gateId: raised!.id });
+    expect((await gateRow(raised!.id)).state).toBe('approved');
+    expect(await awaitingOf(item.id, PR_APPROVAL)).toHaveLength(1);
+  });
+
+  it('gate ON with the merge question already asked at the version: still recorded (no review is owed there)', async () => {
+    const { s, item, approval } = await deliveredGateOff('asked-then-on', 142);
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { reviewAgentEnabled: true },
+    });
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      input(versionOf(142)),
+      s.ctx,
+    );
+    expect(dto).toMatchObject({ outcome: 'recorded', gateId: null });
+    expect((await gateRow(approval.id)).state).toBe('awaiting');
+  });
+
+  it('a gate-off pass, then the switch on: the version is reviewed, so the merge question is asked, not a review nobody could decide', async () => {
+    const { s, item, approval } = await deliveredGateOff('pass-then-on', 143);
+    await reviewVerdictService.submit(s.project.id, item.identifier, input(versionOf(143)), s.ctx);
+    // The merge question at the version goes away (here: withdrawn), and the switch turns on.
+    await adminDb.approvalGate.update({
+      where: { id: approval.id },
+      data: { state: 'superseded', supersededCause: 'ci_rerunning' },
+    });
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { reviewAgentEnabled: true },
+    });
+
+    expect(await reviewHoldsMerge(s.ctx, item.id), 'the pass is the review').toBe(false);
+    expect(await sweepRepair(s.ctx, item.id)).toEqual([PR_APPROVAL]);
+    expect(await awaitingOf(item.id, REVIEW), 'no review over an answered version').toEqual([]);
+    const [asked] = await awaitingOf(item.id, PR_APPROVAL);
+    expect(asked?.subjectVersion).toBe(versionOf(143));
+  });
+
+  it('a gate-off send-back, then the switch on: it holds the merge, and a dismissal asks the merge question, not a review', async () => {
+    const { s, item } = await deliveredGateOff('back-then-on', 144);
+    await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      sendBack(versionOf(144)),
+      s.ctx,
+    );
+    await adminDb.project.update({
+      where: { id: s.project.id },
+      data: { reviewAgentEnabled: true },
+    });
+
+    expect(await sweepRepair(s.ctx, item.id), 'the send-back is the review').toEqual([]);
+    expect(await awaitingOf(item.id, REVIEW)).toEqual([]);
+    expect(await awaitingOf(item.id, PR_APPROVAL), 'and it holds the merge').toEqual([]);
+    expect(await reviewHoldsMerge(s.ctx, item.id)).toBe(true);
+
+    await reviewDismissalService.dismiss(
+      s.project.id,
+      item.identifier,
+      { subjectVersion: versionOf(144), reasonMd: 'Out of scope for this card.' },
+      s.ctx,
+    );
+    expect(await awaitingOf(item.id, REVIEW)).toEqual([]);
+    const [asked] = await awaitingOf(item.id, PR_APPROVAL);
+    expect(asked?.subjectVersion).toBe(versionOf(144));
+    expect(await reviewHoldsMerge(s.ctx, item.id), 'dismissed: the review is answered').toBe(false);
   });
 });
 

@@ -198,14 +198,23 @@ export async function agentReviewHoldsMerge(
   // The version is the card's OWN set's (Bug MOTIR-11695) — the set its review gate, its
   // verdicts and its dismissals are measured over — so a child sharing a pull request with
   // its story is held by a send-back at its own version.
-  const [deliveries, latestAgentReviewGate, latestMergeGate, latestSendBack, latestDismissal] =
-    await Promise.all([
-      listOwnDeliveriesWithChecks(item.id, tx),
-      approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
-      approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
-      reviewVerdictRecordRepository.findLatestRecordedSendBack(item.id, tx),
-      reviewDismissalRepository.findLatestByWorkItem(item.id, tx),
-    ]);
+  const [
+    deliveries,
+    latestAgentReviewGate,
+    latestMergeGate,
+    latestSendBack,
+    latestDismissal,
+    latestRecordedAnswer,
+  ] = await Promise.all([
+    listOwnDeliveriesWithChecks(item.id, tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
+    reviewVerdictRecordRepository.findLatestRecordedSendBack(item.id, tx),
+    reviewDismissalRepository.findLatestByWorkItem(item.id, tx),
+    // A gate-off ANSWER is the review at its version (Bug MOTIR-12147) — read here as the
+    // gate set reads it, so the carry and the question agree.
+    reviewVerdictRecordRepository.findLatestRecordedAnswer(item.id, tx),
+  ]);
   const version = deliverySetVersion(deliveries.map((delivery) => deliveryMemberVersion(delivery)));
   const dismissedVersion = latestDismissal?.subjectVersion ?? null;
   if (
@@ -224,6 +233,7 @@ export async function agentReviewHoldsMerge(
     latestAgentReviewGate,
     latestMergeGate,
     dismissedVersion,
+    recordedAnswer: latestRecordedAnswer,
   });
   return standing === 'owed' || standing === 'refused';
 }
