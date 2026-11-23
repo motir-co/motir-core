@@ -158,7 +158,7 @@ export function mergePlanLevel(
   // MOTIR-5387) — the fifth fact in this family, and the one the legend names.
   // `buildWorkItemLevel` draws an off-level blocker with three effects: a `cross`
   // arrow, a viewable GHOST ANCHOR naming the blocker, and the dependent's
-  // "blocked elsewhere" chip. A COMMITTED edge reaches that branch; a proposal's
+  // "blocked elsewhere" tab. A COMMITTED edge reaches that branch; a proposal's
   // own edges never did, because both carrier loops below kept an edge only when
   // BOTH ends sat on this level and dropped the rest. So a plan adding a
   // cross-container dependency drew nothing, and approving it was the first time
@@ -169,7 +169,7 @@ export function mergePlanLevel(
   // reviewer gets AFTER approve. Materialized, the same edge comes back from the
   // roadmap read and takes the off-level branch, so it takes the same treatment
   // here, in the same language — the anchor is minted by the same
-  // `ghostAnchorNode` and the chip is the same `CrossBlockedFlag`. The review
+  // `ghostAnchorNode` and the flag is the same `BlockedTab` (MOTIR-12158). The review
   // model supplies what an anchor needs (`blockerStubs`), because the two edge
   // carriers name ids only.
   //
@@ -377,6 +377,9 @@ export function mergePlanLevel(
       return {
         ...node,
         drillable,
+        // The re-skinned card's tab is the proposal's: its outcome, else the
+        // blocked tab (MOTIR-12158) — the committed card's own flag is replaced.
+        topTab: outcome != null || crossBlocked.has(node.id),
         content: (
           <PlanItemNode
             item={proposal}
@@ -407,6 +410,8 @@ export function mergePlanLevel(
       crumbLabel: item.identifier ?? item.title,
       drillable: item.hasChildren,
       viewable: true,
+      // The outcome tab or the blocked tab (MOTIR-12158) rides the card's top edge.
+      ...(outcome != null || crossBlocked.has(item.nodeId) ? { topTab: true } : {}),
       content: (
         <PlanItemNode item={item} outcome={outcome} crossBlocked={crossBlocked.has(item.nodeId)} />
       ),

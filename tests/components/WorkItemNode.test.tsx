@@ -47,15 +47,16 @@ describe('WorkItemNode', () => {
 
   it('flags an off-level blocked node "blocked elsewhere"', () => {
     render(<WorkItemNode item={item} crossBlocked />);
-    const flag = screen.getByTestId('cross-blocked-flag');
-    // The tag row shows the short label (MOTIR-10508); the sentence rides the name.
+    // The card's top-edge TAB (MOTIR-12158) shows the short label; the sentence
+    // rides the name.
+    const flag = screen.getByTestId('blocked-tab');
     expect(flag.textContent).toBe('blocked');
     expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
   });
 
   it('SPRINT scope: the cross-blocked flag names the blocker ("blocker not in sprint"), not the card (MOTIR-1582)', () => {
     render(<WorkItemNode item={item} crossBlocked crossBlockedSprint />);
-    const flag = screen.getByTestId('cross-blocked-flag');
+    const flag = screen.getByTestId('blocked-tab');
     // Names the out-of-sprint blocker — distinct from the neutral node-membership
     // tag ("not in sprint"), which describes the card itself.
     expect(flag.getAttribute('aria-label')).toBe('blocker not in sprint');
@@ -198,8 +199,83 @@ describe('WorkItemNode', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} crossBlocked />);
     const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
-    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(screen.getByTestId('blocked-tab')).toBeTruthy();
     expect(card.className).not.toContain('bg-(--el-tint-sky)');
+  });
+});
+
+// MOTIR-12158 (design MOTIR-12157): "blocked elsewhere" moves off the edge's
+// midpoint onto a TAB on the blocked card's own top edge.
+describe('WorkItemNode — the blocked tab (MOTIR-12158)', () => {
+  const todo: WorkItemNodeData = { ...item, status: 'todo', statusCategory: 'todo' };
+
+  it('hangs on the card top edge, left, on the danger fill / ink pair, as a labelled image', () => {
+    render(<WorkItemNode item={item} crossBlocked />);
+    const tab = screen.getByTestId('blocked-tab');
+    // The shared CardEdgeTab placement: the here tab's slot, in the row gap.
+    expect(tab.className).toContain('absolute');
+    expect(tab.className).toContain('bottom-[calc(100%-1px)]');
+    expect(tab.className).toContain('left-3');
+    expect(tab.className).toContain('rounded-t-(--radius-badge)');
+    // The one pair `--el-danger-text` is legal in — never on a page surface.
+    expect(tab.className).toContain('bg-(--el-danger)');
+    expect(tab.className).toContain('text-(--el-danger-text)');
+    // Its name is the sentence; the visible word and the flag glyph are hidden.
+    expect(tab.getAttribute('role')).toBe('img');
+    expect(tab.getAttribute('title')).toBe('blocked elsewhere');
+    expect(tab.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(tab.querySelector('span')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('is rendered BEFORE the frame, outside it, so its name is read first', () => {
+    const { container } = render(<WorkItemNode item={item} crossBlocked />);
+    const tab = screen.getByTestId('blocked-tab');
+    const frame = container.querySelector('[data-node-state]') as HTMLElement;
+    expect(frame.contains(tab)).toBe(false);
+    expect(tab.compareDocumentPosition(frame) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The danger frame stays on the blocked card.
+    expect(frame.className).toContain('border-(--el-danger)');
+  });
+
+  it('replaces the tag-row `blocked` tag, freeing the row: no give-way on blocked alone', () => {
+    render(<WorkItemNode item={todo} crossBlocked />);
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+    // The status keeps its words (it was cut to its glyph while blocked sat in the row).
+    expect(screen.getByText('To Do')).toBeTruthy();
+  });
+
+  it('is not drawn on a card that is not blocked elsewhere', () => {
+    render(<WorkItemNode item={item} />);
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
+  });
+
+  it('a card that is both HERE and blocked keeps the here tab; blocked stays in the row', () => {
+    const { container } = render(<WorkItemNode item={item} here crossBlocked />);
+    // One tab per edge: the identity tab keeps it.
+    expect(screen.getByTestId('here-tab')).toBeTruthy();
+    expect(screen.queryByTestId('blocked-tab')).toBeNull();
+    // The card renders as it shipped: danger frame + the short row tag.
+    const flag = screen.getByTestId('cross-blocked-flag');
+    expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
+    expect(container.querySelector('[data-node-state]')!.getAttribute('data-node-state')).toBe(
+      'cross-blocked',
+    );
+  });
+
+  it('SPRINT scope: a blocked non-member shows BOTH the tab and the "not in sprint" tag', () => {
+    render(<WorkItemNode item={item} crossBlocked crossBlockedSprint notInSprint />);
+    expect(screen.getByTestId('blocked-tab').getAttribute('aria-label')).toBe(
+      'blocker not in sprint',
+    );
+    expect(screen.getByTestId('not-in-sprint-tag')).toBeTruthy();
+  });
+
+  it('SPRINT scope, here + blocked + not in sprint: the row keeps the old suppression', () => {
+    render(<WorkItemNode item={item} here crossBlocked crossBlockedSprint notInSprint />);
+    expect(screen.getByTestId('cross-blocked-flag').getAttribute('aria-label')).toBe(
+      'blocker not in sprint',
+    );
+    expect(screen.queryByTestId('not-in-sprint-tag')).toBeNull();
   });
 });
 
