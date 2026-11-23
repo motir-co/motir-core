@@ -77,6 +77,15 @@ const closeInputSchema = {
     ),
 };
 
+/** A member handed over for its BASE rather than its checks (Bug MOTIR-12095) — its checks
+ *  are green, so this clause is the only thing on its line that says what to do. */
+function baseState(pr: WorkItemRepairClaimDto['pullRequests'][number]): string {
+  const base = pr.baseRef ? `\`${pr.baseRef}\`` : 'its base';
+  if (pr.conflicted) return ` — conflicts with ${base}: merge it, resolve the conflicts, and push`;
+  if (pr.outOfDate) return ` — out of date with ${base}: merge it and push`;
+  return '';
+}
+
 /** What the agent reads first — the claim's outcome, said as an instruction. */
 function summarizeClaim(claim: WorkItemRepairClaimDto): string {
   const holder = claim.holder?.name ?? 'someone else';
@@ -85,7 +94,7 @@ function summarizeClaim(claim: WorkItemRepairClaimDto): string {
       const checks =
         pr.failingChecks.length > 0 ? ` — failing: ${pr.failingChecks.join(', ')}` : '';
       const exit = pr.queueExit ? ` — merge queue exit: ${pr.queueExit.rawReason}` : '';
-      return `  · ${pr.repo}#${pr.number} on branch ${pr.headRef}${checks}${exit}`;
+      return `  · ${pr.repo}#${pr.number} on branch ${pr.headRef}${checks}${exit}${baseState(pr)}`;
     })
     .join('\n');
   const rerun =
@@ -216,8 +225,10 @@ export function registerWorkItemRepair(
         '(by identifier, e.g. "ACME-7") — the same claim `motir fix` makes, and the same lock: ' +
         'only one fixer at a time, across MCP and the CLI. The card’s status and assignee are ' +
         'not changed; it reads *being fixed* by you. Answers `claimed` (yours: the `runId`, the ' +
-        'repair class, and each pull request to fix with its branch, failing checks and any ' +
-        'merge-queue exit), `mine` (you already hold it — resume), `taken` (someone else is ' +
+        'repair class, and each pull request to fix with its branch, failing checks, any ' +
+        'merge-queue exit, and whether it is `conflicted` with or `outOfDate` against its base — ' +
+        'either one means merge the base into the branch and push, even when its checks are ' +
+        'green), `mine` (you already hold it — resume), `taken` (someone else is ' +
         'fixing it; they are named) or `not_repairable` with the reason (`not_implemented`, ' +
         '`repair_on_run_target` naming the card to repair instead, `no_pull_requests`, ' +
         '`ci_running`, `not_failing`, `repair_not_code`). A refusal is a RESULT, not an error, ' +

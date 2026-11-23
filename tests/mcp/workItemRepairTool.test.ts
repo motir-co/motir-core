@@ -103,7 +103,12 @@ interface ClaimOut {
   reason: string | null;
   runId: string | null;
   holder: { id: string; name: string } | null;
-  pullRequests: { headRef: string; failingChecks: string[] }[];
+  pullRequests: {
+    headRef: string;
+    failingChecks: string[];
+    conflicted: boolean;
+    outOfDate: boolean;
+  }[];
 }
 interface RunOut {
   key: string;
@@ -167,6 +172,55 @@ describe('claim_work_item_repair', () => {
     expect(viaTool).toEqual(viaRest);
     expect(viaTool.outcome).toBe('mine');
     expect(viaTool.runId).toBe(claimed.runId);
+  });
+
+  it('a GREEN member behind or conflicting with its base is named in the text with what to do, and on the payload (Bug MOTIR-12095)', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'stale base' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    const head = 'c'.repeat(40);
+    const stale = [
+      { headRef: 'subtask/behind', baseRef: 'main', mergeableState: 'behind' },
+      { headRef: 'subtask/conflicted', baseRef: 'release', mergeableState: 'dirty' },
+      // A row mirrored before base branches were recorded names no base.
+      { headRef: 'subtask/no-base', baseRef: null, mergeableState: 'behind' },
+    ];
+    for (const s of stale) {
+      const row = await deliveredPr(fx, card.id, repo, {
+        headRef: s.headRef,
+        checks: { Vitest: 'success' },
+      });
+      await adminDb.githubPullRequest.update({
+        where: { id: row.id },
+        data: {
+          baseRef: s.baseRef,
+          mergeableState: s.mergeableState,
+          mergeableStateHeadSha: head,
+        },
+      });
+    }
+
+    const result = await runClaimWorkItemRepair({ key: card.identifier }, fx.ctx);
+
+    const claimed = ok<ClaimOut>(result);
+    expect(claimed.outcome).toBe('claimed');
+    expect(
+      claimed.pullRequests.map((pr) => [pr.headRef, pr.conflicted, pr.outOfDate]).sort(),
+    ).toEqual([
+      ['subtask/behind', false, true],
+      ['subtask/conflicted', true, false],
+      ['subtask/no-base', false, true],
+    ]);
+    expect(text(result)).toContain(
+      'on branch subtask/behind — out of date with `main`: merge it and push',
+    );
+    expect(text(result)).toContain(
+      'on branch subtask/conflicted — conflicts with `release`: merge it, resolve the conflicts, and push',
+    );
+    expect(text(result)).toContain(
+      'on branch subtask/no-base — out of date with its base: merge it and push',
+    );
   });
 
   it('a card a REVIEW sent back is claimed as `review`, and the text names the reviewer and carries EVERY finding (MOTIR-6822)', async () => {

@@ -1495,6 +1495,7 @@ function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
+    hostingShape: null,
     position: 'a0',
     createdAt: NOW,
     hostedDeletionStartedAt: null,

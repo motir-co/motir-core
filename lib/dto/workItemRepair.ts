@@ -120,12 +120,13 @@ export interface RepairPullRequestDto {
    *  (`queueExitHoldsAtHead`), else null. */
   queueExit: RepairQueueExitDto | null;
   /** The host reports this pull request CONFLICTED with its base at its head (MOTIR-5913's
-   *  stored reading) — a member failing for that alone has green checks and no exit. NOT on
-   *  the wire: the v1 presenter copies fields by name, and this one is the page's. */
+   *  stored reading) — a member failing for that alone has green checks and no exit. On the
+   *  wire since contract 1.91.0 (Bug MOTIR-12095), so a fixer knows to merge the base. */
   conflicted: boolean;
   /** The host reports this pull request OUT OF DATE with a base branch that requires it to
    *  be up to date (`mergeable_state: behind`, Bug MOTIR-10054) — its checks are green and
-   *  only a merge of the base answers it. NOT on the wire, for `conflicted`'s reason. */
+   *  only a merge of the base answers it. On the wire since contract 1.91.0, beside
+   *  `conflicted`. */
   outOfDate: boolean;
 }
 

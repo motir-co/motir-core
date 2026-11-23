@@ -9,6 +9,7 @@ import {
   failingDeliveries,
   pluralize,
   queueReasonInWords,
+  renderBaseMergePrompt,
   renderFixPrompt,
   runCiWatchPhase,
   CI_WAITING_EVENT_INTERVAL_MS,
@@ -971,5 +972,55 @@ describe('what the watch tells the run while it waits', () => {
     });
 
     expect(chunks).toEqual(['fixing…']);
+  });
+});
+
+// Bug MOTIR-12095 — the one turn `motir fix` runs for a member handed over for its BASE.
+describe('renderBaseMergePrompt', () => {
+  const member = (over: Record<string, unknown> = {}) => ({
+    repo: 'acme/motir-core',
+    number: 131,
+    url: 'https://github.com/acme/motir-core/pull/131',
+    baseRef: 'main' as string | null,
+    conflicted: false,
+    outOfDate: true,
+    ...over,
+  });
+  const checkouts = [{ repo: 'acme/motir-core', branch: 'subtask/PROD-7', path: '/work/fix-131' }];
+
+  it('names each member, why it was handed over, and one merge target when the bases agree', () => {
+    const out = renderBaseMergePrompt({
+      key: 'PROD-7',
+      title: null,
+      pullRequests: [member(), member({ number: 132, conflicted: true, outOfDate: false })],
+      checkouts,
+    });
+    expect(out.split('\n')[0]).toBe('# Bring the branch up to date with its base — PROD-7');
+    expect(out).toContain(
+      '- **acme/motir-core#131** is OUT OF DATE with `main`, which requires branches to be up to date',
+    );
+    expect(out).toContain('- **acme/motir-core#132** CONFLICTS with `main`');
+    expect(out).toContain('`git fetch origin && git merge origin/main`');
+    expect(out).toContain('branch `subtask/PROD-7` at `/work/fix-131`');
+    expect(out).toContain('A MERGE, never a rebase, and never a force push.');
+    expect(out).toContain('must be PUSHED');
+  });
+
+  it('points at each pull request’s own base when the set does not agree, or a base is unknown', () => {
+    const split = renderBaseMergePrompt({
+      key: 'PROD-7',
+      title: 'Add the thing',
+      pullRequests: [member(), member({ number: 132, baseRef: 'release' })],
+      checkouts,
+    });
+    expect(split).toContain("git merge origin/<that pull request's base>");
+    const unknown = renderBaseMergePrompt({
+      key: 'PROD-7',
+      title: 'Add the thing',
+      pullRequests: [member({ baseRef: null })],
+      checkouts,
+    });
+    expect(unknown).toContain("is OUT OF DATE with `the pull request's base`");
+    expect(unknown).toContain("git merge origin/<that pull request's base>");
   });
 });

@@ -67,7 +67,13 @@ describe('POST /api/v1/work-items/{key}/repair', () => {
     });
     expect(parsed.data?.runId).toEqual(expect.any(String));
     expect(parsed.data?.pullRequests).toEqual([
-      expect.objectContaining({ repo: 'acme/web', headRef: 'subtask/red', ci: 'failing' }),
+      expect.objectContaining({
+        repo: 'acme/web',
+        headRef: 'subtask/red',
+        ci: 'failing',
+        conflicted: false,
+        outOfDate: false,
+      }),
     ]);
   });
 
@@ -109,6 +115,64 @@ describe('POST /api/v1/work-items/{key}/repair', () => {
         },
       }),
     ]);
+  });
+
+  it('a GREEN member behind or conflicting with its base says so on the wire, and PARSES (Bug MOTIR-12095)', async () => {
+    const card = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Stale base' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(caller.fixture, 'web');
+    const head = 'c'.repeat(40);
+    const behind = await deliveredPr(caller.fixture, card.id, repo, {
+      headRef: 'subtask/behind',
+      checks: { Vitest: 'success' },
+    });
+    const conflicted = await deliveredPr(caller.fixture, card.id, repo, {
+      headRef: 'subtask/conflicted',
+      checks: { Vitest: 'success' },
+    });
+    await adminDb.githubPullRequest.update({
+      where: { id: behind.id },
+      data: { mergeableState: 'behind', mergeableStateHeadSha: head },
+    });
+    await adminDb.githubPullRequest.update({
+      where: { id: conflicted.id },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: head },
+    });
+
+    const res = await repair(card.identifier, caller);
+
+    expect(res.status).toBe(200);
+    const parsed = workItemRepairClaimSchema.safeParse(await res.json());
+    expect(parsed.success, JSON.stringify(parsed.error?.issues, null, 2)).toBe(true);
+    expect(parsed.data?.outcome).toBe('claimed');
+    const byRef = Object.fromEntries(
+      (parsed.data?.pullRequests ?? []).map((pr) => [
+        pr.headRef,
+        {
+          ci: pr.ci,
+          failingChecks: pr.failingChecks,
+          queueExit: pr.queueExit,
+          conflicted: pr.conflicted,
+          outOfDate: pr.outOfDate,
+        },
+      ]),
+    );
+    expect(byRef).toEqual({
+      'subtask/behind': {
+        ci: 'passing',
+        failingChecks: [],
+        queueExit: null,
+        conflicted: false,
+        outOfDate: true,
+      },
+      'subtask/conflicted': {
+        ci: 'passing',
+        failingChecks: [],
+        queueExit: null,
+        conflicted: true,
+        outOfDate: false,
+      },
+    });
   });
 
   it('a refusal is a 200 with its reason — and a card at a status no workflow defines is not_implemented, not a 404', async () => {
