@@ -659,6 +659,22 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
+  /** Fill in a row's DRAFT-NESS from a host read, only while the row does not know it
+   *  (MOTIR-12094) — the placeholder `link_pull_request` writes before any delivery has
+   *  arrived (MOTIR-5002). Guarded on `draft IS NULL` in its own statement, so a delivery
+   *  that wrote the flag between the read and this write wins. Write path → `tx`. */
+  async setDraftIfUnknown(
+    pullRequestId: string,
+    draft: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: { id: pullRequestId, draft: null },
+      data: { draft },
+    });
+    return result.count;
+  },
+
   /** Record that the HOST confirmed CI had decided the WHOLE check set at `commitSha`
    *  (Bug MOTIR-10797) — the marker `hasHeadDecidedBeforeRunningChecks` reads. Written only
    *  while that commit IS the pull request's head (or the row has no stored head yet, when

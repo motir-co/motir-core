@@ -71,11 +71,30 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // check rows are persisted, so edge 2 re-reads state that already exists rather
 // than inventing a record or a queue.
 //
-// ⚠️ The window is NOT closed by widening the source states. Accepting
-// `in_progress → in_review` on green would promote a card whose agent died
-// before it finished, and would break the idempotence the `implemented` guard
-// gives for free. The state stays `implemented`; what changes is WHEN the
-// question gets asked.
+// ⚠️ AMENDED BY MOTIR-12094: THE SOURCE IS `in_progress` OR `implemented`. This
+// header used to say the window was NOT to be closed by widening the source, because
+// accepting `in_progress → in_review` would promote a card whose agent died before it
+// finished. That reasoning is overruled (settled with the owner, 2026-11-23): the
+// evidence a card is ready for a person is a delivery set that is green and landable,
+// not whether an agent got round to reporting. A card left at In Progress with a green,
+// ready pull request — a run that never reported, a pull request a person linked by
+// hand — waited 10 to 15 minutes for the reconcile sweep, and Motir looked as if it
+// had ignored the build. So every reader in this module asks ONE set,
+// `PROMOTABLE_SOURCE_STATUSES`, and a card at either status goes DIRECTLY to
+// `in_review` (no hop through `implemented`). Idempotence is the status guard's as
+// before: a promoted card is no longer at a source status, so a second green or a
+// second link finds nothing to move.
+//
+// ⚠️ AND A DRAFT IS NOT EVIDENCE (`heldByDraft`). `in_progress` is where a parent run
+// keeps its story while its pull request is a deliberate DRAFT, so a source that now
+// includes `in_progress` must refuse a draft member — at every source, since a draft
+// can be asked about nobody (`mergeCandidateHead`) — and must refuse a member whose
+// draft-ness is UNKNOWN when it promotes from `in_progress`. A card at `implemented`
+// keeps today's reading of `null` (a legacy row, not a draft), which is why that arm
+// is per source.
+//
+// Still never a source: `todo`, `blocked` and `planning`. Nobody has started a card at
+// those, so a green set on one asks nobody anything.
 //
 // ── THE VERDICT IS `derivePrCiState`, DELIBERATELY ──────────────────────────
 // Both edges ask the shipped per-PR derivation over ALL of a change request's
@@ -116,9 +135,10 @@ const SKIPPABLE = [
   // kind that did would refuse this promotion for that one card — which, like
   // the rest of this list, says nothing about the other cards the run delivered.
   ApprovalGatePendingError,
-  // THE PLAN HOLD (MOTIR-6265; AMENDMENT 21 §5(b)). A promotion only ever moves a
-  // card out of `implemented`, so it cannot meet a held card today — listed so a
-  // widened source status inherits the right answer rather than a failed job.
+  // THE PLAN HOLD (MOTIR-6265; AMENDMENT 21 §5(b)). A promotion moves a card out of
+  // `in_progress` or `implemented` (MOTIR-12094), so a card a plan holds at one of
+  // them is refused by the funnel — and, like the rest of this list, that says nothing
+  // about the other cards the run delivered.
   PlanTargetHeldError,
   // A MARKED card stays finished (MOTIR-6672 · MOTIR-6681). A promotion moves a
   // card from `implemented` to `in_review`, both outside the done category; a card
@@ -128,8 +148,19 @@ const SKIPPABLE = [
   MarkedCardCannotReopenError,
 ];
 
-/** The ONLY status a promotion moves a card out of. */
-const SOURCE_STATUS = 'implemented';
+/**
+ * The statuses a promotion moves a card OUT of (MOTIR-12094) — the one answer edge 1,
+ * edge 2, the re-read before edge 2 and every sweep that calls into this module read,
+ * so no two of them can disagree about which cards are promotable.
+ */
+export const PROMOTABLE_SOURCE_STATUSES: readonly string[] = ['in_progress', 'implemented'];
+/** The source at which a member of UNKNOWN draft-ness holds (see `heldByDraft`). */
+const UNSTARTED_REVIEW_SOURCE = 'in_progress';
+
+/** Is this status one a green, landable delivery set promotes a card out of? */
+export function isPromotableSourceStatus(status: string): boolean {
+  return PROMOTABLE_SOURCE_STATUSES.includes(status);
+}
 /** The status CI green moves it to. */
 const TARGET_STATUS = 'in_review';
 /**
@@ -251,13 +282,42 @@ async function heldByQueueFailure(
  * doc gives: two answers depending on which edge fired is a latch nobody can trust.
  */
 async function isPromotable(
-  item: { id: string; sessionBranch: string | null },
+  item: { id: string; sessionBranch: string | null; status: string },
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
   if (!(await everyDeliveryIsGreen(item, tx))) return false;
   const byId = await collectDeliveries(item, tx);
+  if (heldByDraft(byId, item.status)) return false;
   if (heldByConflict(byId)) return false;
   return !(await heldByQueueFailure(byId, tx));
+}
+
+/**
+ * THE DRAFT HOLD (MOTIR-12094) — true while any OPEN delivering pull request is a draft,
+ * or, for a card promoted from `in_progress`, of unknown draft-ness (`draft` null).
+ *
+ * A draft is its author saying *not ready*, and the host refuses to merge one, so a card
+ * promoted over it would sit In Review with no question anybody could answer
+ * (`mergeCandidateHead` refuses a draft). That was harmless while the only source was
+ * `implemented`, which a draft never reaches through the lifecycle seam (MOTIR-4968); it
+ * stopped being harmless when `in_progress` became a source, because In Progress is
+ * where a parent run holds its story while the story's pull request is a deliberate
+ * draft. A member whose draft-ness is not known is held at that source for the same
+ * reason the link-time resync declines one (MOTIR-5002): neither guess is available. At
+ * `implemented` `null` keeps reading as a legacy row — what `mergeCandidateHead` reads it
+ * as — so that source promotes exactly as it did.
+ *
+ * It lifts the way the lifecycle does: `ready_for_review` writes `draft: false` and
+ * re-runs the promotion (`changeRequestStatusSync`'s `becameReady`), and a host read that
+ * learns the flag (the link door's hydration) fills it in.
+ */
+function heldByDraft(byId: Map<string, DeliveredPullRequest>, status: string): boolean {
+  for (const pr of byId.values()) {
+    if (pr.state !== 'open' || pr.merged) continue;
+    if (pr.draft === true) return true;
+    if (pr.draft === null && status === UNSTARTED_REVIEW_SOURCE) return true;
+  }
+  return false;
 }
 
 /**
@@ -295,8 +355,9 @@ function heldByConflict(byId: Map<string, DeliveredPullRequest>): boolean {
 /**
  * EDGE 1 — CI has just reported a terminal verdict for one change request.
  *
- * Promotes every card that change request delivers and that currently sits at
- * `implemented`. Best-effort by construction: it runs AFTER the feedback
+ * Promotes every card that change request delivers and that currently sits at a
+ * source status — `in_progress` or `implemented` (MOTIR-12094) — straight to
+ * `in_review`. Best-effort by construction: it runs AFTER the feedback
  * comment and the `ciState` write have committed, and a failure here must never
  * turn a recorded verdict into a webhook the host retries forever.
  *
@@ -327,9 +388,10 @@ export async function promoteDeliveredCardsOnGreen(args: {
       githubPullRequestId: pr.id,
       tx,
     });
-    // Only the cards at `implemented`. A sibling a human moved back to In
-    // Progress to rework must not be yanked forward by a green run.
-    const atImplemented = set.items.filter((item) => item.status === SOURCE_STATUS);
+    // Only the cards at a SOURCE status — `in_progress` or `implemented` (MOTIR-12094).
+    // A card nobody has started (`todo`, `blocked`, `planning`) is asked nothing, and a
+    // card already in review is the re-raise's, below.
+    const atSource = set.items.filter((item) => isPromotableSourceStatus(item.status));
 
     // ⚠️ AND ONLY THE ONES WHOSE WHOLE SET IS GREEN (MOTIR-3685). This pull
     // request going green is what WOKE the promotion; it is not what decides it.
@@ -338,7 +400,7 @@ export async function promoteDeliveredCardsOnGreen(args: {
     // the defect. Evaluated per card, because the answer genuinely differs
     // between two cards the same pull request delivers.
     const green: string[] = [];
-    for (const item of atImplemented) {
+    for (const item of atSource) {
       // `set.items` carries no `sessionBranch`, and the legacy branch join needs
       // it — so the row is re-read rather than guessed at.
       const row = await workItemRepository.findById(item.id, tx);
@@ -348,7 +410,7 @@ export async function promoteDeliveredCardsOnGreen(args: {
     // ⚠️ AND THE CARDS ALREADY IN REVIEW (MOTIR-5515). A card that went green, was
     // promoted and had a gate withdrawn by a push stays in review — so the green
     // verdict for its new head is the moment its fresh gate is owed, and the
-    // `implemented` filter above would never reach it. Their verdict is judged under
+    // source filter above would never reach it. Their verdict is judged under
     // the card's lock, in `reRaiseMergeGates`.
     const reRaise = set.items
       .filter((item) => REVIEW_STATUSES.includes(item.status))
@@ -479,7 +541,11 @@ async function withdrawDeliveredCardsOffGreen(
 }
 
 /**
- * EDGE 2 — a card has just ARRIVED at `implemented`.
+ * EDGE 2 — a card has just ARRIVED at `implemented`, or its delivery set has just
+ * CHANGED (a link or an unlink, MOTIR-12094), or a sweep is asking again.
+ *
+ * Promotes a card at either source status (`in_progress` / `implemented`) whose whole
+ * set is green and landable; a card at any other status is a clean no-op.
  *
  * Re-reads the change request's already-recorded verdict and promotes
  * immediately when it is terminally green, which is the case the push-first
@@ -522,7 +588,7 @@ export async function promoteIfCiAlreadyGreen(
     const item = await workItemRepository.findById(workItemId, tx);
     // Re-read rather than trusting the caller: between the transition committing
     // and this running, the card may have moved again.
-    if (!item || item.status !== SOURCE_STATUS) return false;
+    if (!item || !isPromotableSourceStatus(item.status)) return false;
 
     // ⚠️ EVERY pull request delivering it, not ANY (MOTIR-3685) — and the SAME
     // function edge 1 asks, so the latch cannot answer two ways depending on
@@ -631,12 +697,13 @@ async function reconcileClaimedCompleteDeliveries(
       await bindWorkspaceContext(tx, ctx.workspaceId);
       const item = await workItemRepository.findById(workItemId, tx);
       // ⚠️ THIS GATE IS THE LATCH'S, NOT THE RE-READ'S (Bug MOTIR-11638). Edge 2 asks
-      // only about a card it could promote, so it re-reads only at `implemented`. A
+      // only about a card it could promote, so it re-reads only at a source status
+      // (MOTIR-12094: `in_progress` or `implemented`). A
       // card at any OTHER status — In Review after a send-back, above all — has its
       // lost completions settled by the reconcile tick's status-independent sweep
       // (`lostCheckCompletionService.settleLostCheckCompletions`), which runs for every
       // open delivering pull request before this latch does.
-      if (item?.status !== SOURCE_STATUS) return [];
+      if (!item || !isPromotableSourceStatus(item.status)) return [];
       const byId = await collectDeliveries(item, tx);
 
       const asking: CheckSetReReadTarget[] = [];

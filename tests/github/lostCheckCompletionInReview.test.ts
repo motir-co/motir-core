@@ -559,10 +559,12 @@ describe('MOTIR-11638 — the promotion stays the only status-gated part', () =>
     expect(after.ciState).toBe('passing');
   });
 
-  it('a card at In Progress is not promoted by a green settle', async () => {
+  // Since MOTIR-12094 In Progress IS a promotion source, so the status a green settle
+  // must leave alone is one nobody has started work at.
+  it('a card at Blocked is not promoted by a green settle', async () => {
     const s = await makeScenario('in-progress-green@example.com');
     const { card, pr } = await strandedInReview(s, { pendingWrittenAt: AN_HOUR_AGO() });
-    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'in_progress' } });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'blocked' } });
     hostChecks.set(FIX_SHA, [
       [SETTLED_LANE, 'completed', 'success'],
       [LOST_LANE, 'completed', 'success'],
@@ -576,7 +578,7 @@ describe('MOTIR-11638 — the promotion stays the only status-gated part', () =>
 
     expect(settle).toEqual({ settled: true, promoted: [] });
     const after = await cardRow(card.id);
-    expect(after.status).toBe('in_progress');
+    expect(after.status).toBe('blocked');
     expect(after.ciState).toBe('passing');
   });
 });
