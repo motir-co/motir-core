@@ -1790,9 +1790,11 @@ export default defineConfig({
         // Story MOTIR-9708 · MOTIR-9850 — the pool-account definition as add-shard
         // reads it, and the `aws` provider that applies it. MEASURED on this branch
         // against `tests/ciFleet/awsPoolStackSeam.test.ts`, `awsPoolDefinition`,
-        // `fleetShardProvisioningAws` and `fleetShardProvisioningAwsIndexer` alone:
-        // awsPoolDefinition 100 / 95 / 100 / 100, awsProvisioningProvider
-        // 96.94 / 90 / 100 / 98.34 (statements / branches / functions / lines).
+        // `fleetShardProvisioningAws` and `fleetShardProvisioningAwsIndexer` alone
+        // (the last deleted with the code-graph index kind, MOTIR-12041):
+        // awsPoolDefinition 100 / 94.44 / 100 / 100, awsProvisioningProvider
+        // 97.03 / 91.02 / 100 / 98.38 (statements / branches / functions / lines),
+        // re-measured without the deleted file (MOTIR-12041).
         // Pinned at the fleet's 90 floor below.
         'lib/fleetShards/awsPoolDefinition.ts',
         'lib/fleetShards/awsProvisioningProvider.ts',

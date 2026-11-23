@@ -15,8 +15,8 @@ import type { CodeGraphIndexData } from '../types';
 // hands both to motir-ai as a `first_index`, which starts motir-codegraph's job,
 // then polls motir-ai's status route until the commit is published, refused or
 // failed. `runIndexHandoffSteps` is the step shape — read the note there for
-// which calls are memoized and why. The container path (`runIndexFleetSteps`)
-// was deleted with the indexer fleet (MOTIR-12036).
+// which calls are memoized and why. The container path's steps were deleted
+// with the indexer fleet (MOTIR-12036).
 //
 // SYSTEM-scoped (`system.*`): the work spans an installation's workspace + its
 // projects, resolved under `withSystemContext` inside the service — like every
@@ -33,7 +33,7 @@ import type { CodeGraphIndexData } from '../types';
 //
 // ⚠️ THERE IS DELIBERATELY NO `concurrency` HERE ANY MORE (MOTIR-1990,
 // `docs/decisions/code-graph-index-fleet.md` §7). The cap lived in the
-// ORCHESTRATOR's admission control (`codeGraphIndexAdmissionService`, deleted
+// ORCHESTRATOR's admission control (the index admission service, deleted
 // with the indexer fleet by MOTIR-12036); the build now runs in motir-codegraph,
 // which owns its own capacity — and DO NOT ADD ONE BACK. The reasons, written
 // when this job supervised a container, in order of how badly each bit:

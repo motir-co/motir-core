@@ -270,7 +270,6 @@ describe('2 · outgoing bodies match motir-ai’s contract', () => {
   it('a settled container’s meter report — each workload — costUsd a decimal string', async () => {
     const workloads = [
       ['ci_runner', 'ci'],
-      ['code_graph_index', 'index'],
       ['hosted_agent', 'agent'],
       ['agent_instance', 'agent_instance'],
     ] as const;

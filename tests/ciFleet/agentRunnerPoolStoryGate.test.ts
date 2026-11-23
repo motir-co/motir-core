@@ -639,7 +639,7 @@ describe('with the agent-runner switch off, and flipped at run time', () => {
 
   it('flipping the switch moves the hosted-agent kind only', async () => {
     const a = await flyAccount('hosted_agent', 5);
-    const others = ['ci_runner', 'code_graph_index', 'agent_instance'] as const;
+    const others = ['ci_runner', 'agent_instance'] as const;
     const readOthers = () => Promise.all(others.map((k) => fleetKindOnPool(k)));
     const baseline = await readOthers();
 

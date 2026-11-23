@@ -7,6 +7,14 @@ import type { FleetQuotaRequestStatusDTO } from '@/lib/dto/fleetPools';
 
 export type FleetCapacityRequestStatusDTO = 'open' | 'filed' | 'closed';
 
+/**
+ * The kind a capacity request STORES: a live fleet kind, or `code_graph_index`,
+ * the code-graph index kind retired by MOTIR-12041. Only a stored value — the past
+ * requests the merged-account re-home re-pointed onto the agent row (MOTIR-12038)
+ * keep it as billing history, and no path accepts or writes it any more.
+ */
+export type CapacityRequestFleetKind = FleetWorkloadKind | 'code_graph_index';
+
 /** The linked quota request as it stands NOW — read at read time, so the two
  *  records can never disagree about what AWS answered. */
 export interface FleetCapacityRequestOutcomeDTO {
@@ -22,7 +30,7 @@ export interface FleetCapacityRequestDTO {
   shardId: string;
   awsAccountId: string;
   /** The kind the organisation named. */
-  fleetKind: FleetWorkloadKind;
+  fleetKind: CapacityRequestFleetKind;
   quotaCode: string;
   desiredVcpu: number;
   reasonMd: string;
@@ -46,7 +54,7 @@ export interface FleetCapacityRequestDTO {
  */
 export interface OrgFleetCapacityRequestDTO {
   id: string;
-  fleetKind: FleetWorkloadKind;
+  fleetKind: CapacityRequestFleetKind;
   desiredVcpu: number;
   reasonMd: string;
   status: FleetCapacityRequestStatusDTO;

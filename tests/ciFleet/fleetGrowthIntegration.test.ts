@@ -411,32 +411,28 @@ describe('a refused CreateAccount', () => {
 
 describe('a kind on Fly', () => {
   it('gets no event, audit row, alert, row, raise or AWS call while ci_runner grows in the same pass', async () => {
-    const indexer = await fleetShardService.createShard({
-      name: 'code-graph-index-use1-1',
-      fleetKind: 'code_graph_index',
+    const onFly = await fleetShardService.createShard({
+      name: 'hosted-agent-use1-1',
+      fleetKind: 'hosted_agent',
       provider: 'aws',
       state: 'active',
       githubOrg: ORG,
       githubInstallationId: '9001',
       awsAccountId: '999900001111',
       awsRegion: 'us-east-1',
-      credentialRef: 'FLEET_SHARD_CODE_GRAPH_INDEX_USE1_1',
+      credentialRef: 'FLEET_SHARD_HOSTED_AGENT_USE1_1',
       limits: { vcpuQuota: 100 },
     });
     organization.quotaByAccount.set('999900001111', 50);
-    usage.set(indexer.id, 90);
+    usage.set(onFly.id, 90);
 
     const summary = await pass();
 
-    expect(summary.kinds).toMatchObject({ ci_runner: 'grown', code_graph_index: 'on_fly' });
-    expect(await adminDb.fleetGrowthEvent.count({ where: { fleetKind: 'code_graph_index' } })).toBe(
-      0,
-    );
-    expect(
-      await adminDb.fleetQuotaRequest.count({ where: { fleetKind: 'code_graph_index' } }),
-    ).toBe(0);
-    expect(await shards('code_graph_index')).toEqual([await shard(indexer.id)]);
-    expect(await shard(indexer.id)).toMatchObject({ vcpuQuota: 100 });
+    expect(summary.kinds).toMatchObject({ ci_runner: 'grown', hosted_agent: 'on_fly' });
+    expect(await adminDb.fleetGrowthEvent.count({ where: { fleetKind: 'hosted_agent' } })).toBe(0);
+    expect(await adminDb.fleetQuotaRequest.count({ where: { fleetKind: 'hosted_agent' } })).toBe(0);
+    expect(await shards('hosted_agent')).toEqual([await shard(onFly.id)]);
+    expect(await shard(onFly.id)).toMatchObject({ vcpuQuota: 100 });
     expect(organization.calls.some((c) => c.includes('999900001111'))).toBe(false);
     expect(await growAudits()).toHaveLength(1); // ci_runner's
     expect(alerts).toEqual([]);

@@ -71,7 +71,7 @@ import {
 // and that its fleet slot is held for exactly that long. Keeping the two apart is
 // what stops "is it metered?" depending on "did the orchestration get it right?".
 //
-// It is the three-operation shape the deleted `codeGraphIndexDispatchService`
+// It is the three-operation shape the deleted index dispatch service
 // (MOTIR-12036) had, and deliberately so: BOOT and SETTLE are the side effects a durable step memoizes; POLL is one
 // provider read that never throws; `advance` is one pass of the shared supervision
 // driver; `run` drives it to completion in-process for a caller with no job row.

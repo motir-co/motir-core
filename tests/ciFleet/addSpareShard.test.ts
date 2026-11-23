@@ -208,7 +208,6 @@ describe('addSpareShard, given only a fleet kind', () => {
   it.each([
     ['hosted_agent', 32],
     ['agent_instance', 32],
-    ['code_graph_index', 16],
   ] as const)('a %s spare asks for %d vCPU', async (kind, target) => {
     await fleetShardService.createShard({
       name: `${kind.replace(/_/g, '-')}-primary`,

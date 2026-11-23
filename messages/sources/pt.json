@@ -9379,7 +9379,6 @@
   "platformAdmin.monitoring.pools.subtitle": "Each fleet kind’s pool of AWS accounts: capacity, use against 70%, the Motir spare, the quota raises asked of AWS and whether growth has been doing its job. Read from what the growth pass last recorded — loading this page asks AWS nothing.",
   "platformAdmin.monitoring.pools.kind.ci_runner": "CI runner",
   "platformAdmin.monitoring.pools.kind.hosted_agent": "Agent runner",
-  "platformAdmin.monitoring.pools.kind.code_graph_index": "Indexer",
   "platformAdmin.monitoring.pools.kind.agent_instance": "Agent hoster",
   "platformAdmin.monitoring.pools.block.title": "Pool · {kind}",
   "platformAdmin.monitoring.pools.block.subtitle.aws": "Its shared accounts, the Motir spare, quota raises asked of AWS and the growth events — as the growth pass last read them.",

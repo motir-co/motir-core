@@ -10,6 +10,11 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { currentWorkerUrl } from '../helpers/parallelDb';
+import {
+  allowRetiredFleetKind,
+  RETIRED_FLEET_KIND,
+  refuseRetiredFleetKind,
+} from '../helpers/retiredFleetKind';
 import { randomInt, randomToken } from '../helpers/random';
 
 // THE MERGED HOST ACCOUNT RE-HOME (MOTIR-12038), run against the real database
@@ -19,9 +24,9 @@ import { randomInt, randomToken } from '../helpers/random';
 // to pass their policies rather than a superuser walking past them.
 //
 // Seeded: a merged account written the old way (an `org_owned`
-// `code_graph_index` row carrying the raise, and its `agent_instance` twin), with
+// `RETIRED_FLEET_KIND` row carrying the raise, and its `agent_instance` twin), with
 // a row in every table that references a fleet account; a merged account whose
-// twin was never written; and a platform-pool `code_graph_index` row beside them.
+// twin was never written; and a platform-pool `RETIRED_FLEET_KIND` row beside them.
 
 const MIGRATION = path.join(
   process.cwd(),
@@ -54,7 +59,7 @@ async function indexRow(
   return adminDb.fleetShard.create({
     data: {
       name,
-      fleetKind: 'code_graph_index',
+      fleetKind: RETIRED_FLEET_KIND,
       provider: 'aws',
       role,
       ownerOrganizationId: organizationId,
@@ -132,7 +137,7 @@ async function mergedWithTwin(): Promise<Seed> {
       organizationId,
       shardId: index.id,
       awsAccountId: account,
-      fleetKind: 'code_graph_index',
+      fleetKind: RETIRED_FLEET_KIND,
       desiredVcpu: 200,
       reasonMd: 'more index room',
       status: 'closed',
@@ -143,7 +148,7 @@ async function mergedWithTwin(): Promise<Seed> {
   });
   const growth = await adminDb.fleetGrowthEvent.create({
     data: {
-      fleetKind: 'code_graph_index',
+      fleetKind: RETIRED_FLEET_KIND,
       triggeringShardId: index.id,
       spareShardId: index.id,
       newShardId: index.id,
@@ -154,7 +159,7 @@ async function mergedWithTwin(): Promise<Seed> {
   });
   const slot = await adminDb.fleetInFlightSlot.create({
     data: {
-      workload: 'code_graph_index',
+      workload: RETIRED_FLEET_KIND,
       ref: `index-${randomToken(6)}`,
       organizationId,
       workspaceId: fx.workspaceId,
@@ -232,10 +237,14 @@ async function clearFleet() {
 beforeEach(async () => {
   await clearFleet();
   await truncateAuthTables();
+  // The database as it stood when this migration ran: the kind it moves rows
+  // off was retired after it (MOTIR-12041).
+  await allowRetiredFleetKind();
 });
 
 afterAll(async () => {
   await clearFleet();
+  await refuseRetiredFleetKind();
   await truncateAuthTables();
   await db.$disconnect();
   await adminDb.$disconnect();
@@ -280,7 +289,7 @@ describe('the merged host account re-home migration (MOTIR-12038)', () => {
       }),
     ).toMatchObject({
       shardId: twin.id,
-      fleetKind: 'code_graph_index',
+      fleetKind: RETIRED_FLEET_KIND,
       awsAccountId: seed.index.awsAccountId,
     });
     expect(
@@ -324,7 +333,7 @@ describe('the merged host account re-home migration (MOTIR-12038)', () => {
         organizationId,
         shardId: index.id,
         awsAccountId: index.awsAccountId!,
-        fleetKind: 'code_graph_index',
+        fleetKind: RETIRED_FLEET_KIND,
         desiredVcpu: 200,
         reasonMd: 'more',
         requestedByUserId: fx.ownerId,
@@ -345,7 +354,7 @@ describe('the merged host account re-home migration (MOTIR-12038)', () => {
     ).toMatchObject({ shardId: index.id, fleetKind: 'agent_instance' });
     expect(
       await adminDb.fleetCapacityRequest.findUniqueOrThrow({ where: { id: capacity.id } }),
-    ).toMatchObject({ shardId: index.id, fleetKind: 'code_graph_index' });
+    ).toMatchObject({ shardId: index.id, fleetKind: RETIRED_FLEET_KIND });
     const ceiling = await withSystemContext((tx) =>
       fleetShardAdmissionService.ownCeilingInTx(row, tx),
     );
@@ -364,18 +373,18 @@ describe('the merged host account re-home migration (MOTIR-12038)', () => {
 
     expect(
       await adminDb.fleetShard.count({
-        where: { fleetKind: 'code_graph_index', role: 'org_owned' },
+        where: { fleetKind: RETIRED_FLEET_KIND, role: 'org_owned' },
       }),
     ).toBe(0);
     expect(
       await adminDb.fleetQuotaRequest.count({
-        where: { fleetKind: 'code_graph_index', shard: { role: 'org_owned' } },
+        where: { fleetKind: RETIRED_FLEET_KIND, shard: { role: 'org_owned' } },
       }),
     ).toBe(0);
     expect(await adminDb.fleetShard.findUniqueOrThrow({ where: { id: pool.id } })).toEqual(pool);
     expect(
       await adminDb.fleetQuotaRequest.findUniqueOrThrow({ where: { id: poolRaise.id } }),
-    ).toMatchObject({ shardId: pool.id, fleetKind: 'code_graph_index' });
+    ).toMatchObject({ shardId: pool.id, fleetKind: RETIRED_FLEET_KIND });
 
     const once = await snapshot();
     await runMigration();

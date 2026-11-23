@@ -63,7 +63,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     name: 'Acme Corp',
     isMeta: false,
     internalBilling: false,
-    byWorkload: { ci_runner: 42, hosted_agent: 6, code_graph_index: 2, agent_instance: 3 },
+    byWorkload: { ci_runner: 42, hosted_agent: 6, agent_instance: 3 },
     agentsLive: 3,
     plan: MAX,
     accruedMinutesInWindow: 386,
@@ -199,7 +199,7 @@ describe('organisations card', () => {
           row({
             organizationId: 'org_globex',
             name: 'Globex',
-            byWorkload: { ci_runner: 3, hosted_agent: 0, code_graph_index: 0, agent_instance: 2 },
+            byWorkload: { ci_runner: 3, hosted_agent: 0, agent_instance: 2 },
             accruedMinutesInWindow: 0,
             latestAccrualTickAt: minAgo(22),
             confirmedCreditsThisMonth: 4_018,
@@ -298,7 +298,7 @@ describe('organisations card', () => {
           organizationId: 'org_std',
           name: 'Halcyon',
           plan: STANDARD,
-          byWorkload: { ci_runner: 4, hosted_agent: 1, code_graph_index: 2, agent_instance: 0 },
+          byWorkload: { ci_runner: 4, hosted_agent: 1, agent_instance: 0 },
           agentsLive: 0,
         }),
         row({
@@ -306,7 +306,7 @@ describe('organisations card', () => {
           name: 'Initech',
           plan: PRO,
           // 4 running, 7 live: the agent-instance cell reads the LIVE count (MOTIR-9954).
-          byWorkload: { ci_runner: 2, hosted_agent: 2, code_graph_index: 0, agent_instance: 4 },
+          byWorkload: { ci_runner: 2, hosted_agent: 2, agent_instance: 4 },
           agentsLive: 7,
         }),
       ]),

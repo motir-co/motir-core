@@ -44,12 +44,7 @@ const { truncateAuthTables } = await import('../helpers/db');
 const NOW = new Date('2026-11-04T12:00:00.000Z');
 const LATER = new Date(NOW.getTime() + 60 * 60_000);
 const DAY = 24 * 60 * 60_000;
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'code_graph_index',
-  'hosted_agent',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 type Fixture = Awaited<ReturnType<typeof makeWorkItemFixture>>;
 
@@ -147,20 +142,6 @@ async function hostedRun(org: Org, options: { scoped: boolean; startedAt: Date }
   });
   org.marks.runIds.push(run.id);
   return { run, scope };
-}
-
-async function indexSlot(org: Org) {
-  seq += 1;
-  await adminDb.fleetInFlightSlot.create({
-    data: {
-      workload: 'code_graph_index',
-      ref: `index-${seq}`,
-      ownerRef: `index-${seq}`,
-      organizationId: org.organizationId,
-      workspaceId: org.workspaceId,
-      expiresAt: LATER,
-    },
-  });
 }
 
 async function instance(org: Org, state: 'running' | 'hibernated', stateChangedAt: Date) {
@@ -271,7 +252,6 @@ async function seed(org: Org) {
     queuedAt: new Date(NOW.getTime() - 60_000),
   });
   await intent(org, 'completed');
-  await indexSlot(org);
   await kill(org, { decidedAt: new Date(NOW.getTime() - DAY), reason: 'no_record' });
   await kill(org, {
     decidedAt: new Date(NOW.getTime() - 2 * DAY),

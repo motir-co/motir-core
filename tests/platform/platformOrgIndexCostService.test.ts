@@ -9,6 +9,7 @@ import type { PlatformPrincipal } from '@/lib/platform/auth';
 import type { ContainerUsage } from '@motir/orchestrator';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { RETIRED_CAPACITY_PAUSES } from '../helpers/retiredFleetKind';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE ORG PAGE'S INDEX & FLEET COST CARD — the service (MOTIR-5341 · Story MOTIR-4335;
@@ -70,7 +71,7 @@ async function seedOrg() {
 
 async function recordContainer(
   fx: { organizationId: string; workspaceId: string },
-  workload: 'code_graph_index' | 'ci_runner',
+  workload: 'agent_instance' | 'ci_runner',
   seconds: number,
   costUsd: string,
 ) {
@@ -194,7 +195,7 @@ describe('the three threshold states are told apart (AC 2)', () => {
   // ⚠️ THE CAPACITY PAUSES LEFT WITH THE INDEXER POOL (MOTIR-12036). A row still
   // recording one is a pause like any other until the next catch-up pass re-hands
   // it, and its stored reason names why.
-  it.each(['paused_index_pool_full', 'paused_index_no_indexer_account'])(
+  it.each(RETIRED_CAPACITY_PAUSES)(
     'a leftover %s row reads as the org’s pause, its stored reason naming it',
     async (stored) => {
       const org = await seedOrg();
@@ -225,17 +226,23 @@ describe('the three threshold states are told apart (AC 2)', () => {
 describe('the ways this card can lie (AC 3)', () => {
   it('workload lines come from the real rollup, and a line that did not run is ABSENT, not zero', async () => {
     const org = await seedOrg();
-    await recordContainer(org, 'code_graph_index', 1840, '0.058210330160');
+    await recordContainer(org, 'agent_instance', 1840, '0.058210330160');
     const dto = await enabled(org.organizationId);
+    // The live kinds' lines only: `index` is the retired code-graph index kind's
+    // (MOTIR-12041), and no live kind records under it.
     expect(dto.workloads).toEqual([
       { workload: 'ci', containerCount: null, containerSeconds: null, costUsd: null },
-      { workload: 'index', containerCount: 1, containerSeconds: 1840, costUsd: expect.any(String) },
       { workload: 'agent', containerCount: null, containerSeconds: null, costUsd: null },
       // Agent instances (MOTIR-6872) meter under their own line.
-      { workload: 'instance', containerCount: null, containerSeconds: null, costUsd: null },
+      {
+        workload: 'instance',
+        containerCount: 1,
+        containerSeconds: 1840,
+        costUsd: expect.any(String),
+      },
     ]);
-    const index = dto.workloads.find((w) => w.workload === 'index')!;
-    expect(new Prisma.Decimal(index.costUsd!).equals(new Prisma.Decimal('0.058210330160'))).toBe(
+    const instance = dto.workloads.find((w) => w.workload === 'instance')!;
+    expect(new Prisma.Decimal(instance.costUsd!).equals(new Prisma.Decimal('0.058210330160'))).toBe(
       true,
     );
   });

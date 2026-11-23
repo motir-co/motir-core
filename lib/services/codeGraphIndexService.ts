@@ -338,8 +338,8 @@ export interface IndexModeRecord {
  *
  * ⚠️ **AND THE CONTAINER HALF IS OPTIONAL BY CONSTRUCTION, NEVER DEFAULTED.**
  * It was read after a container run settled, by a client that returned `null`
- * for every failure (`fetchCodeGraphRunVerdict`, deleted with the container
- * fleet by MOTIR-12036); a handed-off index never reports it. Absent therefore
+ * for every failure (the run-verdict read, deleted with the container fleet by
+ * MOTIR-12036); a handed-off index never reports it. Absent therefore
  * means *nobody told us*, which is
  * not the same as `build` and must never be read as it — a defaulted value here
  * would be indistinguishable from a measured one, which is the precise confusion

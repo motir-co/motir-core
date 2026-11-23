@@ -227,13 +227,11 @@ describe('the agent-hoster switch', () => {
   it('defaults to Fly and is separate from every other kind’s switch', async () => {
     expect(await fleetKindOnPool('agent_instance')).toBe(false);
     wireFleetKindSwitch('ci_runner', () => true);
-    wireFleetKindSwitch('code_graph_index', () => true);
     expect(await fleetKindOnPool('agent_instance')).toBe(false);
     wireFleetKindSwitch('agent_instance', () => true);
     wireFleetKindSwitch('ci_runner', () => false);
     expect(await fleetKindOnPool('agent_instance')).toBe(true);
     expect(await fleetKindOnPool('ci_runner')).toBe(false);
-    wireFleetKindSwitch('code_graph_index', null);
   });
 });
 

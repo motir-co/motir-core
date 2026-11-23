@@ -3,7 +3,6 @@ import {
   AWS_DISPATCH_RUN_TAG_KEY,
   AWS_REAP_PAGE_SIZE,
   AwsInstanceSizeError,
-  AwsRetiredWorkloadError,
   Ec2ApiError,
   FLEET_METADATA_KEY,
   OrchestratorApiError,
@@ -13,7 +12,6 @@ import {
   createAwsOrchestrator,
   type ContainerHandle,
   type ContainerOrchestrator,
-  type ContainerSpec,
   type Ec2Api,
 } from '../src/index';
 import { AwsEc2Fake, userInitiated } from './contract/awsEc2Fake';
@@ -220,8 +218,7 @@ describe('provision', () => {
     expect(ec2.mutations().map((c) => c.method)).toEqual(['runInstances']);
   });
 
-  // Retargeted from `code_graph_index`, which the adapter now refuses (MOTIR-9422):
-  // a workload with no job still omits the intent tag.
+  // A workload with no job omits the intent tag.
   it('omits the intent tag for a workload with no job', async () => {
     const handle = await adapter().provision(HOSTED_SPEC);
     const tags = ec2.requestOf(handle.id).tags;
@@ -729,43 +726,5 @@ describe('reap', () => {
   it('throws the typed error when the listing fails', async () => {
     ec2.failNext('describeInstances', 'UnauthorizedOperation', 403);
     await expect(adapter().reap(cutoff(), resolveAll)).rejects.toMatchObject({ status: 403 });
-  });
-});
-
-// ── A retired index VM (MOTIR-12037) ─────────────────────────────────────
-
-describe('a code_graph_index spec is refused: the index VM is retired (MOTIR-12037)', () => {
-  const INDEX_SPEC: ContainerSpec = {
-    ...AWS_SPEC,
-    workload: 'code_graph_index',
-    workflowJobId: null,
-    image: `ghcr.io/motir-co/motir-indexer@sha256:${'a'.repeat(64)}`,
-  };
-
-  it('throws the retired-kind refusal and makes no EC2 call', async () => {
-    const before = ec2.calls.length;
-    const thrown = await adapter()
-      .provision(INDEX_SPEC)
-      .catch((err: unknown) => err);
-
-    expect(thrown).toBeInstanceOf(AwsRetiredWorkloadError);
-    expect(thrown).toMatchObject({ code: 'AWS_RETIRED_WORKLOAD', workload: 'code_graph_index' });
-    expect((thrown as Error).message).toBe(
-      'the code_graph_index workload is retired: the aws orchestrator boots none',
-    );
-    expect(ec2.calls.slice(before).map((c) => c.method)).not.toContain('runInstances');
-    expect(ec2.mutations()).toEqual([]);
-  });
-
-  it('a VM tagged as an index describes like any other instance: no console read', async () => {
-    const handle = await adapter().provision(AWS_SPEC);
-    ec2.setState(handle.id, 'stopped', userInitiated(new Date('2026-11-01T00:00:00Z')));
-
-    expect(await adapter().describe(handle)).toMatchObject({
-      exists: true,
-      terminal: true,
-      exitCode: null,
-    });
-    expect(ec2.calls.map((c) => c.method)).not.toContain('getConsoleOutput');
   });
 });

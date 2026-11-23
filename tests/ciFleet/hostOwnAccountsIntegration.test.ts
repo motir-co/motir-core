@@ -121,12 +121,7 @@ interface Ec2Fake extends Ec2Api {
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 let AwsEc2Fake: new () => Ec2Fake;
 
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
@@ -468,7 +463,6 @@ beforeEach(async () => {
   const ids: Record<FleetWorkloadKind, string> = {
     ci_runner: '111122223331',
     hosted_agent: '111122223332',
-    code_graph_index: '111122223333',
     agent_instance: '111122223334',
   };
   for (const kind of KINDS) {
@@ -629,10 +623,6 @@ describe('an account granted', () => {
       true,
     );
     expect(agentsPlaced[20]).toEqual(ownFull('agent_instance'));
-    // And an index job is the shared pool's: the org has no own index account.
-    expect(await placed('code_graph_index', host, { start: false })).toEqual({
-      shardId: shared.code_graph_index!.id,
-    });
   });
 });
 
@@ -1056,8 +1046,8 @@ describe('leaving Host and buying it again', () => {
   it('an unreadable plan defers a job of an org with an own account: neither side', async () => {
     const host = await liveHost();
     await setPlan(host.organizationId, 'unknown');
-    // Every kind the org has an own account of (no index account since MOTIR-12038).
-    for (const kind of KINDS.filter((k) => k !== 'code_graph_index')) {
+    // Every kind the org has an own account of.
+    for (const kind of KINDS) {
       const p = await placed(kind, host, { start: false });
       expect(p).toMatchObject({ deferred: 'shard_capacity' });
     }

@@ -178,7 +178,6 @@ beforeEach(async () => {
   await createTestUser({ email: MOTIR_SYSTEM_USER_EMAIL });
   await primary('ci-runner-use1-1', 'ci_runner', '111122223331');
   await primary('hosted-agent-use1-1', 'hosted_agent', '111122223332');
-  await primary('indexer-use1-1', 'code_graph_index', '111122223333');
   await primary('agent-host-use1-1', 'agent_instance', '111122223334');
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -245,7 +244,7 @@ describe('one pass over a fresh Host organisation', () => {
     const org = await hostOrg();
     await pass(at(1));
 
-    for (const kind of ['ci_runner', 'hosted_agent', 'code_graph_index', 'agent_instance']) {
+    for (const kind of ['ci_runner', 'hosted_agent', 'agent_instance']) {
       const selected = await withSystemContext((tx) =>
         fleetShardAdmissionService.selectionSetInTx(
           { fleetKind: kind as FleetWorkloadKind, organizationId: org.id },

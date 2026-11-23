@@ -5066,11 +5066,11 @@ enum JobSupervisionState {
 model JobSupervision {
   id                      String              @id @default(cuid())
   runId                   String              @map("run_id")
-  /// WHAT is being supervised, within this run — the `projectId` for the index
-  /// fleet, the intent id for the CI fleet.
+  /// WHAT is being supervised, within this run — the intent id for the CI
+  /// fleet (and, until MOTIR-12036 retired the index fleet, its `projectId`).
   ///
   /// ⚠️ THE ROW IS NOT ONE PER RUN, AND THAT IS THE DESIGN QUESTION RATHER THAN
-  /// A DETAIL. `runIndexFleetSteps` fans out over `target.projectIds` — one
+  /// A DETAIL. The index fleet's steps fanned out over `target.projectIds` — one
   /// container per (repo × project) — so a supervision is a SET whose degenerate
   /// case is one. A schema keyed by `run_id` alone models the fan-out as a
   /// singular and is re-shaped the first time a workspace has two projects.

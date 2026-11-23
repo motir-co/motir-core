@@ -45,7 +45,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     name: 'Acme Corp',
     isMeta: false,
     internalBilling: false,
-    byWorkload: { ci_runner: 3, hosted_agent: 1, agent_instance: 2, code_graph_index: 1 },
+    byWorkload: { ci_runner: 3, hosted_agent: 1, agent_instance: 2 },
     agentsLive: 2,
     plan: {
       kind: 'capped',
@@ -160,10 +160,10 @@ describe('OrgFleetCard', () => {
     },
   );
 
-  it('nothing running disables it with “Nothing to stop.” — a stray index count is not counted (S2 d)', () => {
+  it('nothing running disables it with “Nothing to stop.” (S2 d)', () => {
     renderCard({
       row: row({
-        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0, code_graph_index: 1 },
+        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0 },
         verdicts: ['ok'],
       }),
     });
@@ -178,7 +178,7 @@ describe('OrgFleetCard', () => {
     renderCard({
       role: 'operator',
       row: row({
-        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0, code_graph_index: 0 },
+        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0 },
       }),
     });
     expect(screen.queryByText('Nothing to stop.')).toBeNull();
@@ -189,7 +189,7 @@ describe('OrgFleetCard', () => {
   it('after a stop the foot shows the fleet.stop row — actor, time, reason, counts (S4 k)', () => {
     renderCard({
       row: row({
-        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0, code_graph_index: 1 },
+        byWorkload: { ci_runner: 0, hosted_agent: 0, agent_instance: 0 },
         verdicts: ['ok'],
       }),
       lastStop: {

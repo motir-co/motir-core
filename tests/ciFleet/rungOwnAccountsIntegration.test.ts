@@ -77,12 +77,7 @@ const { projectsService } = await import('@/lib/services/projectsService');
 type Ec2Fake = Ec2Api;
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
@@ -412,7 +407,6 @@ beforeAll(async () => {
   const ids: Record<FleetWorkloadKind, string> = {
     ci_runner: '111122224441',
     hosted_agent: '111122224442',
-    code_graph_index: '111122224443',
     agent_instance: '111122224444',
   };
   for (const kind of KINDS) {

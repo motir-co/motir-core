@@ -197,13 +197,6 @@ describe('the daily health check carries no indexer check', () => {
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
-    for (const name of [
-      'MOTIR_INDEXER_IMAGE',
-      'MOTIR_INDEX_FLEET_PROVIDER',
-      'MOTIR_AWS_INDEXER_AMI_ID',
-    ]) {
-      vi.stubEnv(name, '');
-    }
     vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
 
     const engine = new JobTestEngine({ function: dailyHealthCheck });

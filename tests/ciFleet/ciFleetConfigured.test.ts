@@ -206,7 +206,7 @@ describe('with cloud off and the CI runner on the install fleet (MOTIR-11232)', 
 
   it('with the CI runner unlisted, cloud off asks the switch’s fleet as before', async () => {
     configureInstallFleet();
-    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'code_graph_index');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'hosted_agent');
     expect(await ciFleetMissingConfig()).not.toEqual([]);
   });
 });

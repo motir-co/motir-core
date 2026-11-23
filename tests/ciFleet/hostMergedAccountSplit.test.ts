@@ -13,7 +13,11 @@ import {
 describe('mergedAccountSplit', () => {
   it('counts 2 vCPU spots, bounds agents at 50, and keeps no index spots', () => {
     expect([MERGED_SPOT_VCPU, MERGED_AGENT_CEILING]).toEqual([2, 50]);
-    expect(Object.keys(split)).not.toContain('MERGED_INDEX_SPOTS');
+    expect(Object.keys(split).sort()).toEqual([
+      'MERGED_AGENT_CEILING',
+      'MERGED_SPOT_VCPU',
+      'mergedAccountSplit',
+    ]);
   });
 
   it.each([

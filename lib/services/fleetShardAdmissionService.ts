@@ -108,8 +108,6 @@ export const OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND: Record<FleetWorkloadKind, stri
     "Your organization's own CI capacity is full right now. This job starts when one of your runners finishes.",
   hosted_agent:
     "Your organization's own agent-run capacity is full right now. This run starts when another of your runs finishes.",
-  code_graph_index:
-    "Your organization's own indexing capacity is full right now. This index starts when another of yours finishes.",
   agent_instance:
     "Your organization's own agent-hosting capacity is full right now. This agent starts when one of yours stops.",
 };
@@ -121,8 +119,8 @@ type ShardInFlightCounter = (
   tx: Prisma.TransactionClient,
 ) => Promise<number>;
 
-/** Each kind's per-account counter. CI, the agent runner (MOTIR-9421), the
- *  agent hoster (MOTIR-9471) and the indexer (MOTIR-9445) are wired here. A
+/** Each kind's per-account counter. CI, the agent runner (MOTIR-9421) and the
+ *  agent hoster (MOTIR-9471) are wired here. A
  *  slot-backed kind counts its live fleet slots on the account, never another
  *  workload's. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
@@ -132,8 +130,6 @@ const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter
   // The agent hoster (MOTIR-9471): every live instance placed on the account,
   // a reservation included — placement writes it inside the counting transaction.
   agent_instance: (shardId, _now, tx) => agentInstanceRepository.countLiveOnFleetShard(shardId, tx),
-  code_graph_index: (shardId, now, tx) =>
-    slots.countLiveForWorkloadOnShardInTx('code_graph_index', shardId, now, tx),
 };
 
 /**

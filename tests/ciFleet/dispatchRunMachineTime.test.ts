@@ -322,15 +322,15 @@ describe('the pointer outlives the run, and only a hosted container sets it', ()
   });
 
   // AC 6
-  it('a CI-runner row and an index-container row carry null', async () => {
+  it('a CI-runner row and an agent-instance row carry null', async () => {
     await ciFleetCostMeterService.recordContainerUsage(usageFor());
     await ciFleetCostMeterService.recordContainerUsage(
-      usageFor({ workload: 'code_graph_index', workflowJobId: null }),
+      usageFor({ workload: 'agent_instance', workflowJobId: null }),
     );
     const rows = await adminDb.ciContainerUsage.findMany({ orderBy: { workload: 'asc' } });
     expect(rows.map((r) => [r.workload, r.dispatchRunId])).toEqual([
       ['ci', null],
-      ['index', null],
+      ['instance', null],
     ]);
   });
 

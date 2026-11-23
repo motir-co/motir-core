@@ -34,9 +34,6 @@ const HOSTED_SPEC: ContainerSpec = {
   image: AWS_HOSTED_IMAGE,
   env: AWS_HOSTED_ENV,
 };
-// The kind is retired (MOTIR-12037); its arm64 spec is still refused on the
-// architecture before anything else is read.
-const INDEX_SPEC: ContainerSpec = { ...AWS_SPEC, workload: 'code_graph_index' };
 
 let ec2: AwsEc2Fake;
 let callsBefore = 0;
@@ -148,7 +145,6 @@ describe('an arm64 spec the adapter cannot boot is refused before any EC2 call',
 
   it.each([
     ['hosted_agent', HOSTED_SPEC],
-    ['code_graph_index', INDEX_SPEC],
     ['agent_instance', { ...AWS_SPEC, workload: 'agent_instance' as const }],
   ])('refuses an arm64 %s', async (workload, spec) => {
     const err = await refusal(adapter().provision({ ...spec, architecture: 'arm64' }));

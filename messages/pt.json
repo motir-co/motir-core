@@ -11817,7 +11817,6 @@
         "kind": {
           "ci_runner": "Runner de CI",
           "hosted_agent": "Runner de agentes",
-          "code_graph_index": "Indexador",
           "agent_instance": "Hospedagem de agentes"
         },
         "block": {

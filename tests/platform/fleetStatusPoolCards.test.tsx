@@ -59,15 +59,6 @@ function install(over: Partial<Extract<InstallFleetBlockDTO, { status: 'ok' }>> 
       sharePercent: 2,
     },
     {
-      fleetKind: 'code_graph_index',
-      enabled: true,
-      running: 0,
-      hibernated: null,
-      machineVcpu: 2,
-      vcpu: 0,
-      sharePercent: 0,
-    },
-    {
       fleetKind: 'agent_instance',
       enabled: true,
       running: 5,
@@ -209,13 +200,6 @@ describe('the install fleet card', () => {
       '8 vCPU',
       '2%',
     ]);
-    expect(cells(poolRow(root, 'code_graph_index'))).toEqual([
-      'Indexer',
-      'Yes',
-      'None running',
-      '0 vCPU',
-      '0%',
-    ]);
     expect(cells(poolRow(root, 'agent_instance'))).toEqual([
       'Agent hoster',
       'Yes',
@@ -278,7 +262,6 @@ describe('the install fleet card', () => {
       'Not available',
       'Not available',
     ]);
-    expect(cells(poolRow(root, 'code_graph_index')).slice(3)).toEqual(['0 vCPU', 'Not available']);
 
     root = await installCard(
       install({ quota: { status: 'notRead', lastReadAt: null }, usedVcpu: 18, percent: null }),
@@ -321,15 +304,6 @@ describe('the add-shard card', () => {
             running: 0,
             percent: null,
           },
-          awsPool({
-            fleetKind: 'code_graph_index',
-            sizeMachines: 32,
-            running: 32,
-            percent: 100,
-            flag: 'atSize',
-            spareNames: [],
-            sharedCount: 1,
-          }),
           awsPool({
             fleetKind: 'agent_instance',
             sizeMachines: 24,
@@ -376,13 +350,28 @@ describe('the add-shard card', () => {
       '—Not applicable',
     ]);
 
-    const full = card.querySelector('tr[data-shard-pool="code_graph_index"]')!;
-    expect(full.querySelector('[data-rail="warning"]')).not.toBeNull();
-    expect(text(full.querySelector('[data-flag="atSize"]'))).toBe(f.shard.atSize);
-    expect(cells(full)[2]).toBe('1 sharedno Motir spare yet');
     const near = card.querySelector('tr[data-shard-pool="agent_instance"]')!;
     expect(text(near.querySelector('[data-flag="near"]'))).toBe(f.shard.near);
     expect(cells(near)[4]).toContain('79%');
+
+    // A pool AT its size, drawn alone: three kinds cannot show all four states at once.
+    const atSize = await shardCard(
+      block([
+        awsPool({
+          fleetKind: 'agent_instance',
+          sizeMachines: 32,
+          running: 32,
+          percent: 100,
+          flag: 'atSize',
+          spareNames: [],
+          sharedCount: 1,
+        }),
+      ]),
+    );
+    const full = atSize.querySelector('tr[data-shard-pool="agent_instance"]')!;
+    expect(full.querySelector('[data-rail="warning"]')).not.toBeNull();
+    expect(text(full.querySelector('[data-flag="atSize"]'))).toBe(f.shard.atSize);
+    expect(cells(full)[2]).toBe('1 sharedno Motir spare yet');
     expect(text(card)).toContain(
       'Read-only. To ask AWS for more quota, run fleet-admin request-quota --account <name> --vcpu <n> at a terminal; an account’s ceiling override stays on its existing door.',
     );
@@ -486,7 +475,7 @@ describe('the add-shard card', () => {
       block([
         { fleetKind: 'ci_runner', provider: 'fly' },
         { fleetKind: 'hosted_agent', provider: 'unavailable' },
-        awsPool({ fleetKind: 'code_graph_index' }),
+        awsPool({ fleetKind: 'agent_instance' }),
       ]),
     );
     const fly = root.querySelector('tr[data-shard-pool="ci_runner"]')!;
@@ -500,7 +489,7 @@ describe('the add-shard card', () => {
     const failed = root.querySelector('tr[data-shard-pool="hosted_agent"]')!;
     expect(failed.querySelector('[role="alert"]')).not.toBeNull();
     expect(text(failed)).toContain('Couldn’t read the Agent runner pool');
-    expect(root.querySelector('tr[data-shard-pool="code_graph_index"] button')).not.toBeNull();
+    expect(root.querySelector('tr[data-shard-pool="agent_instance"] button')).not.toBeNull();
   });
 
   it('is the block error when the pools read did not answer', async () => {

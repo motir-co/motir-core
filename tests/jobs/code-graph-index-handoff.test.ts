@@ -1,7 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as motirAiClient from '@/lib/ai/motirAiClient';
 import {
   AI_PLAN_INDEX_PAUSE_REASON,
   INDEX_SIZE_REFUSED_PAUSE_REASON,
@@ -37,6 +34,7 @@ import {
   presignedUrlFor,
   statusAnswer,
   stubIndexHandoff,
+  HANDOFF_AI_PATHS,
 } from '../helpers/indexHandoff';
 import { indexEventFor, refreshEventFor, seedIndexWorkspace } from '../helpers/indexFleet';
 import { JobTestEngine } from '../helpers/jobs';
@@ -217,33 +215,17 @@ describe('system.code-graph-index hands a first_index off and settles on the pub
     expect(indexed).toContain(REPO_REF);
   });
 
-  it('the container path is gone: no admission, dispatch or run-credential mint exists to reach (MOTIR-12036)', async () => {
-    for (const file of [
-      'lib/services/codeGraphIndexAdmissionService.ts',
-      'lib/services/codeGraphIndexDispatchService.ts',
-      'lib/jobs/indexFleetSteps.ts',
-    ]) {
-      expect(existsSync(join(process.cwd(), file)), file).toBe(false);
-    }
-    expect(motirAiClient).not.toHaveProperty('mintCodeGraphRunCredential');
-    expect(motirAiClient).not.toHaveProperty('fetchCodeGraphRunVerdict');
-    expect(motirAiClient).not.toHaveProperty('drawIndexAllowance');
-
+  // The deleted container path's modules and client calls are held absent by the
+  // story's closing searches (MOTIR-12041) and the typechecker; this holds the
+  // behaviour: both jobs run with nothing but the handoff world to answer them.
+  it('the container path is gone: both jobs run on the handoff world alone (MOTIR-12036)', async () => {
     const index = await runJob(codeGraphIndex, 'handoff-nofleet-a');
     const refresh = await runJob(codeGraphRefresh, 'handoff-nofleet-b');
 
     expect(index.error).toBeUndefined();
     expect(refresh.error).toBeUndefined();
-    expect(handoffWorld.aiPaths).not.toContain('/v1/code-graph/run-credential');
-    expect(handoffWorld.aiPaths).not.toContain('/v1/code-graph/run/verdict');
-  });
-
-  it('no job definition calls runIndexFleetSteps any more', () => {
-    const dir = join(process.cwd(), 'lib/jobs/definitions');
-    const callers = readdirSync(dir).filter((f) =>
-      /runIndexFleetSteps\s*\(/.test(readFileSync(join(dir, f), 'utf8')),
-    );
-    expect(callers).toEqual([]);
+    // No run credential and no run verdict: only the handoff world's paths.
+    expect(handoffWorld.aiPaths.filter((p) => !HANDOFF_AI_PATHS.includes(p))).toEqual([]);
   });
 });
 

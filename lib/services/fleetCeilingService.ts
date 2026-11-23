@@ -208,15 +208,13 @@ export function describeFleetCensus(census: FleetInFlightCensus): string {
  * WHICH PLAN FIGURE HOLDS WHICH WORKLOAD (MOTIR-9373; decision MOTIR-9357).
  * Total by construction, like `FLEET_WORKLOADS`: a workload added to the union
  * without an entry here is a compile error. `null` means no plan figure holds it
- * — indexing (Motir charges nobody for it) and agent
- * instances (their own `guard` reads the plan at create and wake). The CI gate
+ * — agent instances (their own `guard` reads the plan at create and wake). The CI gate
  * reads the same map, so "which figure holds CI" has one spelling.
  */
 export const PLAN_FIGURE_BY_WORKLOAD: Readonly<Record<FleetWorkloadKind, keyof PlanCaps | null>> =
   Object.freeze({
     hosted_agent: 'agentRunsInParallel',
     ci_runner: 'ciBurstCap',
-    code_graph_index: null,
     agent_instance: null,
   });
 
@@ -224,7 +222,6 @@ export const PLAN_FIGURE_BY_WORKLOAD: Readonly<Record<FleetWorkloadKind, keyof P
 const PLAN_CAP_NOUN: Record<FleetWorkloadKind, readonly [string, string]> = {
   hosted_agent: ['agent run', 'agent runs'],
   ci_runner: ['CI job', 'CI jobs'],
-  code_graph_index: ['index container', 'index containers'],
   agent_instance: ['agent', 'agents'],
 };
 

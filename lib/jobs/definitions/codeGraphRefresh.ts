@@ -86,7 +86,7 @@ import type { CodeGraphRefreshData } from '../types';
 //   3. ITS ORIGINAL REASON IS GONE. The bytes moved to the containers; what
 //      remains in-process is one short credential mint.
 //
-// The cap lived where the containers were — `codeGraphIndexAdmissionService`,
+// The cap lived where the containers were — the index admission service,
 // deleted with the indexer fleet (MOTIR-12036). The build now runs in
 // motir-codegraph, which owns its own capacity.
 //

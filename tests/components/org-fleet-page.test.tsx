@@ -857,14 +857,6 @@ describe('edges', () => {
               reason: 'no_record',
               completed: true,
             },
-            {
-              // A kill of a retired index container still inside the window
-              // reads under the generic label, never a removed key (MOTIR-12040).
-              decidedAt: ago(2),
-              workload: 'code_graph_index' as never,
-              reason: 'no_record',
-              completed: true,
-            },
           ],
         },
       }),
@@ -874,7 +866,7 @@ describe('edges', () => {
     const stopRows = within(screen.getByTestId('fleet-motir-stops')).getAllByTestId(
       'fleet-motir-stop-row',
     );
-    expect(stopRows.map((row) => row.textContent?.includes('Machine'))).toEqual([true, true]);
+    expect(stopRows.map((row) => row.textContent?.includes('Machine'))).toEqual([true]);
     expect(screen.getByTestId('fleet-motir-stops').textContent).not.toMatch(/index/i);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel the run of OPS-1' }));
     let dialog = await screen.findByRole('alertdialog');

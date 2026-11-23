@@ -29,12 +29,7 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 const MOTIR_ORG = 'motir-projects';
 const NOW = new Date('2026-10-25T12:00:00.000Z');
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 interface Fixture {
   workspaceId: string;

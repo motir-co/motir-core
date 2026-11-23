@@ -13,7 +13,7 @@ import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 // asks 120 whatever the plan.
 //
 // The merged account once also hosted the container-based indexer, as a second
-// `code_graph_index` row on the same AWS account. That indexer left motir-core
+// row of the indexer's fleet kind on the same AWS account (retired, MOTIR-12041). That indexer left motir-core
 // (MOTIR-11026), so the account is ONE `agent_instance` row with one raise
 // (MOTIR-12038). It keeps the `index` suffix: that name is the one its AWS member
 // email was derived from, so renaming it would make a replay create a second AWS

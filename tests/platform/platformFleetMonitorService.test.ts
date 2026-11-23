@@ -509,7 +509,7 @@ describe('listRunningOrgs', () => {
       const org = await adminDb.organization.create({
         data: { name: `Quiet ${i}`, slug: `quiet-${seq++}` },
       });
-      await seedSlot(org.id, 'code_graph_index', ago(MIN));
+      await seedSlot(org.id, 'hosted_agent', ago(MIN));
       quiet.push(org.id);
     }
     const leaking = await seedTenant();

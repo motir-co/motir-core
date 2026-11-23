@@ -33,6 +33,11 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { currentWorkerAdminUrl } from '../helpers/parallelDb';
 import {
+  allowRetiredFleetKind,
+  RETIRED_FLEET_KIND,
+  refuseRetiredFleetKind,
+} from '../helpers/retiredFleetKind';
+import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
   POOL_DEFINITION,
@@ -205,7 +210,6 @@ beforeEach(async () => {
   await createTestUser({ email: MOTIR_SYSTEM_USER_EMAIL });
   await primary('ci-runner-use1-1', 'ci_runner', '111122223331');
   await primary('hosted-agent-use1-1', 'hosted_agent', '111122223332');
-  await primary('indexer-use1-1', 'code_graph_index', '111122223333');
   await primary('agent-host-use1-1', 'agent_instance', '111122223334');
   alerts = [];
   plans = new Map();
@@ -219,6 +223,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  await refuseRetiredFleetKind();
   await truncateAuthTables();
   await db.$disconnect();
   await adminDb.$disconnect();
@@ -250,7 +255,11 @@ describe('one pass over a Host organisation with no accounts', () => {
     );
     // MOTIR-12038: one row per account; the merged one keeps its index name.
     expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.fleetKind)).not.toContain('code_graph_index');
+    expect(rows.map((r) => r.fleetKind).sort()).toEqual([
+      'agent_instance',
+      'ci_runner',
+      'hosted_agent',
+    ]);
     const merged = rows.find((r) => r.fleetKind === 'agent_instance')!;
     expect(merged.name).toBe(
       hostAccountPlan(org.id, 'merged', hostMonthlyPlanCredits()).account.name,
@@ -285,7 +294,7 @@ describe('one pass over a Host organisation with no accounts', () => {
       where: { ownerOrganizationId: org.id },
       data: { state: 'active' },
     });
-    for (const kind of ['ci_runner', 'hosted_agent', 'code_graph_index', 'agent_instance']) {
+    for (const kind of ['ci_runner', 'hosted_agent', 'agent_instance']) {
       const selected = await withSystemContext((tx) =>
         fleetShardAdmissionService.selectionSetInTx(
           { fleetKind: kind as FleetWorkloadKind, organizationId: org.id },
@@ -344,6 +353,8 @@ describe('a replayed pass', () => {
   // raise. It is moved into the agent unit under the hoster runner policy, and
   // nothing is created or filed a second time.
   it('after the re-home migration, finds the migrated merged account and creates nothing', async () => {
+    // The database as it stood before the kind was retired (MOTIR-12041).
+    await allowRetiredFleetKind();
     const org = await seedOrg();
     plans.set(org.id, host());
     await hostAccountReconcileService.runReconcile(deps());
@@ -352,11 +363,11 @@ describe('a replayed pass', () => {
     // Rewind it to the old two-row shape: the index row with the raise …
     await adminDb.fleetShard.update({
       where: { id: fresh.id },
-      data: { fleetKind: 'code_graph_index' },
+      data: { fleetKind: RETIRED_FLEET_KIND },
     });
     await adminDb.fleetQuotaRequest.updateMany({
       where: { shardId: fresh.id },
-      data: { fleetKind: 'code_graph_index' },
+      data: { fleetKind: RETIRED_FLEET_KIND },
     });
     // … and its agent twin, as `writeSharedRow` wrote it, in the index unit.
     const twin = await adminDb.fleetShard.create({
@@ -374,15 +385,16 @@ describe('a replayed pass', () => {
         credentialRef: fresh.credentialRef,
       },
     });
-    organization.accountUnits.set(fresh.awsAccountId!, POOL_DEFINITION.unitId('code_graph_index'));
+    organization.accountUnits.set(fresh.awsAccountId!, POOL_DEFINITION.unitId(RETIRED_FLEET_KIND));
     const stackOf = () =>
       [...organization.stackInstances.entries()].find(([key]) =>
         key.includes(`/${fresh.awsAccountId}/`),
       )![1];
-    stackOf().unitId = POOL_DEFINITION.unitId('code_graph_index');
+    stackOf().unitId = POOL_DEFINITION.unitId(RETIRED_FLEET_KIND);
     stackOf().overrides = { ...stackOf().overrides, RunnerPolicy: 'runner' };
 
     await runRehomeMigration();
+    await refuseRetiredFleetKind();
     const replay = await fleetShardProvisioningService.addOrgOwnedShard(
       { organizationId: org.id, slot: 'merged', planKey: HOST_PLAN_KEY },
       deps().provisioning,

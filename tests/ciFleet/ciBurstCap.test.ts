@@ -134,7 +134,7 @@ async function inFlight(fx: Fixture, count: number): Promise<CiRunnerProvisionin
 
 let slotSeq = 0;
 /** A live fleet slot of another workload, held by the org. */
-async function otherSlot(fx: Fixture, workload: 'hosted_agent' | 'code_graph_index') {
+async function otherSlot(fx: Fixture, workload: 'hosted_agent' | 'agent_instance') {
   slotSeq += 1;
   await adminDb.fleetInFlightSlot.create({
     data: {
@@ -226,11 +226,11 @@ describe('each plan’s CI burst cap, over CI runners alone', () => {
     expect((await ciRunnerAdmissionService.admit(again)).outcome).toBe('admitted');
   });
 
-  it('hosted runs and index containers far above the figure take none of CI’s room', async () => {
+  it('hosted runs and agent instances far above the figure take none of CI’s room', async () => {
     stubPaidAiPlan('standard');
     const fx = await seedTenant();
     for (let i = 0; i < 5; i++) await otherSlot(fx, 'hosted_agent');
-    for (let i = 0; i < 3; i++) await otherSlot(fx, 'code_graph_index');
+    for (let i = 0; i < 3; i++) await otherSlot(fx, 'agent_instance');
 
     expect(await admit(fx)).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 2 });
   });

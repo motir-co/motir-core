@@ -155,7 +155,6 @@ describe('fleet-admin org-accounts', () => {
     expect(result.out).toContain(
       `${org}  agent_instance  host-index  granted  requested 120  granted 96  (approved)`,
     );
-    expect(result.out.join('\n')).not.toContain('code_graph_index');
   });
 
   it('prints the latest raise asked and the largest value granted', async () => {

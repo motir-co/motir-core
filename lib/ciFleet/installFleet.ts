@@ -45,17 +45,15 @@ export const INSTALL_FLEET_TAG = 'motir-install-fleet';
 /** The kinds the install fleet can run at all. */
 const ELIGIBLE: ReadonlySet<FleetWorkloadKind> = new Set<FleetWorkloadKind>([
   'ci_runner',
-  'code_graph_index',
   'agent_instance',
   'hosted_agent',
 ]);
 
 /** The kinds the install fleet can run at all, in the Fleet status page's order
- *  (Monitoring's): CI runner, agent runner, indexer, agent hoster. */
+ *  (Monitoring's): CI runner, agent runner, agent hoster. */
 export const INSTALL_FLEET_ELIGIBLE_KINDS: readonly FleetWorkloadKind[] = [
   'ci_runner',
   'hosted_agent',
-  'code_graph_index',
   'agent_instance',
 ];
 

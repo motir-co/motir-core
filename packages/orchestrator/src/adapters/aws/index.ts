@@ -64,10 +64,6 @@ export * from './inventory';
 //
 // ⚠️ SHARD-BLIND AND ENVIRONMENT-BLIND. The composition root reads the account's
 // key and the AMI id and hands this a plain config.
-//
-// AN INDEX VM (MOTIR-9446) is RETIRED (MOTIR-12037): indexing is handed off to
-// motir-codegraph, so a `code_graph_index` spec is refused before any EC2 call
-// (`AwsRetiredWorkloadError`) until the kind itself leaves `FleetWorkloadKind`.
 
 /** The machine class the fleet's one size maps to — 2 vCPU / 8 GiB, x86. */
 export const AWS_DEFAULT_INSTANCE_TYPE = 'm6i.large';
@@ -143,7 +139,6 @@ const STALE_NETWORK_CODES = new Set([
 /** The machine-name prefix per workload, as the Fly adapter names its machines. */
 const NAME_PREFIXES: Record<ContainerSpec['workload'], string> = {
   ci_runner: 'motir-runner',
-  code_graph_index: 'motir-index',
   hosted_agent: 'motir-agent',
   agent_instance: 'motir-instance',
 };
@@ -162,17 +157,6 @@ export class AwsInstanceSizeError extends Error {
 
 /** EC2's limit on a tag value. A longer value is cut to it, never dropped. */
 export const AWS_TAG_VALUE_MAX = 256;
-
-/** A spec of a workload kind the AWS adapter no longer boots — refused before
- *  any EC2 call, so no instance is launched. `code_graph_index` since its boot
- *  path was deleted (MOTIR-12037); the kind card removes the member itself. */
-export class AwsRetiredWorkloadError extends Error {
-  readonly code = 'AWS_RETIRED_WORKLOAD' as const;
-  constructor(readonly workload: ContainerSpec['workload']) {
-    super(`the ${workload} workload is retired: the aws orchestrator boots none`);
-    this.name = 'AwsRetiredWorkloadError';
-  }
-}
 
 /** The tag naming the hosted run an instance serves (MOTIR-9422) — what the
  *  reaper reads back to find the run and its paying org from AWS alone. */
@@ -349,12 +333,6 @@ const LAUNCH_PAYLOADS: Record<
       userData: encodeUserData(userData),
       tags: hostedAgentTagsFor(spec, shardTag, runId),
     };
-  },
-  // RETIRED (MOTIR-12037): indexing is handed off to motir-codegraph. The entry
-  // stays only while the member is in the union this map is total over, and it
-  // boots nothing.
-  code_graph_index: () => {
-    throw new AwsRetiredWorkloadError('code_graph_index');
   },
   agent_instance: () => notOnAws('agent_instance'),
 };

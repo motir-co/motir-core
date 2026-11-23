@@ -173,7 +173,7 @@ function accrualFor(fx: Fixture, overrides: Partial<ContainerAccrual> = {}): Con
     workspaceId: fx.workspaceId,
     projectId: fx.projectId,
     repoFullName: fx.repoFullName,
-    workload: 'code_graph_index',
+    workload: 'agent_instance',
     workflowJobId: null,
     cpuKind: 'performance',
     cpus: 2,
@@ -249,7 +249,7 @@ describe('recording one container', () => {
     const fx = await seedTenant();
 
     const outcome = await ciFleetCostMeterService.recordContainerUsage(
-      usageFor(fx, { workload: 'code_graph_index', workflowJobId: null }),
+      usageFor(fx, { workload: 'agent_instance', workflowJobId: null }),
     );
 
     expect(outcome).toMatchObject({ outcome: 'recorded' });
@@ -421,13 +421,13 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
     const fx = await seedTenant({ isMeta: true });
 
     const outcome = await ciFleetCostMeterService.recordContainerUsage(
-      usageFor(fx, { workload: 'code_graph_index', workflowJobId: null }),
+      usageFor(fx, { workload: 'agent_instance', workflowJobId: null }),
     );
 
     expect(outcome).toMatchObject({
       outcome: 'recorded',
       organizationId: fx.organizationId,
-      workload: 'index',
+      workload: 'instance',
       billableSeconds: 240,
     });
     const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
@@ -443,7 +443,7 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
     const meta = await seedTenant({ isMeta: true });
     const tenant = await seedTenant();
     await ciFleetCostMeterService.recordContainerUsage(
-      usageFor(meta, { workload: 'code_graph_index', workflowJobId: null, billableSeconds: 300 }),
+      usageFor(meta, { workload: 'agent_instance', workflowJobId: null, billableSeconds: 300 }),
     );
     await ciFleetCostMeterService.recordContainerUsage(usageFor(tenant, { billableSeconds: 120 }));
 
@@ -459,7 +459,7 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
       },
       {
         isMeta: true,
-        workload: 'index',
+        workload: 'instance',
         containerSeconds: 300,
         costUsd: expect.any(String),
         containerCount: 1,
@@ -491,14 +491,14 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
       usageFor(fx, { workload: 'ci_runner', billableSeconds: 100 }),
     );
     await ciFleetCostMeterService.recordContainerUsage(
-      usageFor(fx, { workload: 'code_graph_index', workflowJobId: null, billableSeconds: 200 }),
+      usageFor(fx, { workload: 'agent_instance', workflowJobId: null, billableSeconds: 200 }),
     );
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, { workload: 'hosted_agent', workflowJobId: null, billableSeconds: 400 }),
     );
 
     const rows = await adminDb.ciContainerUsage.findMany({ orderBy: { billableSeconds: 'asc' } });
-    expect(rows.map((r) => r.workload)).toEqual(['ci', 'index', 'agent']);
+    expect(rows.map((r) => r.workload)).toEqual(['ci', 'instance', 'agent']);
   });
 
   it('keeps the three SEPARABLE in the rollup — they never merge into one figure', async () => {
@@ -510,7 +510,7 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
       usageFor(fx, { workload: 'ci_runner', billableSeconds: 100 }),
     );
     await ciFleetCostMeterService.recordContainerUsage(
-      usageFor(fx, { workload: 'code_graph_index', workflowJobId: null, billableSeconds: 200 }),
+      usageFor(fx, { workload: 'agent_instance', workflowJobId: null, billableSeconds: 200 }),
     );
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, { workload: 'hosted_agent', workflowJobId: null, billableSeconds: 400 }),
@@ -523,11 +523,16 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
     expect(byWorkload).toEqual([
       { workload: 'agent', containerSeconds: 400, costUsd: expect.any(String), containerCount: 1 },
       { workload: 'ci', containerSeconds: 100, costUsd: expect.any(String), containerCount: 1 },
-      { workload: 'index', containerSeconds: 200, costUsd: expect.any(String), containerCount: 1 },
+      {
+        workload: 'instance',
+        containerSeconds: 200,
+        costUsd: expect.any(String),
+        containerCount: 1,
+      },
     ]);
     // And each line is independently readable by the same indexed read.
     expect(
-      (await ciFleetCostMeterService.getOrgPeriodCost(fx.organizationId, STOPPED_AT, 'index'))
+      (await ciFleetCostMeterService.getOrgPeriodCost(fx.organizationId, STOPPED_AT, 'instance'))
         .containerSeconds,
     ).toBe(200);
     expect(
@@ -536,9 +541,9 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
     ).toBe(100);
   });
 
-  it('the MARGIN readout uses the `ci` line ONLY — index spend never inflates cost-per-minute', async () => {
+  it('the MARGIN readout uses the `ci` line ONLY — agent-instance spend never inflates cost-per-minute', async () => {
     // §Q.2's phantom drift as a RATIO: the denominator is metered CI minutes, so
-    // folding index seconds into the numerator produces a cost-per-CI-minute figure
+    // folding agent-instance seconds into the numerator produces a cost-per-CI-minute figure
     // that overstates by whatever else the org ran — quietly, and worse as indexing
     // grows. The one number §M's estimate is supposed to be checkable against.
     const fx = await seedTenant();
@@ -558,9 +563,9 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, { workload: 'ci_runner', billableSeconds: 600 }),
     );
-    // A big index container in the same period, which must NOT move the ratio.
+    // A big agent-instance container in the same period, which must NOT move the ratio.
     await ciFleetCostMeterService.recordContainerUsage(
-      usageFor(fx, { workload: 'code_graph_index', workflowJobId: null, billableSeconds: 9000 }),
+      usageFor(fx, { workload: 'agent_instance', workflowJobId: null, billableSeconds: 9000 }),
     );
 
     const basis = await ciFleetCostMeterService.getOrgPeriodCostBasis(
@@ -585,7 +590,6 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
     expect(FLEET_WORKLOAD_KINDS.map((kind) => containerWorkloadFor(kind)).sort()).toEqual([
       'agent',
       'ci',
-      'index',
       'instance',
     ]);
     for (const kind of FLEET_WORKLOAD_KINDS) {
@@ -608,7 +612,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
 
     expect(outcome).toMatchObject({
       outcome: 'accrued',
-      workload: 'index',
+      workload: 'instance',
       billableSeconds: 90,
       accruedSecondsDelta: 90,
     });
@@ -655,7 +659,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     const settled = await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 240,
       }),
@@ -687,7 +691,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     const settled = await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 250,
       }),
@@ -751,7 +755,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 240,
       }),
@@ -786,7 +790,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 520,
         teardownReason: 'reaped',
@@ -821,7 +825,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 1200,
         stoppedAt: new Date('2026-09-01T00:10:00.000Z'),
@@ -846,7 +850,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 240,
       }),
@@ -921,7 +925,7 @@ describe('the CHECKPOINT seam the supervision loop actually calls (MOTIR-1995)',
         workspaceId: 'ws',
         projectId: 'proj',
         repoFullName: 'motir-projects/acme-web',
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         size: { cpuKind: 'performance', cpus: 2, memoryMb: 8192 },
         observedStartedAt: startedAt,
@@ -949,7 +953,7 @@ describe('the CHECKPOINT seam the supervision loop actually calls (MOTIR-1995)',
         workspaceId: 'ws',
         projectId: 'proj',
         repoFullName: 'motir-projects/acme-web',
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         size: { cpuKind: 'performance', cpus: 2, memoryMb: 8192 },
         observedStartedAt: startedAt,
@@ -1013,7 +1017,7 @@ describe('ONE write path over the shared record (MOTIR-1995)', () => {
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         workflowJobId: null,
         billableSeconds: 95,
       }),
@@ -1026,7 +1030,7 @@ describe('ONE write path over the shared record (MOTIR-1995)', () => {
     const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(95);
     expect(rollup.containerCount).toBe(1);
-    expect(rollup.workload).toBe('index');
+    expect(rollup.workload).toBe('instance');
   });
 });
 
@@ -1464,7 +1468,9 @@ describe('repairing an index row its settle never closed (MOTIR-8913)', () => {
       where: {
         containerProvider_handleId: { containerProvider: 'fake', handleId: accrual.handleId },
       },
-      data: { createdAt: new Date(NOW.getTime() - ageMs) },
+      // The `index` line is what the retired code-graph index kind recorded
+      // (MOTIR-12041); no live kind writes it, so the row is aged AND re-lined.
+      data: { createdAt: new Date(NOW.getTime() - ageMs), workload: 'index' },
     });
     return accrual;
   }
@@ -1522,7 +1528,7 @@ describe('repairing an index row its settle never closed (MOTIR-8913)', () => {
     await ciFleetCostMeterService.recordContainerUsage(
       usageFor(fx, {
         handleId: real.handleId,
-        workload: 'code_graph_index',
+        workload: 'agent_instance',
         billableSeconds: real.accruedSeconds,
         startedAt: real.startedAt,
         createdAt: real.createdAt,
@@ -1570,7 +1576,9 @@ describe('reporting a repaired index row to the platform meter (MOTIR-10822)', (
       where: {
         containerProvider_handleId: { containerProvider: 'fake', handleId: accrual.handleId },
       },
-      data: { createdAt: new Date(NOW.getTime() - ageMs) },
+      // The `index` line is what the retired code-graph index kind recorded
+      // (MOTIR-12041); no live kind writes it, so the row is aged AND re-lined.
+      data: { createdAt: new Date(NOW.getTime() - ageMs), workload: 'index' },
     });
     return accrual;
   }
@@ -1635,7 +1643,7 @@ describe('reporting a repaired index row to the platform meter (MOTIR-10822)', (
         await ciFleetCostMeterService.recordContainerUsage(
           usageFor(fx, {
             handleId: accrual.handleId,
-            workload: 'code_graph_index',
+            workload: 'agent_instance',
             billableSeconds: accrual.accruedSeconds,
             startedAt: accrual.startedAt,
             createdAt: accrual.createdAt,

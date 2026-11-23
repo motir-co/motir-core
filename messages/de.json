@@ -11817,7 +11817,6 @@
         "kind": {
           "ci_runner": "CI-Runner",
           "hosted_agent": "Agent-Runner",
-          "code_graph_index": "Indexer",
           "agent_instance": "Agent-Host"
         },
         "block": {

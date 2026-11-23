@@ -11811,7 +11811,6 @@
         "kind": {
           "ci_runner": "CI 러너",
           "hosted_agent": "에이전트 러너",
-          "code_graph_index": "인덱서",
           "agent_instance": "에이전트 호스트"
         },
         "block": {

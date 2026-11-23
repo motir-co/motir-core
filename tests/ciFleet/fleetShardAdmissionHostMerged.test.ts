@@ -25,12 +25,7 @@ import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 const MOTIR_ORG = 'motir-projects';
 const NOW = new Date('2026-10-26T12:00:00.000Z');
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 interface Fixture {
   workspaceId: string;
@@ -60,25 +55,6 @@ async function seedTenant(): Promise<Fixture> {
     organizationId: workspace.organizationId,
     projectId: project.id,
   };
-}
-
-async function shared(fleetKind: FleetWorkloadKind): Promise<FleetShard> {
-  const slug = randomToken(6).toLowerCase();
-  return adminDb.fleetShard.create({
-    data: {
-      name: `shared-${slug}`,
-      fleetKind,
-      provider: 'aws',
-      role: 'primary',
-      state: 'active',
-      githubOrg: MOTIR_ORG,
-      githubInstallationId: '556677',
-      awsAccountId: String(randomInt(100_000_000_000, 999_999_999_999)),
-      awsRegion: 'us-east-1',
-      credentialRef: `FLEET_SHARD_${slug.toUpperCase()}`,
-      vcpuQuota: 640,
-    },
-  });
 }
 
 /** An own AWS account of `owner`, one row per kind, live. */
@@ -191,14 +167,6 @@ describe('the merged account granted 40 vCPU', () => {
     expect(await choose('agent_instance', host.organizationId)).toEqual({ shardId: hoster.id });
     agentsRunning({ [hoster.id]: 20 });
     expect(await choose('agent_instance', host.organizationId)).toEqual(ownFull('agent_instance'));
-  });
-
-  it('takes no index job: the org has no own index account', async () => {
-    const host = await seedTenant();
-    await merged(host, 40);
-    const pool = await shared('code_graph_index');
-
-    expect(await choose('code_graph_index', host.organizationId)).toEqual({ shardId: pool.id });
   });
 });
 

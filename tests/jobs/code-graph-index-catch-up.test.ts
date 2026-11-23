@@ -21,6 +21,7 @@ import {
 import * as indexEnqueue from '@/lib/github/indexEnqueue';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
+import { RETIRED_CAPACITY_PAUSES } from '../helpers/retiredFleetKind';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { refreshEventFor, seedIndexWorkspace } from '../helpers/indexFleet';
 import { handoffWorld, stubIndexHandoff } from '../helpers/indexHandoff';
@@ -349,7 +350,7 @@ describe('asked ONCE per organisation; a failed ask changes nothing (AC 6, 7)', 
 // The two capacity reasons belonged to the retired indexer fleet (MOTIR-9451,
 // MOTIR-10600). With no pool left to wait on, a row still recording either is
 // re-asked of the allowance and handed off like any other pause (MOTIR-12036).
-const CAPACITY_PAUSES = ['paused_index_pool_full', 'paused_index_no_indexer_account'] as const;
+const CAPACITY_PAUSES = RETIRED_CAPACITY_PAUSES;
 
 describe('a row still paused for the retired indexer’s capacity is re-asked like any other (MOTIR-12036)', () => {
   it('allowed: each row gets the index or refresh the drift rule names, for ONE ask per organisation', async () => {
@@ -510,7 +511,7 @@ describe('the sweep’s own seams (MOTIR-4544 top-up)', () => {
 
   it('with NO injected deps a pool-full row is asked of the real allowance and handed its index (MOTIR-12036)', async () => {
     await seedOrg('cu-defaults-pool', ['waiting']);
-    await setRepo('waiting', { paused: 'paused_index_pool_full', indexedHeadSha: null });
+    await setRepo('waiting', { paused: RETIRED_CAPACITY_PAUSES[0], indexedHeadSha: null });
     stubIndexHandoff();
     const index = vi.spyOn(indexEnqueue, 'enqueueCodeGraphIndex').mockResolvedValue();
 

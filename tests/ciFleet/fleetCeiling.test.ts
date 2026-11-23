@@ -40,8 +40,8 @@ import type { FleetShard } from '@/generated/prisma/client';
 // `docs/decisions/fleet-per-org-pool.md`).
 //
 // ⚠️ WHAT THIS SUITE HAS TO PROVE. An organisation's pool is ONE number over CI
-// *and* the workloads that write no runner intent — index containers and hosted
-// agents — so every case mixes workloads on purpose (the 2026-08-02 lesson: two
+// *and* the workloads that write no runner intent — hosted agents and agent
+// instances — so every case mixes workloads on purpose (the 2026-08-02 lesson: two
 // per-workload caps do not compose into a bound). And it is PER ORGANISATION: one
 // org's burst must never queue another's, so the race cases mix ORGS too.
 //
@@ -243,11 +243,11 @@ describe('the fleet workload REGISTRY', () => {
   it('counts CI from the intent table and every other workload from the slot table', async () => {
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
-    await reserve('code_graph_index', fx);
+    await reserve('hosted_agent', fx);
 
     const seen = await orgCensus(fx);
     expect(seen.byWorkload['ci_runner']).toBe(1);
-    expect(seen.byWorkload['code_graph_index']).toBe(1);
+    expect(seen.byWorkload['hosted_agent']).toBe(1);
     expect(seen.total).toBe(2);
     expect((await census()).total).toBe(2);
     const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count({
@@ -263,7 +263,7 @@ describe('the fleet workload REGISTRY', () => {
     const b = await seedTenant();
     await seedIntent(a, { status: 'running' });
     await reserve('hosted_agent', b);
-    await reserve('code_graph_index', b);
+    await reserve('hosted_agent', b);
 
     expect((await orgCensus(a)).total).toBe(1);
     expect((await orgCensus(b)).total).toBe(2);
@@ -281,12 +281,12 @@ describe('the fleet workload REGISTRY', () => {
 // ── One pool per organisation, over ALL its workloads ───────────────────────
 
 describe("each workload is held to its OWN figure, never the org's summed pool", () => {
-  // MOTIR-9375: the CI gate judges the org's CI runners alone, so ITS index and
-  // agent containers no longer take CI's room.
-  it("admits an org's CI job however many index and agent containers it holds", async () => {
+  // MOTIR-9375: the CI gate judges the org's CI runners alone, so ITS agent runs
+  // and agent instances no longer take CI's room.
+  it("admits an org's CI job however many agent containers it holds", async () => {
     const fx = await seedTenant({ ciBurstCap: 4 });
-    await reserve('code_graph_index', fx);
-    await reserve('code_graph_index', fx);
+    await reserve('agent_instance', fx);
+    await reserve('agent_instance', fx);
     await reserve('hosted_agent', fx);
     await reserve('hosted_agent', fx);
 
@@ -316,17 +316,17 @@ describe("each workload is held to its OWN figure, never the org's summed pool",
     expect(detail).toContain('Motir agent runs 1');
   });
 
-  // MOTIR-9373: `reserve` no longer judges the summed pool. An index slot taken
-  // through it is held by no plan figure.
-  it("reserve no longer refuses an INDEX slot because the org's CI runners filled its pool", async () => {
+  // MOTIR-9373: `reserve` no longer judges the summed pool. A hosted run taken
+  // through it is held by its own plan figure, never CI's.
+  it("reserve no longer refuses a hosted run because the org's CI runners filled its pool", async () => {
     const fx = await seedTenant({ ciBurstCap: 3 });
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'provisioning' });
 
-    const { verdict } = await reserve('code_graph_index', fx);
+    const { verdict } = await reserve('hosted_agent', fx);
 
-    expect(verdict).toMatchObject({ outcome: 'reserved', pool: null });
+    expect(verdict).toMatchObject({ outcome: 'reserved', pool: 5 });
     expect(await adminDb.fleetInFlightSlot.count()).toBe(1);
   });
 
@@ -350,7 +350,7 @@ describe("each workload is held to its OWN figure, never the org's summed pool",
   it('reserves a hosted run against its plan figure and reports the figure it used', async () => {
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
-    await reserve('code_graph_index', fx);
+    await reserve('hosted_agent', fx);
 
     const { verdict } = await reserve('hosted_agent', fx);
 
@@ -393,7 +393,7 @@ describe('MOTIR_FLEET_MAX_IN_FLIGHT is the kill switch, and only that', () => {
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
     const fx = await seedTenant();
 
-    for (const workload of ['code_graph_index', 'hosted_agent', 'agent_instance'] as const) {
+    for (const workload of ['hosted_agent', 'agent_instance'] as const) {
       expect((await reserve(workload, fx)).verdict).toMatchObject({
         outcome: 'deferred',
         reason: 'fleet_ceiling',
@@ -413,17 +413,21 @@ describe('MOTIR_FLEET_MAX_IN_FLIGHT is the kill switch, and only that', () => {
     const a = await seedTenant();
     const b = await seedTenant();
     // Hosted runs stop at the plan's figure (Max ×2: 5, MOTIR-9373), so the
-    // bulk is index slots, which no plan figure holds.
-    for (let i = 0; i < 5; i += 1) {
-      expect((await reserve('hosted_agent', a)).verdict.outcome).toBe('reserved');
+    // bulk is agent instance slots, which no plan figure holds (their own pool,
+    // so they are counted per workload and not in the shared total).
+    for (const fx of [a, b]) {
+      for (let i = 0; i < 5; i += 1) {
+        expect((await reserve('hosted_agent', fx)).verdict.outcome).toBe('reserved');
+      }
     }
     for (let i = 0; i < 10; i += 1) {
-      expect((await reserve('code_graph_index', a)).verdict.outcome).toBe('reserved');
+      expect((await reserve('agent_instance', a)).verdict.outcome).toBe('reserved');
     }
-    for (let i = 0; i < 15; i += 1) {
-      expect((await reserve('code_graph_index', b)).verdict.outcome).toBe('reserved');
+    for (let i = 0; i < 10; i += 1) {
+      expect((await reserve('agent_instance', b)).verdict.outcome).toBe('reserved');
     }
-    expect((await census()).total).toBe(30);
+    const seen = await census();
+    expect(seen.total + seen.byWorkload.agent_instance).toBe(30);
   });
 });
 
@@ -444,7 +448,7 @@ describe('a slot with no organisation is refused (criterion 5)', () => {
   it('refuses a request whose organizationId is missing at runtime', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const verdict = await fleetCeilingService.reserve(
-      { workload: 'code_graph_index', ref: 'orgless-2' } as unknown as Parameters<
+      { workload: 'hosted_agent', ref: 'orgless-2' } as unknown as Parameters<
         typeof fleetCeilingService.reserve
       >[0],
       NOW,
@@ -507,7 +511,7 @@ describe('completion frees a slot for ANY workload of the org', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(fleetInFlightSlotRepository, 'release').mockRejectedValue(new Error('conn reset'));
 
-    expect(await fleetCeilingService.release('code_graph_index', 'whatever')).toBe(false);
+    expect(await fleetCeilingService.release('hosted_agent', 'whatever')).toBe(false);
     expect(error).toHaveBeenCalled();
   });
 });
@@ -557,8 +561,8 @@ describe('the pool holds under REAL concurrency (notes.html #35)', () => {
     const fx = await seedTenant();
 
     const verdicts = await Promise.all([
-      reserve('code_graph_index', fx, 'same-run').then((r) => r.verdict),
-      reserve('code_graph_index', fx, 'same-run').then((r) => r.verdict),
+      reserve('hosted_agent', fx, 'same-run').then((r) => r.verdict),
+      reserve('hosted_agent', fx, 'same-run').then((r) => r.verdict),
     ]);
 
     expect(verdicts.filter((v) => v.outcome === 'reserved')).toHaveLength(1);
@@ -592,7 +596,7 @@ describe('the pool fails CLOSED', () => {
     ).mockRejectedValue(new Error('connection reset'));
     const fx = await seedTenant();
 
-    const { verdict } = await reserve('code_graph_index', fx);
+    const { verdict } = await reserve('hosted_agent', fx);
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
     expect(error).toHaveBeenCalled();
@@ -640,7 +644,7 @@ describe('the pool fails CLOSED', () => {
     vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockResolvedValue(false);
     const fx = await seedTenant();
 
-    const { verdict } = await reserve('code_graph_index', fx);
+    const { verdict } = await reserve('hosted_agent', fx);
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
     expect(error).toHaveBeenCalled();
@@ -703,22 +707,22 @@ describe('the expiry safety net', () => {
 
   it('keeps counting a slot that is still inside its budget', async () => {
     const fx = await seedTenant();
-    await reserve('code_graph_index', fx);
+    await reserve('hosted_agent', fx);
 
     const almost = new Date(NOW.getTime() + (TTL_SECONDS - 60) * 1_000);
-    expect((await orgCensus(fx, almost)).byWorkload['code_graph_index']).toBe(1);
+    expect((await orgCensus(fx, almost)).byWorkload['hosted_agent']).toBe(1);
   });
 
   it('sweeps expired rows without touching live ones', async () => {
     const fx = await seedTenant();
-    const { ref: stale } = await reserve('code_graph_index', fx);
+    const { ref: stale } = await reserve('agent_instance', fx);
     const later = new Date(NOW.getTime() + (TTL_SECONDS + 60) * 1_000);
     await reserve('hosted_agent', fx, 'live', later);
 
     expect(await fleetCeilingService.sweepExpired(later)).toBe(1);
     expect(
       await withSystemContext((tx) =>
-        fleetInFlightSlotRepository.findByRef('code_graph_index', stale, tx),
+        fleetInFlightSlotRepository.findByRef('agent_instance', stale, tx),
       ),
     ).toBeNull();
     expect(
@@ -738,14 +742,14 @@ describe('the slot reservation’s defaults and its own race', () => {
     const before = Date.now();
 
     const verdict = await fleetCeilingService.reserve({
-      workload: 'code_graph_index',
+      workload: 'hosted_agent',
       ref: 'ttl-default-1',
       organizationId: fx.organizationId,
     });
 
     expect(verdict.outcome).toBe('reserved');
     const slot = await withSystemContext((tx) =>
-      fleetInFlightSlotRepository.findByRef('code_graph_index', 'ttl-default-1', tx),
+      fleetInFlightSlotRepository.findByRef('hosted_agent', 'ttl-default-1', tx),
     );
     expect(slot?.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 120_000 - 5_000);
     expect(slot?.expiresAt.getTime()).toBeLessThanOrEqual(before + 120_000 + 5_000);
@@ -780,7 +784,7 @@ describe('the slot reservation’s defaults and its own race', () => {
     vi.spyOn(ciFleetAdmissionLockRepository, 'ensureScope').mockRejectedValue('a bare string');
 
     const verdict = await fleetCeilingService.reserve({
-      workload: 'code_graph_index',
+      workload: 'hosted_agent',
       ref: 'non-error-1',
       organizationId: fx.organizationId,
     });
@@ -1041,17 +1045,17 @@ describe('a hosted run is placed on an agent-runner account (MOTIR-9421)', () =>
     const a = await hostedAccount(5);
     const fx = await seedTenant();
     const before = await Promise.all(
-      (['ci_runner', 'code_graph_index', 'agent_instance'] as const).map((k) => fleetKindOnPool(k)),
+      (['ci_runner', 'agent_instance'] as const).map((k) => fleetKindOnPool(k)),
     );
     vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
     expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ fleetShardId: null });
     vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
     expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ fleetShardId: a.id });
     const after = await Promise.all(
-      (['ci_runner', 'code_graph_index', 'agent_instance'] as const).map((k) => fleetKindOnPool(k)),
+      (['ci_runner', 'agent_instance'] as const).map((k) => fleetKindOnPool(k)),
     );
     expect(after).toEqual(before);
-    expect(after).toEqual([false, false, false]);
+    expect(after).toEqual([false, false]);
   });
 
   it('an agent_instance slot carries no account, with the switch on', async () => {
@@ -1111,8 +1115,8 @@ describe('fleetInFlightSlotRepository and the account column (MOTIR-9421)', () =
     await withSystemContext((tx) =>
       fleetInFlightSlotRepository.take(
         {
-          workload: 'code_graph_index',
-          ref: 'idx',
+          workload: 'agent_instance',
+          ref: 'instance',
           organizationId: fx.organizationId,
           fleetShardId: a.id,
           expiresAt,

@@ -99,7 +99,7 @@ async function seedTenant(): Promise<Fixture> {
   };
 }
 
-type Kind = 'ci_runner' | 'hosted_agent' | 'code_graph_index' | 'agent_instance';
+type Kind = 'ci_runner' | 'hosted_agent' | 'agent_instance';
 
 interface OwnAccount {
   /** The row's id per fleet kind — two for the merged account. */
@@ -351,7 +351,7 @@ describe('a machine nothing names on an own account (MOTIR-9584)', () => {
     // The tenant has no plan at all here, so it does not read `host`: the account
     // stays open and the pass keeps walking it.
     const owner = await seedTenant();
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
+    const merged = await ownAccount(owner, ['agent_instance']);
     const stray = plant(merged);
     const kept = plant(merged, OLD(), [{ key: 'Name', value: 'agent-instance' }]);
     await seedInstance(owner, merged.rows.agent_instance!, merged.names.agent_instance!, kept);
@@ -371,7 +371,7 @@ describe('the owner match (MOTIR-9584)', () => {
     const owner = await seedTenant();
     const ci = await ownAccount(owner, ['ci_runner']);
     const runner = await ownAccount(owner, ['hosted_agent']);
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
+    const merged = await ownAccount(owner, ['agent_instance']);
     const job = plant(ci);
     await seedIntent(owner, ci.rows.ci_runner!, job);
     const run = plant(runner);
@@ -432,7 +432,7 @@ describe('the owner match (MOTIR-9584)', () => {
 describe('the merged account and listing failures (MOTIR-9584)', () => {
   it('lists and judges the merged account once: one stray, one kill row, one alert, one listing', async () => {
     const owner = await seedTenant();
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
+    const merged = await ownAccount(owner, ['agent_instance']);
     const stray = plant(merged);
 
     const result = await reconcile();

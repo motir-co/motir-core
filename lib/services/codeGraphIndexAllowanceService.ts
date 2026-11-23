@@ -2,7 +2,7 @@ import { checkIndexAllowance } from '@/lib/ai/motirAiClient';
 import { indexPauseReasonFor, type IndexPauseReason } from '@/lib/ciFleet/indexAllowance';
 
 // THE INDEX ALLOWANCE ASK (MOTIR-12035) — moved verbatim out of
-// `codeGraphIndexDispatchService` so the index handoff (MOTIR-11883) keeps its
+// the index dispatch service so the index handoff (MOTIR-11883) keeps its
 // allowance ask now the container dispatch is deleted (MOTIR-12036).
 
 /**

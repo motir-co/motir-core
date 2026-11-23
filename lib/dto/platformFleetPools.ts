@@ -13,11 +13,10 @@ import type { FleetGrowthEventViewDTO, FleetQuotaRequestStatusDTO } from '@/lib/
 // ⚠️ NO CREDENTIAL, SECRET, AWS ACCOUNT ID OR MEMBER EMAIL has a field here: an
 // account is named by its shard name only.
 
-/** The blocks' order on the page: CI runner, agent runner, indexer, agent hoster. */
+/** The blocks' order on the page: CI runner, agent runner, agent hoster. */
 export const PLATFORM_POOL_KIND_ORDER: readonly FleetWorkloadKind[] = [
   'ci_runner',
   'hosted_agent',
-  'code_graph_index',
   'agent_instance',
 ];
 

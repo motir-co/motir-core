@@ -76,7 +76,7 @@ async function seedTenant(): Promise<Fixture> {
 
 async function bootFleetContainer(
   fx: Fixture,
-  workload: 'ci_runner' | 'code_graph_index' | 'hosted_agent',
+  workload: 'ci_runner' | 'hosted_agent',
 ): Promise<ContainerHandle> {
   return fakeOrchestrator.provision({
     orgId: fx.organizationId,
@@ -156,18 +156,6 @@ async function seedCheckpoint(
       usdPerSecond: '0.00003',
       costUsd: '0.0018',
       dispatchRunId: options.dispatchRunId ?? null,
-    },
-  });
-}
-
-async function seedSlot(fx: Fixture, workload: string, ref: string, expiresAt: Date) {
-  await adminDb.fleetInFlightSlot.create({
-    data: {
-      workload,
-      ref,
-      organizationId: fx.organizationId,
-      workspaceId: fx.workspaceId,
-      expiresAt,
     },
   });
 }
@@ -401,21 +389,15 @@ describe('a machine whose record says it should have stopped', () => {
     expect(fakeOrchestrator.teardowns).toEqual([{ handleId: ci.id, reason: 'reaped' }]);
   });
 
-  // ⚠️ NOTHING PLACES AN INDEX CONTAINER ANY MORE (MOTIR-12036): the index
-  // admission that wrote its slot left with the container-based indexer, so a
-  // leftover index machine has no record that keeps it, whatever slot row a
-  // past admission left behind.
-  it('an index container is destroyed, open checkpoint and live slot row or not', async () => {
+  // ⚠️ NOTHING PLACES AN INDEX CONTAINER ANY MORE (MOTIR-12036), and the kind
+  // itself is retired (MOTIR-12041): a leftover machine whose usage record is on
+  // the `index` line has ended, open checkpoint or not, and names no workload.
+  // (The fake boots it under a live kind: the record is what is judged.)
+  it('a leftover index container is destroyed, open checkpoint or not, naming no workload', async () => {
     const fx = await seedTenant();
-    const leftover = await bootFleetContainer(fx, 'code_graph_index');
+    const leftover = await bootFleetContainer(fx, 'hosted_agent');
     await seedCheckpoint(fx, leftover, 'index');
-    await seedSlot(
-      fx,
-      'code_graph_index',
-      `${fx.projectId}:motir-projects/acme-web`,
-      new Date(Date.now() + 3_600_000),
-    );
-    const closed = await bootFleetContainer(fx, 'code_graph_index');
+    const closed = await bootFleetContainer(fx, 'hosted_agent');
     await seedCheckpoint(fx, closed, 'index', { stopped: true });
 
     const result = await fleetAttributionService.reconcile({ now: pastGrace });
@@ -424,8 +406,8 @@ describe('a machine whose record says it should have stopped', () => {
     if (result.outcome !== 'reconciled') throw new Error('unreachable');
     expect(result.killed.map((k) => [k.machineId, k.reason, k.workload]).sort()).toEqual(
       [
-        [leftover.id, 'record_ended', 'code_graph_index'],
-        [closed.id, 'record_ended', 'code_graph_index'],
+        [leftover.id, 'record_ended', null],
+        [closed.id, 'record_ended', null],
       ].sort(),
     );
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);

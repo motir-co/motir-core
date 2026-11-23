@@ -1,4 +1,3 @@
-import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { platformFleetKindSwitchRepository } from '@/lib/repositories/platformFleetKindSwitchRepository';
 
@@ -72,8 +71,8 @@ export function setCiRunnerSwitchForTests(reader: LaneSwitchReader | null): void
 /**
  * IS THE CI RUNNER ON ITS POOL? The lane's fixture answers first; then
  * `MOTIR_FLEET_CI_RUNNER_PROVIDER`: `aws` ⇒ yes; unset, empty or `fly` ⇒ Fly,
- * today's path; any other value ⇒ Fly WITH A WARNING, as the indexer's switch
- * does — a typo must leave CI where it is, never move it. Read on every
+ * today's path; any other value ⇒ Fly WITH A WARNING — a typo must leave CI
+ * where it is, never move it. Read on every
  * admission and never cached, so a flip moves the next CI job with no restart
  * and touches no other kind. Unsetting it, or setting `fly`, is the rollback.
  */
@@ -104,7 +103,3 @@ export async function agentHosterOnPool(): Promise<boolean> {
 wireFleetKindSwitch('hosted_agent', agentRunnerOnPool);
 wireFleetKindSwitch('agent_instance', agentHosterOnPool);
 wireFleetKindSwitch('ci_runner', ciRunnerOnPool);
-// The indexer's reader was also wired where its admission lived (deleted with
-// MOTIR-12036); it is wired here so a process that reads every kind's switch (the
-// Pools read on /admin/monitoring) answers the indexer's switch too (MOTIR-9562).
-wireFleetKindSwitch('code_graph_index', indexFleetOnPool);

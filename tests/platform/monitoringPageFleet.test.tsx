@@ -60,11 +60,10 @@ const HEALTH: PlatformHealthDTO = {
 
 const m = en.platformAdmin.monitoring;
 
-/** The Pools section's four kinds, all on Fly — the smallest well-formed read. */
+/** The Pools section's three kinds, all on Fly — the smallest well-formed read. */
 const POOL_BLOCKS = [
   { fleetKind: 'ci_runner', provider: 'fly' },
   { fleetKind: 'hosted_agent', provider: 'fly' },
-  { fleetKind: 'code_graph_index', provider: 'fly' },
   { fleetKind: 'agent_instance', provider: 'fly' },
 ];
 
@@ -265,7 +264,7 @@ describe('/admin/monitoring — the Pools section', () => {
     const root = await renderPage();
     const text = root.textContent ?? '';
     expect(text.indexOf(m.fleet.kills.title)).toBeLessThan(text.indexOf(m.pools.subtitle));
-    expect(root.querySelectorAll('[data-testid^="pool-"]')).toHaveLength(4);
+    expect(root.querySelectorAll('[data-testid^="pool-"]')).toHaveLength(3);
     expect(listPools).toHaveBeenCalledWith(PRINCIPAL, expect.any(Date));
   });
 

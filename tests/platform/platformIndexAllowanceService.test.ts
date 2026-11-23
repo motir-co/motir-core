@@ -6,6 +6,7 @@ import type { IndexAllowanceSummary } from '@/lib/ciFleet/indexAllowance';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { RETIRED_CAPACITY_PAUSES } from '../helpers/retiredFleetKind';
 import { truncateAuthTables } from '../helpers/db';
 
 // MONITORING · INDEX ALLOWANCE — the service (MOTIR-4595 · Story MOTIR-4335; design
@@ -305,10 +306,7 @@ describe('the Stopped orgs list (AC 4) — server-paged, filtered, searched, lon
   // be kept off these reads (MOTIR-9451, MOTIR-10600); a row still recording one
   // now counts like any other pause until the next catch-up pass re-hands it, and
   // the row's reason is the stored one.
-  it.each([
-    ['paused_index_pool_full', 'pool_full'],
-    ['paused_index_no_indexer_account', 'no_indexer_account'],
-  ])(
+  it.each(RETIRED_CAPACITY_PAUSES.map((stored) => [stored, stored.replace(/^paused_index_/, '')]))(
     'a leftover %s row counts as a stopped org, its reason the stored one',
     async (stored, reason) => {
       await pause((await seedOrg('Capacity only')).repoIds[0]!, stored, 6);

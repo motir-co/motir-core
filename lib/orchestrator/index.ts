@@ -760,7 +760,7 @@ function installFleetPseudoShard(region: string): FleetShardDTO {
   return {
     id: INSTALL_FLEET_SHARD_ID,
     name: INSTALL_FLEET_TAG,
-    fleetKind: 'code_graph_index',
+    fleetKind: 'ci_runner',
     provider: 'aws',
     role: 'primary',
     state: 'active',
@@ -815,7 +815,7 @@ function installFleetOnPlainFake(): boolean {
   return selectedOrchestratorProvider() === 'fake' && awsEc2Override() === null;
 }
 
-/** The install fleet's orchestrator (a CI runner, an index or an agent run). */
+/** The install fleet's orchestrator (a CI runner or an agent run). */
 export function installFleetOrchestrator(): ContainerOrchestrator {
   if (installFleetOnPlainFake()) return fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
   const { ec2, config } = installFleetEc2();
@@ -925,10 +925,9 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
  * Fly ORGANISATION inventory already walks every Fly app, and a second listing
  * would judge each machine twice.
  *
- * An AWS account of the INDEXER pool lists every instance it has (MOTIR-9450),
- * with that account's own key, so an index VM no record owns is reaped there. A
- * CI-runner AWS account has none: its runners are swept by the adapter's
- * tag-scoped reaper, and its key may only terminate shard-tagged instances. With
+ * An AWS account lists every instance it has (MOTIR-9426), with that account's
+ * own key, so a VM no record owns is judged there; a CI-runner account's key may
+ * still only terminate shard-tagged instances. With
  * the fake orchestrator selected nothing reads EC2.
  */
 export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
@@ -1003,10 +1002,9 @@ export function fleetRunnerRegion(): string {
 
 /** What a fleet container needs from this deployment's configuration: its image
  *  and region. Neutral: no Fly type, no token, no app name — a second adapter
- *  fills the same shape. Named for the index container it was first written for;
- *  the hosted agent's {@link hostedAgentFleetConfig} is its one user since the
- *  indexer's boot path was deleted (MOTIR-12037). */
-export interface IndexFleetConfig {
+ *  fills the same shape. The hosted agent's {@link hostedAgentFleetConfig} is its
+ *  one user. */
+export interface FleetContainerConfig {
   /** The digest-pinned image. On Fly, the `registry.fly.io` reference. */
   readonly image: string;
   readonly region: string;
@@ -1108,7 +1106,7 @@ export function hostedAgentImage(provider: OrchestratorProvider): string {
  * on the pool only the image is required, judged as an AWS VM pulls it, and the
  * region is a placeholder the admitted account's own region replaces.
  */
-export function hostedAgentFleetConfig(): IndexFleetConfig {
+export function hostedAgentFleetConfig(): FleetContainerConfig {
   if (selectedOrchestratorProvider() === 'fake') {
     return { image: FAKE_HOSTED_AGENT_IMAGE, region: 'iad' };
   }

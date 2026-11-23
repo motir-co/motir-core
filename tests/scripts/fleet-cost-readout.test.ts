@@ -79,8 +79,10 @@ describe('fleet cost readout — ABSENT is not ZERO', () => {
     expect(absentWorkloads([{ workload: 'ci' }])).not.toContain('ci');
   });
 
-  it('derives its workload set from the meter map, so all three lines are covered', () => {
-    expect(READOUT_WORKLOADS).toEqual(expect.arrayContaining(['ci', 'index', 'agent']));
+  it('derives its workload set from the meter map, so every live line is covered', () => {
+    // `index` is the retired code-graph index kind's line (MOTIR-12041): past rows
+    // still print, but no live kind runs under it, so its absence is not reported.
+    expect([...READOUT_WORKLOADS].sort()).toEqual(['agent', 'ci', 'instance']);
   });
 
   it('says an org with no fleet activity had none, rather than printing zeros', () => {

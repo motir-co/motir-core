@@ -11808,7 +11808,6 @@
         "kind": {
           "ci_runner": "CI 运行器",
           "hosted_agent": "智能体运行器",
-          "code_graph_index": "索引器",
           "agent_instance": "智能体托管"
         },
         "block": {

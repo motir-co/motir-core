@@ -164,8 +164,8 @@ describe('refreshLiveGrantedQuotas', () => {
     const provisioningSpare = await awsAccount({ role: 'spare', state: 'provisioning' });
     const retiredSpare = await awsAccount({ role: 'spare', state: 'provisioning' });
     await fleetShardService.setState(retiredSpare.id, 'disabled');
-    await awsAccount({ fleetKind: 'code_graph_index' }); // still on Fly
-    await awsAccount({ fleetKind: 'code_graph_index', role: 'spare' }); // still on Fly
+    await awsAccount({ fleetKind: 'hosted_agent' }); // still on Fly
+    await awsAccount({ fleetKind: 'hosted_agent', role: 'spare' }); // still on Fly
     await fleetShardService.createShard({
       name: 'quota-test-fly',
       fleetKind: 'ci_runner',

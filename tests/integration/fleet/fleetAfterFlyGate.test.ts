@@ -21,7 +21,6 @@ import {
   AGENT_RUNNER_PROVIDER_ENV_VAR,
   CI_RUNNER_PROVIDER_ENV_VAR,
 } from '@/lib/ciFleet/fleetKindSwitches';
-import { INDEX_FLEET_PROVIDER_ENV } from '@/lib/ciFleet/limits';
 import { INSTALL_FLEET_KINDS_ENV } from '@/lib/ciFleet/installFleet';
 import {
   getFleetInventory,
@@ -58,7 +57,7 @@ import { grantPaidAiPlan } from '../../helpers/paidAiPlan';
 //
 //   1. the deploy surface is gone and nothing reaches it (a scan proved able to
 //      fail, by a planted line in a scratch tree);
-//   2. with all four fleet kinds seeded in one world, an unset switch still
+//   2. with all three fleet kinds seeded in one world, an unset switch still
 //      answers the process-wide lane — under an EXPLICIT `fly` selector, the
 //      kept Fly fleet — and one `aws` flip moves exactly one kind;
 //   3. the composition root still hands out the Fly fleet adapters by identity;
@@ -323,12 +322,7 @@ describe('1 · the deploy surface is gone and nothing reaches it', () => {
 const PASSWORD = 'hunter2hunter2';
 const GITHUB_ORG = 'motir-projects';
 const NOW = new Date('2026-11-12T12:00:00.000Z');
-const KINDS: readonly FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: readonly FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 interface World {
   workspaceId: string;
@@ -436,11 +430,10 @@ function unsetSwitchesUnder(selector: 'fly' | 'fake'): void {
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', selector);
   vi.stubEnv(CI_RUNNER_PROVIDER_ENV_VAR, '');
   vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, '');
-  vi.stubEnv(INDEX_FLEET_PROVIDER_ENV, '');
   vi.stubEnv(INSTALL_FLEET_KINDS_ENV, '');
 }
 
-const ZERO = { ci_runner: 0, hosted_agent: 0, code_graph_index: 0, agent_instance: 0 };
+const ZERO = { ci_runner: 0, hosted_agent: 0, agent_instance: 0 };
 
 describe('2 · kind isolation, composed, with the Fly fleet still a placement', () => {
   grantPaidAiPlan();
@@ -499,7 +492,7 @@ describe('2 · kind isolation, composed, with the Fly fleet still a placement', 
     expect(await placedOnSeeded(world)).toEqual(ZERO);
   });
 
-  it('the agent runner flipped to aws, the rest unset: a hosted run is placed on its seeded account and the other three still answer the process-wide lane', async () => {
+  it('the agent runner flipped to aws, the rest unset: a hosted run is placed on its seeded account and the other two still answer the process-wide lane', async () => {
     unsetSwitchesUnder('fly');
     vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
     expect(selectedOrchestratorProvider()).toBe('fly');
@@ -519,13 +512,13 @@ describe('2 · kind isolation, composed, with the Fly fleet still a placement', 
       outcome: 'reserved',
       fleetShardId: world.accounts.hosted_agent.id,
     });
-    for (const kind of ['ci_runner', 'code_graph_index', 'agent_instance'] as const) {
+    for (const kind of ['ci_runner', 'agent_instance'] as const) {
       expect(await choose(world, kind), kind).toEqual({ shardId: null });
     }
     expect(await placedOnSeeded(world)).toEqual({ ...ZERO, hosted_agent: 1 });
   });
 
-  it('the CI runner flipped to aws, the rest unset: a CI job is placed on its seeded account with exactly one intent row, and the other three still answer the process-wide lane', async () => {
+  it('the CI runner flipped to aws, the rest unset: a CI job is placed on its seeded account with exactly one intent row, and the other two still answer the process-wide lane', async () => {
     unsetSwitchesUnder('fly');
     vi.stubEnv(CI_RUNNER_PROVIDER_ENV_VAR, 'aws');
     expect(selectedOrchestratorProvider()).toBe('fly');
@@ -542,7 +535,7 @@ describe('2 · kind isolation, composed, with the Fly fleet still a placement', 
         select: { id: true },
       }),
     ).toEqual([{ id: intent.id }]);
-    for (const kind of ['hosted_agent', 'code_graph_index', 'agent_instance'] as const) {
+    for (const kind of ['hosted_agent', 'agent_instance'] as const) {
       expect(await choose(world, kind), kind).toEqual({ shardId: null });
     }
     expect(await placedOnSeeded(world)).toEqual({ ...ZERO, ci_runner: 1 });

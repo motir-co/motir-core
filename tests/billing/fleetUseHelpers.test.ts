@@ -199,10 +199,11 @@ describe('groupOwnAccounts', () => {
   });
 
   it('lists no account whose rows run none of billing’s kinds', () => {
-    // A row left on a kind billing does not describe (the retired indexer) is no
-    // account on Billing & plans — never an "indexer" account by another name.
+    // A row on a kind billing does not describe is no account on Billing &
+    // plans. The database refuses any other kind since MOTIR-12041; this holds
+    // the filter itself, not a row that can still be written.
     const groups = groupOwnAccounts(
-      [row('x', 'code_graph_index', '444'), row('c', 'ci_runner', '111')],
+      [row('x', 'gpu_farm', '444'), row('c', 'ci_runner', '111')],
       [raise('x', 8, null, 'pending')],
     );
     expect(groups.map((group) => group.accountKind)).toEqual(['ci_runner']);
@@ -210,7 +211,7 @@ describe('groupOwnAccounts', () => {
 
   it('describes only billing’s own kinds on an account', () => {
     const [group] = groupOwnAccounts(
-      [row('x', 'code_graph_index', '333'), row('a', 'agent_instance', '333')],
+      [row('x', 'gpu_farm', '333'), row('a', 'agent_instance', '333')],
       [],
     );
     expect(group).toMatchObject({ accountKind: 'agent_hoster', fleetKinds: ['agent_instance'] });
