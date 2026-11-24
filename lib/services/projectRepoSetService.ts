@@ -1275,9 +1275,13 @@ export const projectRepoSetService = {
    * (`ProjectRepoNotMotirHostedError`, D1) and a row already on a DIFFERENT
    * target (`ProjectRepoHostingTargetFixedError` — moving is a migration, D3).
    * The same values again are a no-op with no write; on the same target the use
-   * case, size and shape may be revised. An absent shape records none: an `aws`
-   * row without one is a decision not yet made, and its production release is
-   * refused by name (`ReleaseShapeRequiredError`) rather than given a guess.
+   * case, size and shape may be revised.
+   *
+   * `shape` omitted KEEPS the recorded one, so a revision of the use case or
+   * size cannot silently erase it (and with it every AWS release); an explicit
+   * `null` clears it. An `aws` row with no shape is a decision not yet made, and
+   * its production release is refused by name (`ReleaseShapeRequiredError`)
+   * rather than given a guess.
    */
   async setHosting(
     rowId: string,
@@ -1285,7 +1289,7 @@ export const projectRepoSetService = {
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
     const { target, useCase, size } = input;
-    const shape = input.shape ?? null;
+    const requested = input.shape;
     if (!isHostingTarget(target)) {
       throw new ProjectRepoInvalidFieldError(
         'target',
@@ -1301,13 +1305,13 @@ export const projectRepoSetService = {
     if (!isHostingSize(size)) {
       throw new ProjectRepoInvalidFieldError('size', `must be one of ${HOSTING_SIZES.join(', ')}.`);
     }
-    if (shape !== null && !isHostingShape(shape)) {
+    if (requested != null && !isHostingShape(requested)) {
       throw new ProjectRepoInvalidFieldError(
         'shape',
         `must be one of ${HOSTING_SHAPES.join(', ')}.`,
       );
     }
-    if (shape !== null && target !== SHAPED_HOSTING_TARGET) {
+    if (requested != null && target !== SHAPED_HOSTING_TARGET) {
       throw new ProjectRepoInvalidFieldError(
         'shape',
         `only the ${SHAPED_HOSTING_TARGET} target takes a shape.`,
@@ -1318,6 +1322,9 @@ export const projectRepoSetService = {
       if (row.hostingTarget !== null && row.hostingTarget !== target) {
         throw new ProjectRepoHostingTargetFixedError(rowId, row.hostingTarget, target);
       }
+      // Omitted keeps what is recorded; only an `aws` row can hold one, and the
+      // target cannot change, so a kept shape is always on its own target.
+      const shape = requested === undefined ? row.hostingShape : requested;
       if (
         row.hostingTarget === target &&
         row.hostingUseCase === useCase &&

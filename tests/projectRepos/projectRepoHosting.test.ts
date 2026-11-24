@@ -208,6 +208,31 @@ describe('projectRepoSetService.setHosting', () => {
     );
     expect(dto.hostingShape).toBe('container');
   });
+
+  it('keeps the recorded shape when a revision omits it, and clears it only on an explicit null', async () => {
+    const { fx, row } = await motirRow();
+    await projectRepoSetService.setHosting(
+      row.id,
+      { ...HOSTING, target: 'aws', shape: 'container' },
+      fx.ctx,
+    );
+
+    const resized = await projectRepoSetService.setHosting(
+      row.id,
+      { target: 'aws', useCase: 'planned_product', size: 'large' },
+      fx.ctx,
+    );
+    expect(resized).toMatchObject({ hostingSize: 'large', hostingShape: 'container' });
+    expect(await stored(row.id)).toMatchObject({ hostingSize: 'large', hostingShape: 'container' });
+
+    const cleared = await projectRepoSetService.setHosting(
+      row.id,
+      { target: 'aws', useCase: 'planned_product', size: 'large', shape: null },
+      fx.ctx,
+    );
+    expect(cleared.hostingShape).toBeNull();
+    expect(await stored(row.id)).toMatchObject({ hostingShape: null });
+  });
 });
 
 describe('toProjectRepoDto hosting fields', () => {
