@@ -13,6 +13,7 @@ import {
 } from '@/lib/github/previewDeployments';
 import type { RepositoryCoordinates } from '@/lib/github/repositoryActionsConfig';
 import { seedPromotionGithub } from '@/lib/github/seedPromotion';
+import { HOSTED_IDLE_SECONDS_DEFAULT } from '@/lib/hosting/idlePolicy';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 // From the composition root, not `./hosting`: loading it binds the preview
@@ -89,8 +90,9 @@ export const PREVIEW_START_POLL_MS = 30_000;
 export const PREVIEW_REAP_RECHECK_MS = 60 * 60_000;
 
 /** What a preview Machine is told about idling (recorded on Fly, native on
- *  serverless; AWS previews run until closed, §4). */
-const PREVIEW_IDLE_SECONDS = 300;
+ *  serverless; AWS previews run until closed, §4) — the same window a new
+ *  production application suspends after (MOTIR-12107). */
+const PREVIEW_IDLE_SECONDS = HOSTED_IDLE_SECONDS_DEFAULT;
 
 export type PreviewLifecycleOutcome =
   /** A delivery the lifecycle does not act on. */

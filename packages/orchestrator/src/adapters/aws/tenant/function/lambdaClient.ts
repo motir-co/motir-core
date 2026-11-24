@@ -16,6 +16,19 @@ export interface TenantLambda {
   listVersions(functionName: string): Promise<string[]>;
   /** One version's state, or null when the function or version does not exist. */
   getFunctionState(functionName: string, version: string): Promise<TenantFunctionState | null>;
+  /** One version's state with when it last changed and how its last update
+   *  went (MOTIR-12104), or null when the function or version does not exist. */
+  getFunctionVersion(functionName: string, version: string): Promise<TenantFunctionVersion | null>;
+  /** The provisioned-concurrency status on the alias (`IN_PROGRESS`, `READY`,
+   *  `FAILED`), or null when it has none (MOTIR-12104). */
+  getProvisionedConcurrency(functionName: string, alias: string): Promise<string | null>;
+}
+
+export interface TenantFunctionVersion {
+  readonly state: TenantFunctionState;
+  /** `successful` · `failed` · `inprogress`; null when Lambda gives none. */
+  readonly lastUpdateStatus: string | null;
+  readonly lastModified: Date | null;
 }
 
 export interface TenantMetricSum {

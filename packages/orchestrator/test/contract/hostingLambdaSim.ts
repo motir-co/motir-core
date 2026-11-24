@@ -43,6 +43,16 @@ export interface SimLambdaFunction {
   urls: Map<string, string>;
   /** Provisioned concurrency per alias, with its status. */
   provisioned: Map<string, { instances: number; status: string }>;
+  /** `Configuration.LastModified`, in Lambda's own format (MOTIR-12103). */
+  lastModified?: string;
+}
+
+/** One event of a log group, as CloudWatch holds it (MOTIR-12103). */
+export interface SimLogEvent {
+  eventId: string;
+  timestamp: number;
+  logStreamName: string;
+  message: string;
 }
 
 export interface LambdaSim {
@@ -51,6 +61,10 @@ export interface LambdaSim {
   readonly repositories: Set<string>;
   readonly secrets: Map<string, string>;
   readonly logGroups: Set<string>;
+  /** Each log group's events, any order (MOTIR-12103). */
+  readonly logEvents: Map<string, SimLogEvent[]>;
+  /** How many events one FilterLogEvents page holds. */
+  readonly logPage: { size: number };
   readonly metrics: Array<{ fn: string; at: number; durationMs: number; invocations: number }>;
   /** Every session STS issued, with the role and the key it was asked with. */
   readonly sessions: Array<{ roleArn: string; asKey: string | null; accessKeyId: string }>;
@@ -96,6 +110,8 @@ export function createLambdaSim(clock: () => number): LambdaSim {
   const repositories = new Set<string>();
   const secrets = new Map<string, string>();
   const logGroups = new Set<string>();
+  const logEvents = new Map<string, SimLogEvent[]>();
+  const logPage = { size: 10_000 };
   const metrics: LambdaSim['metrics'] = [];
   const sessions: LambdaSim['sessions'] = [];
   const failures: Array<{
@@ -140,7 +156,12 @@ export function createLambdaSim(clock: () => number): LambdaSim {
         f.lastUpdateStatus = 'Successful';
       }
       return {
-        Configuration: { FunctionArn: f.arn, State: f.state, LastUpdateStatus: f.lastUpdateStatus },
+        Configuration: {
+          FunctionArn: f.arn,
+          State: f.state,
+          LastUpdateStatus: f.lastUpdateStatus,
+          ...(f.lastModified ? { LastModified: f.lastModified } : {}),
+        },
         Code: { ImageUri: f.latest.imageUri },
         Tags: { ...f.tags },
       };
@@ -309,7 +330,36 @@ export function createLambdaSim(clock: () => number): LambdaSim {
     },
   };
 
+  /** CloudWatch's filter pattern, as far as the adapter writes one: a term,
+   *  or `?term ?"a phrase"` alternatives — each matched case-SENSITIVELY, as
+   *  CloudWatch matches terms. */
+  function matchesPattern(pattern: string, message: string): boolean {
+    const terms = [...pattern.matchAll(/\??(?:"([^"]*)"|(\S+))/g)].map((m) => m[1] ?? m[2]!);
+    return terms.some((t) => message.includes(t.replace(/^\?/, '')));
+  }
+
   const logs: Record<string, (input: Record<string, unknown>) => unknown> = {
+    FilterLogEventsCommand(input) {
+      const group = asString(input['logGroupName']);
+      if (!logGroups.has(group)) throw simError('ResourceNotFoundException', 400);
+      const start = input['startTime'] as number;
+      const end = input['endTime'] as number;
+      const pattern = asString(input['filterPattern']);
+      const all = (logEvents.get(group) ?? [])
+        .filter(
+          (e) =>
+            e.timestamp >= start &&
+            e.timestamp <= end &&
+            (!pattern || matchesPattern(pattern, e.message)),
+        )
+        .sort((a, b) => a.timestamp - b.timestamp || (a.eventId < b.eventId ? -1 : 1));
+      const from = Number(asString(input['nextToken']) || '0');
+      const page = all.slice(from, from + logPage.size);
+      return {
+        events: page.map((e) => ({ ...e, ingestionTime: e.timestamp })),
+        ...(from + logPage.size < all.length ? { nextToken: String(from + logPage.size) } : {}),
+      };
+    },
     DeleteLogGroupCommand(input) {
       if (!logGroups.delete(asString(input['logGroupName']))) {
         throw simError('ResourceNotFoundException', 400);
@@ -403,6 +453,8 @@ export function createLambdaSim(clock: () => number): LambdaSim {
     repositories,
     secrets,
     logGroups,
+    logEvents,
+    logPage,
     metrics,
     sessions,
     clientFactory,

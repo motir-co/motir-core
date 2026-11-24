@@ -1,18 +1,24 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CustomerRepositoryRefusedError,
   GithubRepositoryIdsMissingError,
   HostingAppNameInvalidError,
   IdlePolicyUnsupportedError,
+  LOG_GROUP_MISSING,
+  LogsUnavailableError,
   NoPreviousReleaseError,
   OrchestratorApiError,
   RegistryNotReadyError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
   ReleaseShapeRequiredError,
+  RuntimeHealthUnavailableError,
+  TENANT_ACCOUNT_NOT_READY,
+  TenantRoleUnavailableError,
   awsReleaseId,
+  containerRuntimeHealth,
   createAwsHostingDeployPort,
   createFakeTenantClients,
   deriveOriginSecret,
@@ -27,7 +33,10 @@ import {
   type AwsHostingLogLine,
   type DeployReleaseInput,
   type HostingEnvironment,
+  type ReleaseHandle,
   type ReleaseShape,
+  type TenantEcsService,
+  type TenantEcsTask,
 } from '../src/index';
 
 // THE AWS ADAPTER on the deploy port (MOTIR-10010), over the seam's fakes: the
@@ -640,5 +649,459 @@ describe('the function front door (MOTIR-10129, to MOTIR-10128)', () => {
       upstreamAddress: expect.stringMatching(/^https:\/\/[a-z0-9]+\.cloudfront\.net$/),
       originCredential: 'origin_secret',
     });
+  });
+});
+
+// ── The runtime reads (MOTIR-12104) ─────────────────────────────────────────
+
+const MIN = 60_000;
+const FUNCTION_GROUP = `/aws/lambda/${APP}`;
+const CONTAINER_GROUP = `/motir/hosting/${APP}`;
+const REPORT = (id: string, used = 90, size = 512, extra = '') =>
+  `REPORT RequestId: ${id}\tDuration: 12.3 ms\tBilled Duration: 13 ms\tMemory Size: ${size} MB\tMax Memory Used: ${used} MB${extra ? `\t${extra}` : ''}\n`;
+const EXIT = (id: string, how: string) =>
+  `RequestId: ${id} Error: Runtime exited with error: ${how}\nRuntime.ExitError\n`;
+
+async function deployed(shape: ReleaseShape) {
+  const h = harness();
+  const handle = await h.port.deploy(release(shape));
+  const at = (ms: number) => new Date(h.deps.now!().getTime() + ms);
+  return { ...h, handle, at };
+}
+
+describe.each<[ReleaseShape, string]>([
+  ['function', FUNCTION_GROUP],
+  ['container', CONTAINER_GROUP],
+])('readLogs on the %s shape (MOTIR-12104)', (shape, group) => {
+  it('reads the release’s group newest first, a cursor at a time, no line twice', async () => {
+    const h = await deployed(shape);
+    h.advance(3600);
+    for (let i = 0; i < 9; i += 1)
+      h.clients.logs.write(group, h.at(-50 * MIN + i * MIN), `line ${i}\n`);
+    h.clients.logs.pageSize = 2;
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let round = 0; round < 10; round += 1) {
+      const page = await h.port.readLogs(h.handle, { limit: 4, ...(cursor ? { cursor } : {}) });
+      seen.push(...page.lines.map((l) => l.message));
+      if (!page.cursor) break;
+      cursor = page.cursor;
+    }
+    expect(seen).toEqual(Array.from({ length: 9 }, (_, i) => `line ${8 - i}`));
+    expect(new Set(h.clients.logs.queries.map((q) => q.group))).toEqual(new Set([group]));
+  });
+
+  it('honours since, until, the limit and a case-insensitive literal filter', async () => {
+    const h = await deployed(shape);
+    h.advance(3600);
+    h.clients.logs.write(group, h.at(-40 * MIN), 'GET /a?b-{c} 500 ERROR');
+    h.clients.logs.write(group, h.at(-30 * MIN), 'get /A?B-{C} 200 fine');
+    h.clients.logs.write(group, h.at(-20 * MIN), 'get /a?bx 200 fine');
+    h.clients.logs.write(group, h.at(-10 * MIN), 'GET /a?b-{c} 503 error');
+    const page = await h.port.readLogs(h.handle, {
+      since: h.at(-35 * MIN),
+      until: h.at(-5 * MIN),
+      filter: 'a?B-{c',
+      limit: 5,
+    });
+    expect(page).toEqual({
+      lines: [
+        { at: h.at(-10 * MIN), stream: 'app', message: 'GET /a?b-{c} 503 error' },
+        { at: h.at(-30 * MIN), stream: 'app', message: 'get /A?B-{C} 200 fine' },
+      ],
+      cursor: null,
+    });
+    // The filter went to CloudWatch as a two-case literal, never as syntax.
+    expect(h.clients.logs.queries[0]!.filterPattern).toBe('%[aA]\\?[bB]-\\{[cC]%');
+    const limited = await h.port.readLogs(h.handle, { limit: 1 });
+    expect(limited.lines.map((l) => l.message)).toEqual(['GET /a?b-{c} 503 error']);
+    expect(limited.cursor).not.toBeNull();
+  });
+
+  it('answers an existing group with no matching line as an empty page', async () => {
+    const h = await deployed(shape);
+    h.clients.logs.write(group, h.at(-MIN), 'hello');
+    expect(await h.port.readLogs(h.handle, { filter: 'nothing like it', limit: 5 })).toEqual({
+      lines: [],
+      cursor: null,
+    });
+  });
+
+  it('matches a filter CloudWatch cannot carry in the window alone', async () => {
+    const h = await deployed(shape);
+    h.clients.logs.write(group, h.at(-MIN), 'café ouvert');
+    h.clients.logs.write(group, h.at(-2 * MIN), 'cafe ferme');
+    const page = await h.port.readLogs(h.handle, { filter: 'CAFÉ', limit: 5 });
+    expect(page.lines.map((l) => l.message)).toEqual(['café ouvert']);
+    expect(h.clients.logs.queries.every((q) => q.filterPattern === undefined)).toBe(true);
+  });
+
+  it('throws LogsUnavailableError for a missing group, a refusal, a throttle and the role', async () => {
+    const h = await deployed(shape);
+    const missing = await h.port.readLogs(h.handle, { limit: 5 }).catch((e: unknown) => e);
+    expect(missing).toBeInstanceOf(LogsUnavailableError);
+    expect(missing).toMatchObject({ target: 'aws', reason: LOG_GROUP_MISSING });
+
+    h.clients.logs.write(group, h.at(-MIN), 'line');
+    for (const [code, status] of [
+      ['AccessDeniedException', 403],
+      ['ThrottlingException', 400],
+    ] as const) {
+      h.clients.logs.refuseNext(code, status);
+      const refused = await h.port.readLogs(h.handle, { limit: 5 }).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(LogsUnavailableError);
+      expect((refused as LogsUnavailableError).reason).toContain(`logs ${code}`);
+    }
+    vi.spyOn(h.clients.logs, 'filterLogEvents').mockRejectedValueOnce(
+      new TenantRoleUnavailableError(ACCOUNT, 'AccessDenied'),
+    );
+    await expect(h.port.readLogs(h.handle, { limit: 5 })).rejects.toMatchObject({
+      reason: 'the tenant deploy role could not be assumed (AccessDenied)',
+    });
+    vi.spyOn(h.clients.logs, 'filterLogEvents').mockRejectedValueOnce(new TypeError('a bug'));
+    await expect(h.port.readLogs(h.handle, { limit: 5 })).rejects.toBeInstanceOf(TypeError);
+    expect((await h.port.readLogs(h.handle, { limit: 5 })).lines).toHaveLength(1);
+  });
+});
+
+describe('readLogs and readHealth with no release to read (MOTIR-12104)', () => {
+  const HANDLE: ReleaseHandle = {
+    target: 'aws',
+    appRef: APP,
+    environment: PRODUCTION,
+    releaseId: awsReleaseId(APP, 1),
+    providerRef: `function:${releaseStack()}`,
+  };
+
+  it('answers logs unavailable and health deploying while the account is not ready', async () => {
+    const h = harness({ ready: false });
+    const logs = await h.port.readLogs(HANDLE, { limit: 5 }).catch((e: unknown) => e);
+    expect(logs).toBeInstanceOf(LogsUnavailableError);
+    expect(logs).toMatchObject({ target: 'aws', reason: TENANT_ACCOUNT_NOT_READY });
+    expect(await h.port.readHealth(HANDLE)).toEqual({ state: 'deploying', since: T0 });
+    expect(h.clientsFor).toEqual([]);
+  });
+
+  it('answers ReleaseNotFoundError for an app with no release stack', async () => {
+    const h = harness();
+    await expect(h.port.readLogs(HANDLE, { limit: 5 })).rejects.toBeInstanceOf(
+      ReleaseNotFoundError,
+    );
+    await expect(h.port.readHealth(HANDLE)).rejects.toBeInstanceOf(ReleaseNotFoundError);
+  });
+
+  it('answers logs unavailable when the stack read itself is refused', async () => {
+    const h = harness();
+    h.clients.cloudformation.failAt('describeStack', 1);
+    await expect(h.port.readLogs(HANDLE, { limit: 5 })).rejects.toBeInstanceOf(
+      LogsUnavailableError,
+    );
+    h.clients.cloudformation.failAt('describeStack', 1);
+    await expect(h.port.readHealth(HANDLE)).rejects.toBeInstanceOf(RuntimeHealthUnavailableError);
+  });
+});
+
+describe('readHealth on the container shape (MOTIR-12104)', () => {
+  const service = (h: Harness) => h.clients.ecs.services.get(APP)!;
+  const runningTask = (h: Harness) =>
+    h.clients.ecs.tasks.find((t) => t.service === APP && t.lastStatus === 'RUNNING')!;
+
+  it('is running since its task started, with no last exit', async () => {
+    const h = await deployed('container');
+    const started = runningTask(h).startedAt!;
+    h.advance(60);
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'running', since: started });
+  });
+
+  it('is deploying while the primary rollout is in progress, since it began', async () => {
+    const h = await deployed('container');
+    const svc = service(h);
+    svc.deployments = [{ ...svc.deployments[0]!, rolloutState: 'IN_PROGRESS', createdAt: T0 }];
+    svc.pendingPolls = 5;
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'deploying', since: T0 });
+  });
+
+  it('is suspended at desired count 0, since its last task stopped', async () => {
+    const h = await deployed('container');
+    h.advance(120);
+    h.clients.ecs.stopTask(runningTask(h).taskArn, { stopCode: 'ServiceSchedulerInitiated' });
+    service(h).desiredCount = 0;
+    h.advance(60);
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'suspended',
+      since: new Date(T0.getTime() + 120_000),
+    });
+  });
+
+  it('is exited with the essential container’s code when its task stopped and none runs', async () => {
+    const h = await deployed('container');
+    h.advance(300);
+    h.clients.ecs.stopTask(runningTask(h).taskArn, { exitCode: 3 });
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'exited',
+      exitCode: 3,
+      since: new Date(T0.getTime() + 300_000),
+    });
+  });
+
+  it('is oom_killed when its newest stopped task hit the memory limit', async () => {
+    const h = await deployed('container');
+    h.advance(300);
+    h.clients.ecs.stopTask(runningTask(h).taskArn, {
+      exitCode: 137,
+      reason: 'OutOfMemoryError: Container killed due to memory usage',
+    });
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'oom_killed',
+      since: new Date(T0.getTime() + 300_000),
+    });
+  });
+
+  it('is running again after ECS replaced a crashed task, carrying that exit', async () => {
+    const h = await deployed('container');
+    h.advance(300);
+    h.clients.ecs.stopTask(runningTask(h).taskArn, {
+      exitCode: 137,
+      reason: 'OutOfMemoryError: Container killed due to memory usage',
+    });
+    h.advance(30);
+    const replacement = h.clients.ecs.startTask(APP);
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'running',
+      since: replacement.startedAt,
+      lastExit: { exitCode: 137, oomKilled: true, at: new Date(T0.getTime() + 300_000) },
+    });
+  });
+
+  it('throws rather than guessing when ECS refuses the read', async () => {
+    const h = await deployed('container');
+    h.clients.ecs.failAt('listTasks', 1);
+    const error = await h.port.readHealth(h.handle).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RuntimeHealthUnavailableError);
+    expect(error).toMatchObject({ target: 'aws' });
+    expect((error as RuntimeHealthUnavailableError).reason).toContain('ecs InjectedFault');
+  });
+});
+
+describe('the container health classification (MOTIR-12104)', () => {
+  const NOW = new Date('2026-11-23T12:00:00Z');
+  const at = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * MIN);
+  const svc = (overrides: Partial<TenantEcsService> = {}): TenantEcsService => ({
+    taskDefinition: 'td:2',
+    desiredCount: 1,
+    runningCount: 0,
+    deployments: [
+      {
+        taskDefinition: 'td:2',
+        status: 'PRIMARY',
+        rolloutState: 'COMPLETED',
+        createdAt: at(30),
+        updatedAt: at(25),
+      },
+    ],
+    ...overrides,
+  });
+  const task = (overrides: Partial<TenantEcsTask>): TenantEcsTask => ({
+    taskArn: 't',
+    taskDefinition: 'td:2',
+    lastStatus: 'STOPPED',
+    startedAt: at(29),
+    stoppedAt: at(10),
+    cpu: 256,
+    memory: 512,
+    stopCode: 'EssentialContainerExited',
+    stoppedReason: 'Essential container in task exited',
+    container: { exitCode: 1, reason: null },
+    ...overrides,
+  });
+  const health = (
+    service: TenantEcsService | null,
+    tasks: TenantEcsTask[],
+    stackCreatedAt: Date | null = at(40),
+  ) => containerRuntimeHealth({ service, tasks, stackCreatedAt, now: NOW });
+
+  it('is deploying with no service yet, since the stack (or now)', () => {
+    expect(health(null, [])).toEqual({ state: 'deploying', since: at(40) });
+    expect(health(null, [], null)).toEqual({ state: 'deploying', since: NOW });
+  });
+
+  it('is deploying while a task is still starting, and never decided by an older revision', () => {
+    expect(
+      health(svc(), [
+        task({ taskDefinition: 'td:1', stoppedAt: at(5), stopCode: 'ServiceSchedulerInitiated' }),
+        task({ lastStatus: 'PROVISIONING', stoppedAt: null, stopCode: null, container: null }),
+      ]),
+    ).toEqual({ state: 'deploying', since: at(30) });
+  });
+
+  it('reads a scale-in with no task left as suspended since the deployment changed', () => {
+    expect(health(svc({ desiredCount: 0 }), [])).toEqual({ state: 'suspended', since: at(25) });
+    expect(health(svc({ desiredCount: 0, deployments: [] }), [])).toEqual({
+      state: 'suspended',
+      since: at(40),
+    });
+  });
+
+  it('carries no last exit for a crash before the deployment began, nor for ECS’s own stops', () => {
+    const running = task({ lastStatus: 'RUNNING', stoppedAt: null, startedAt: at(20) });
+    expect(
+      health(svc(), [
+        running,
+        task({ stoppedAt: at(35) }),
+        task({ stoppedAt: at(15), stopCode: 'ServiceSchedulerInitiated', container: null }),
+        task({ lastStatus: 'DEPROVISIONING', stoppedAt: null }),
+      ]),
+    ).toEqual({ state: 'running', since: at(20) });
+  });
+
+  it('reads an OOM from the task’s reason, and an exit with no code as null', () => {
+    expect(
+      health(svc(), [
+        task({
+          stopCode: 'TaskFailedToStart',
+          stoppedReason: 'OutOfMemoryError: x',
+          container: null,
+        }),
+      ]),
+    ).toEqual({ state: 'oom_killed', since: at(10) });
+    expect(health(svc(), [task({ container: null })])).toEqual({
+      state: 'exited',
+      exitCode: null,
+      since: at(10),
+    });
+    const running = task({ lastStatus: 'RUNNING', stoppedAt: null, startedAt: null });
+    expect(health(svc(), [running, task({ container: null, stoppedAt: at(20) })])).toEqual({
+      state: 'running',
+      since: at(30),
+      lastExit: { exitCode: null, oomKilled: false, at: at(20) },
+    });
+  });
+});
+
+describe('readHealth on the function shape (MOTIR-12104)', () => {
+  const VERSION = '1';
+
+  async function fn() {
+    const h = await deployed('function');
+    h.advance(3600);
+    h.clients.lambda.setVersionFacts(APP, VERSION, { lastModified: T0 });
+    return h;
+  }
+
+  it('is suspended with no invocation in the window, since the last one before it', async () => {
+    const h = await fn();
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'suspended', since: T0 });
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-20 * MIN), REPORT('r0'));
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'suspended',
+      since: h.at(-20 * MIN),
+    });
+  });
+
+  it('is running with an invocation in the window, since the first one', async () => {
+    const h = await fn();
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-3 * MIN), 'START RequestId: r1 Version: 1');
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-3 * MIN + 5), 'GET / 200');
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-3 * MIN + 10), REPORT('r1'));
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-MIN), REPORT('r2'));
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'running',
+      since: h.at(-3 * MIN + 10),
+    });
+  });
+
+  it('is running with a ready provisioned instance, and deploying while it is provisioned', async () => {
+    const h = await fn();
+    h.clients.lambda.setProvisioned(APP, 'live', 'READY');
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'running', since: T0 });
+    h.clients.lambda.setProvisioned(APP, 'live', 'IN_PROGRESS');
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'deploying', since: T0 });
+  });
+
+  it('is deploying for a pending version or an update in progress, exited for a failed one', async () => {
+    const h = await fn();
+    h.clients.lambda.setState(APP, VERSION, 'pending');
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'deploying', since: T0 });
+    h.clients.lambda.setState(APP, VERSION, 'active');
+    h.clients.lambda.setVersionFacts(APP, VERSION, {
+      lastModified: T0,
+      lastUpdateStatus: 'inprogress',
+    });
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'deploying', since: T0 });
+    h.clients.lambda.setState(APP, VERSION, 'failed');
+    h.clients.lambda.setVersionFacts(APP, VERSION, { lastModified: T0 });
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'exited',
+      exitCode: null,
+      since: T0,
+    });
+  });
+
+  it('is deploying with no live alias yet, since the stack was created', async () => {
+    const h = await fn();
+    h.clients.lambda.functions.get(APP)!.alias = null;
+    const created = h.clients.cloudformation.stacks.get(releaseStack())!.createdAt;
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'deploying', since: created });
+  });
+
+  it('is deploying since now when CloudFormation gives no creation time', async () => {
+    const h = await fn();
+    h.clients.lambda.functions.get(APP)!.alias = null;
+    const describe = h.clients.cloudformation.describeStack.bind(h.clients.cloudformation);
+    vi.spyOn(h.clients.cloudformation, 'describeStack').mockImplementation(async (name) => {
+      const stack = await describe(name);
+      return stack ? { ...stack, createdAt: undefined } : null;
+    });
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'deploying', since: h.at(0) });
+  });
+
+  it('is exited with the runtime’s code, and oom_killed at the memory limit, from its own lines', async () => {
+    const h = await fn();
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-4 * MIN), REPORT('r1'));
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-2 * MIN), EXIT('r2', 'exit status 2'));
+    h.clients.logs.write(
+      FUNCTION_GROUP,
+      h.at(-2 * MIN + 1),
+      REPORT('r2', 90, 512, 'Status: error\tError Type: Runtime.ExitError'),
+    );
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'exited',
+      exitCode: 2,
+      since: h.at(-2 * MIN),
+    });
+    h.clients.logs.write(
+      FUNCTION_GROUP,
+      h.at(-MIN),
+      REPORT('r3', 512, 512, 'Status: error\tError Type: Runtime.OutOfMemory'),
+    );
+    expect(await h.port.readHealth(h.handle)).toEqual({
+      state: 'oom_killed',
+      since: h.at(-MIN),
+    });
+  });
+
+  it('throws rather than answering running when Lambda or the log read is refused', async () => {
+    const h = await fn();
+    h.clients.logs.write(FUNCTION_GROUP, h.at(-MIN), REPORT('r1'));
+    h.clients.logs.refuseNext('ThrottlingException', 400);
+    const throttled = await h.port.readHealth(h.handle).catch((e: unknown) => e);
+    expect(throttled).toBeInstanceOf(RuntimeHealthUnavailableError);
+    expect((throttled as RuntimeHealthUnavailableError).reason).toContain(
+      'logs ThrottlingException',
+    );
+
+    h.clients.lambda.failAt('getAlias', 1);
+    await expect(h.port.readHealth(h.handle)).rejects.toBeInstanceOf(RuntimeHealthUnavailableError);
+    vi.spyOn(h.clients.lambda, 'getProvisionedConcurrency').mockRejectedValueOnce(
+      new TenantRoleUnavailableError(ACCOUNT, 'ExpiredToken'),
+    );
+    await expect(h.port.readHealth(h.handle)).rejects.toMatchObject({
+      reason: 'the tenant deploy role could not be assumed (ExpiredToken)',
+    });
+    vi.spyOn(h.clients.lambda, 'getProvisionedConcurrency').mockRejectedValueOnce(
+      new TypeError('a bug'),
+    );
+    await expect(h.port.readHealth(h.handle)).rejects.toBeInstanceOf(TypeError);
+    expect(await h.port.readHealth(h.handle)).toEqual({ state: 'running', since: h.at(-MIN) });
   });
 });

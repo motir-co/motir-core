@@ -16,6 +16,7 @@ import { hostInstallationIdOf } from '@/lib/services/projectRepoTakeoverService'
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
 import { getDatabasePort } from '@/lib/orchestrator/database';
 import { repoDeletionClient } from '@/lib/github/repoDeletion';
@@ -254,6 +255,11 @@ export const hostedRepositoryRemovalService = {
     if (app.currentReleaseId) {
       // Never throws: a usage the port cannot read is logged and skipped.
       await hostedReleaseUsageService.settleReleaseUsage(app.currentReleaseId);
+      // Its last window charged, and every open day with it: the application's
+      // slices go with its row (MOTIR-12108). Never throws.
+      await productionUsageMeterService.accrueOutgoingRelease(app.currentReleaseId, {
+        chargeNow: true,
+      });
     }
     const port = getHostingDeployPort(app.target);
     const appRef =

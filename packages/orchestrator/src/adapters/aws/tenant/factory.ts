@@ -8,6 +8,7 @@ import {
   sdkTenantEcs,
   sdkTenantElb,
   sdkTenantLambda,
+  sdkTenantLogs,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   sdkTenantSsm,
@@ -49,6 +50,7 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     elb: sdkTenantElb(factory('elasticloadbalancing', config)),
     ssm: sdkTenantSsm(factory('ssm', config)),
     ec2: sdkTenantEc2(factory('ec2', config)),
+    logs: sdkTenantLogs(factory('logs', config)),
   };
 }
 

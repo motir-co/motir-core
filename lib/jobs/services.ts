@@ -51,6 +51,8 @@ import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcile
 import { awsCostService } from '@/lib/services/awsCostService';
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
+import { productionHealthService } from '@/lib/services/productionHealthService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
@@ -161,6 +163,10 @@ export const jobServices = {
   hostAccountState: hostAccountStateService,
   // The enterprise tenant account reconcile (Story MOTIR-9792 · MOTIR-9942).
   hostingTenantAccountReconcile: hostingTenantAccountService,
+  // A live app's health and crashes (Story MOTIR-9799 · MOTIR-12106).
+  productionHealth: productionHealthService,
+  // Production hosting charged in credits (Story MOTIR-9799 · MOTIR-12108).
+  productionUsageMeter: productionUsageMeterService,
   // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
   previewEnablement: previewEnablementService,
   previewLifecycle: previewLifecycleService,

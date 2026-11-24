@@ -666,6 +666,57 @@ export async function debitAgentStorage(
   return (await res.json()) as RawAgentStorageDebitResponse;
 }
 
+// ── Production hosting, charged daily (MOTIR-12108 · Decision MOTIR-12100) ────
+
+/**
+ * What `POST /v1/credits/hosting-production` takes: ONE production application's
+ * usage on ONE UTC day, already converted to whole credits by motir-core
+ * (Decision MOTIR-12100 §6: the day's Linux-equivalent minutes, rounded up once).
+ * There is no `externalRef` — motir-ai builds the ledger key itself as
+ * `hosting_production:<applicationId>:<day>`, so an application is charged at
+ * most once per day whatever this side retries.
+ */
+export interface HostingProductionDebitInput {
+  coreOrganizationId: string;
+  /** `HostedApplication.id`. */
+  applicationId: string;
+  /** The UTC day charged, `YYYY-MM-DD`. */
+  day: string;
+  /** Whole credits (integer ≥ 1). */
+  credits: number;
+  /** The day's Linux-equivalent minutes before rounding, for the ledger's note. */
+  linuxEquivalentMinutes: number;
+  reason?: string;
+}
+
+/** The same body `ci-overage` answers, `idempotent` and `exhausted` included. */
+export type RawHostingProductionDebitResponse = RawCiOverageDebitResponse;
+
+/**
+ * POST /v1/credits/hosting-production — charge an org's ledger for one
+ * production application's hosting on one UTC day, the `hosting_production`
+ * kind (Decision MOTIR-12100 §4), outside CI's per-seat pool.
+ *
+ * {@link debitAgentStorage}'s contract: it THROWS a typed error on failure, and
+ * the caller (`productionUsageMeterService`) — whose slices are already written
+ * and closed for that day — decides to retry. Idempotent on the application and
+ * the day, so a retry after a timed-out call that had in fact landed answers
+ * `idempotent: true` and moves nothing. Like every external debit it overdrafts
+ * rather than refuses, and reports `exhausted`.
+ */
+export async function debitHostingProduction(
+  input: HostingProductionDebitInput,
+): Promise<RawHostingProductionDebitResponse> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/credits/hosting-production`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawHostingProductionDebitResponse;
+}
+
 /**
  * POST /v1/credits/index-check — may this organisation's next index container
  * boot? (MOTIR-4593; motir-ai MOTIR-5284.)

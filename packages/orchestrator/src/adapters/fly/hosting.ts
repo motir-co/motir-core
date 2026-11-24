@@ -1,10 +1,21 @@
-import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
 import {
+  OrchestratorApiError,
+  OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
+} from '../../errors';
+import {
+  LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
   ReleaseRuntimeRefusedError,
+  RuntimeHealthUnavailableError,
 } from '../../hosting/errors';
+import {
+  readLogWindowNewestFirst,
+  type LogWindowEntry,
+  type LogWindowLimits,
+} from '../../hosting/logWindow';
 import { hostingAppNames, pushNamespaceName } from '../../hosting/names';
 import { deriveOriginSecret } from '../../hosting/originSecret';
 import type {
@@ -17,6 +28,10 @@ import type {
   ReleaseDescription,
   ReleaseHandle,
   ReleaseIdlePolicy,
+  ReleaseLastExit,
+  ReleaseLogPage,
+  ReleaseLogQuery,
+  ReleaseRuntimeHealth,
   ReleaseSize,
   ReleaseState,
   ReleaseSummary,
@@ -27,10 +42,13 @@ import {
   exitCodeOf,
   flyErrorDetail,
   flyGraphqlRequest,
+  flyLogsRequest,
   flyMachinesClientFor,
   flyRequest,
   readFlyJson,
   toFlyMachine,
+  type FlyLogEntry,
+  type FlyLogPage,
   type FlyMachine,
 } from './flyMachines';
 import { flyAppProvisioning } from './persistent';
@@ -401,6 +419,189 @@ export function runTransitionsOf(machine: FlyMachine): RunTransition[] {
     }
     return [];
   });
+}
+
+// ── The runtime reads (MOTIR-12102) ─────────────────────────────────────────
+
+type FlyMachineEvent = FlyMachine['events'][number];
+type DatedEvent = FlyMachineEvent & { timestamp: Date };
+
+/** Fly states of a Machine whose process is not running. */
+const DOWN_STATES = new Set(['stopped', 'stopping', 'suspended', 'suspending', 'failed']);
+
+function latestOf(
+  events: readonly DatedEvent[],
+  match: (event: DatedEvent) => boolean,
+): DatedEvent | null {
+  let latest: DatedEvent | null = null;
+  for (const event of events) {
+    if (match(event) && (latest === null || event.timestamp >= latest.timestamp)) latest = event;
+  }
+  return latest;
+}
+
+/**
+ * The release Machine → the runtime state the port reports (MOTIR-12102), from
+ * its state and its event log alone — no request, so every case is pinned by a
+ * recorded log.
+ *
+ * Only the events since the current release was put in place count: the latest
+ * `launch` or `update` (a deploy and a rollback are both an update of the one
+ * release Machine), else the Machine's creation. An exit is told apart by its
+ * exit event's `requested_stop`: an exit somebody ASKED for — Fly's proxy
+ * stopping or suspending an idle Machine, an update replacing the process — is
+ * not the process ending on its own. So:
+ *
+ * - `deploying` while the Machine is created, starting, replacing or updating,
+ *   since the update (or launch) that began it;
+ * - `running` while it is started, since its latest start, with `lastExit` the
+ *   newest unrequested exit Fly restarted it from (the exit event says
+ *   `restarting`, or a start follows it);
+ * - `suspended` while it is suspended, or stopped by a request, since the
+ *   suspend or stop;
+ * - `exited` (with its code) or `oom_killed` (the exit event's `oom_killed`)
+ *   while it is down after an exit nobody asked for, since that exit — and a
+ *   `failed` Machine is `exited` whatever its last exit was.
+ *
+ * Each `since` falls back to the update, then the Machine's `updated_at`, then
+ * its `created_at`, when Fly kept no event for it.
+ */
+export function runtimeHealthOf(machine: FlyMachine): ReleaseRuntimeHealth {
+  const dated = machine.events.filter((e): e is DatedEvent => e.timestamp !== null);
+  const put = latestOf(dated, (e) => e.type === 'launch' || e.type === 'update');
+  const from = put?.timestamp ?? machine.createdAt;
+  const current = from ? dated.filter((e) => e.timestamp >= from) : dated;
+  const fallback = from ?? machine.updatedAt ?? machine.createdAt ?? new Date(0);
+  const unrequestedExit = (e: DatedEvent) => e.type === 'exit' && !e.requestedStop;
+
+  if (machine.state === 'started') {
+    const start = latestOf(current, (e) => e.type === 'start');
+    const restarted = latestOf(
+      current,
+      (e) =>
+        unrequestedExit(e) &&
+        (e.restarting || current.some((s) => s.type === 'start' && s.timestamp > e.timestamp)),
+    );
+    const lastExit: ReleaseLastExit | null = restarted
+      ? { exitCode: restarted.exitCode, oomKilled: restarted.oomKilled, at: restarted.timestamp }
+      : null;
+    return {
+      state: 'running',
+      since: start?.timestamp ?? fallback,
+      ...(lastExit ? { lastExit } : {}),
+    };
+  }
+  if (DOWN_STATES.has(machine.state)) {
+    const exit = latestOf(current, (e) => e.type === 'exit');
+    const halt = latestOf(current, (e) => e.type === 'stop' || e.type === 'suspend');
+    const exitedOnItsOwn =
+      exit !== null && !exit.requestedStop && (halt === null || halt.timestamp <= exit.timestamp);
+    if (machine.state === 'failed' || exitedOnItsOwn) {
+      if (exit?.oomKilled) return { state: 'oom_killed', since: exit.timestamp };
+      return {
+        state: 'exited',
+        exitCode: exit?.exitCode ?? null,
+        since: exit?.timestamp ?? fallback,
+      };
+    }
+    return { state: 'suspended', since: halt?.timestamp ?? exit?.timestamp ?? fallback };
+  }
+  // `created`, `starting`, `replacing`, `updating` — and any state Fly adds
+  // that is none of the above, which is read as on its way rather than as down.
+  return { state: 'deploying', since: fallback };
+}
+
+/** A log read with no `since` reads this far back: Fly's own window for a read
+ *  with no cursor (24 hours). */
+export const FLY_LOG_DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Pages read for one slice before it is narrowed. */
+export const FLY_LOG_PAGES_PER_SLICE = 10;
+/** Requests one `readLogs` may make before it answers what it has and a cursor
+ *  to the rest. */
+export const FLY_LOG_MAX_REQUESTS = 40;
+
+const FLY_LOG_LIMITS: LogWindowLimits = {
+  defaultWindowMs: FLY_LOG_DEFAULT_WINDOW_MS,
+  firstSliceNs: 5n * 60n * 1_000_000_000n,
+  minSliceNs: 1_000_000_000n,
+  pagesPerSlice: FLY_LOG_PAGES_PER_SLICE,
+  maxRequests: FLY_LOG_MAX_REQUESTS,
+};
+
+/** One page of an app's logs after a token, or a typed failure. */
+export type FlyLogFetch = (app: string, nextToken: string) => Promise<FlyLogPage>;
+
+/** Fly's line → the window's: Fly's provider `app` is the release's own output. */
+function windowEntryOf(entry: FlyLogEntry): LogWindowEntry {
+  return {
+    id: entry.id,
+    atNs: entry.atNs,
+    message: entry.message,
+    stream: entry.provider === 'app' ? 'app' : 'platform',
+  };
+}
+
+/**
+ * A release's logs, NEWEST FIRST, from Fly's logs API, which only pages
+ * FORWARD from a nanosecond token — the slicing is the shared
+ * `readLogWindowNewestFirst`; a slice here is a forward read from one
+ * nanosecond before its start until a line passes its end, Fly answers no
+ * more lines, or its token stops moving.
+ */
+export async function readFlyLogWindow(
+  app: string,
+  query: ReleaseLogQuery,
+  now: Date,
+  fetchPage: FlyLogFetch,
+): Promise<ReleaseLogPage> {
+  return readLogWindowNewestFirst(
+    'fly',
+    app,
+    query,
+    now,
+    FLY_LOG_LIMITS,
+    async (start, end, maxPages, budget) => {
+      const lines: LogWindowEntry[] = [];
+      // Fly answers the lines AFTER the token, so one nanosecond before `start`
+      // takes the lines at it too.
+      let token = start - 1n;
+      let pages = 0;
+      while (pages < maxPages && budget.requests > 0) {
+        budget.requests -= 1;
+        pages += 1;
+        const page = await fetchPage(app, String(token));
+        let passedEnd = false;
+        for (const entry of page.entries) {
+          if (entry.atNs >= end) passedEnd = true;
+          else if (entry.atNs >= start) lines.push(windowEntryOf(entry));
+        }
+        const next =
+          page.nextToken !== null && /^\d{1,30}$/.test(page.nextToken)
+            ? BigInt(page.nextToken)
+            : null;
+        if (
+          passedEnd ||
+          page.entries.length === 0 ||
+          next === null ||
+          next <= token ||
+          next >= end
+        ) {
+          return { lines, complete: true, pages };
+        }
+        token = next;
+      }
+      return { lines, complete: false, pages };
+    },
+  );
+}
+
+/** Why Fly could not answer a runtime read, without the provider's words. */
+function unavailableReason(error: unknown): string | null {
+  if (error instanceof OrchestratorTimeoutError) return 'the request timed out';
+  if (error instanceof OrchestratorApiError) {
+    return error.status === null ? 'the request failed' : `Fly answered HTTP ${error.status}`;
+  }
+  return null;
 }
 
 function defaultReleaseId(): string {
@@ -848,6 +1049,39 @@ export function createFlyHostingDeployPort(
       } finally {
         await flyRequest(appPath(appRef, `${path}?force=true`), { method: 'DELETE', token });
       }
+    },
+
+    // The runtime reads (MOTIR-12102). The logs come from Fly's logs API for the
+    // whole app — it runs one release Machine, so its stream is the release's
+    // (the guard's lines included, as they come); the health from that Machine.
+    async readLogs(handle, query) {
+      const unavailable = (error: unknown): never => {
+        const reason = unavailableReason(error);
+        if (reason === null) throw error;
+        throw new LogsUnavailableError('fly', reason);
+      };
+      const live = await releaseMachines(handle.appRef).catch(unavailable);
+      if (!live.some((m) => m.state !== 'destroyed')) {
+        throw new ReleaseNotFoundError(handle.appRef);
+      }
+      return readFlyLogWindow(handle.appRef, query, now(), (app, next) =>
+        flyLogsRequest(app, next, token).catch(unavailable),
+      );
+    },
+
+    async readHealth(handle) {
+      let read: Awaited<ReturnType<typeof readMachine>>;
+      try {
+        read = await readMachine(handle.appRef, handle.providerRef);
+      } catch (error) {
+        const reason = unavailableReason(error);
+        if (reason === null) throw error;
+        throw new RuntimeHealthUnavailableError('fly', reason);
+      }
+      if (!read || read.machine.state === 'destroyed' || read.machine.state === 'destroying') {
+        throw new ReleaseNotFoundError(handle.appRef);
+      }
+      return runtimeHealthOf(read.machine);
     },
   };
 }

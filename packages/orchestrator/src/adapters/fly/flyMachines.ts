@@ -144,6 +144,16 @@ export interface FlyMachine {
     /** From this event's `request.exit_event`; null on every event that is not an
      *  exit, and on an exit Fly described without one. */
     exitCode: number | null;
+    /** The exit event's `oom_killed`: the kernel killed the process for its
+     *  memory (MOTIR-12102). False on every event that is not such an exit. */
+    oomKilled: boolean;
+    /** The exit event's `requested_stop`: the exit was ASKED for — a stop, an
+     *  autostop or suspend by Fly's proxy, an update replacing the process —
+     *  rather than the process ending on its own. */
+    requestedStop: boolean;
+    /** The exit event's `restarting`: Fly is restarting the process after it
+     *  (the Machine's restart policy). */
+    restarting: boolean;
   }>;
 }
 
@@ -333,6 +343,23 @@ function exitCodeOfEvent(event: Record<string, unknown>): number | null {
   return null;
 }
 
+/** The exit event's boolean flags (MOTIR-12102), read beside its code. Their
+ *  names are fly-go's `MachineExitEvent` (superfly/fly-go@6c5db230,
+ *  `machine_types.go`): `oom_killed`, `requested_stop`, `restarting` — each
+ *  omitted when false, so absence reads false. */
+function exitFlagsOfEvent(event: Record<string, unknown>): {
+  oomKilled: boolean;
+  requestedStop: boolean;
+  restarting: boolean;
+} {
+  const exitEvent = asRecord(asRecord(event['request'])?.['exit_event']);
+  return {
+    oomKilled: exitEvent?.['oom_killed'] === true,
+    requestedStop: exitEvent?.['requested_stop'] === true,
+    restarting: exitEvent?.['restarting'] === true,
+  };
+}
+
 function stringMap(value: unknown): Record<string, string> {
   const record = asRecord(value);
   if (!record) return {};
@@ -358,6 +385,7 @@ export function toFlyMachine(body: unknown): FlyMachine | null {
         status: typeof event['status'] === 'string' ? event['status'] : '',
         timestamp: parseFlyDate(event['timestamp']),
         exitCode: exitCodeOfEvent(event),
+        ...exitFlagsOfEvent(event),
       },
     ];
   });
@@ -535,6 +563,114 @@ export async function flyGraphqlRequest(
       return typeof message === 'string' ? message.slice(0, 200) : 'unknown error';
     }),
   };
+}
+
+// ── The logs API (MOTIR-12102) ──────────────────────────────────────────────
+
+/** Fly's logs API — on `api.fly.io`, not the Machines API host. Per Fly's docs
+ *  page "Logs API options" (docs.fly.io/monitoring/logs-api-options, read
+ *  2026-11-23): a JSON:API document with a `data` array and `meta.next_token`;
+ *  the token is a NANOSECOND Unix timestamp and pages FORWARD (lines after it);
+ *  with none, the latest lines of the last 24 hours; about 7 days are kept; and
+ *  the endpoint is "not officially supported for external use". */
+export const FLY_LOGS_API = 'https://api.fly.io/api/v1';
+
+/** One line of Fly's log stream, narrowed to what the adapter reads. */
+export interface FlyLogEntry {
+  /** The JSON:API `data[].id`; a line Fly sent without one is keyed by its
+   *  instant and text, so a line read twice is still one line. */
+  readonly id: string;
+  /** The instant, in nanoseconds since the epoch — Fly's own precision, which
+   *  its cursor speaks. */
+  readonly atNs: bigint;
+  readonly message: string;
+  /** `meta.event.provider`: `app` for the release's own output, else Fly's
+   *  (`runner`, `proxy`, …). Empty when absent. */
+  readonly provider: string;
+}
+
+/** A page of the logs API: its lines, and the token for the lines after them
+ *  (null when Fly sent none). */
+export interface FlyLogPage {
+  readonly entries: readonly FlyLogEntry[];
+  readonly nextToken: string | null;
+}
+
+const RFC3339 = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9})\d*)?(Z|[+-]\d{2}:\d{2})$/i;
+
+/** An RFC 3339 instant with up to nanosecond digits → nanoseconds since the
+ *  epoch; null when it is not one. `Date` alone would drop everything after the
+ *  millisecond, and two lines in one millisecond would lose their order. */
+export function flyLogInstantNs(value: unknown): bigint | null {
+  if (typeof value !== 'string') return null;
+  const match = RFC3339.exec(value);
+  if (!match) return null;
+  const ms = Date.parse(`${match[1]}${match[3]!.toUpperCase()}`);
+  if (Number.isNaN(ms)) return null;
+  return BigInt(ms) * 1_000_000n + BigInt((match[2] ?? '').padEnd(9, '0'));
+}
+
+/**
+ * Fly's logs document → its lines, or null when the body is not a log document.
+ *
+ * The per-line fields are not in Fly's docs; their names are fly-go's
+ * `LogEntry` (superfly/fly-go@6c5db230, `types.go`), which flyctl's `fly logs`
+ * decodes each `data[].attributes` into: `timestamp` (RFC 3339, nanosecond
+ * digits), `message`, `level`, `instance`, `region` and
+ * `meta.event.provider`. A line with no readable timestamp cannot be placed in
+ * a window and is dropped.
+ */
+export function toFlyLogPage(body: unknown): FlyLogPage | null {
+  const record = asRecord(body);
+  const data = record?.['data'];
+  if (!Array.isArray(data)) return null;
+  const token = asRecord(record?.['meta'])?.['next_token'];
+  const entries = data.flatMap((raw): FlyLogEntry[] => {
+    const item = asRecord(raw);
+    const attributes = asRecord(item?.['attributes']);
+    if (!attributes) return [];
+    const atNs = flyLogInstantNs(attributes['timestamp']);
+    if (atNs === null) return [];
+    const message = typeof attributes['message'] === 'string' ? attributes['message'] : '';
+    const provider = asRecord(asRecord(attributes['meta'])?.['event'])?.['provider'];
+    const id = item?.['id'];
+    return [
+      {
+        id: typeof id === 'string' && id.length > 0 ? id : `${atNs}:${message}`,
+        atNs,
+        message,
+        provider: typeof provider === 'string' ? provider : '',
+      },
+    ];
+  });
+  return {
+    entries,
+    nextToken: typeof token === 'string' && token.length > 0 ? token : null,
+  };
+}
+
+/**
+ * One page of an app's logs after `nextToken` (nanoseconds), through the same
+ * bounded `fetch` as {@link flyRequest}. Only `next_token` is sent: the
+ * `instance` filter is not used, because it has been reported to answer nothing
+ * (a hosted app runs one release Machine, so its whole stream is the release's).
+ * A non-2xx answer throws `OrchestratorApiError` with its status.
+ */
+export async function flyLogsRequest(
+  app: string,
+  nextToken: string,
+  token: string,
+): Promise<FlyLogPage> {
+  const query = new URLSearchParams({ next_token: nextToken });
+  const res = await boundedFlyFetch(
+    `${FLY_LOGS_API}/apps/${encodeURIComponent(app)}/logs?${query.toString()}`,
+    { method: 'GET', token },
+  );
+  const body = await readFlyJson(res);
+  if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+  const page = toFlyLogPage(body);
+  if (!page) throw new OrchestratorApiError('fly', res.status, 'logs answered an unexpected shape');
+  return page;
 }
 
 async function boundedFlyFetch(

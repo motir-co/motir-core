@@ -37,7 +37,7 @@ import { ProductionPanelSection } from './_components/ProductionPanelSection';
 // `canRollback`, and the rollback service stays the authority.
 
 interface ProductionPageProps {
-  searchParams: Promise<{ repository?: string }>;
+  searchParams: Promise<{ repository?: string; event?: string }>;
 }
 
 export default async function ProjectProductionPage({ searchParams }: ProductionPageProps) {
@@ -70,7 +70,7 @@ export default async function ProjectProductionPage({ searchParams }: Production
   if (!selected) notFound();
 
   return (
-    <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <ProductionHeader title={t('title')} lede={t('lede')} />
       <ProductionRepositoryPicker repositories={repositories} selectedId={selected.id} />
       <div className="flex items-end justify-between gap-3" data-testid="production-panel-header">
@@ -87,6 +87,7 @@ export default async function ProjectProductionPage({ searchParams }: Production
           repositoryId={selected.id}
           repositoryName={selected.name}
           actor={actor}
+          focusEventId={sp.event ?? null}
         />
       </Suspense>
     </div>

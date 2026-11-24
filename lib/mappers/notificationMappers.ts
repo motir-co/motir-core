@@ -55,6 +55,19 @@ function toNotificationData(raw: Notification['data']): NotificationData {
       hibernatedAt: str(d.hibernatedAt),
     };
   }
+  if (d.kind === 'production_app_crashed') {
+    return {
+      kind: 'production_app_crashed',
+      projectKey: str(d.projectKey),
+      projectRepositoryId: str(d.projectRepositoryId),
+      repositoryName: str(d.repositoryName),
+      applicationId: str(d.applicationId),
+      eventId: str(d.eventId),
+      eventKind: d.eventKind === 'health_check_failed' ? 'health_check_failed' : 'crashed',
+      reason: str(d.reason),
+      occurredAt: str(d.occurredAt),
+    };
+  }
   if (d.kind === 'review_sent_back') {
     return {
       kind: 'review_sent_back',

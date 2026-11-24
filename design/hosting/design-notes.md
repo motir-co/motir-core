@@ -238,3 +238,271 @@ markup the Environment room already uses.
 Routes, error codes and the data shape; logs, health, usage or credits (the running-an-app story); the
 Environment room (it is linked, not redrawn); the deploy-a-ref entry point itself (only its history row);
 the address model and the Public address room; any customer-repository surface beyond its absence.
+
+---
+
+## Amendment 2026-11-23 — live app operations: Health, Crash events, Logs, When idle, Usage and the crash notification (MOTIR-12101 · Story MOTIR-9799)
+
+**Delta mock:** `production--live-app-ops.mock.html` (25 panels, revised twice on 2026-11-23: the full-width layout and the collapsed long log lines below). It **amends** § _Elements (named once
+each)_ and § _Panels and states_ above, and the mock `production.mock.html`, which stays as drawn. Every
+element MOTIR-10024 drew (the current release card, the release history, Roll back and its confirmation,
+the read-only note, the empty state, the not-found state) is composed unchanged from the shipped
+components (`CurrentReleaseCard`, `ReleaseHistoryList`, `RollbackDialog`, `ProductionEmptyState`,
+`ProductionHeader`, `ProductionRepositoryPicker`), rendered with `renderMock` against `messages/en.json`.
+
+**Design system.** Unchanged from the head of this file: `package.json` depends on
+`@motir/design-system` (`workspace:*`, 0.19.x) and `app/globals.css` imports
+`@motir/design-system/theme.css` — **on Motir Design**. Axes `warm-editorial` · `motir` · `motir`, light,
+full-width board. Parts used: `Card`, `Pill`, `Button`, `Segmented`, `Input`, `Spinner`, `Switch` (via the
+shipped preferences card), `EmptyState` (via the shipped empty state).
+
+**Access path.** Nothing new: the five sections live **inside the existing Production panel** of each
+Motir repository, reached through the project settings rail's **Production** row and the repository
+picker (panels 1–2 of the base mock). The crash notification's row opens
+`/settings/project/production?repository=<rowId>&event=<eventId>`, which selects that repository and
+scrolls its **Crash events** list to the event.
+
+### Order in the panel
+
+Current release (shipped) → **Health** → **Crash events** → **Logs** → **When idle** → **Usage** →
+Release history (shipped). Each new section is its own `Card` with a serif `text-lg` heading, the
+Release history's heading grammar.
+
+### Width — the panel uses the whole content area (revision, Mo 2026-11-23)
+
+Mo's review: _"the design should utilize the width of the screen, logs can be long, don't just use the
+center of the screen."_ So this delta **changes the Production page's column**, which the base mock and
+`app/(authed)/settings/project/production/page.tsx` draw as `mx-auto max-w-[46rem]`:
+
+- **The page is full width**: `flex w-full flex-col gap-6`, the header, the repository picker and the
+  repository heading left-aligned at the top. No `max-w` on the page or on any section below.
+- **Paired summary cards** share a row from the `lg` breakpoint: `grid gap-6 lg:grid-cols-2` holds
+  **Current release | Health**, and **When idle | Usage**. Below `lg` they stack in the order above.
+- **Crash events, Logs and Release history span the full width**, each alone on its row.
+- **The Logs view has no scroll bar** (second revision, Mo 2026-11-23: _"don't use scroll bar for the
+  logs, long logs can be collapsed by default and click an arrow button to show the full log"_). The
+  lines sit in a plain full-width list (`--radius-card`, `--el-surface-soft`, `--el-border-soft`,
+  `aria-label="Log lines"`), with no `max-h`, no `overflow-auto` and no sideways scroll. How far back
+  it reaches is the time range plus **Show earlier lines**, as before.
+- **A long line is collapsed by default.** A line whose message is over 120 characters (a mask token
+  counts as 3) shows on one line, cut with an ellipsis (`truncate` in a `minmax(0,1fr)` column). An
+  **arrow button** at the start of the row opens it: `ChevronRight` collapsed, `ChevronDown` open, a
+  `size-5` icon button (`--radius-control`, ink `--el-text-secondary`, hover `--el-muted` with ink
+  `--el-text`), `aria-expanded`, labelled _Show the full line_ / _Collapse this line_ (also its
+  tooltip). Opened, the full message wraps in place (`break-words whitespace-pre-wrap`) and the other
+  rows stay as they are (panel 10a). A short line has no arrow; its arrow column stays empty so the
+  time column lines up. Each line opens on its own, and the open state is not kept across reloads.
+- A crash event's last lines use the same rows, so a long stack-trace line there is collapsed with
+  the same arrow (panel 3).
+- The "Wrap long lines" switch from the first revision is **removed**: the arrow replaces it.
+- The Roll back confirmation is the shipped `RollbackDialog`, unchanged; it is drawn in
+  `production.mock.html` (panels 8–10), so this delta no longer repeats it.
+
+New copy: `logs.line.expand` — _Show the full line_; `logs.line.collapse` — _Collapse this line_.
+
+### Elements (named once each — the code cards build them by these names)
+
+| Element                               | What it is                                                                                                                                                                                                                   | Built by    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **Health state**                      | One state per application: `healthy`, `unhealthy`, `suspended`, `crashed`, `deploying`, a one-line explanation, and how long it has held (relative, absolute on hover); the **health probe unreachable** qualifier under it. | MOTIR-12109 |
+| **Crash events**                      | The application's events, newest first: reason in plain words, time, release, the last log lines (collapsed by default), and **Roll back** for an administrator.                                                             | MOTIR-12109 |
+| **Logs view**                         | Recent lines, newest first (time · stream · message, monospace), a time-range control, a text filter, the mask token, Show earlier lines, and its non-happy states.                                                          | MOTIR-12109 |
+| **Idle policy control** ("When idle") | Suspend when idle / Always on, editable by an administrator; switching, refused and read-only states.                                                                                                                        | MOTIR-12110 |
+| **Usage** ("Usage this period")       | This period's compute and database usage per unit, the credits for each, the credits charged, and **credits exhausted**.                                                                                                     | MOTIR-12110 |
+| **Crash notification**                | The drawer row (summary + excerpt) and its row in Account › Notifications.                                                                                                                                                   | MOTIR-12113 |
+
+### Health state — tone per state
+
+| State       | Word      | `Pill`                                                                                       | Glyph (lucide)  | Line                                  |
+| ----------- | --------- | -------------------------------------------------------------------------------------------- | --------------- | ------------------------------------- |
+| `healthy`   | Healthy   | `severity="success"` (mint)                                                                  | `Activity`      | `health.line.healthy`                 |
+| `unhealthy` | Unhealthy | `severity="warning"` (peach)                                                                 | `AlertTriangle` | `health.line.unhealthy`               |
+| `crashed`   | Crashed   | `severity="danger"` (rose)                                                                   | `ServerCrash`   | `health.line.crashed` / `.crashedOom` |
+| `deploying` | Deploying | `status="in-progress"` — the release **Building** pill's tone, same meaning                  | `Spinner`       | `health.line.deploying`               |
+| `suspended` | Suspended | `tone="neutral"` — asleep is inactive, not a judgement (the `archived`/`replaced` reasoning) | `Moon`          | `health.line.suspended`               |
+
+Five distinct tones; ink `--el-text-strong` on every tint (the Pill recipe). **Probe unreachable is never
+a sixth state**: the last known pill stays and a `WifiOff` note box (the shipped failed-newer note's
+recipe: `--el-surface-soft`, `--el-border-soft`, `--radius-card`, `--spacing-card-padding-12/8`, ink
+`--el-text`, glyph `--el-text-secondary`) names the address and since when.
+
+### Permission split
+
+- **Roll back** (on a crash event) and the **When idle** control are for the project's administration
+  permission (`project:administer`) only. For any other member they are **absent, not disabled**: no
+  button on an event, and When idle reads as text with "Only project administrators can change this."
+- **Every other element** — Health, Crash events (with their lines), Logs, Usage — is visible to every
+  member who can browse the project. The read-only note widens to say so (panel 22).
+- **Roll back from an event reuses the shipped confirmation** (`RollbackDialog`, base panel 8) unchanged
+  (panel 4): it returns production to the release before the current one, exactly as the card's own
+  Roll back does. There is no second rollback flow and no "roll back to this event's release".
+- **Top up credits** is shown to an administrator; a member reads "An organisation owner or admin can top
+  up credits." The button links to the organisation's billing page.
+- Log lines and event lines are shown **as the server returns them, already masked** (MOTIR-12105). The
+  page never unmasks or re-masks.
+
+### Usage — units and credits-exhausted, from the approved decision (MOTIR-12100, page v1)
+
+The units and the out-of-credits behaviour are drawn from the decision page, quoted:
+
+- Rate: _"`credits = quantity × (Motir list-price USD per unit ÷ $0.006)`. That is 1 credit per
+  Linux-equivalent minute."_ → the footnote "1 credit is one Linux-equivalent minute."
+- Units: _"Fly: `runningSeconds` at the release's size … Serverless … Lambda `runningSeconds` at 1769 MB
+  and `invocations`. AWS function: Lambda GB-seconds. AWS container: `vcpuSeconds` and `gbSeconds` …
+  Database port: `computeSeconds` and `storageBytes`."_ and _"Compute on the database is `computeSeconds ÷
+3600` CU-hours on Neon and ACU-hours on Aurora."_, _"Storage is GB-hours."_ → one row per unit, shown
+  in the human unit: machine **hours** at its size (Fly), **GB-seconds** and **requests** (Lambda),
+  **vCPU-hours** and **GB-hours** (AWS container), **CU-hours** / **ACU-hours** and **GB-hours** (database).
+- Charge: _"After a UTC day ends, that day's slices are summed per application and debited once, as
+  `ceil(Σ Linux-equivalent minutes)` whole credits."_ → "Each day's usage is charged once, after midnight
+  UTC, rounded up to a whole credit, so today's is not in the total yet." The total is the sum of the
+  daily debits, so it can exceed the rows' sum by under one credit a day.
+- Period: the current calendar month in UTC, to the last charged day ("1–22 Nov 2026").
+- Out of credits: _"The project's Usage section shows the state `credits_exhausted` with the balance."_
+  and _"Motir never stops or deletes a production app for being out of credits."_ → panel 20's peach box
+  (`--el-tint-peach`, ink `--el-text-strong`, `--el-border`), "Out of credits · balance −312 credits".
+- _"After 7 days still below zero, an `always_on` application is switched to `suspend` through the
+  idle-policy path."_ → "If the balance is still below zero on 30 Nov, Motir switches it to Suspend when
+  idle". The date is the day the balance went below zero plus 7.
+- _"`always_on` is refused while the balance is below zero. A top-up that brings the balance to zero or
+  above lifts the refusal. It does not switch an application back by itself."_ → panel 18: Always on
+  disabled in the segmented control, with "Top up credits, then set it again."
+- _"An application whose target cannot suspend is not switched … The panel shows `credits_exhausted`
+  and says that this application cannot be suspended, so it keeps accruing until the balance is topped
+  up."_ → panel 21.
+- **Motir's own cost per unit** (_"recorded on every slice beside its credits"_) is **never shown**: only
+  quantities and credits.
+
+### Panels and states
+
+| #   | State                                                                                                                               | Elements                                    |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 0   | Healthy — populated default, administrator                                                                                          | all five, plus the shipped card and history |
+| 1   | Unhealthy, a health-check-failed event on top                                                                                       | Health, Crash events                        |
+| 2   | Suspended, logs show the last lines before sleep, next request wakes it                                                             | Health, Logs                                |
+| 3   | Crashed (out of memory), last lines expanded, Roll back                                                                             | Health, Crash events                        |
+| 5   | Deploying beside the shipped Building row                                                                                           | Health, history                             |
+| 6   | Health probe unreachable                                                                                                            | Health                                      |
+| 7   | Crash recovered after Roll back; event kept as history, no Roll back on it                                                          | card, Health, Crash events, history         |
+| 8   | Logs filtered                                                                                                                       | Logs                                        |
+| 9   | Logs filtered, no match                                                                                                             | Logs                                        |
+| 10  | Logs with a masked secret                                                                                                           | Logs                                        |
+| 10a | A long line opened by its arrow (the others stay collapsed)                                                                         | Logs                                        |
+| 11  | Logs unavailable from the target                                                                                                    | Logs                                        |
+| 12  | Logs loading                                                                                                                        | Logs                                        |
+| 13  | No release yet: shipped empty state; When idle editable; Logs and Usage say they start with the first release; no Health, no events | empty state, When idle, Logs, Usage         |
+| 14  | When idle — Always on, editable                                                                                                     | When idle                                   |
+| 15  | When idle — switching                                                                                                               | When idle                                   |
+| 16  | When idle — refused (AWS container)                                                                                                 | When idle                                   |
+| 17  | When idle — read-only                                                                                                               | When idle                                   |
+| 18  | When idle — Always on refused below zero                                                                                            | When idle                                   |
+| 19  | Usage                                                                                                                               | Usage                                       |
+| 20  | Credits exhausted (can suspend)                                                                                                     | Health, When idle, Usage                    |
+| 21  | Credits exhausted (AWS container, cannot suspend)                                                                                   | Usage                                       |
+| 22  | Read-only member view                                                                                                               | all, no Roll back, When idle read-only      |
+| 23  | Crash notification in the drawer (unread crash, unread failed check, read)                                                          | NotificationRow                             |
+| 24  | Its row in Account › Notifications                                                                                                  | NotificationPreferencesCard                 |
+
+### Copy — final English, keyed by purpose (under `settings.production` unless noted)
+
+| Key                                                                              | English                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `health.heading`                                                                 | Health                                                                                                                                                                                                                       |
+| `health.state.healthy` · `.unhealthy` · `.suspended` · `.crashed` · `.deploying` | Healthy · Unhealthy · Suspended · Crashed · Deploying                                                                                                                                                                        |
+| `health.since`                                                                   | {state} for {duration} (title: the absolute date and time)                                                                                                                                                                   |
+| `health.line.healthy`                                                            | Answering its health check at {path}.                                                                                                                                                                                        |
+| `health.line.unhealthy`                                                          | Its health check at {path} has failed twice in a row.                                                                                                                                                                        |
+| `health.line.suspended`                                                          | Asleep because nothing has asked for it. The next request wakes it.                                                                                                                                                          |
+| `health.line.crashed`                                                            | The process stopped. {target} is restarting it.                                                                                                                                                                              |
+| `health.line.crashedOom`                                                         | The process was stopped: it ran out of memory. {target} is restarting it.                                                                                                                                                    |
+| `health.line.deploying`                                                          | Release {commit} is rolling out. The current release keeps serving until it is live.                                                                                                                                         |
+| `health.unreachable`                                                             | Motir can’t reach {address} to check it, since {time}. This is the last state Motir saw; the app itself may be fine.                                                                                                         |
+| `events.heading`                                                                 | Crash events                                                                                                                                                                                                                 |
+| `events.empty`                                                                   | No crashes recorded for this app.                                                                                                                                                                                            |
+| `events.reason.exit`                                                             | Exited with code {code}                                                                                                                                                                                                      |
+| `events.reason.exited`                                                           | Exited                                                                                                                                                                                                                       |
+| `events.reason.oom`                                                              | Out of memory                                                                                                                                                                                                                |
+| `events.reason.http`                                                             | Health check failed: HTTP {status}                                                                                                                                                                                           |
+| `events.reason.timeout`                                                          | Health check failed: timed out                                                                                                                                                                                               |
+| `events.release`                                                                 | Release {commit}                                                                                                                                                                                                             |
+| `events.rolledBackSince`                                                         | Rolled back since                                                                                                                                                                                                            |
+| `events.showLines`                                                               | Show the last {count} lines before it                                                                                                                                                                                        |
+| `events.hideLines`                                                               | Hide the last lines                                                                                                                                                                                                          |
+| `events.rollback`                                                                | Roll back (the shipped `rollback.action`)                                                                                                                                                                                    |
+| `logs.heading` · `logs.order`                                                    | Logs · Newest first                                                                                                                                                                                                          |
+| `logs.range.label` · `.15m` · `.1h` · `.24h` · `.7d`                             | Time range · 15 min · 1 hour · 24 hours · 7 days                                                                                                                                                                             |
+| `logs.filter`                                                                    | Filter lines                                                                                                                                                                                                                 |
+| `logs.stream.app` · `.platform`                                                  | app · platform                                                                                                                                                                                                               |
+| `logs.more`                                                                      | Show earlier lines                                                                                                                                                                                                           |
+| `logs.masked`                                                                    | Every secret value from this app’s Environment is shown as \*\*\*.                                                                                                                                                           |
+| `logs.asleep`                                                                    | The last lines before the app went to sleep.                                                                                                                                                                                 |
+| `logs.noMatch`                                                                   | No lines match “{filter}” in the last {range}.                                                                                                                                                                               |
+| `logs.unavailable`                                                               | {target} didn’t return this app’s logs. That is {target}’s log service, not the app: it may still be running fine. No older lines are shown as current.                                                                      |
+| `logs.retry`                                                                     | Try again                                                                                                                                                                                                                    |
+| `logs.loading`                                                                   | Loading lines…                                                                                                                                                                                                               |
+| `logs.noRelease`                                                                 | Logs appear here once the first release is live.                                                                                                                                                                             |
+| `idle.heading`                                                                   | When idle                                                                                                                                                                                                                    |
+| `idle.option.suspend` · `.alwaysOn`                                              | Suspend when idle · Always on                                                                                                                                                                                                |
+| `idle.help.suspend`                                                              | The app sleeps when nothing asks for it, and wakes on the next request. The first request after a sleep is slower.                                                                                                           |
+| `idle.help.alwaysOn`                                                             | The app keeps running all the time, so no request ever waits for it to wake. It uses credits every hour.                                                                                                                     |
+| `idle.default`                                                                   | New apps start with Suspend when idle. It applies to the first release.                                                                                                                                                      |
+| `idle.switching`                                                                 | Applying to the running release…                                                                                                                                                                                             |
+| `idle.switchingNote`                                                             | The same build is redeployed with the new setting. Nothing is rebuilt.                                                                                                                                                       |
+| `idle.refusal.unsupported`                                                       | (shipped) On {target}, a {shape} can only stay always on, so it can’t suspend when idle. + This app keeps running all the time.                                                                                              |
+| `idle.refusal.credits`                                                           | Always on isn’t available while your organisation’s credit balance is below zero. Top up credits, then set it again.                                                                                                         |
+| `idle.readOnly`                                                                  | Only project administrators can change this.                                                                                                                                                                                 |
+| `usage.heading`                                                                  | Usage this period                                                                                                                                                                                                            |
+| `usage.period`                                                                   | {start}–{end} (dates, UTC)                                                                                                                                                                                                   |
+| `usage.col.what` · `.amount` · `.credits`                                        | What it used · Amount · Credits                                                                                                                                                                                              |
+| `usage.unit.flyMachine`                                                          | Fly machine · {size}                                                                                                                                                                                                         |
+| `usage.unit.lambdaCompute` · `.lambdaRequests`                                   | Function compute (GB-seconds) · Function requests                                                                                                                                                                            |
+| `usage.unit.containerCpu` · `.containerMemory`                                   | AWS container · vCPU · AWS container · memory                                                                                                                                                                                |
+| `usage.unit.dbCompute` · `.dbStorage`                                            | {provider} database compute · {provider} database storage                                                                                                                                                                    |
+| `usage.total`                                                                    | Credits charged this period                                                                                                                                                                                                  |
+| `usage.footnote`                                                                 | 1 credit is one Linux-equivalent minute. Each day’s usage is charged once, after midnight UTC, rounded up to a whole credit, so today’s is not in the total yet.                                                             |
+| `usage.noRelease`                                                                | Nothing used yet. Usage starts with the first live release.                                                                                                                                                                  |
+| `usage.exhausted.title`                                                          | Out of credits · balance {balance}                                                                                                                                                                                           |
+| `usage.exhausted.body`                                                           | This app keeps running. If the balance is still below zero on {date}, Motir switches it to Suspend when idle, so it sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits. |
+| `usage.exhausted.bodyCannotSuspend`                                              | This app runs as an AWS container, which can’t be suspended, so it keeps running always on and keeps using credits until the balance is topped up. Motir never stops or deletes a production app for being out of credits.   |
+| `usage.exhausted.topUp`                                                          | Top up credits                                                                                                                                                                                                               |
+| `usage.exhausted.member`                                                         | An organisation owner or admin can top up credits.                                                                                                                                                                           |
+| `readOnly.note` (amended)                                                        | You can see every release, its health, logs and usage. Only project administrators can roll back or change when it sleeps.                                                                                                   |
+| `notifications.summary.productionAppCrashed`                                     | {event, select, health_check_failed {<s>{repository}</s> is failing its health check in production} other {<s>{repository}</s> crashed in production}}                                                                       |
+| `notifications.excerpt.productionAppCrashed`                                     | {reason} · {project}                                                                                                                                                                                                         |
+| `settings.account.notifications.events.production_app_crashed.label` / `.desc`   | (shipped by MOTIR-12106) A production app crashed / An app Motir hosts for a project you administer crashed or failed its health check.                                                                                      |
+
+### Tokens and parts, element by element
+
+- Section cards: `Card` (its own `--radius-card`, `--spacing-card-padding`, `--shadow-card`); headings
+  `font-serif text-lg font-semibold text-(--el-text)`; secondary lines `--el-text-secondary` (never
+  `--el-text-muted` on a tinted surface).
+- Log list: `--el-surface-soft` box, `--el-border-soft` rules, `--radius-card`; rows
+  `px-(--spacing-control-x-12)` `py-(--spacing-control-y-4)` (`-2` in an event's lines); time
+  `font-mono text-xs --el-text-secondary`; stream `Pill tone="neutral"` for `app`, `tone="awaiting"`
+  (yellow) for `platform` so the target's own lines stand apart; message `font-mono text-xs --el-text`.
+- **Mask token** `***`: `--el-tint-yellow` fill, `--el-text-strong` ink, `--radius-control`,
+  `px-(--spacing-chip-x-2)`; the same token for every secret, with a title naming it.
+- Crash event glyphs: `ServerCrash` in `--el-danger-on-surface` (crash), `AlertTriangle` in
+  `--el-text-secondary` (failed check); release hash `--el-text-identifier`.
+- Logs unavailable: `AlertTriangle` in `--el-danger-on-surface`, note box as the unreachable qualifier,
+  `Button variant="secondary"` Try again; the toolbar is disabled and no lines render.
+- When idle: `Segmented` (its own control tokens); refusal note box; switching `Spinner` + `role=status`.
+- Usage: a plain table, header `text-[11px] uppercase --el-text-secondary` (the preferences card's
+  column grammar), quantities `font-mono text-xs`; credits-exhausted box `--el-tint-peach` +
+  `--el-text-strong` + `--el-border`, `Button variant="primary"` Top up credits.
+- Notification row: the shipped `NotificationRow` grammar, actorless (glyph promoted into the avatar
+  slot), glyph `ServerCrash`, badge **`--el-notif-production-crashed`** — a **new Tier-3 token, proposed
+  for `globals.css`, mapped to `--color-destructive`** beside the other `--el-notif-*` hues (the mock
+  declares it over `--el-danger`).
+
+### Proposed additions
+
+- **Product-local:** `--el-notif-production-crashed` (above). No new design-system part: every element
+  composes `Card`, `Pill`, `Button`, `Segmented`, `Input`, `Spinner`.
+
+### What this amendment does not draw
+
+- **A customer (organization-seeded) repository shows none of these elements**: it has no Production
+  room at all (base panel 16, not found; panel 19, no row).
+- **No element shows or changes the project's phase.**
+- No Motir own-cost figure, no rate table, no per-slice detail, and no log download or live tail.

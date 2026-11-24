@@ -7,8 +7,19 @@ import {
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
   ReleaseRuntimeRefusedError,
+  FLY_LOG_DEFAULT_WINDOW_MS,
+  FLY_LOG_MAX_REQUESTS,
+  LogsUnavailableError,
+  RuntimeHealthUnavailableError,
   createFlyHostingDeployPort,
   deriveOriginSecret,
+  exitCodeOf,
+  flyLogInstantNs,
+  readFlyLogWindow,
+  type FlyLogEntry,
+  runtimeHealthOf,
+  toFlyLogPage,
+  toFlyMachine,
   flyHostingConfig,
   releaseStateOf,
   type DeployReleaseInput,
@@ -18,6 +29,8 @@ import {
 import {
   createHostingFlySim,
   flyJson,
+  flyLogTimestamp,
+  type SimLogEntry,
   type FlyCall,
   type HostingFlySim,
   type SimMachine,
@@ -49,6 +62,8 @@ let overrides: Array<(call: FlyCall) => Response | null>;
 let tokens: Map<string, SimToken[]>;
 let release: HostingFlySim['release'];
 let sleeps: number[];
+let logs: Map<string, SimLogEntry[]>;
+let logPage: HostingFlySim['logPage'];
 
 function input(over: Partial<DeployReleaseInput> = {}): DeployReleaseInput {
   return {
@@ -95,7 +110,7 @@ beforeEach(() => {
   sleeps = [];
   clock = Date.parse('2026-10-28T00:00:00.000Z');
   const sim = createHostingFlySim(() => clock);
-  ({ calls, apps, overrides, tokens, release } = sim);
+  ({ calls, apps, overrides, tokens, release, logs, logPage } = sim);
   vi.stubGlobal('fetch', sim.fetch);
 });
 
@@ -1103,5 +1118,521 @@ describe('a release write settles before deploy and rollback return (MOTIR-11250
           : null,
     );
     await expect(p.deploy(input())).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// ── The runtime reads (MOTIR-12102) ─────────────────────────────────────────
+
+/** A release app with one started release Machine, as a deploy leaves it. */
+async function deployed(): Promise<{
+  p: HostingDeployPort;
+  handle: Awaited<ReturnType<HostingDeployPort['deploy']>>;
+}> {
+  const p = port();
+  await p.ensureApp({ repositoryId: RID, environment: { kind: 'production' } });
+  const handle = await p.deploy(input());
+  return { p, handle };
+}
+
+const MIN = 60_000;
+let logSeq: number;
+/** Append a line to the app's recorded stream. */
+function logAt(ms: number, message: string, provider = 'app', extraNs = 0): void {
+  logSeq += 1;
+  const list = logs.get(PROD) ?? [];
+  list.push({ id: `l${logSeq}`, timestamp: flyLogTimestamp(ms, extraNs), message, provider });
+  logs.set(PROD, list);
+}
+const logCalls = () => calls.filter((c) => c.path.startsWith('/api/v1/apps/'));
+
+describe('readLogs (MOTIR-12102)', () => {
+  beforeEach(() => {
+    logSeq = 0;
+  });
+
+  it('reads the app’s lines newest first, with both streams, through Fly’s logs API', async () => {
+    const { p, handle } = await deployed();
+    const t0 = clock;
+    clock = t0 + 10 * MIN;
+    logAt(t0 + 1 * MIN, 'booting', 'runner');
+    logAt(t0 + 2 * MIN, 'listening on 8080');
+    logAt(t0 + 3 * MIN, 'GET / 200');
+
+    const page = await p.readLogs(handle, { limit: 10 });
+
+    expect(page).toEqual({
+      lines: [
+        { at: new Date(t0 + 3 * MIN), stream: 'app', message: 'GET / 200' },
+        { at: new Date(t0 + 2 * MIN), stream: 'app', message: 'listening on 8080' },
+        { at: new Date(t0 + 1 * MIN), stream: 'platform', message: 'booting' },
+      ],
+      cursor: null,
+    });
+    const first = logCalls()[0]!;
+    expect(first.method).toBe('GET');
+    expect(first.auth).toBe('Bearer hosting-token');
+    expect(first.path).toMatch(/^\/api\/v1\/apps\/mh-cmrepo1\/logs\?next_token=\d+$/);
+    expect(logCalls().every((c) => !c.path.includes('instance'))).toBe(true);
+  });
+
+  it('honours since, until and the filter, passing since as a nanosecond next_token', async () => {
+    const { p, handle } = await deployed();
+    const t0 = clock;
+    clock = t0 + 60 * MIN;
+    logAt(t0 + 1 * MIN, 'ERROR before the window');
+    logAt(t0 + 10 * MIN, 'error at since');
+    logAt(t0 + 20 * MIN, 'fine');
+    logAt(t0 + 30 * MIN, 'Error inside');
+    logAt(t0 + 40 * MIN, 'error at until');
+    logAt(t0 + 50 * MIN, 'error after the window');
+
+    const since = new Date(t0 + 10 * MIN);
+    const page = await p.readLogs(handle, {
+      since,
+      until: new Date(t0 + 40 * MIN),
+      filter: 'ERROR',
+      limit: 10,
+    });
+
+    expect(page.lines.map((l) => l.message)).toEqual([
+      'error at until',
+      'Error inside',
+      'error at since',
+    ]);
+    expect(page.cursor).toBeNull();
+    // The oldest slice reaches `since`: its token is one nanosecond before it.
+    const tokens = logCalls().map((c) =>
+      new URLSearchParams(c.path.split('?')[1]).get('next_token'),
+    );
+    expect(tokens).toContain(String(BigInt(since.getTime()) * 1_000_000n - 1n));
+  });
+
+  it('pages to older lines with the cursor, across Fly pages and lines in one instant', async () => {
+    const { p, handle } = await deployed();
+    const t0 = clock;
+    clock = t0 + 60 * MIN;
+    logPage.size = 3;
+    for (let i = 0; i < 12; i += 1) logAt(t0 + i * MIN, `line ${i}`);
+    // Three lines in one nanosecond-identical instant straddle a page edge.
+    for (const n of ['a', 'b', 'c']) logAt(t0 + 30 * MIN, `same ${n}`, 'app', 5);
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let round = 0; round < 10; round += 1) {
+      const page = await p.readLogs(handle, { limit: 4, ...(cursor ? { cursor } : {}) });
+      seen.push(...page.lines.map((l) => l.message));
+      if (!page.cursor) break;
+      cursor = page.cursor;
+    }
+
+    expect(seen).toEqual([
+      'same c',
+      'same b',
+      'same a',
+      ...Array.from({ length: 12 }, (_, i) => `line ${11 - i}`),
+    ]);
+  });
+
+  it('reads a burst’s newest lines when a slice overflows its pages, and the window by default', async () => {
+    const { p, handle } = await deployed();
+    const t0 = clock;
+    clock = t0 + 4 * MIN;
+    logPage.size = 2;
+    // 60 lines in the newest five minutes: more than one slice's ten pages.
+    for (let i = 0; i < 60; i += 1) logAt(t0 + i * 3000, `burst ${i}`);
+    logAt(clock - FLY_LOG_DEFAULT_WINDOW_MS - MIN, 'older than the default window');
+
+    const page = await p.readLogs(handle, { limit: 3 });
+
+    expect(page.lines.map((l) => l.message)).toEqual(['burst 59', 'burst 58', 'burst 57']);
+    expect(page.cursor).not.toBeNull();
+  });
+
+  it('answers what it has and a cursor to the rest once its request budget is spent', async () => {
+    const { p, handle } = await deployed();
+    const t0 = clock;
+    clock = t0 + 24 * 60 * MIN;
+    logPage.size = 1;
+    for (let i = 0; i < 300; i += 1) logAt(clock - i * 10_000, `tick ${i}`);
+
+    const page = await p.readLogs(handle, { limit: 500 });
+
+    expect(logCalls()).toHaveLength(FLY_LOG_MAX_REQUESTS);
+    expect(page.lines.length).toBeGreaterThan(0);
+    expect(page.lines.length).toBeLessThan(300);
+    expect(page.lines[0]!.message).toBe('tick 0');
+    expect(page.cursor).not.toBeNull();
+    calls.length = 0;
+    const next = await p.readLogs(handle, { limit: 500, cursor: page.cursor! });
+    const oldest = page.lines[page.lines.length - 1]!.at.getTime();
+    expect(next.lines.every((l) => l.at.getTime() < oldest)).toBe(true);
+  });
+
+  it('answers an empty page when nothing in the window matches', async () => {
+    const { p, handle } = await deployed();
+    logAt(clock - MIN, 'hello');
+    expect(await p.readLogs(handle, { limit: 5, filter: 'nope' })).toEqual({
+      lines: [],
+      cursor: null,
+    });
+    logs.clear();
+    expect(await p.readLogs(handle, { limit: 5 })).toEqual({ lines: [], cursor: null });
+  });
+
+  it.each([401, 404, 429, 500, 503])(
+    'is LogsUnavailableError when Fly answers %s',
+    async (status) => {
+      const { p, handle } = await deployed();
+      overrides.push((c) =>
+        c.path.startsWith('/api/v1/apps/') ? flyJson(status, { error: 'secret detail' }) : null,
+      );
+      const error = await p.readLogs(handle, { limit: 5 }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(LogsUnavailableError);
+      expect(error).toMatchObject({ target: 'fly', reason: `Fly answered HTTP ${status}` });
+      expect(String((error as Error).message)).not.toContain('secret detail');
+    },
+  );
+
+  it('is LogsUnavailableError when the body is not a log document, or the request fails or times out', async () => {
+    const { p, handle } = await deployed();
+    overrides.push((c) =>
+      c.path.startsWith('/api/v1/apps/') ? flyJson(200, { not: 'logs' }) : null,
+    );
+    await expect(p.readLogs(handle, { limit: 5 })).rejects.toBeInstanceOf(LogsUnavailableError);
+
+    overrides.length = 0;
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      if (url.includes('/logs?')) throw new TypeError('socket hang up');
+      return createHostingFlySimFetch(url, init);
+    });
+    await expect(p.readLogs(handle, { limit: 5 })).rejects.toMatchObject({
+      reason: 'the request failed',
+    });
+
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', (url: string, init: RequestInit) =>
+        url.includes('/logs?')
+          ? new Promise((_, reject) =>
+              init.signal?.addEventListener('abort', () => reject(new Error('aborted'))),
+            )
+          : createHostingFlySimFetch(url, init),
+      );
+      const pending = p.readLogs(handle, { limit: 5 }).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await pending).toMatchObject({ reason: 'the request timed out' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a release-less app, a bad limit and a foreign cursor', async () => {
+    const p = port();
+    const handle = {
+      target: 'fly' as const,
+      appRef: PROD,
+      environment: { kind: 'production' as const },
+      releaseId: 'rel-1',
+      providerRef: 'm-1',
+    };
+    await expect(p.readLogs(handle, { limit: 5 })).rejects.toBeInstanceOf(ReleaseNotFoundError);
+    const { p: live, handle: h } = await deployed();
+    await expect(live.readLogs(h, { limit: 0 })).rejects.toMatchObject({ status: 400 });
+    await expect(live.readLogs(h, { limit: 5, cursor: 'not-a-cursor' })).rejects.toMatchObject({
+      status: 400,
+    });
+    overrides.push((c) =>
+      c.path.endsWith('/machines') && c.method === 'GET' ? flyJson(503, { error: 'x' }) : null,
+    );
+    await expect(live.readLogs(h, { limit: 5 })).rejects.toBeInstanceOf(LogsUnavailableError);
+  });
+});
+
+/** The sim's own fetch, for a test that wraps it. */
+let simFetch: HostingFlySim['fetch'];
+function createHostingFlySimFetch(url: string, init: RequestInit): Promise<Response> {
+  return simFetch(url, init);
+}
+beforeEach(() => {
+  simFetch = (globalThis as unknown as { fetch: HostingFlySim['fetch'] }).fetch;
+});
+
+describe('readFlyLogWindow at the narrowest slice', () => {
+  const NOW = new Date('2026-11-23T10:00:00.000Z');
+  const ns = (offsetNs: bigint) => BigInt(NOW.getTime()) * 1_000_000n + offsetNs;
+  // 100 lines inside ONE millisecond, a page of one line each: no slice can be
+  // narrowed below a second, so the budget runs out inside it.
+  const dense: FlyLogEntry[] = Array.from({ length: 100 }, (_, i) => ({
+    id: `d${String(i).padStart(3, '0')}`,
+    atNs: ns(BigInt(i)),
+    message: `dense ${i}`,
+    provider: 'app',
+  }));
+  const fetchPage = async (_app: string, token: string) => {
+    const next = dense.find((e) => e.atNs > BigInt(token));
+    return next
+      ? { entries: [next], nextToken: String(next.atNs) }
+      : { entries: [], nextToken: token };
+  };
+
+  it('answers the older part it read rather than a page that never moves', async () => {
+    const page = await readFlyLogWindow(PROD, { limit: 5 }, NOW, fetchPage);
+    expect(page.lines.map((l) => l.message)).toEqual([
+      'dense 38',
+      'dense 37',
+      'dense 36',
+      'dense 35',
+      'dense 34',
+    ]);
+    expect(page.cursor).not.toBeNull();
+  });
+
+  it('keeps a slice it could not finish for the cursor once it has lines in hand', async () => {
+    const newest: FlyLogEntry = { id: 'n', atNs: ns(0n), message: 'newest', provider: 'app' };
+    // The same burst, ten seconds older than the newest line.
+    const burst = dense.map((e) => ({ ...e, atNs: e.atNs - 10_000_000_000n }));
+    const stream = [...burst, newest];
+    const page = await readFlyLogWindow(PROD, { limit: 5 }, NOW, async (_a, token) => {
+      const next = stream.find((e) => e.atNs > BigInt(token));
+      return next
+        ? { entries: [next], nextToken: String(next.atNs) }
+        : { entries: [], nextToken: token };
+    });
+    expect(page.lines.map((l) => l.message)).toEqual(['newest']);
+    expect(page.cursor).not.toBeNull();
+  });
+});
+
+describe('the Fly log parsers', () => {
+  it('reads RFC 3339 with nanosecond digits, and refuses anything else', () => {
+    expect(flyLogInstantNs('2026-11-23T10:00:00.123456789Z')).toBe(
+      BigInt(Date.parse('2026-11-23T10:00:00Z')) * 1_000_000n + 123_456_789n,
+    );
+    expect(flyLogInstantNs('2026-11-23T11:00:00+01:00')).toBe(
+      BigInt(Date.parse('2026-11-23T10:00:00Z')) * 1_000_000n,
+    );
+    expect(flyLogInstantNs('yesterday')).toBeNull();
+    expect(flyLogInstantNs(42)).toBeNull();
+    expect(flyLogInstantNs('2026-13-45T10:00:00Z')).toBeNull();
+  });
+
+  it('keeps dated lines, keys an id-less line by its instant and text, and refuses a non-document', () => {
+    expect(toFlyLogPage({ data: 'x' })).toBeNull();
+    expect(toFlyLogPage(null)).toBeNull();
+    expect(
+      toFlyLogPage({
+        data: [
+          { attributes: { timestamp: '2026-11-23T10:00:00Z', message: 'm' } },
+          { id: 'x', attributes: { timestamp: 'bad' } },
+          { id: 'y' },
+          'garbage',
+        ],
+        meta: {},
+      }),
+    ).toEqual({
+      entries: [
+        {
+          id: `${BigInt(Date.parse('2026-11-23T10:00:00Z')) * 1_000_000n}:m`,
+          atNs: BigInt(Date.parse('2026-11-23T10:00:00Z')) * 1_000_000n,
+          message: 'm',
+          provider: '',
+        },
+      ],
+      nextToken: null,
+    });
+  });
+});
+
+// Recorded Machine event logs, in the Machines API's shape (`events[]`, epoch-ms
+// timestamps, `request.exit_event` as fly-go's `MachineExitEvent`,
+// superfly/fly-go@6c5db230): one per runtime state.
+const T = Date.parse('2026-11-23T09:00:00.000Z');
+const at = (s: number) => T + s * 1000;
+function recorded(state: string, events: Array<Record<string, unknown>>) {
+  const machine = toFlyMachine({
+    id: 'm-1',
+    state,
+    created_at: '2026-11-23T08:00:00.000Z',
+    updated_at: '2026-11-23T09:30:00.000Z',
+    events: [...events].reverse(), // Fly lists the newest first
+  });
+  if (!machine) throw new Error('not a machine');
+  return machine;
+}
+const exitEvent = (s: number, exit: Record<string, unknown>) => ({
+  type: 'exit',
+  status: 'stopped',
+  source: 'flyd',
+  timestamp: at(s),
+  request: { exit_event: { exit_code: 0, guest_exit_code: 0, ...exit } },
+});
+const ev = (type: string, status: string, s: number) => ({
+  type,
+  status,
+  source: 'flyd',
+  timestamp: at(s),
+});
+
+describe('runtimeHealthOf over recorded Machine event logs (MOTIR-12102)', () => {
+  it('running with no lastExit after a clean deploy', () => {
+    expect(
+      runtimeHealthOf(recorded('started', [ev('launch', 'created', 0), ev('start', 'started', 2)])),
+    ).toEqual({ state: 'running', since: new Date(at(2)) });
+  });
+
+  it('running with the exit Fly restarted it from — and only since the release', () => {
+    const machine = recorded('started', [
+      ev('launch', 'created', 0),
+      ev('start', 'started', 1),
+      exitEvent(5, { exit_code: 9, restarting: true }), // the old release's crash
+      ev('update', 'replacing', 10),
+      exitEvent(11, { exit_code: 143, requested_stop: true }),
+      ev('start', 'started', 12),
+      exitEvent(20, { exit_code: 137, oom_killed: true, restarting: true }),
+      ev('start', 'started', 21),
+    ]);
+    expect(runtimeHealthOf(machine)).toEqual({
+      state: 'running',
+      since: new Date(at(21)),
+      lastExit: { exitCode: 137, oomKilled: true, at: new Date(at(20)) },
+    });
+  });
+
+  it('running after an autostop and wake carries no lastExit', () => {
+    const machine = recorded('started', [
+      ev('launch', 'created', 0),
+      ev('start', 'started', 1),
+      ev('suspend', 'suspending', 100),
+      exitEvent(101, { requested_stop: true }),
+      ev('start', 'started', 200),
+    ]);
+    expect(runtimeHealthOf(machine)).toEqual({ state: 'running', since: new Date(at(200)) });
+  });
+
+  it.each(['created', 'starting', 'replacing', 'updating'])('deploying while %s', (state) => {
+    const machine = recorded(state, [ev('launch', 'created', 0), ev('update', 'replacing', 30)]);
+    expect(runtimeHealthOf(machine)).toEqual({ state: 'deploying', since: new Date(at(30)) });
+  });
+
+  it('suspended by autostop (suspend), and stopped by autostop (a requested stop)', () => {
+    expect(
+      runtimeHealthOf(
+        recorded('suspended', [
+          ev('launch', 'created', 0),
+          ev('start', 'started', 1),
+          ev('suspend', 'suspending', 50),
+        ]),
+      ),
+    ).toEqual({ state: 'suspended', since: new Date(at(50)) });
+    expect(
+      runtimeHealthOf(
+        recorded('stopped', [
+          ev('launch', 'created', 0),
+          ev('start', 'started', 1),
+          ev('stop', 'stopping', 60),
+          exitEvent(61, { exit_code: 143, requested_stop: true }),
+        ]),
+      ),
+    ).toEqual({ state: 'suspended', since: new Date(at(60)) });
+  });
+
+  it('exited with its code when the process stopped on its own', () => {
+    expect(
+      runtimeHealthOf(
+        recorded('stopped', [
+          ev('launch', 'created', 0),
+          ev('start', 'started', 1),
+          exitEvent(70, { exit_code: 3 }),
+        ]),
+      ),
+    ).toEqual({ state: 'exited', exitCode: 3, since: new Date(at(70)) });
+  });
+
+  it('oom_killed when the exit event says the kernel killed it', () => {
+    expect(
+      runtimeHealthOf(
+        recorded('stopped', [
+          ev('launch', 'created', 0),
+          ev('start', 'started', 1),
+          exitEvent(80, { exit_code: 137, oom_killed: true }),
+        ]),
+      ),
+    ).toEqual({ state: 'oom_killed', since: new Date(at(80)) });
+  });
+
+  it('a failed Machine is exited; with no events every since falls back', () => {
+    expect(runtimeHealthOf(recorded('failed', [ev('launch', 'created', 0)]))).toEqual({
+      state: 'exited',
+      exitCode: null,
+      since: new Date(at(0)),
+    });
+    expect(runtimeHealthOf(recorded('stopped', []))).toEqual({
+      state: 'suspended',
+      since: new Date('2026-11-23T08:00:00.000Z'),
+    });
+    expect(runtimeHealthOf(recorded('started', []))).toEqual({
+      state: 'running',
+      since: new Date('2026-11-23T08:00:00.000Z'),
+    });
+    const bare = toFlyMachine({ id: 'm', state: 'mystery' })!;
+    expect(runtimeHealthOf(bare)).toEqual({ state: 'deploying', since: new Date(0) });
+  });
+
+  it('parses the exit flags beside the code, and exitCodeOf is unchanged', () => {
+    const machine = recorded('stopped', [exitEvent(5, { exit_code: 137, oom_killed: true })]);
+    expect(machine.events[0]).toMatchObject({
+      type: 'exit',
+      exitCode: 137,
+      oomKilled: true,
+      requestedStop: false,
+      restarting: false,
+    });
+    expect(exitCodeOf(machine)).toBe(137);
+    expect(recorded('started', [ev('start', 'started', 1)]).events[0]).toMatchObject({
+      exitCode: null,
+      oomKilled: false,
+    });
+  });
+});
+
+describe('readHealth (MOTIR-12102)', () => {
+  it('reads the release Machine and classifies it', async () => {
+    const { p, handle } = await deployed();
+    expect(await p.readHealth(handle)).toMatchObject({ state: 'running' });
+    const m = apps.get(PROD)![0]!;
+    m.state = 'stopped';
+    m.events.push({
+      type: 'exit',
+      status: 'stopped',
+      timestamp: clock + 5000,
+      request: { exit_event: { exit_code: 137, oom_killed: true } },
+    });
+    expect(await p.readHealth(handle)).toEqual({
+      state: 'oom_killed',
+      since: new Date(clock + 5000),
+    });
+  });
+
+  it('is ReleaseNotFoundError for a gone Machine, and RuntimeHealthUnavailableError when Fly cannot answer', async () => {
+    const { p, handle } = await deployed();
+    overrides.push((c) => (c.path.endsWith('/machines/m-1') ? flyJson(500, { error: 'x' }) : null));
+    const error = await p.readHealth(handle).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RuntimeHealthUnavailableError);
+    expect(error).toMatchObject({ reason: 'Fly answered HTTP 500' });
+    overrides.length = 0;
+    apps.get(PROD)![0]!.state = 'destroyed';
+    await expect(p.readHealth(handle)).rejects.toBeInstanceOf(ReleaseNotFoundError);
+    apps.set(PROD, []);
+    await expect(p.readHealth(handle)).rejects.toBeInstanceOf(ReleaseNotFoundError);
+  });
+
+  it('reads a failure inside the bounded fetch as unavailable', async () => {
+    const { p, handle } = await deployed();
+    vi.stubGlobal('fetch', async () => {
+      throw new OrchestratorNotConfiguredError('boom');
+    });
+    // A non-Fly failure in the bounded fetch is wrapped as an API error by it,
+    // so the read is still typed as unavailable.
+    await expect(p.readHealth(handle)).rejects.toBeInstanceOf(RuntimeHealthUnavailableError);
   });
 });

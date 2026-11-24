@@ -12,6 +12,7 @@ import {
   GitPullRequest,
   MessageSquare,
   Moon,
+  ServerCrash,
   UserCheck,
 } from 'lucide-react';
 import { agentVerdictHref } from '@/lib/agentReview/verdictActivity';
@@ -19,6 +20,7 @@ import { projectSettingsHref } from '@/lib/settings/projectSettingsLink';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationData, NotificationDTO } from '@/lib/dto/notifications';
 import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
+import { eventReasonMessage } from '@/lib/hosting/productionRuntimeWords';
 
 // One notification row in the drawer feed (Subtask 5.7.5), per
 // design/notifications/drawer.mock.html panels 0–1: the leading accent unread
@@ -26,8 +28,8 @@ import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
 // in the event's hue (finding #54 — the palette, not grey) · the one-line
 // summary (actor + action + issue key, actor & key in --el-text-strong) with
 // the relative time pushed right (absolute on hover/title) · the denormalized
-// excerpt, single-line truncated. Read rows persist (greyed via --el-text-muted,
-// no dot).
+// excerpt, single-line truncated. Read rows persist (greyed via
+// --el-text-secondary, which clears AA on the hover surface too; no dot).
 //
 // ⚠️ No nested interactive elements (the portal-popover / nested-button
 // lessons): the whole row is ONE clickable deep-link `<Link>`, and the per-row
@@ -70,6 +72,11 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   // MOTIR-10338 — an agent sent the recipient's card back. The same `Bot` glyph, on the
   // To fix hue, because the row reports the refusal the To fix tag stands for.
   review_sent_back: { Icon: Bot, badge: 'bg-(--el-notif-review-sent-back)' },
+  // MOTIR-12113 · Story MOTIR-9799 — a production app crashed or failed its health
+  // check (design/hosting/design-notes.md § Amendment 2026-11-23, panel 23).
+  // `ServerCrash`, the glyph the Production panel's crash event and Crashed pill
+  // carry, so the alert and what it opens look alike. Nobody crashed it: actorless.
+  production_app_crashed: { Icon: ServerCrash, badge: 'bg-(--el-notif-production-crashed)' },
 };
 
 /** Types whose subject is a PROJECT rather than a work item — no actor, and a
@@ -79,6 +86,7 @@ const ACTORLESS_TYPES = new Set<string>([
   'code_access_refused',
   'review_to_run',
   'review_sent_back',
+  'production_app_crashed',
 ]);
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
 
@@ -95,6 +103,8 @@ function summaryKey(type: string, hasKey: boolean, kind: NotificationData['kind'
   // below is for a work-item row whose key is missing — a degraded payload — which
   // is a different thing from a row that is not about a work item at all.
   if (type === 'code_access_refused') return 'summary.accessRefused';
+  // About a production app, not a work item (MOTIR-12113): before `hasKey` too.
+  if (type === 'production_app_crashed') return 'summary.productionAppCrashed';
   // Also not about a work item, so also checked before `hasKey` (MOTIR-10368).
   if (type === 'agent_hibernated_by_admin') return 'summary.agentHibernatedByAdmin';
   // Actorless too (MOTIR-10340): its summary names no actor, so it never takes the
@@ -140,6 +150,9 @@ export function NotificationRow({
   const tPages = useTranslations('pages');
   const page = data.kind === 'page_mentioned' || data.kind === 'page_replied' ? data : null;
   const issueKey = 'issueKey' in data ? data.issueKey || null : null;
+  const tProduction = useTranslations('settings.production');
+  const crashReason =
+    data.kind === 'production_app_crashed' ? eventReasonMessage(data.reason) : null;
   // The hibernated-agent row's second line names WHEN, in the reader's own
   // clock (design/org-admin, panel 12) — the relative time sits on the right.
   const excerpt =
@@ -148,13 +161,19 @@ export function NotificationRow({
       ? page.excerpt
       : data.kind === 'mentioned'
         ? data.excerpt
-        : data.kind === 'agent_hibernated_by_admin'
-          ? t('excerpt.agentHibernatedByAdmin', {
-              time: data.hibernatedAt
-                ? format.dateTime(new Date(data.hibernatedAt), { timeStyle: 'short' })
-                : '',
+        : data.kind === 'production_app_crashed'
+          ? // The reason in the Production panel's own words, then the project.
+            t('excerpt.productionAppCrashed', {
+              reason: tProduction(crashReason!.key, crashReason!.values),
+              project: data.projectKey,
             })
-          : null;
+          : data.kind === 'agent_hibernated_by_admin'
+            ? t('excerpt.agentHibernatedByAdmin', {
+                time: data.hibernatedAt
+                  ? format.dateTime(new Date(data.hibernatedAt), { timeStyle: 'short' })
+                  : '',
+              })
+            : null;
   const toStatus = data.kind === 'transitioned' ? data.toStatus : '';
   // ⚠️ NO ACTOR, AND NO FALLBACK NAME. Motir tried something on the user's behalf
   // and GitHub said no, so `actorFallback` would put a FICTIONAL actor into the
@@ -173,13 +192,23 @@ export function NotificationRow({
       ? // The link names its project, so the room opens on it whatever the reader's
         // active project is (MOTIR-12169) — `projectSettingsHref` is the one spelling.
         projectSettingsHref('/settings/project/code-access', data.projectKey)
-      : issueKey
-        ? // A send-back lands on its own activity entry, whose findings open there — on the
-          // All tab, since the default Comments tab does not draw it (MOTIR-10458).
-          data.kind === 'review_sent_back' && data.recordId
-          ? agentVerdictHref(`/items/${issueKey}`, data.recordId)
-          : `/items/${issueKey}`
-        : null;
+      : data.kind === 'production_app_crashed'
+        ? // The Production panel selects the repository and opens the event
+          // (`event`, read by the page since MOTIR-12109). The link names the
+          // crash's own project, so a crash outside the active project opens
+          // there rather than on not-found (MOTIR-12170, MOTIR-12169) — as the
+          // code-access row does.
+          projectSettingsHref('/settings/project/production', data.projectKey, {
+            repository: data.projectRepositoryId,
+            event: data.eventId,
+          })
+        : issueKey
+          ? // A send-back lands on its own activity entry, whose findings open there — on the
+            // All tab, since the default Comments tab does not draw it (MOTIR-10458).
+            data.kind === 'review_sent_back' && data.recordId
+            ? agentVerdictHref(`/items/${issueKey}`, data.recordId)
+            : `/items/${issueKey}`
+          : null;
   const createdAt = new Date(notification.createdAt);
 
   // Rich summary: actor + key bolded via the <s> tag, greyed one tier on a
@@ -205,6 +234,8 @@ export function NotificationRow({
     status: toStatus,
     project: data.kind === 'code_access_refused' ? data.projectName : '',
     agent: data.kind === 'agent_hibernated_by_admin' ? data.agentName : '',
+    repository: data.kind === 'production_app_crashed' ? data.repositoryName : '',
+    event: data.kind === 'production_app_crashed' ? data.eventKind : '',
     s: strong,
   });
 
@@ -262,7 +293,7 @@ export function NotificationRow({
           <span
             className={cn(
               'min-w-0 flex-1 text-[13px] leading-[1.4]',
-              read ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+              read ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
             )}
           >
             {summary}

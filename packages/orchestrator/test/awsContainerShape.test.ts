@@ -766,6 +766,9 @@ describe('usage and destroy', () => {
       stoppedAt: new Date(stop),
       cpu: 1024,
       memory: 2048,
+      stopCode: 'ServiceSchedulerInitiated',
+      stoppedReason: null,
+      container: null,
     });
     const a1 = accrueStoppedTasks(EMPTY_ACCRUAL, [task(1, 10_000), task(2, 10_000)]);
     expect(a1.changed).toBe(true);
@@ -869,7 +872,13 @@ describe('the container shape’s clients', () => {
               desiredCount: 1,
               runningCount: 1,
               deployments: [
-                { taskDefinition: 'td:2', status: 'PRIMARY', rolloutState: 'COMPLETED' },
+                {
+                  taskDefinition: 'td:2',
+                  status: 'PRIMARY',
+                  rolloutState: 'COMPLETED',
+                  createdAt: new Date(10),
+                  updatedAt: new Date(20),
+                },
                 {},
               ],
             },
@@ -909,7 +918,22 @@ describe('the container shape’s clients', () => {
                 cpu: '512',
                 memory: '1024',
               }
-            : { taskArn: arn, startedAt: new Date(3), stoppedAt: new Date(4) },
+            : {
+                taskArn: arn,
+                startedAt: new Date(3),
+                stoppedAt: new Date(4),
+                // MOTIR-12104 — a task the app stopped, as DescribeTasks records it.
+                stopCode: 'EssentialContainerExited',
+                stoppedReason: 'Essential container in task exited',
+                containers: [
+                  { name: 'sidecar', exitCode: 0 },
+                  {
+                    name: 'app',
+                    exitCode: 137,
+                    reason: 'OutOfMemoryError: Container killed due to memory usage',
+                  },
+                ],
+              },
         ),
       }),
     });
@@ -919,8 +943,20 @@ describe('the container shape’s clients', () => {
       desiredCount: 1,
       runningCount: 1,
       deployments: [
-        { taskDefinition: 'td:2', status: 'PRIMARY', rolloutState: 'COMPLETED' },
-        { taskDefinition: '', status: '', rolloutState: 'IN_PROGRESS' },
+        {
+          taskDefinition: 'td:2',
+          status: 'PRIMARY',
+          rolloutState: 'COMPLETED',
+          createdAt: new Date(10),
+          updatedAt: new Date(20),
+        },
+        {
+          taskDefinition: '',
+          status: '',
+          rolloutState: 'IN_PROGRESS',
+          createdAt: null,
+          updatedAt: null,
+        },
       ],
     });
     expect(await ecs.describeService('gone', 's')).toBeNull();
@@ -949,6 +985,9 @@ describe('the container shape’s clients', () => {
         stoppedAt: null,
         cpu: 512,
         memory: 1024,
+        stopCode: null,
+        stoppedReason: null,
+        container: null,
       },
       {
         taskArn: 't2',
@@ -958,6 +997,12 @@ describe('the container shape’s clients', () => {
         stoppedAt: new Date(4),
         cpu: 0,
         memory: 0,
+        stopCode: 'EssentialContainerExited',
+        stoppedReason: 'Essential container in task exited',
+        container: {
+          exitCode: 137,
+          reason: 'OutOfMemoryError: Container killed due to memory usage',
+        },
       },
     ]);
     expect(listPage).toBe(3);

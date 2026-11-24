@@ -3213,6 +3213,10 @@
           "review_sent_back": {
             "label": "Un agente ha chiesto modifiche",
             "desc": "Un agente di revisione ha rimandato indietro un elemento di lavoro assegnato a te, con i suoi rilievi."
+          },
+          "production_app_crashed": {
+            "label": "Un'app di produzione si è arrestata",
+            "desc": "Un'app che Motir ospita per un progetto che amministri si è arrestata in modo anomalo o non ha superato il controllo di integrità."
           }
         },
         "soon": "Presto",
@@ -4704,7 +4708,8 @@
         "rollback": "Ripristinato con rollback · {name}",
         "rollbackUnnamed": "Ripristinato con rollback",
         "ref": "Deploy di {ref} · {name}",
-        "refUnnamed": "Deploy di {ref}"
+        "refUnnamed": "Deploy di {ref}",
+        "idlePolicy": "Nuovo deploy · comportamento in inattività modificato"
       },
       "address": {
         "newTab": "(si apre in una nuova finestra)",
@@ -4752,7 +4757,7 @@
         "notFound": "Questo repository non è più disponibile per te."
       },
       "readOnly": {
-        "note": "Puoi vedere tutti i rilasci. Solo gli amministratori del progetto possono eseguire il rollback."
+        "note": "Puoi vedere ogni rilascio, il suo stato, i log e il consumo. Solo gli amministratori del progetto possono eseguire il rollback o cambiare quando l’app si sospende."
       },
       "empty": {
         "title": "Ancora niente in produzione",
@@ -4768,6 +4773,162 @@
         "title": "Repository non trovato",
         "body": "Motir gestisce la produzione solo per i repository che ospita. Scegli uno dei repository di questo progetto.",
         "back": "Torna a Produzione"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Su {target}, un {shape} può solo restare sempre attivo, quindi non può sospendersi quando è inattivo.",
+          "unsupportedKeeps": "Questa app resta sempre in esecuzione.",
+          "unsupportedShort": "L’hosting di questa app non supporta questa impostazione, quindi non è cambiato nulla.",
+          "credits": "«Sempre attiva» non è disponibile finché il saldo crediti della tua organizzazione è sotto zero. Ricarica i crediti, poi impostala di nuovo.",
+          "releaseInProgress": "Un rilascio è in corso. Modifica questa impostazione quando è terminato.",
+          "forbidden": "Solo gli amministratori del progetto possono modificarla.",
+          "noApplication": "Non c’è ancora nulla in produzione. Si applica quando il primo rilascio è online.",
+          "failed": "La nuova impostazione non è stata applicata, quindi non è cambiato nulla. Riprova."
+        },
+        "shape": {
+          "function": "funzione",
+          "container": "container"
+        },
+        "heading": "Quando inattiva",
+        "option": {
+          "suspend": "Sospendi se inattiva",
+          "alwaysOn": "Sempre attiva"
+        },
+        "help": {
+          "suspend": "L’app si sospende quando nessuno la richiede e si riattiva alla richiesta successiva. La prima richiesta dopo la sospensione è più lenta.",
+          "alwaysOn": "L’app resta sempre in esecuzione, quindi nessuna richiesta attende che si riattivi. Consuma crediti ogni ora."
+        },
+        "default": "Le nuove app partono con «Sospendi se inattiva». Si applica al primo rilascio.",
+        "switching": "Applicazione al rilascio in esecuzione…",
+        "switchingNote": "La stessa build viene ridistribuita con la nuova impostazione. Non viene ricompilato nulla.",
+        "readOnly": "Solo gli amministratori del progetto possono modificarla.",
+        "loading": "Caricamento dell’impostazione…",
+        "loadError": "Impossibile caricare questa impostazione."
+      },
+      "health": {
+        "heading": "Stato",
+        "state": {
+          "healthy": "Funzionante",
+          "unhealthy": "Con errori",
+          "suspended": "Sospesa",
+          "crashed": "Arrestata",
+          "deploying": "In distribuzione"
+        },
+        "since": "{state} da {duration}",
+        "line": {
+          "healthy": "Risponde al controllo di stato su {path}.",
+          "unhealthy": "Il controllo di stato su {path} non è riuscito due volte di seguito.",
+          "suspended": "Sospesa perché nessuno l’ha richiesta. La prossima richiesta la riattiva.",
+          "crashed": "Il processo si è arrestato. {target} lo sta riavviando.",
+          "crashedOom": "Il processo è stato arrestato: ha esaurito la memoria. {target} lo sta riavviando.",
+          "deploying": "Il rilascio {commit} è in distribuzione. Il rilascio attuale resta in servizio finché non è online.",
+          "deployingUnnamed": "Un nuovo rilascio è in distribuzione. Il rilascio attuale resta in servizio finché non è online."
+        },
+        "unreachable": "Motir non riesce a raggiungere {address} per controllarla. Questo è l’ultimo stato visto da Motir; l’app potrebbe funzionare correttamente.",
+        "unreachableNoAddress": "Motir non riesce a raggiungere questa app per controllarla. Questo è l’ultimo stato visto da Motir; l’app potrebbe funzionare correttamente.",
+        "pending": "Motir non ha ancora controllato questa app. Il primo controllo avviene entro un minuto da quando il rilascio è online.",
+        "loading": "Controllo dello stato…",
+        "failed": "Impossibile leggere lo stato di questa app.",
+        "retry": "Riprova"
+      },
+      "events": {
+        "heading": "Arresti anomali",
+        "empty": "Nessun arresto anomalo registrato per questa app.",
+        "reason": {
+          "exit": "Terminata con codice {code}",
+          "exited": "Terminata",
+          "oom": "Memoria esaurita",
+          "http": "Controllo di stato non riuscito: HTTP {status}",
+          "timeout": "Controllo di stato non riuscito: tempo scaduto"
+        },
+        "release": "Rilascio <code>{commit}</code>",
+        "rolledBackSince": "Annullato in seguito",
+        "showLines": "{count, plural, one {Mostra l’ultima riga precedente} other {Mostra le ultime # righe precedenti}}",
+        "hideLines": "Nascondi le ultime righe"
+      },
+      "logs": {
+        "heading": "Log",
+        "order": "Prima i più recenti",
+        "range": {
+          "label": "Intervallo",
+          "15m": "15 min",
+          "1h": "1 ora",
+          "24h": "24 ore",
+          "7d": "7 giorni"
+        },
+        "rangeSpan": {
+          "15m": "ultimi 15 minuti",
+          "1h": "ultima ora",
+          "24h": "ultime 24 ore",
+          "7d": "ultimi 7 giorni"
+        },
+        "filter": "Filtra le righe",
+        "stream": {
+          "app": "app",
+          "platform": "piattaforma"
+        },
+        "linesLabel": "Righe di log",
+        "line": {
+          "expand": "Mostra la riga intera",
+          "collapse": "Comprimi questa riga"
+        },
+        "more": "Mostra righe precedenti",
+        "moreError": "Impossibile caricare le righe precedenti. Riprova.",
+        "masked": "Ogni valore segreto dell’ambiente di questa app viene mostrato come ***.",
+        "asleep": "Le ultime righe prima che l’app venisse sospesa.",
+        "noMatch": "Nessuna riga corrisponde a “{filter}” in: {range}.",
+        "empty": "Nessuna riga in: {range}.",
+        "unavailable": "{target} non ha restituito i log di questa app. Si tratta del servizio di log di {target}, non dell’app: potrebbe funzionare correttamente. Nessuna riga più vecchia viene mostrata come attuale.",
+        "failed": "Impossibile caricare i log di questa app.",
+        "retry": "Riprova",
+        "loading": "Caricamento delle righe…",
+        "noRelease": "I log compaiono qui non appena il primo rilascio è online."
+      },
+      "usage": {
+        "heading": "Consumo del periodo",
+        "loading": "Caricamento del consumo…",
+        "loadError": "Impossibile caricare il consumo di questo periodo.",
+        "retry": "Riprova",
+        "col": {
+          "what": "Cosa ha usato",
+          "amount": "Quantità",
+          "credits": "Crediti"
+        },
+        "unit": {
+          "machine": "Macchina Fly · {size}",
+          "lambdaCompute": "Calcolo delle funzioni (GB-secondi)",
+          "lambdaRequests": "Richieste alle funzioni",
+          "containerCpu": "Container AWS · vCPU",
+          "containerMemory": "Container AWS · memoria",
+          "dbCompute": "Database {provider} · calcolo",
+          "dbStorage": "Database {provider} · archiviazione"
+        },
+        "size": {
+          "small": "piccola",
+          "medium": "media",
+          "large": "grande"
+        },
+        "total": "Crediti addebitati nel periodo",
+        "footnote": "1 credito è un minuto equivalente Linux. Il consumo di ogni giorno viene addebitato una volta, dopo la mezzanotte UTC, arrotondato al credito intero, quindi quello di oggi non è ancora nel totale.",
+        "noRelease": "Nessun consumo finora. Il consumo inizia con il primo rilascio online.",
+        "exhausted": {
+          "title": "Crediti esauriti · saldo {balance}",
+          "titleNoBalance": "Crediti esauriti",
+          "body": "Questa app resta in esecuzione. Se il saldo è ancora sotto zero il {date}, Motir la imposta su «Sospendi se inattiva», così si sospende quando nessuno la richiede. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "bodySuspended": "Questa app resta in esecuzione e si sospende quando nessuno la richiede. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "bodyCannotSuspend": "Questa app gira come container AWS, che non può essere sospeso, quindi resta sempre attiva e continua a consumare crediti finché il saldo non viene ricaricato. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "topUp": "Ricarica crediti",
+          "member": "Un proprietario o amministratore dell’organizzazione può ricaricare i crediti."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {
@@ -6286,10 +6447,12 @@
       "reviewSentBack": "Un agente ha chiesto modifiche a <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> ha ibernato il tuo agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> ti ha menzionato in <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> ha risposto a un thread in <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> ha risposto a un thread in <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> non supera il controllo di integrità in produzione} other {<s>{repository}</s> si è arrestata in produzione}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Un amministratore dell’organizzazione lo ha arrestato alle {time}. I suoi file vengono conservati; risveglialo da Agenti."
+      "agentHibernatedByAdmin": "Un amministratore dell’organizzazione lo ha arrestato alle {time}. I suoi file vengono conservati; risveglialo da Agenti.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

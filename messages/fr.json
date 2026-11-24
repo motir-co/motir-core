@@ -3213,6 +3213,10 @@
           "review_sent_back": {
             "label": "Un agent a réclamé des modifications",
             "desc": "Un agent de revue a renvoyé un élément de travail qui vous est attribué, avec ses constats."
+          },
+          "production_app_crashed": {
+            "label": "Une app de production a planté",
+            "desc": "Une app hébergée par Motir pour un projet que vous administrez a planté ou a échoué à son contrôle de santé."
           }
         },
         "soon": "Bientôt",
@@ -4704,7 +4708,8 @@
         "rollback": "Restaurée par retour arrière · {name}",
         "rollbackUnnamed": "Restaurée par retour arrière",
         "ref": "Déploiement de {ref} · {name}",
-        "refUnnamed": "Déploiement de {ref}"
+        "refUnnamed": "Déploiement de {ref}",
+        "idlePolicy": "Redéploiement · comportement en veille modifié"
       },
       "address": {
         "newTab": "(s’ouvre dans un nouvel onglet)",
@@ -4752,7 +4757,7 @@
         "notFound": "Ce dépôt ne vous est plus accessible."
       },
       "readOnly": {
-        "note": "Vous pouvez voir toutes les versions. Seuls les administrateurs du projet peuvent revenir en arrière."
+        "note": "Vous pouvez voir chaque version, son état, ses journaux et sa consommation. Seuls les administrateurs du projet peuvent revenir en arrière ou changer quand elle se met en veille."
       },
       "empty": {
         "title": "Rien en production pour l’instant",
@@ -4768,6 +4773,162 @@
         "title": "Dépôt introuvable",
         "body": "Motir n’exécute la production que pour les dépôts qu’il héberge. Choisissez l’un des dépôts de ce projet.",
         "back": "Retour à Production"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Sur {target}, un {shape} ne peut que rester toujours actif : il ne peut pas se suspendre en cas d’inactivité.",
+          "unsupportedKeeps": "Cette application tourne en permanence.",
+          "unsupportedShort": "L’hébergement de cette application ne permet pas ce réglage : rien n’a changé.",
+          "credits": "« Toujours active » n’est pas disponible tant que le solde de crédits de votre organisation est négatif. Rechargez des crédits, puis réessayez.",
+          "releaseInProgress": "Une version est en cours. Modifiez ce réglage une fois qu’elle est terminée.",
+          "forbidden": "Seuls les administrateurs du projet peuvent modifier ce réglage.",
+          "noApplication": "Rien n’est encore en production. Ce réglage s’applique dès que la première version est en ligne.",
+          "failed": "Le nouveau réglage n’a pas été appliqué : rien n’a changé. Réessayez."
+        },
+        "shape": {
+          "function": "fonction",
+          "container": "conteneur"
+        },
+        "heading": "En cas d’inactivité",
+        "option": {
+          "suspend": "Mettre en veille si inactive",
+          "alwaysOn": "Toujours active"
+        },
+        "help": {
+          "suspend": "L’application se met en veille quand personne ne la sollicite et se réveille à la requête suivante. La première requête après une veille est plus lente.",
+          "alwaysOn": "L’application tourne en permanence : aucune requête n’attend son réveil. Elle consomme des crédits chaque heure."
+        },
+        "default": "Les nouvelles applications démarrent avec « Mettre en veille si inactive ». Cela s’applique à la première version.",
+        "switching": "Application à la version en cours…",
+        "switchingNote": "Le même build est redéployé avec le nouveau réglage. Rien n’est reconstruit.",
+        "readOnly": "Seuls les administrateurs du projet peuvent modifier ce réglage.",
+        "loading": "Chargement du réglage…",
+        "loadError": "Impossible de charger ce réglage."
+      },
+      "health": {
+        "heading": "État",
+        "state": {
+          "healthy": "Opérationnelle",
+          "unhealthy": "Défaillante",
+          "suspended": "En veille",
+          "crashed": "Plantée",
+          "deploying": "En déploiement"
+        },
+        "since": "{state} depuis {duration}",
+        "line": {
+          "healthy": "Répond à sa vérification d’état sur {path}.",
+          "unhealthy": "Sa vérification d’état sur {path} a échoué deux fois de suite.",
+          "suspended": "En veille, car personne ne l’a sollicitée. La prochaine requête la réveille.",
+          "crashed": "Le processus s’est arrêté. {target} le redémarre.",
+          "crashedOom": "Le processus a été arrêté : il a manqué de mémoire. {target} le redémarre.",
+          "deploying": "La version {commit} est en cours de déploiement. La version actuelle reste servie jusqu’à ce qu’elle soit en ligne.",
+          "deployingUnnamed": "Une nouvelle version est en cours de déploiement. La version actuelle reste servie jusqu’à ce qu’elle soit en ligne."
+        },
+        "unreachable": "Motir ne parvient pas à joindre {address} pour la vérifier. C’est le dernier état observé par Motir ; l’application elle-même fonctionne peut-être.",
+        "unreachableNoAddress": "Motir ne parvient pas à joindre cette application pour la vérifier. C’est le dernier état observé par Motir ; l’application elle-même fonctionne peut-être.",
+        "pending": "Motir n’a pas encore vérifié cette application. La première vérification a lieu dans la minute qui suit la mise en ligne de la version.",
+        "loading": "Vérification de l’état…",
+        "failed": "Impossible de lire l’état de cette application.",
+        "retry": "Réessayer"
+      },
+      "events": {
+        "heading": "Plantages",
+        "empty": "Aucun plantage enregistré pour cette application.",
+        "reason": {
+          "exit": "Arrêtée avec le code {code}",
+          "exited": "Arrêtée",
+          "oom": "Mémoire insuffisante",
+          "http": "Échec de la vérification d’état : HTTP {status}",
+          "timeout": "Échec de la vérification d’état : délai dépassé"
+        },
+        "release": "Version <code>{commit}</code>",
+        "rolledBackSince": "Annulée depuis",
+        "showLines": "{count, plural, one {Afficher la dernière ligne avant} other {Afficher les # dernières lignes avant}}",
+        "hideLines": "Masquer les dernières lignes"
+      },
+      "logs": {
+        "heading": "Journaux",
+        "order": "Plus récentes d’abord",
+        "range": {
+          "label": "Période",
+          "15m": "15 min",
+          "1h": "1 heure",
+          "24h": "24 heures",
+          "7d": "7 jours"
+        },
+        "rangeSpan": {
+          "15m": "15 dernières minutes",
+          "1h": "dernière heure",
+          "24h": "dernières 24 heures",
+          "7d": "7 derniers jours"
+        },
+        "filter": "Filtrer les lignes",
+        "stream": {
+          "app": "app",
+          "platform": "plateforme"
+        },
+        "linesLabel": "Lignes de journal",
+        "line": {
+          "expand": "Afficher la ligne entière",
+          "collapse": "Replier cette ligne"
+        },
+        "more": "Afficher les lignes précédentes",
+        "moreError": "Impossible de charger les lignes précédentes. Réessayez.",
+        "masked": "Chaque valeur secrète de l’environnement de cette application s’affiche sous la forme ***.",
+        "asleep": "Les dernières lignes avant la mise en veille de l’application.",
+        "noMatch": "Aucune ligne ne correspond à « {filter} » sur la période : {range}.",
+        "empty": "Aucune ligne sur la période : {range}.",
+        "unavailable": "{target} n’a pas renvoyé les journaux de cette application. Il s’agit du service de journaux de {target}, pas de l’application : elle fonctionne peut-être. Aucune ligne plus ancienne n’est présentée comme actuelle.",
+        "failed": "Impossible de charger les journaux de cette application.",
+        "retry": "Réessayer",
+        "loading": "Chargement des lignes…",
+        "noRelease": "Les journaux apparaissent ici dès que la première version est en ligne."
+      },
+      "usage": {
+        "heading": "Consommation sur la période",
+        "loading": "Chargement de la consommation…",
+        "loadError": "Impossible de charger la consommation de cette période.",
+        "retry": "Réessayer",
+        "col": {
+          "what": "Ressource utilisée",
+          "amount": "Quantité",
+          "credits": "Crédits"
+        },
+        "unit": {
+          "machine": "Machine Fly · {size}",
+          "lambdaCompute": "Calcul de fonction (Go-secondes)",
+          "lambdaRequests": "Requêtes de fonction",
+          "containerCpu": "Conteneur AWS · vCPU",
+          "containerMemory": "Conteneur AWS · mémoire",
+          "dbCompute": "Base de données {provider} · calcul",
+          "dbStorage": "Base de données {provider} · stockage"
+        },
+        "size": {
+          "small": "petite",
+          "medium": "moyenne",
+          "large": "grande"
+        },
+        "total": "Crédits facturés sur la période",
+        "footnote": "1 crédit correspond à une minute équivalent Linux. La consommation de chaque jour est facturée une fois, après minuit UTC, arrondie au crédit supérieur : celle d’aujourd’hui n’est pas encore dans le total.",
+        "noRelease": "Aucune consommation pour l’instant. Elle commence avec la première version en ligne.",
+        "exhausted": {
+          "title": "Plus de crédits · solde {balance}",
+          "titleNoBalance": "Plus de crédits",
+          "body": "Cette application continue de tourner. Si le solde est toujours négatif le {date}, Motir la passe en « Mettre en veille si inactive » : elle se met en veille quand personne ne la sollicite. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "bodySuspended": "Cette application continue de tourner et se met en veille quand personne ne la sollicite. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "bodyCannotSuspend": "Cette application tourne en conteneur AWS, qui ne peut pas être mis en veille : elle reste toujours active et consomme des crédits jusqu’à ce que le solde soit rechargé. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "topUp": "Recharger des crédits",
+          "member": "Un propriétaire ou un administrateur de l’organisation peut recharger des crédits."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {
@@ -6286,10 +6447,12 @@
       "reviewSentBack": "Un agent a réclamé des modifications sur <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> a mis votre agent <s>{agent}</s> en veille",
       "pageMentioned": "<s>{actor}</s> vous a mentionné dans <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> a répondu à un fil dans <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> a répondu à un fil dans <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> échoue à sa vérification d’état en production} other {<s>{repository}</s> a planté en production}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Un administrateur de l’organisation l’a arrêté à {time}. Ses fichiers sont conservés ; réveillez-le depuis Agents."
+      "agentHibernatedByAdmin": "Un administrateur de l’organisation l’a arrêté à {time}. Ses fichiers sont conservés ; réveillez-le depuis Agents.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

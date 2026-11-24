@@ -3213,6 +3213,10 @@
           "review_sent_back": {
             "label": "An agent asked for changes",
             "desc": "A review agent sent back a work item assigned to you, with its findings."
+          },
+          "production_app_crashed": {
+            "label": "A production app crashed",
+            "desc": "An app Motir hosts for a project you administer crashed or failed its health check."
           }
         },
         "soon": "Soon",
@@ -4704,7 +4708,8 @@
         "rollback": "Restored by rollback · {name}",
         "rollbackUnnamed": "Restored by rollback",
         "ref": "Deploy of {ref} · {name}",
-        "refUnnamed": "Deploy of {ref}"
+        "refUnnamed": "Deploy of {ref}",
+        "idlePolicy": "Redeploy · idle policy changed"
       },
       "address": {
         "newTab": "(opens in a new tab)",
@@ -4752,7 +4757,7 @@
         "notFound": "This repository is no longer available to you."
       },
       "readOnly": {
-        "note": "You can see every release. Only project administrators can roll back."
+        "note": "You can see every release, its health, logs and usage. Only project administrators can roll back or change when it sleeps."
       },
       "empty": {
         "title": "Nothing in production yet",
@@ -4768,6 +4773,162 @@
         "title": "Repository not found",
         "body": "Motir runs production only for the repositories it hosts. Choose one of this project’s repositories.",
         "back": "Back to Production"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "On {target}, a {shape} can only stay always on, so it can’t suspend when idle.",
+          "unsupportedKeeps": "This app keeps running all the time.",
+          "unsupportedShort": "This app’s hosting can’t run that setting, so nothing changed.",
+          "credits": "Always on isn’t available while your organisation’s credit balance is below zero. Top up credits, then set it again.",
+          "releaseInProgress": "A release is in progress. Change this once it has finished.",
+          "forbidden": "Only project administrators can change this.",
+          "noApplication": "Nothing is in production yet. This applies once the first release is live.",
+          "failed": "The new setting didn’t apply, so nothing changed. Try again."
+        },
+        "shape": {
+          "function": "function",
+          "container": "container"
+        },
+        "heading": "When idle",
+        "option": {
+          "suspend": "Suspend when idle",
+          "alwaysOn": "Always on"
+        },
+        "help": {
+          "suspend": "The app sleeps when nothing asks for it, and wakes on the next request. The first request after a sleep is slower.",
+          "alwaysOn": "The app keeps running all the time, so no request ever waits for it to wake. It uses credits every hour."
+        },
+        "default": "New apps start with Suspend when idle. It applies to the first release.",
+        "switching": "Applying to the running release…",
+        "switchingNote": "The same build is redeployed with the new setting. Nothing is rebuilt.",
+        "readOnly": "Only project administrators can change this.",
+        "loading": "Loading the setting…",
+        "loadError": "Couldn’t load this setting."
+      },
+      "health": {
+        "heading": "Health",
+        "state": {
+          "healthy": "Healthy",
+          "unhealthy": "Unhealthy",
+          "suspended": "Suspended",
+          "crashed": "Crashed",
+          "deploying": "Deploying"
+        },
+        "since": "{state} for {duration}",
+        "line": {
+          "healthy": "Answering its health check at {path}.",
+          "unhealthy": "Its health check at {path} has failed twice in a row.",
+          "suspended": "Asleep because nothing has asked for it. The next request wakes it.",
+          "crashed": "The process stopped. {target} is restarting it.",
+          "crashedOom": "The process was stopped: it ran out of memory. {target} is restarting it.",
+          "deploying": "Release {commit} is rolling out. The current release keeps serving until it is live.",
+          "deployingUnnamed": "A new release is rolling out. The current release keeps serving until it is live."
+        },
+        "unreachable": "Motir can’t reach {address} to check it. This is the last state Motir saw; the app itself may be fine.",
+        "unreachableNoAddress": "Motir can’t reach this app to check it. This is the last state Motir saw; the app itself may be fine.",
+        "pending": "Motir hasn’t checked this app yet. Its first check runs within a minute of the release going live.",
+        "loading": "Checking health…",
+        "failed": "Couldn’t read this app’s health.",
+        "retry": "Try again"
+      },
+      "events": {
+        "heading": "Crash events",
+        "empty": "No crashes recorded for this app.",
+        "reason": {
+          "exit": "Exited with code {code}",
+          "exited": "Exited",
+          "oom": "Out of memory",
+          "http": "Health check failed: HTTP {status}",
+          "timeout": "Health check failed: timed out"
+        },
+        "release": "Release <code>{commit}</code>",
+        "rolledBackSince": "Rolled back since",
+        "showLines": "{count, plural, one {Show the last line before it} other {Show the last # lines before it}}",
+        "hideLines": "Hide the last lines"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Newest first",
+        "range": {
+          "label": "Time range",
+          "15m": "15 min",
+          "1h": "1 hour",
+          "24h": "24 hours",
+          "7d": "7 days"
+        },
+        "rangeSpan": {
+          "15m": "15 minutes",
+          "1h": "hour",
+          "24h": "24 hours",
+          "7d": "7 days"
+        },
+        "filter": "Filter lines",
+        "stream": {
+          "app": "app",
+          "platform": "platform"
+        },
+        "linesLabel": "Log lines",
+        "line": {
+          "expand": "Show the full line",
+          "collapse": "Collapse this line"
+        },
+        "more": "Show earlier lines",
+        "moreError": "Couldn’t load earlier lines. Try again.",
+        "masked": "Every secret value from this app’s Environment is shown as ***.",
+        "asleep": "The last lines before the app went to sleep.",
+        "noMatch": "No lines match “{filter}” in the last {range}.",
+        "empty": "No lines in the last {range}.",
+        "unavailable": "{target} didn’t return this app’s logs. That is {target}’s log service, not the app: it may still be running fine. No older lines are shown as current.",
+        "failed": "Couldn’t load this app’s logs.",
+        "retry": "Try again",
+        "loading": "Loading lines…",
+        "noRelease": "Logs appear here once the first release is live."
+      },
+      "usage": {
+        "heading": "Usage this period",
+        "loading": "Loading usage…",
+        "loadError": "Couldn’t load this period’s usage.",
+        "retry": "Try again",
+        "col": {
+          "what": "What it used",
+          "amount": "Amount",
+          "credits": "Credits"
+        },
+        "unit": {
+          "machine": "Fly machine · {size}",
+          "lambdaCompute": "Function compute (GB-seconds)",
+          "lambdaRequests": "Function requests",
+          "containerCpu": "AWS container · vCPU",
+          "containerMemory": "AWS container · memory",
+          "dbCompute": "{provider} database compute",
+          "dbStorage": "{provider} database storage"
+        },
+        "size": {
+          "small": "small",
+          "medium": "medium",
+          "large": "large"
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        },
+        "total": "Credits charged this period",
+        "footnote": "1 credit is one Linux-equivalent minute. Each day’s usage is charged once, after midnight UTC, rounded up to a whole credit, so today’s is not in the total yet.",
+        "noRelease": "Nothing used yet. Usage starts with the first live release.",
+        "exhausted": {
+          "title": "Out of credits · balance {balance}",
+          "titleNoBalance": "Out of credits",
+          "body": "This app keeps running. If the balance is still below zero on {date}, Motir switches it to Suspend when idle, so it sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
+          "bodySuspended": "This app keeps running and sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
+          "bodyCannotSuspend": "This app runs as an AWS container, which can’t be suspended, so it keeps running always on and keeps using credits until the balance is topped up. Motir never stops or deletes a production app for being out of credits.",
+          "topUp": "Top up credits",
+          "member": "An organisation owner or admin can top up credits."
+        }
       }
     },
     "workspaceAddress": {
@@ -6286,10 +6447,12 @@
       "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mentioned you on <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> replied to a thread on <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> is failing its health check in production} other {<s>{repository}</s> crashed in production}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents."
+      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

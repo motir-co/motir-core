@@ -3213,6 +3213,10 @@
           "review_sent_back": {
             "label": "智能体要求修改",
             "desc": "审查智能体退回了一个分配给你的工作项，并附上了发现。"
+          },
+          "production_app_crashed": {
+            "label": "生产应用崩溃了",
+            "desc": "Motir 为你管理的项目托管的应用崩溃了，或未通过健康检查。"
           }
         },
         "soon": "即将推出",
@@ -4704,7 +4708,8 @@
         "rollback": "由回滚恢复 · {name}",
         "rollbackUnnamed": "由回滚恢复",
         "ref": "部署 {ref} · {name}",
-        "refUnnamed": "部署 {ref}"
+        "refUnnamed": "部署 {ref}",
+        "idlePolicy": "重新部署 · 空闲策略已更改"
       },
       "address": {
         "newTab": "（在新标签页中打开）",
@@ -4752,7 +4757,7 @@
         "notFound": "此代码仓库已不再可用。"
       },
       "readOnly": {
-        "note": "你可以查看所有发布。只有项目管理员可以回滚。"
+        "note": "你可以查看每个发布及其健康状况、日志和用量。只有项目管理员可以回滚或更改应用何时休眠。"
       },
       "empty": {
         "title": "生产中尚无内容",
@@ -4768,6 +4773,162 @@
         "title": "未找到代码仓库",
         "body": "Motir 只为其托管的代码仓库运行生产。请选择此项目的代码仓库之一。",
         "back": "返回生产"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "在 {target} 上，{shape} 只能保持常开，因此无法在空闲时暂停。",
+          "unsupportedKeeps": "此应用会一直运行。",
+          "unsupportedShort": "此应用的托管方式不支持该设置，因此没有任何变化。",
+          "credits": "组织的额度余额低于零时无法使用“始终运行”。请先充值额度，然后重新设置。",
+          "releaseInProgress": "有发布正在进行。请在它完成后再更改。",
+          "forbidden": "只有项目管理员可以更改此设置。",
+          "noApplication": "生产环境中还没有内容。第一个发布上线后此设置生效。",
+          "failed": "新设置未能应用，因此没有任何变化。请重试。"
+        },
+        "shape": {
+          "function": "函数",
+          "container": "容器"
+        },
+        "heading": "空闲时",
+        "option": {
+          "suspend": "空闲时暂停",
+          "alwaysOn": "始终运行"
+        },
+        "help": {
+          "suspend": "没有请求时应用会休眠，并在下一个请求到来时唤醒。休眠后的第一个请求会慢一些。",
+          "alwaysOn": "应用一直运行，因此没有请求需要等待它唤醒。它每小时都会消耗额度。"
+        },
+        "default": "新应用默认“空闲时暂停”。从第一个发布开始生效。",
+        "switching": "正在应用到运行中的发布…",
+        "switchingNote": "同一构建会以新设置重新部署，不会重新构建。",
+        "readOnly": "只有项目管理员可以更改此设置。",
+        "loading": "正在加载设置…",
+        "loadError": "无法加载此设置。"
+      },
+      "health": {
+        "heading": "健康状况",
+        "state": {
+          "healthy": "健康",
+          "unhealthy": "异常",
+          "suspended": "已休眠",
+          "crashed": "已崩溃",
+          "deploying": "部署中"
+        },
+        "since": "{state}已 {duration}",
+        "line": {
+          "healthy": "正在响应 {path} 的健康检查。",
+          "unhealthy": "{path} 的健康检查已连续两次失败。",
+          "suspended": "因没有请求而休眠。下一个请求会唤醒它。",
+          "crashed": "进程已停止。{target} 正在重启它。",
+          "crashedOom": "进程因内存耗尽而被停止。{target} 正在重启它。",
+          "deploying": "发布 {commit} 正在上线。在它上线之前，当前发布继续提供服务。",
+          "deployingUnnamed": "新的发布正在上线。在它上线之前，当前发布继续提供服务。"
+        },
+        "unreachable": "Motir 无法连接 {address} 进行检查。这是 Motir 最后看到的状态；应用本身可能运行正常。",
+        "unreachableNoAddress": "Motir 无法连接此应用进行检查。这是 Motir 最后看到的状态；应用本身可能运行正常。",
+        "pending": "Motir 尚未检查此应用。发布上线后一分钟内会进行首次检查。",
+        "loading": "正在检查健康状况…",
+        "failed": "无法读取此应用的健康状况。",
+        "retry": "重试"
+      },
+      "events": {
+        "heading": "崩溃事件",
+        "empty": "此应用没有崩溃记录。",
+        "reason": {
+          "exit": "以代码 {code} 退出",
+          "exited": "已退出",
+          "oom": "内存耗尽",
+          "http": "健康检查失败：HTTP {status}",
+          "timeout": "健康检查失败：超时"
+        },
+        "release": "发布 <code>{commit}</code>",
+        "rolledBackSince": "之后已回滚",
+        "showLines": "{count, plural, other {显示之前的最后 # 行}}",
+        "hideLines": "隐藏最后几行"
+      },
+      "logs": {
+        "heading": "日志",
+        "order": "最新的在前",
+        "range": {
+          "label": "时间范围",
+          "15m": "15 分钟",
+          "1h": "1 小时",
+          "24h": "24 小时",
+          "7d": "7 天"
+        },
+        "rangeSpan": {
+          "15m": "15 分钟",
+          "1h": "1 小时",
+          "24h": "24 小时",
+          "7d": "7 天"
+        },
+        "filter": "筛选行",
+        "stream": {
+          "app": "应用",
+          "platform": "平台"
+        },
+        "linesLabel": "日志行",
+        "line": {
+          "expand": "显示整行",
+          "collapse": "收起此行"
+        },
+        "more": "显示更早的行",
+        "moreError": "无法加载更早的行。请重试。",
+        "masked": "此应用环境中的每个机密值都显示为 ***。",
+        "asleep": "应用休眠前的最后几行。",
+        "noMatch": "最近 {range} 内没有与“{filter}”匹配的行。",
+        "empty": "最近 {range} 内没有日志行。",
+        "unavailable": "{target} 没有返回此应用的日志。这来自 {target} 的日志服务，而不是应用：应用可能仍在正常运行。不会把更早的行当作当前日志显示。",
+        "failed": "无法加载此应用的日志。",
+        "retry": "重试",
+        "loading": "正在加载行…",
+        "noRelease": "第一个发布上线后，日志会显示在这里。"
+      },
+      "usage": {
+        "heading": "本期用量",
+        "loading": "正在加载用量…",
+        "loadError": "无法加载本期用量。",
+        "retry": "重试",
+        "col": {
+          "what": "用量项",
+          "amount": "数量",
+          "credits": "额度"
+        },
+        "unit": {
+          "machine": "Fly 机器 · {size}",
+          "lambdaCompute": "函数计算（GB·秒）",
+          "lambdaRequests": "函数请求",
+          "containerCpu": "AWS 容器 · vCPU",
+          "containerMemory": "AWS 容器 · 内存",
+          "dbCompute": "{provider} 数据库计算",
+          "dbStorage": "{provider} 数据库存储"
+        },
+        "size": {
+          "small": "小型",
+          "medium": "中型",
+          "large": "大型"
+        },
+        "total": "本期已扣额度",
+        "footnote": "1 额度为 1 个 Linux 等效分钟。每天的用量在 UTC 午夜后扣费一次，向上取整到整数额度，因此今天的用量尚未计入总额。",
+        "noRelease": "尚无用量。第一个发布上线后开始计算用量。",
+        "exhausted": {
+          "title": "额度已用完 · 余额 {balance}",
+          "titleNoBalance": "额度已用完",
+          "body": "此应用会继续运行。如果到 {date} 余额仍低于零，Motir 会将其切换为“空闲时暂停”，使其在没有请求时休眠。Motir 绝不会因为额度不足而停止或删除生产应用。",
+          "bodySuspended": "此应用会继续运行，并在没有请求时休眠。Motir 绝不会因为额度不足而停止或删除生产应用。",
+          "bodyCannotSuspend": "此应用以无法暂停的 AWS 容器运行，因此会一直运行并持续消耗额度，直到余额充值。Motir 绝不会因为额度不足而停止或删除生产应用。",
+          "topUp": "充值额度",
+          "member": "组织所有者或管理员可以充值额度。"
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {
@@ -6286,10 +6447,12 @@
       "reviewSentBack": "智能体要求修改 <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠",
       "pageMentioned": "<s>{actor}</s> 在 <s>{page}</s> 中提到了你",
-      "pageReplied": "<s>{actor}</s> 回复了 <s>{page}</s> 上的一个讨论"
+      "pageReplied": "<s>{actor}</s> 回复了 <s>{page}</s> 上的一个讨论",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> 在生产环境中未通过健康检查} other {<s>{repository}</s> 在生产环境中崩溃了}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。"
+      "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

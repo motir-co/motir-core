@@ -5,6 +5,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { repoDeletionClient, RepoDeletionError } from '@/lib/github/repoDeletion';
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
 import { getDatabasePort, resetDatabaseFakes } from '@/lib/orchestrator/database';
@@ -67,6 +68,11 @@ beforeEach(async () => {
   vi.spyOn(hostedReleaseUsageService, 'settleReleaseUsage').mockResolvedValue({
     outcome: 'settled',
     seconds: 60,
+  });
+  // The meter's own suite drives it against the port (MOTIR-12108).
+  vi.spyOn(productionUsageMeterService, 'accrueOutgoingRelease').mockResolvedValue({
+    outcome: 'accrued',
+    slices: 0,
   });
   vi.spyOn(repoDeletionClient, 'probeRepo').mockResolvedValue('present');
   vi.spyOn(repoDeletionClient, 'deleteRepo').mockResolvedValue('deleted');
@@ -361,6 +367,11 @@ describe('remove — the delete sequence (§19.6)', () => {
       (await adminDb.hostedRelease.findFirst({ where: { applicationId: app.id } }))?.id ??
         expect.any(String),
     );
+    // …and its last window metered, with every open day charged now (MOTIR-12108).
+    expect(productionUsageMeterService.accrueOutgoingRelease).toHaveBeenCalledWith(
+      expect.any(String),
+      { chargeNow: true },
+    );
     expect(destroyApp).toHaveBeenCalledWith({ appRef: 'mh-shop' });
     expect(deleteDatabase).toHaveBeenCalledWith(
       expect.objectContaining({ applicationRef: row.id, databaseRef: 'neon-shop' }),
@@ -468,9 +479,11 @@ describe('remove — the delete sequence (§19.6)', () => {
     });
 
     vi.mocked(hostedReleaseUsageService.settleReleaseUsage).mockClear();
+    vi.mocked(productionUsageMeterService.accrueOutgoingRelease).mockClear();
     destroyApp.mockClear();
     await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
     expect(hostedReleaseUsageService.settleReleaseUsage).not.toHaveBeenCalled();
+    expect(productionUsageMeterService.accrueOutgoingRelease).not.toHaveBeenCalled();
     expect(ensureApp).not.toHaveBeenCalled();
     expect(destroyApp).not.toHaveBeenCalled();
     expect(await adminDb.projectRepo.count({ where: { id: row.id } })).toBe(0);

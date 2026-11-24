@@ -54,6 +54,8 @@ import { awsCostFetch } from './definitions/awsCostFetch';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
 import { hostAccountState } from './definitions/hostAccountState';
 import { hostingTenantAccountReconcile } from './definitions/hostingTenantAccountReconcile';
+import { productionHealthProbe } from './definitions/productionHealthProbe';
+import { productionUsageAccrual } from './definitions/productionUsageAccrual';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
@@ -210,6 +212,10 @@ export const jobDefinitions = [
   previewReaper,
   // Preview usage metered into the CI pool (Story MOTIR-5766 · MOTIR-5777).
   previewUsageAccrual,
+  // A live app's health and crashes (Story MOTIR-9799 · MOTIR-12106).
+  productionHealthProbe,
+  // Production hosting charged in credits (Story MOTIR-9799 · MOTIR-12108).
+  productionUsageAccrual,
   codeGraphIndexCatchUp,
   jobRunReap,
   jobQueueRetention,

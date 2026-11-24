@@ -26,8 +26,12 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 
 const PANEL = '@/app/api/projects/[key]/repositories/[rowId]/production/route';
 const ROLLBACK = '@/app/api/projects/[key]/repositories/[rowId]/production/rollback/route';
+const IDLE = '@/app/api/projects/[key]/repositories/[rowId]/production/idle-policy/route';
+const USAGE = '@/app/api/projects/[key]/repositories/[rowId]/production/usage/route';
 const { GET } = await import(PANEL);
 const { POST } = await import(ROLLBACK);
+const { GET: GET_IDLE, PUT: PUT_IDLE } = await import(IDLE);
+const { GET: GET_USAGE } = await import(USAGE);
 const { getHostingDeployPort, resetHostingFakes } = await import('@/lib/orchestrator/hosting');
 const { resetDatabaseFakes } = await import('@/lib/orchestrator/database');
 const { hostedRepositoryAccessService } =
@@ -71,6 +75,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 afterAll(async () => {
@@ -325,18 +330,361 @@ describe('POST …/production/rollback', () => {
   });
 });
 
+async function readIdle(key: string, rowId: string): Promise<Response> {
+  return GET_IDLE(new Request(`${url(key, rowId)}/idle-policy`), params(key, rowId));
+}
+async function putIdle(key: string, rowId: string, body: unknown): Promise<Response> {
+  return PUT_IDLE(
+    new Request(`${url(key, rowId)}/idle-policy`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+    params(key, rowId),
+  );
+}
+
+describe('…/production/idle-policy (MOTIR-12107)', () => {
+  it('answers a member read-only and an administrator editable', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+
+    s.asMember();
+    const asMember = await readIdle('ACME', id);
+    expect(asMember.status).toBe(200);
+    expect(await asMember.json()).toEqual({
+      policy: { mode: 'suspend', idleSeconds: 300 },
+      editable: false,
+      refusal: null,
+    });
+    s.asAdmin();
+    expect((await (await readIdle('ACME', id)).json()).editable).toBe(true);
+  });
+
+  it('switches an administrator’s application and answers the new policy', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    s.asAdmin();
+
+    const res = await putIdle('ACME', id, { mode: 'always_on' });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      policy: { mode: 'always_on' },
+      editable: true,
+      refusal: null,
+    });
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { projectRepositoryId: id } }),
+    ).toMatchObject({ idleMode: 'always_on', idleSeconds: null });
+  });
+
+  it('is 403 for a member, storing and deploying nothing', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    const deploys = hosting().calls.filter((c) => c.operation === 'deploy').length;
+    s.asMember();
+
+    const res = await putIdle('ACME', id, { mode: 'always_on' });
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe('idle_policy_not_permitted');
+    expect(hosting().calls.filter((c) => c.operation === 'deploy')).toHaveLength(deploys);
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { projectRepositoryId: id } }),
+    ).toMatchObject({ idleMode: 'suspend' });
+  });
+
+  it('is 409 HOSTING_IDLE_POLICY_UNSUPPORTED for suspend on an AWS container, naming both', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await adminDb.projectRepo.update({
+      where: { id },
+      data: { hostingTarget: 'aws', hostingShape: 'container' },
+    });
+    await release(id, 1);
+    s.asAdmin();
+
+    const res = await putIdle('ACME', id, { mode: 'suspend' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'HOSTING_IDLE_POLICY_UNSUPPORTED',
+        message: 'This hosting target and shape cannot run that idle policy.',
+        details: { target: 'aws', shape: 'container', mode: 'suspend' },
+      },
+    });
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { projectRepositoryId: id } }),
+    ).toMatchObject({ idleMode: 'always_on' });
+  });
+
+  it('is 400 for a malformed policy', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    s.asAdmin();
+
+    for (const body of [
+      'not json',
+      [],
+      { mode: 'sometimes' },
+      { mode: 'suspend', idleSeconds: 5 },
+      { mode: 'suspend', idleSeconds: 90_000 },
+      { mode: 'suspend', idleSeconds: 61.5 },
+      { mode: 'always_on', idleSeconds: 300 },
+    ]) {
+      const res = await putIdle('ACME', id, body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect((await res.json()).error.code).toBe('invalid_idle_policy');
+    }
+  });
+
+  it('is 409 no_application before production exists, and 404 for a customer repository', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    const customer = await repo(s.fx, 'api', 'organization');
+    s.asAdmin();
+
+    expect(await (await readIdle('ACME', id)).json()).toEqual({
+      policy: null,
+      editable: false,
+      refusal: null,
+    });
+    const none = await putIdle('ACME', id, { mode: 'always_on' });
+    expect(none.status).toBe(409);
+    expect((await none.json()).error.code).toBe('no_application');
+    for (const res of [
+      await readIdle('ACME', customer),
+      await putIdle('ACME', customer, {
+        mode: 'always_on',
+      }),
+    ]) {
+      expect(res.status).toBe(404);
+      expect((await res.json()).error.code).toBe('repository_not_found');
+    }
+  });
+
+  it('is 502 when the redeploy fails, and 401 with no session', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    expect((await readIdle('ACME', id)).status).toBe(401);
+    expect((await putIdle('ACME', id, { mode: 'always_on' })).status).toBe(401);
+    s.asAdmin();
+    hosting().failNext('deploy');
+
+    const res = await putIdle('ACME', id, { mode: 'always_on' });
+
+    expect(res.status).toBe(502);
+    expect((await res.json()).error.code).toBe('idle_policy_failed');
+  });
+
+  it('rethrows an error it has no status for, so the framework answers 500', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    s.asAdmin();
+    const { productionPanelService } = await import('@/lib/services/productionPanelService');
+    vi.spyOn(productionPanelService, 'getIdlePolicy').mockRejectedValue(new Error('read'));
+    vi.spyOn(productionPanelService, 'setIdlePolicy').mockRejectedValue(new Error('write'));
+
+    await expect(readIdle('ACME', id)).rejects.toThrow('read');
+    await expect(putIdle('ACME', id, { mode: 'always_on' })).rejects.toThrow('write');
+  });
+});
+
+/** motir-ai answering this organisation's balance. */
+function stubBalance(balance: number): void {
+  vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (u: string) => {
+      if (String(u).includes('/v1/usage')) {
+        return new Response(JSON.stringify({ balance }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    }),
+  );
+}
+
+async function readUsage(key: string, rowId: string): Promise<Response> {
+  return GET_USAGE(new Request(`${url(key, rowId)}/usage`), params(key, rowId));
+}
+
+describe('always on while out of credits (MOTIR-12108)', () => {
+  async function exhausted(balance: number) {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    await adminDb.hostedApplication.update({
+      where: { projectRepositoryId: id },
+      data: { creditsExhaustedSince: new Date(Date.now() - 3_600_000) },
+    });
+    stubBalance(balance);
+    s.asAdmin();
+    return id;
+  }
+
+  it('is 409 always_on_refused_out_of_credits below zero, storing and deploying nothing', async () => {
+    const id = await exhausted(-5);
+    const deploys = hosting().calls.filter((c) => c.operation === 'deploy').length;
+
+    const res = await putIdle('ACME', id, { mode: 'always_on' });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('always_on_refused_out_of_credits');
+    expect(hosting().calls.filter((c) => c.operation === 'deploy')).toHaveLength(deploys);
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { projectRepositoryId: id } }),
+    ).toMatchObject({ idleMode: 'suspend' });
+  });
+
+  it('lifts the refusal at once on a top-up, before the meter’s next pass', async () => {
+    const id = await exhausted(250);
+
+    expect((await putIdle('ACME', id, { mode: 'always_on' })).status).toBe(200);
+  });
+
+  it('still lets an administrator choose suspend when idle', async () => {
+    const id = await exhausted(-5);
+
+    expect((await putIdle('ACME', id, { mode: 'suspend', idleSeconds: 600 })).status).toBe(200);
+  });
+});
+
+describe('GET …/production/usage (MOTIR-12108)', () => {
+  it('answers a member this period’s usage and credits, with no figure of Motir’s cost', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    const app = await adminDb.hostedApplication.findUniqueOrThrow({
+      where: { projectRepositoryId: id },
+      include: { workspace: true },
+    });
+    const end = new Date();
+    await adminDb.productionUsageSlice.create({
+      data: {
+        workspaceId: app.workspaceId,
+        organizationId: app.workspace.organizationId,
+        applicationId: app.id,
+        releaseId: app.currentReleaseId,
+        unit: 'fly_small_seconds',
+        quantity: 3600,
+        credits: 7.5,
+        motirCostUsd: 0.0092,
+        periodStart: new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1)),
+        chargeDay: new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())),
+        sliceStart: new Date(end.getTime() - 3_600_000),
+        sliceEnd: end,
+        idempotencyKey: `${app.id}:fly_small_seconds:${end.toISOString()}`,
+      },
+    });
+    s.asMember();
+
+    const res = await readUsage('ACME', id);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      usage: [{ unit: 'fly_small_seconds', quantity: 3600, credits: 7.5 }],
+      // Today's open day is in the rows, and charged only once it closes
+      // (Decision MOTIR-12100 §2), so nothing is charged yet.
+      credits: 0,
+      motirCostRecorded: true,
+      state: 'ok',
+      exhausted: null,
+    });
+    expect(JSON.stringify(body)).not.toMatch(/0\.0092|motirCostUsd/);
+  });
+
+  it('answers no_release before a first release', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    s.asMember();
+
+    expect(await (await readUsage('ACME', id)).json()).toMatchObject({
+      usage: [],
+      credits: 0,
+      state: 'no_release',
+    });
+  });
+
+  it('answers credits_exhausted while the organisation is below zero', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    const since = new Date(Date.now() - 86_400_000);
+    await adminDb.hostedApplication.update({
+      where: { projectRepositoryId: id },
+      data: { creditsExhaustedSince: since },
+    });
+    stubBalance(-12);
+    s.asAdmin();
+
+    expect(await (await readUsage('ACME', id)).json()).toMatchObject({
+      state: 'credits_exhausted',
+      exhausted: { since: since.toISOString(), balance: -12, canSuspend: true, suspendsAt: null },
+    });
+  });
+
+  it('rethrows an error it has no status for, so the framework answers 500', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    const { productionUsageService } = await import('@/lib/services/productionUsageService');
+    vi.spyOn(productionUsageService, 'getUsageForRepository').mockRejectedValue(new Error('boom'));
+    s.asAdmin();
+
+    await expect(readUsage('ACME', id)).rejects.toThrow('boom');
+  });
+
+  it('is the ordinary 404 for a customer repository and another project’s path, 401 with no session', async () => {
+    const s = await setup();
+    const customer = await repo(s.fx, 'api', 'organization');
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const foreign = await repo(other);
+    expect((await readUsage('ACME', customer)).status).toBe(401);
+    s.asAdmin();
+
+    for (const [key, rowId] of [
+      ['ACME', customer],
+      ['ACME', foreign],
+      ['OTHR', foreign],
+    ] as const) {
+      const res = await readUsage(key, rowId);
+      expect(res.status, `${key}/${rowId}`).toBe(404);
+      expect((await res.json()).error.code).toBe('repository_not_found');
+    }
+  });
+});
+
 describe('layering', () => {
   it('the routes import no database client, no repository and no port', () => {
-    for (const file of [
-      'app/api/projects/[key]/repositories/[rowId]/production/route.ts',
-      'app/api/projects/[key]/repositories/[rowId]/production/rollback/route.ts',
-    ]) {
+    for (const [file, handlers] of [
+      ['app/api/projects/[key]/repositories/[rowId]/production/route.ts', 1],
+      ['app/api/projects/[key]/repositories/[rowId]/production/rollback/route.ts', 1],
+      // GET and PUT, one service call each.
+      ['app/api/projects/[key]/repositories/[rowId]/production/idle-policy/route.ts', 2],
+    ] as const) {
       const source = readFileSync(file, 'utf8');
       expect(source, file).not.toMatch(/@\/lib\/db['/]/);
       expect(source, file).not.toMatch(/@\/lib\/repositories\//);
       expect(source, file).not.toMatch(/@\/lib\/orchestrator|@motir\/orchestrator/);
-      expect(source.match(/productionPanelService\.\w+\(/g), file).toHaveLength(1);
+      expect(source.match(/productionPanelService\.\w+\(/g), file).toHaveLength(handlers);
     }
+    const usage = readFileSync(
+      'app/api/projects/[key]/repositories/[rowId]/production/usage/route.ts',
+      'utf8',
+    );
+    expect(usage).not.toMatch(/@\/lib\/db['/]|@\/lib\/repositories\/|@motir\/orchestrator/);
+    expect(usage.match(/productionUsageService\.\w+\(/g)).toHaveLength(1);
     const service = readFileSync('lib/services/productionPanelService.ts', 'utf8');
     expect(service).not.toMatch(/@\/lib\/db['/]|@\/lib\/repositories\//);
   });

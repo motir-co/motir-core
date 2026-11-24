@@ -8,11 +8,17 @@ import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import { resolveEnvironment } from '@/lib/environmentConfig/resolveEnvironment';
 import {
   ApplicationNotFoundError,
+  ProductionDatabaseUnreadableError,
   ReleaseDeployFailedError,
   ReleaseInProgressError,
   ReleaseMigrationFailedError,
   type ReleaseStep,
 } from '@/lib/hosting/errors';
+import {
+  idlePolicyColumns,
+  idlePolicyOfRow,
+  type HostedIdlePolicy,
+} from '@/lib/hosting/idlePolicy';
 import type { HostingManifest } from '@/lib/hosting/manifest';
 import { mergeProductionEnvironment } from '@/lib/hosting/releaseEnvironment';
 import type { HostedReleaseCause } from '@/lib/hosting/vocabulary';
@@ -22,14 +28,16 @@ import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseReposit
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import { productionDatabaseService } from '@/lib/services/productionDatabaseService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
 // PUT ONE COMMIT INTO PRODUCTION (Story MOTIR-9797 · MOTIR-10030). The one entry
 // point for a production release of a Motir repository: a merge (MOTIR-10031), a
-// config change (MOTIR-10032) and a promotion by ref (MOTIR-7144) all call
-// `deployProductionRelease`, so there is no second path.
+// config change (MOTIR-10032), a promotion by ref (MOTIR-7144) and an idle-policy
+// change (MOTIR-12107) all call `deployProductionRelease`, so there is no second
+// path.
 //
 // ⚠️ THE ORDER DECIDES WHAT SERVES AFTER EACH FAILURE.
 //   1. Under the application row's lock — and only for that — refuse a second
@@ -76,6 +84,10 @@ export interface DeployProductionReleaseInput {
   /** The image the caller built for that commit. */
   artifactRef: string;
   cause: HostedReleaseCause;
+  /** The idle policy this release runs, and that the application STORES when
+   *  it goes live (the idle-policy switch, MOTIR-12107). Absent, the release
+   *  runs the stored one. A release that fails stores nothing. */
+  idle?: HostedIdlePolicy;
 }
 
 export interface ProductionReleaseDeps {
@@ -113,6 +125,15 @@ function reasonOf(error: ReleaseDeployFailedError | ReleaseMigrationFailedError)
     return error.timedOut ? 'migrate: timed out' : `migrate: exit ${error.exitCode ?? 'unknown'}`;
   }
   return `${error.step}: ${error.causeCode}${error.status === null ? '' : ` (HTTP ${error.status})`}`;
+}
+
+/** The application's stored idle policy. */
+async function storedIdlePolicy(applicationId: string): Promise<HostedIdlePolicy> {
+  const row = await withSystemContext((tx) =>
+    hostedApplicationRepository.findIdlePolicy(applicationId, tx),
+  );
+  if (!row) throw new ApplicationNotFoundError(applicationId);
+  return idlePolicyOfRow(row);
 }
 
 /** Create the release and move it to `releasing`, under the application row's
@@ -229,20 +250,26 @@ async function deployProductionRelease(
     )?.currentRelease;
     if (serving?.state === 'live') {
       await hostedReleaseUsageService.settleReleaseUsage(serving.id);
+      // Its last window charged too (MOTIR-12108); never throws.
+      await productionUsageMeterService.accrueOutgoingRelease(serving.id);
     }
 
-    const handle = await inStep(id, 'deploy', () =>
-      port.deploy({
+    // The idle policy (MOTIR-12107): the one asked for, or the application's
+    // stored one, read now — releases of one application are serialised, so no
+    // other change of it can land between this read and the go-live.
+    const handle = await inStep(id, 'deploy', async () => {
+      const idle = input.idle ?? (await storedIdlePolicy(app.id));
+      return port.deploy({
         appRef,
         environment: { kind: 'production' },
         artifact,
         runtime: manifest,
         env,
         size,
-        idle: { mode: 'always_on' },
+        idle,
         ...(shape ? { shape } : {}),
-      }),
-    );
+      });
+    });
 
     return await withSystemContext(async (tx) => {
       const live = await hostedApplicationService.transitionRelease(
@@ -253,6 +280,11 @@ async function deployProductionRelease(
         tx,
       );
       await hostedApplicationService.swapCurrentRelease(app.id, id, tx);
+      // Stored only once the port has accepted it and the release is live, in
+      // the same transaction as the swap.
+      if (input.idle) {
+        await hostedApplicationRepository.setIdlePolicy(app.id, idlePolicyColumns(input.idle), tx);
+      }
       return live;
     });
   } catch (error) {
@@ -302,4 +334,41 @@ async function recordFailedRelease(
   });
 }
 
-export const productionReleaseService = { deployProductionRelease, recordFailedRelease };
+/**
+ * The SECRET entries a production release of the application runs with, read
+ * fresh (MOTIR-12105): every production entry saved as a secret, and the
+ * production database's connection string as the reserved `DATABASE_URL` when
+ * the application has one — the same merge `deployProductionRelease` hands the
+ * port, so a reader masking a release's output masks exactly what it was given.
+ *
+ * It lives here because this service is the one door to the production
+ * database's value (MOTIR-10028); the logs service asks for the secrets, never
+ * for the database. An application with no database adds nothing; a stored
+ * value that will not decrypt is thrown, so a caller fails closed rather than
+ * showing output it could not mask. The values live in memory only.
+ */
+async function productionSecretEnvironment(application: {
+  id: string;
+  workspaceId: string;
+  projectRepositoryId: string;
+}): Promise<ReleaseEnvVar[]> {
+  const resolved = await resolveEnvironment(application.projectRepositoryId, 'production', {
+    workspaceId: application.workspaceId,
+  });
+  let database: { readonly DATABASE_URL: string } | null;
+  try {
+    database = await productionDatabaseService.getProductionDatabaseEnv(application.id);
+  } catch (error) {
+    if (!(error instanceof ProductionDatabaseUnreadableError) || error.reason !== 'absent') {
+      throw error;
+    }
+    database = null;
+  }
+  return mergeProductionEnvironment(resolved, database).filter((entry) => entry.secret);
+}
+
+export const productionReleaseService = {
+  deployProductionRelease,
+  recordFailedRelease,
+  productionSecretEnvironment,
+};

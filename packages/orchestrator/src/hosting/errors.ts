@@ -129,3 +129,31 @@ export class ServerlessRoleReadBackMismatchError extends Error {
     this.name = 'ServerlessRoleReadBackMismatchError';
   }
 }
+
+/** The target cannot read the release's output — not built for this target yet,
+ *  or the provider will not answer. Distinct from an `OrchestratorApiError`, so a
+ *  caller can show "logs unavailable from the target" rather than a failure. */
+export class LogsUnavailableError extends Error {
+  readonly code = 'HOSTING_LOGS_UNAVAILABLE' as const;
+  constructor(
+    readonly target: string,
+    readonly reason: string,
+  ) {
+    super(`Logs are unavailable from the ${target} target: ${reason}.`);
+    this.name = 'LogsUnavailableError';
+  }
+}
+
+/** The target cannot report the release's runtime health — not built for this
+ *  target yet, or the provider will not answer. A caller falls back to its own
+ *  health-check probe alone. */
+export class RuntimeHealthUnavailableError extends Error {
+  readonly code = 'HOSTING_RUNTIME_HEALTH_UNAVAILABLE' as const;
+  constructor(
+    readonly target: string,
+    readonly reason: string,
+  ) {
+    super(`Runtime health is unavailable from the ${target} target: ${reason}.`);
+    this.name = 'RuntimeHealthUnavailableError';
+  }
+}

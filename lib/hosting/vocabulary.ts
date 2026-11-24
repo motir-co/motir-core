@@ -69,8 +69,15 @@ export const HOSTED_RELEASE_STATES = [
 export type HostedReleaseState = (typeof HOSTED_RELEASE_STATES)[number];
 
 /** Why a release was made: a merge to the default branch, a configuration
- *  change, a person asking for a ref, or a rollback. */
-export const HOSTED_RELEASE_CAUSES = ['merge', 'config_change', 'ref', 'rollback'] as const;
+ *  change, a person asking for a ref, a rollback, or a change of the
+ *  application's idle policy (MOTIR-12107). */
+export const HOSTED_RELEASE_CAUSES = [
+  'merge',
+  'config_change',
+  'ref',
+  'rollback',
+  'idle_policy',
+] as const;
 export type HostedReleaseCause = (typeof HOSTED_RELEASE_CAUSES)[number];
 
 /**

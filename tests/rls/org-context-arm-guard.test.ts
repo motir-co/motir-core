@@ -111,6 +111,14 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'Moved out of `list` into a module helper shared with the name-only Visitor list ' +
       '(Story MOTIR-6170 · MOTIR-6646); the read is unchanged',
   },
+  'lib/services/projectAccessService.ts#listUserIdsWithPermission': {
+    tables: ['organization_membership'],
+    source: 'scan',
+    why:
+      "the org Owner / Admin half of a project permission's holders, for the production " +
+      'crash notification (Story MOTIR-9799 · MOTIR-12106) — the org-manager read, under the ' +
+      "workspace's own org, org_membership_visible_active_or_own",
+  },
   'lib/services/projectMembersService.ts#previewAccessModeChange': {
     tables: ['organization_membership'],
     source: 'scan',

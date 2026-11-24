@@ -3213,6 +3213,10 @@
           "review_sent_back": {
             "label": "Een agent vroeg om wijzigingen",
             "desc": "Een review-agent stuurde een werkitem dat aan je is toegewezen terug, met zijn bevindingen."
+          },
+          "production_app_crashed": {
+            "label": "Een productie-app is gecrasht",
+            "desc": "Een app die Motir host voor een project dat je beheert, is gecrasht of heeft de statuscontrole niet doorstaan."
           }
         },
         "soon": "Binnenkort",
@@ -4704,7 +4708,8 @@
         "rollback": "Hersteld door terugdraaien · {name}",
         "rollbackUnnamed": "Hersteld door terugdraaien",
         "ref": "Deploy van {ref} · {name}",
-        "refUnnamed": "Deploy van {ref}"
+        "refUnnamed": "Deploy van {ref}",
+        "idlePolicy": "Opnieuw gedeployd · gedrag bij inactiviteit gewijzigd"
       },
       "address": {
         "newTab": "(opent in een nieuw tabblad)",
@@ -4752,7 +4757,7 @@
         "notFound": "Deze repository is niet meer voor je beschikbaar."
       },
       "readOnly": {
-        "note": "Je kunt elke release zien. Alleen projectbeheerders kunnen terugdraaien."
+        "note": "Je kunt elke release zien, met de status, logs en het gebruik. Alleen projectbeheerders kunnen terugdraaien of wijzigen wanneer de app slaapt."
       },
       "empty": {
         "title": "Nog niets in productie",
@@ -4768,6 +4773,162 @@
         "title": "Repository niet gevonden",
         "body": "Motir draait productie alleen voor de repository’s die het host. Kies een van de repository’s van dit project.",
         "back": "Terug naar Productie"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Op {target} kan een {shape} alleen altijd aan blijven, dus kan die niet pauzeren bij inactiviteit.",
+          "unsupportedKeeps": "Deze app draait de hele tijd.",
+          "unsupportedShort": "De hosting van deze app ondersteunt die instelling niet, dus er is niets veranderd.",
+          "credits": "‘Altijd aan’ is niet beschikbaar zolang het creditsaldo van je organisatie onder nul staat. Vul credits aan en stel het daarna opnieuw in.",
+          "releaseInProgress": "Er loopt een release. Wijzig dit zodra die klaar is.",
+          "forbidden": "Alleen projectbeheerders kunnen dit wijzigen.",
+          "noApplication": "Er staat nog niets in productie. Dit geldt zodra de eerste release live is.",
+          "failed": "De nieuwe instelling is niet toegepast, dus er is niets veranderd. Probeer het opnieuw."
+        },
+        "shape": {
+          "function": "functie",
+          "container": "container"
+        },
+        "heading": "Bij inactiviteit",
+        "option": {
+          "suspend": "Pauzeren bij inactiviteit",
+          "alwaysOn": "Altijd aan"
+        },
+        "help": {
+          "suspend": "De app slaapt als niets erom vraagt en wordt wakker bij het volgende verzoek. Het eerste verzoek na het slapen is trager.",
+          "alwaysOn": "De app draait de hele tijd, dus geen enkel verzoek wacht tot hij wakker wordt. Hij verbruikt elk uur credits."
+        },
+        "default": "Nieuwe apps starten met ‘Pauzeren bij inactiviteit’. Dit geldt vanaf de eerste release.",
+        "switching": "Toepassen op de draaiende release…",
+        "switchingNote": "Dezelfde build wordt opnieuw uitgerold met de nieuwe instelling. Er wordt niets opnieuw gebouwd.",
+        "readOnly": "Alleen projectbeheerders kunnen dit wijzigen.",
+        "loading": "Instelling laden…",
+        "loadError": "Kon deze instelling niet laden."
+      },
+      "health": {
+        "heading": "Status",
+        "state": {
+          "healthy": "Gezond",
+          "unhealthy": "Ongezond",
+          "suspended": "Gepauzeerd",
+          "crashed": "Gecrasht",
+          "deploying": "Wordt uitgerold"
+        },
+        "since": "{state} sinds {duration}",
+        "line": {
+          "healthy": "Beantwoordt de statuscontrole op {path}.",
+          "unhealthy": "De statuscontrole op {path} is twee keer achter elkaar mislukt.",
+          "suspended": "Slaapt omdat niets erom vroeg. Het volgende verzoek maakt de app wakker.",
+          "crashed": "Het proces is gestopt. {target} start het opnieuw.",
+          "crashedOom": "Het proces is gestopt: het geheugen raakte op. {target} start het opnieuw.",
+          "deploying": "Release {commit} wordt uitgerold. De huidige release blijft draaien tot deze live is.",
+          "deployingUnnamed": "Een nieuwe release wordt uitgerold. De huidige release blijft draaien tot deze live is."
+        },
+        "unreachable": "Motir kan {address} niet bereiken om te controleren. Dit is de laatste status die Motir zag; de app zelf werkt mogelijk prima.",
+        "unreachableNoAddress": "Motir kan deze app niet bereiken om te controleren. Dit is de laatste status die Motir zag; de app zelf werkt mogelijk prima.",
+        "pending": "Motir heeft deze app nog niet gecontroleerd. De eerste controle volgt binnen een minuut nadat de release live is.",
+        "loading": "Status controleren…",
+        "failed": "Kon de status van deze app niet lezen.",
+        "retry": "Opnieuw proberen"
+      },
+      "events": {
+        "heading": "Crashes",
+        "empty": "Geen crashes vastgelegd voor deze app.",
+        "reason": {
+          "exit": "Gestopt met code {code}",
+          "exited": "Gestopt",
+          "oom": "Geheugen vol",
+          "http": "Statuscontrole mislukt: HTTP {status}",
+          "timeout": "Statuscontrole mislukt: time-out"
+        },
+        "release": "Release <code>{commit}</code>",
+        "rolledBackSince": "Inmiddels teruggedraaid",
+        "showLines": "{count, plural, one {De laatste regel ervoor tonen} other {De laatste # regels ervoor tonen}}",
+        "hideLines": "Laatste regels verbergen"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Nieuwste eerst",
+        "range": {
+          "label": "Periode",
+          "15m": "15 min",
+          "1h": "1 uur",
+          "24h": "24 uur",
+          "7d": "7 dagen"
+        },
+        "rangeSpan": {
+          "15m": "15 minuten",
+          "1h": "uur",
+          "24h": "24 uur",
+          "7d": "7 dagen"
+        },
+        "filter": "Regels filteren",
+        "stream": {
+          "app": "app",
+          "platform": "platform"
+        },
+        "linesLabel": "Logregels",
+        "line": {
+          "expand": "Hele regel tonen",
+          "collapse": "Deze regel inklappen"
+        },
+        "more": "Eerdere regels tonen",
+        "moreError": "Kon eerdere regels niet laden. Probeer het opnieuw.",
+        "masked": "Elke geheime waarde uit de omgeving van deze app wordt getoond als ***.",
+        "asleep": "De laatste regels voordat de app ging slapen.",
+        "noMatch": "Geen regels komen overeen met ‘{filter}’ in het laatste {range}.",
+        "empty": "Geen regels in het laatste {range}.",
+        "unavailable": "{target} gaf de logs van deze app niet terug. Dat is de logdienst van {target}, niet de app: die draait mogelijk prima. Oudere regels worden niet als actueel getoond.",
+        "failed": "Kon de logs van deze app niet laden.",
+        "retry": "Opnieuw proberen",
+        "loading": "Regels laden…",
+        "noRelease": "Logs verschijnen hier zodra de eerste release live is."
+      },
+      "usage": {
+        "heading": "Gebruik deze periode",
+        "loading": "Gebruik laden…",
+        "loadError": "Kon het gebruik van deze periode niet laden.",
+        "retry": "Opnieuw proberen",
+        "col": {
+          "what": "Wat er is gebruikt",
+          "amount": "Hoeveelheid",
+          "credits": "Credits"
+        },
+        "unit": {
+          "machine": "Fly-machine · {size}",
+          "lambdaCompute": "Functierekenkracht (GB-seconden)",
+          "lambdaRequests": "Functieverzoeken",
+          "containerCpu": "AWS-container · vCPU",
+          "containerMemory": "AWS-container · geheugen",
+          "dbCompute": "{provider}-database · rekenkracht",
+          "dbStorage": "{provider}-database · opslag"
+        },
+        "size": {
+          "small": "klein",
+          "medium": "middel",
+          "large": "groot"
+        },
+        "total": "In deze periode afgerekende credits",
+        "footnote": "1 credit is één Linux-equivalente minuut. Het gebruik van elke dag wordt één keer afgerekend, na middernacht UTC, afgerond op een hele credit, dus dat van vandaag zit nog niet in het totaal.",
+        "noRelease": "Nog niets gebruikt. Het gebruik begint met de eerste live release.",
+        "exhausted": {
+          "title": "Geen credits meer · saldo {balance}",
+          "titleNoBalance": "Geen credits meer",
+          "body": "Deze app blijft draaien. Staat het saldo op {date} nog onder nul, dan zet Motir hem op ‘Pauzeren bij inactiviteit’, zodat hij slaapt als niets erom vraagt. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "bodySuspended": "Deze app blijft draaien en slaapt als niets erom vraagt. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "bodyCannotSuspend": "Deze app draait als AWS-container, die niet gepauzeerd kan worden. Hij blijft dus altijd aan en verbruikt credits tot het saldo is aangevuld. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "topUp": "Credits aanvullen",
+          "member": "Een eigenaar of beheerder van de organisatie kan credits aanvullen."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {
@@ -6286,10 +6447,12 @@
       "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet",
       "pageMentioned": "<s>{actor}</s> heeft je vermeld op <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> slaagt in productie niet voor de statuscontrole} other {<s>{repository}</s> is in productie gecrasht}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents."
+      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {

@@ -2,6 +2,7 @@
 // MOTIR-10026). `HostedApplicationDto` never carries the database URL, in any
 // form: the ciphertext stays on the row.
 
+import type { HostedIdlePolicy } from '@/lib/hosting/idlePolicy';
 import type {
   HostedReleaseCause,
   HostedReleaseState,
@@ -47,6 +48,8 @@ export interface HostedApplicationDto {
   productionAddress: string | null;
   currentRelease: HostedReleaseDto | null;
   previousRelease: HostedReleaseDto | null;
+  /** The idle policy its production release runs (MOTIR-12107). */
+  idlePolicy: HostedIdlePolicy;
   /** Whether a production database has been provisioned. */
   hasDatabase: boolean;
   createdAt: string;
