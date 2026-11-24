@@ -7,6 +7,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Server Actions for the top-nav project switcher + project surfaces.
@@ -54,6 +55,46 @@ export async function setActiveProjectAction(projectId: string): Promise<void> {
   // route re-renders against the new active project, matching how the cookie
   // write auto-invalidates for the workspace/org switch.
   revalidatePath('/', 'layout');
+}
+
+/** What opening a project-settings link that names a project did (MOTIR-12169). */
+export type ProjectLinkOutcome =
+  /** The named project is already the reader's active one: nothing was written. */
+  | 'current'
+  /** The reader may enter it, and it is now their active project. */
+  | 'switched'
+  /** No project the reader may enter carries the key — a private project and a
+   * missing one answer alike, so the link cannot probe for existence. */
+  | 'refused';
+
+/**
+ * Open a project-settings link that names its project (`?project=<KEY>`, Bug
+ * MOTIR-12169): resolve the key with the browse-gated, alias-aware resolver
+ * the project routes use, and — when it names a project the reader may enter
+ * that is not their active one — make the switcher's own switch.
+ *
+ * A POST, so it runs only when the reader opens the link (never on a prefetch),
+ * and it is the switch's own `project:browse` check: `setActiveProject` alone
+ * asserts only membership (MOTIR-6319).
+ */
+export async function openProjectLinkAction(projectKey: string): Promise<ProjectLinkOutcome> {
+  const { userId, workspaceId } = await requireContext();
+  let projectId: string;
+  try {
+    ({
+      project: { id: projectId },
+    } = await projectsService.resolveByKey(projectKey, { userId, workspaceId }));
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) return 'refused';
+    throw err;
+  }
+  const active = await projectsService.getActiveProject(userId, workspaceId);
+  if (active?.id === projectId) return 'current';
+  await projectsService.setActiveProject({ userId, workspaceId, projectId });
+  // As for the switcher: the shell above the settings area renders the active
+  // project, and only a layout revalidation reaches it.
+  revalidatePath('/', 'layout');
+  return 'switched';
 }
 
 export interface CreateProjectActionInput {

@@ -66,6 +66,11 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     card: 'MOTIR-6319',
     reason: 'pins a project with no `project:browse` check',
   },
+  '_project-actions.ts#openProjectLinkAction': {
+    kind: 'self',
+    reason:
+      'the actor’s own active project, switched only to a project `resolveByKey` lets them browse (MOTIR-12169)',
+  },
   '_project-actions.ts#startNewAiProjectAction': {
     kind: 'self',
     reason: 'workspace membership starts a new project',
