@@ -21,6 +21,7 @@ import {
 import type {
   TenantAccountHandoverDto,
   TenantHandoverApplicationDto,
+  TenantHandoverRoomDto,
 } from '@/lib/dto/tenantAccountHandover';
 import { githubAccountIdOfLogin } from '@/lib/github/repositoryOwnerId';
 import {
@@ -36,6 +37,7 @@ import {
   TenantHandoverNotAdminError,
   TenantHandoverNotFoundError,
 } from '@/lib/hosting/tenantHandoverErrors';
+import { isHandoverGithubOwner, isHandoverOwnerEmail } from '@/lib/hosting/handoverInput';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { GithubIdentityRequiredError } from '@/lib/projectRepos/errors';
@@ -188,10 +190,6 @@ const RECHECKED_STEPS: readonly TenantHandoverStep[] = [
 
 /** A repository past the transfer: the saga issued it, Motir no longer acts. */
 const PAST_TRANSFER = new Set(['transfer_pending', 'awaiting_reinstall', 'done']);
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** GitHub's login shape: alphanumerics and single hyphens, at most 39. */
-const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 
 async function defaultAws(): Promise<TenantHandoverAwsReach> {
   const [{ createConfiguredAwsHandover }, { hostingOriginSecretKey }] = await Promise.all([
@@ -604,10 +602,8 @@ async function freshDto(tenantAccountId: string): Promise<TenantAccountHandoverD
 function validStart(input: { ownerEmail: string; githubOwner: string }) {
   const ownerEmail = input.ownerEmail.trim();
   const githubOwner = input.githubOwner.trim();
-  if (!EMAIL.test(ownerEmail) || ownerEmail.length > 254) {
-    throw new TenantHandoverInputError('ownerEmail');
-  }
-  if (!GITHUB_LOGIN.test(githubOwner)) throw new TenantHandoverInputError('githubOwner');
+  if (!isHandoverOwnerEmail(ownerEmail)) throw new TenantHandoverInputError('ownerEmail');
+  if (!isHandoverGithubOwner(githubOwner)) throw new TenantHandoverInputError('githubOwner');
   return { ownerEmail, githubOwner };
 }
 
@@ -779,6 +775,48 @@ export const tenantAccountHandoverService = {
     if (!moved) throw new HandoverNothingToRetryError(tenantAccountId, currentLabel(row));
     await resolve(deps).enqueueAdvance(tenantAccountId);
     return freshDto(tenantAccountId);
+  },
+
+  /**
+   * What the Repositories room shows an organisation admin of the AWS hosting
+   * (MOTIR-12137): every AWS-target repository of the organisation, handed over
+   * together, and the tenant account a handover runs on. Null for anyone who is
+   * not an organisation admin — the room then draws neither the entry nor the
+   * checklist, and every route keeps its own gate.
+   */
+  async roomOverview(
+    organizationId: string,
+    userId: string,
+  ): Promise<TenantHandoverRoomDto | null> {
+    try {
+      await assertAdmin({ userId, organizationId });
+    } catch (err) {
+      if (
+        err instanceof TenantHandoverNotAdminError ||
+        err instanceof TenantHandoverNotFoundError
+      ) {
+        return null;
+      }
+      throw err;
+    }
+    return withSystemContext(async (tx) => {
+      const [account, repositories] = await Promise.all([
+        hostingTenantAccountRepository.findByOrganizationId(organizationId, tx),
+        projectRepoRepository.listAwsMotirReposByOrganizationInTx(organizationId, tx),
+      ]);
+      return {
+        organizationId,
+        tenantAccountId: account?.id ?? null,
+        accountState: account ? (account.state as HostingTenantAccountState) : null,
+        handoverStarted: account ? isTenantAccountHandoverState(account.state) : false,
+        repositories: repositories.map((repo) => ({
+          id: repo.id,
+          name: repo.name,
+          repoRef: repo.githubRepo ? `${repo.githubRepo.owner}/${repo.githubRepo.name}` : null,
+          projectName: repo.project.name,
+        })),
+      };
+    });
   },
 
   /** The checklist: each step's status, error and what it waits on, and each

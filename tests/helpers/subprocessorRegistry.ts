@@ -189,6 +189,8 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
     'documentation URL cited in a code comment (MOTIR-5595); never rendered and never requested',
   'docs.aws.amazon.com':
     'documentation URL cited in a code comment (MOTIR-11725, the CI Spot instance-type allowlist); never rendered and never requested',
+  'signin.aws.amazon.com':
+    "AWS's own sign-in page, a link the AWS hosting handover's checklist shows the new account owner (MOTIR-12137) so they do AWS's steps in AWS; opened by the person's browser, never requested by the server, and no data of ours is sent to it",
   'docs.claude.com': 'documentation link shown to the user',
   'developers.openai.com': 'documentation link shown to the user',
   'developers.google.com': 'documentation link shown to the user',

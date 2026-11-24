@@ -10726,6 +10726,154 @@
       "stateUnfinishedYours": "Verwijderen is niet voltooid",
       "unfinishedDetailYours": "Motir is halverwege gestopt met het stoppen van wat het vanuit deze repository draait. De repository zelf blijft in je GitHub-account, en opnieuw proberen maakt de rest af.",
       "retryDelete": "Opnieuw proberen"
+    },
+    "awsHandover": {
+      "takeOver": "AWS-hosting overnemen",
+      "takeOverLabel": "AWS-hosting voor {repo} overnemen",
+      "rowHelperMember": "Draait op het AWS-account van {org}, dat Motir in zijn geheel verlaat — een organisatiebeheerder draagt het over.",
+      "refusalTitle": "{repo} verhuist samen met {count, plural, one {één andere repository} other {# andere repository's}}",
+      "refusalLead": "De app draait op het AWS-account van {org}, net als deze. Een AWS-account verlaat Motir in zijn geheel — één account per organisatie — dus ze kunnen alleen samen worden overgenomen.",
+      "startLead": "De app van deze repository draait op het eigen AWS-account van {org} binnen Motir. Dat account verlaat Motir in zijn geheel, met de apps nog draaiend — op AWS neem je dus de hosting over, en de repository's gaan mee.",
+      "refusalOthersLabel": "De andere repository's op het account",
+      "oneAccountTitle": "Eén AWS-account per organisatie",
+      "oneAccountBody": "Elke repository van {org} die op AWS draait, wordt samen overgedragen, in één stap die je kunt volgen en hervatten.",
+      "nothingChanged": "Er is niets veranderd.",
+      "stillHosted": "{repo} wordt nog steeds door Motir gehost, net als de andere.",
+      "askAnAdmin": "Een organisatiebeheerder kan de AWS-hosting voor alle samen overnemen.",
+      "cancel": "Annuleren",
+      "close": "Sluiten",
+      "back": "Terug",
+      "continue": "Doorgaan",
+      "stepEyebrow": "AWS-hosting overnemen · stap {step} van 2",
+      "stepTitle": "Het AWS-account van {org} overdragen",
+      "stepLead": "Het account verlaat Motir met elke app erin nog draaiend. Geef aan wie de nieuwe eigenaar is en waar de repository's naartoe gaan.",
+      "ownerEmailLabel": "E-mail van de eigenaar",
+      "ownerEmailPlaceholder": "naam@example.com",
+      "ownerEmailHelp": "Het adres dat eigenaar wordt van het AWS-account. AWS mailt hier een eenmalige code naartoe.",
+      "ownerEmailInvalid": "Voer een e-mailadres in, zoals naam@example.com.",
+      "githubOwnerLabel": "GitHub-eigenaar",
+      "githubOwnerPlaceholder": "je-organisatie",
+      "githubOwnerHelp": "Het GitHub-account of de organisatie die de repository's ontvangt.",
+      "githubOwnerInvalid": "Voer de naam van een GitHub-account of -organisatie in: letters, cijfers en enkele koppeltekens.",
+      "handedOverTogether": "Samen overgedragen",
+      "noAwsRepositories": "{org} heeft geen repository's die op AWS draaien, dus er is niets over te dragen.",
+      "awsStepsNote": "Een paar stappen gebeuren in AWS zelf — inloggen als root-gebruiker, een betaalmethode toevoegen. Motir vraagt nooit om betaalgegevens of een root-wachtwoord.",
+      "confirmTitle": "De overdracht starten?",
+      "confirmNewOwner": "Nieuwe eigenaar van het AWS-account",
+      "confirmRepositoriesGoTo": "Repository's gaan naar",
+      "consequencePreviews": "{count, plural, one {De previews van deze repository worden verwijderd en Motir stopt met het deployen ervan.} other {De previews van deze # repository's worden verwijderd en Motir stopt met het deployen ervan.}}",
+      "consequenceRunning": "De apps blijven draaien. Je laat je domeinen naar hun eigen adressen wijzen voordat de toegang van Motir eindigt.",
+      "consequenceIrreversible": "Zodra het account de AWS Organization van Motir heeft verlaten, kan dit niet ongedaan worden gemaakt.",
+      "start": "Overdracht starten",
+      "starting": "Bezig met starten…",
+      "startRefused": {
+        "notReady": "De overdracht kon niet starten: het AWS-account van {org} is nog niet klaar om over te dragen. Er is niets gewijzigd — probeer het over een paar minuten opnieuw.",
+        "alreadyStarted": "De overdracht kon niet starten: die is al gestart voor het AWS-account van {org}. Er is niets gewijzigd — laad de pagina opnieuw om hem te volgen.",
+        "githubIdentity": "De overdracht kon niet starten: koppel eerst je GitHub-account, zodat de repository's kunnen worden overgedragen. Er is niets gewijzigd.",
+        "input": "De overdracht kon niet starten: controleer de e-mail van de eigenaar en de GitHub-eigenaar. Er is niets gewijzigd.",
+        "failed": "De overdracht kon niet starten. Er is niets gewijzigd — probeer het zo opnieuw."
+      },
+      "checklistEyebrow": "Overdracht van de AWS-hosting",
+      "checklistTitle": "AWS-account van {org}",
+      "accountLabel": "Account-ID",
+      "repositoryCount": "{count, plural, one {# repository} other {# repository's}}",
+      "checklistLoading": "Overdracht wordt gelezen…",
+      "checklistError": "De overdracht kon niet worden gelezen",
+      "checklistErrorBody": "Er is niets veranderd. Probeer het zo opnieuw.",
+      "tryAgain": "Opnieuw proberen",
+      "stepsLabel": "Stappen van de overdracht",
+      "stepFailedUnknown": "Deze stap is mislukt. Niets daarna is uitgevoerd.",
+      "retry": "Opnieuw uitvoeren",
+      "status": {
+        "pending": "In afwachting",
+        "running": "Bezig",
+        "waitingOnYou": "Wacht op jou",
+        "done": "Klaar",
+        "failed": "Mislukt"
+      },
+      "overall": {
+        "inProgress": "Bezig",
+        "waiting": "Wacht op jou",
+        "failed": "Moet opnieuw",
+        "done": "Overgedragen"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Previews verwijderd",
+          "body": "{count, plural, one {De preview-omgevingen van de repository worden verwijderd.} other {De preview-omgevingen van de # repository's worden verwijderd.}}"
+        },
+        "create_deploy_role": {
+          "label": "Deployrol voor je CI aangemaakt",
+          "body": "De workflows van je repository's deployen er voortaan mee."
+        },
+        "open_upstream": {
+          "label": "Apps bereikbaar zonder Motir",
+          "body": "Elke app antwoordt op een eigen adres, hieronder vermeld."
+        },
+        "move_email": {
+          "label": "Accountmail overgezet",
+          "body": "Het e-mailadres van het AWS-account wordt dat van de nieuwe eigenaar."
+        },
+        "await_standalone": {
+          "label": "Stappen in AWS",
+          "body": "Root-aanmelding, betaalmethode, contactgegevens en overeenkomsten, gedaan in AWS."
+        },
+        "remove_access": {
+          "label": "Toegang van Motir verwijderd",
+          "body": "De rollen van Motir in het account worden verwijderd; motir.site-adressen antwoorden niet meer."
+        },
+        "leave_organization": {
+          "label": "Account heeft de AWS Organization van Motir verlaten",
+          "body": "Het account is nu een zelfstandig AWS-account."
+        },
+        "transfer_repositories": {
+          "label": "Elke repository overgedragen",
+          "body": "GitHub draagt elke repository over aan de nieuwe eigenaar.",
+          "bodyOwner": "GitHub draagt elke repository over aan {owner}."
+        }
+      },
+      "codeLabel": "Code van AWS",
+      "confirmCode": "Code bevestigen",
+      "codeRefused": "AWS heeft die code niet geaccepteerd.",
+      "codeEmpty": "Voer de code uit de e-mail van AWS in.",
+      "codeHelp": "AWS heeft een eenmalige code naar {email} gemaild. Motir geeft hem door aan AWS en bewaart hem nooit.",
+      "codeHelpUnknown": "AWS heeft een eenmalige code naar de nieuwe eigenaar gemaild. Motir geeft hem door aan AWS en bewaart hem nooit.",
+      "codeRefusedHelp": "Bekijk de nieuwste e-mail van AWS aan {email} — een nieuwe code vervangt de oude — en probeer het opnieuw.",
+      "codeRefusedHelpUnknown": "Bekijk de nieuwste e-mail van AWS aan de nieuwe eigenaar — een nieuwe code vervangt de oude — en probeer het opnieuw.",
+      "standaloneIntro": "{email} doet dit in AWS:",
+      "standaloneIntroUnknown": "De nieuwe eigenaar doet dit in AWS:",
+      "standalone": {
+        "rootSignIn": "Aanmelden bij het account als root-gebruiker en een wachtwoord instellen",
+        "payment": "Een betaalmethode toevoegen",
+        "contact": "De contactgegevens bevestigen",
+        "agreement": "De klantovereenkomst van AWS accepteren"
+      },
+      "standaloneNote": "Dit gebeurt in AWS, niet hier. Motir vraagt nooit om betaalgegevens of een root-wachtwoord.",
+      "checkAgain": "Opnieuw controleren",
+      "signIn": "De aanmeldpagina van AWS openen (opent in een nieuw tabblad)",
+      "notReady": "Nog niet klaar — AWS heeft nog nodig:",
+      "missing": {
+        "wait_period": "tijd: AWS houdt een nieuw account een paar dagen vast voordat het kan vertrekken",
+        "delegated_administrator": "dat het account geen gedelegeerde beheerder meer is",
+        "payment_method": "een betaalmethode",
+        "support_plan": "een supportplan",
+        "contact_information": "de contactgegevens van het account"
+      },
+      "actionFailed": "Dat is niet gelukt. Er is niets gewijzigd — probeer het zo opnieuw.",
+      "upstreamsTitle": "Waar je apps zonder Motir antwoorden",
+      "upstreamsLead": "De adressen van Motir (…motir.site) antwoorden niet meer zodra de toegang van Motir is verwijderd. Laat elk domein vóór die tijd naar zijn adres wijzen.",
+      "upstreamsLoading": "Adressen worden gelezen…",
+      "upstreamsEmpty": "Nog geen apps om te tonen.",
+      "upstreamsError": "De adressen konden niet worden gelezen",
+      "upstreamsErrorBody": "De overdracht is niet geraakt. Probeer het zo opnieuw.",
+      "ownAddress": "Eigen adres",
+      "upstreamNotOpen": "Nog niet geopend",
+      "noDomains": "Geen eigen domeinen — niets om om te zetten.",
+      "pointAt": "wijst naar",
+      "copy": "Kopiëren",
+      "copied": "Gekopieerd",
+      "copyOwnLabel": "Adres van {app} kopiëren",
+      "copyDomainLabel": "Kopiëren waar {host} naar wijst"
     }
   },
   "apiDocs": {

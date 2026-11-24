@@ -10723,6 +10723,154 @@
       "stateUnfinishedYours": "削除が完了しませんでした",
       "unfinishedDetailYours": "Motir はこのリポジトリから実行しているものの停止を途中で中断しました。リポジトリ自体はあなたの GitHub アカウントに残り、もう一度試すと残りが完了します。",
       "retryDelete": "もう一度試す"
+    },
+    "awsHandover": {
+      "takeOver": "AWS ホスティングを引き継ぐ",
+      "takeOverLabel": "{repo} の AWS ホスティングを引き継ぐ",
+      "rowHelperMember": "{org} の AWS アカウントで動いています。このアカウントは丸ごと Motir を離れるため、組織の管理者が引き渡します。",
+      "refusalTitle": "{count, plural, other {{repo} はほかの # 件のリポジトリと一緒に移ります}}",
+      "refusalLead": "このアプリは {org} の AWS アカウントで動いており、これらも同じです。AWS アカウントは丸ごと Motir を離れる（1 組織につき 1 アカウント）ため、まとめてしか引き継げません。",
+      "startLead": "このリポジトリのアプリは、Motir 内にある {org} 専用の AWS アカウントで動いています。そのアカウントはアプリが動いたまま丸ごと Motir を離れます。そのため AWS ではホスティングを引き継ぎ、リポジトリも一緒に移ります。",
+      "refusalOthersLabel": "このアカウントにあるほかのリポジトリ",
+      "oneAccountTitle": "1 組織につき 1 つの AWS アカウント",
+      "oneAccountBody": "AWS で動く {org} のリポジトリはすべてまとめて引き渡されます。進み具合を確認でき、途中から再開できる 1 つの手順です。",
+      "nothingChanged": "何も変更されていません。",
+      "stillHosted": "{repo} はほかのリポジトリと同じく、引き続き Motir がホストしています。",
+      "askAnAdmin": "組織の管理者なら、すべてまとめて AWS ホスティングを引き継げます。",
+      "cancel": "キャンセル",
+      "close": "閉じる",
+      "back": "戻る",
+      "continue": "続ける",
+      "stepEyebrow": "AWS ホスティングを引き継ぐ · ステップ {step}/2",
+      "stepTitle": "{org} の AWS アカウントを引き渡す",
+      "stepLead": "アカウントは中のアプリが動いたまま Motir を離れます。次の所有者と、リポジトリの移動先を指定してください。",
+      "ownerEmailLabel": "所有者のメールアドレス",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "AWS アカウントを所有するアドレスです。AWS がこのアドレスにワンタイムコードを送ります。",
+      "ownerEmailInvalid": "name@example.com のようなメールアドレスを入力してください。",
+      "githubOwnerLabel": "GitHub の所有者",
+      "githubOwnerPlaceholder": "your-organization",
+      "githubOwnerHelp": "リポジトリを受け取る GitHub アカウントまたは組織です。",
+      "githubOwnerInvalid": "GitHub のアカウント名または組織名を入力してください（英字、数字、単独のハイフン）。",
+      "handedOverTogether": "まとめて引き渡すもの",
+      "noAwsRepositories": "{org} には AWS で動くリポジトリがないため、引き渡すものはありません。",
+      "awsStepsNote": "いくつかの手順は AWS 上で行います（ルートユーザーとしてのサインイン、支払い方法の追加など）。Motir が支払い情報やルートパスワードを尋ねることはありません。",
+      "confirmTitle": "引き渡しを開始しますか？",
+      "confirmNewOwner": "AWS アカウントの新しい所有者",
+      "confirmRepositoriesGoTo": "リポジトリの移動先",
+      "consequencePreviews": "{count, plural, other {これら # 件のリポジトリのプレビューは削除され、Motir はデプロイを停止します。}}",
+      "consequenceRunning": "アプリは動き続けます。Motir のアクセスが終わる前に、ドメインを各アプリ自身のアドレスに向けてください。",
+      "consequenceIrreversible": "アカウントが Motir の AWS Organization を離れた後は、元に戻せません。",
+      "start": "引き渡しを開始",
+      "starting": "開始しています…",
+      "startRefused": {
+        "notReady": "引き渡しを開始できませんでした。{org} の AWS アカウントはまだ引き渡しの準備ができていません。何も変更されていません。数分後にもう一度お試しください。",
+        "alreadyStarted": "引き渡しを開始できませんでした。{org} の AWS アカウントの引き渡しはすでに開始されています。何も変更されていません。ページを再読み込みして進み具合を確認してください。",
+        "githubIdentity": "引き渡しを開始できませんでした。リポジトリを移管できるよう、先に GitHub アカウントを接続してください。何も変更されていません。",
+        "input": "引き渡しを開始できませんでした。所有者のメールアドレスと GitHub の所有者を確認してください。何も変更されていません。",
+        "failed": "引き渡しを開始できませんでした。何も変更されていません。しばらくしてからもう一度お試しください。"
+      },
+      "checklistEyebrow": "AWS ホスティングの引き渡し",
+      "checklistTitle": "{org} の AWS アカウント",
+      "accountLabel": "アカウント",
+      "repositoryCount": "{count, plural, other {# 件のリポジトリ}}",
+      "checklistLoading": "引き渡しを読み込んでいます…",
+      "checklistError": "引き渡しを読み込めませんでした",
+      "checklistErrorBody": "何も変更されていません。しばらくしてからもう一度お試しください。",
+      "tryAgain": "もう一度試す",
+      "stepsLabel": "引き渡しの手順",
+      "stepFailedUnknown": "この手順は失敗しました。以降の手順は実行されていません。",
+      "retry": "再試行",
+      "status": {
+        "pending": "保留中",
+        "running": "実行中",
+        "waitingOnYou": "あなたの操作待ち",
+        "done": "完了",
+        "failed": "失敗"
+      },
+      "overall": {
+        "inProgress": "進行中",
+        "waiting": "あなたの操作待ち",
+        "failed": "再試行が必要",
+        "done": "引き渡し済み"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "プレビューを削除",
+          "body": "{count, plural, other {# 件のリポジトリのプレビュー環境を削除します。}}"
+        },
+        "create_deploy_role": {
+          "label": "CI 用のデプロイロールを作成",
+          "body": "今後はリポジトリのワークフローがこのロールでデプロイします。"
+        },
+        "open_upstream": {
+          "label": "Motir なしでアプリに到達可能",
+          "body": "各アプリは下に記載した自身のアドレスで応答します。"
+        },
+        "move_email": {
+          "label": "アカウントのメールアドレスを変更",
+          "body": "AWS アカウントのメールアドレスが新しい所有者のものになります。"
+        },
+        "await_standalone": {
+          "label": "AWS 側の手順",
+          "body": "ルートサインイン、支払い方法、連絡先情報、契約への同意を AWS 上で行います。"
+        },
+        "remove_access": {
+          "label": "Motir のアクセスを削除",
+          "body": "アカウント内の Motir のロールを削除します。motir.site のアドレスは応答しなくなります。"
+        },
+        "leave_organization": {
+          "label": "Motir の AWS Organization から離脱",
+          "body": "アカウントは独立した AWS アカウントになります。"
+        },
+        "transfer_repositories": {
+          "label": "各リポジトリを移管",
+          "body": "GitHub が各リポジトリを新しい所有者に移管します。",
+          "bodyOwner": "GitHub が各リポジトリを {owner} に移管します。"
+        }
+      },
+      "codeLabel": "AWS からのコード",
+      "confirmCode": "コードを確認",
+      "codeRefused": "AWS はそのコードを受け付けませんでした。",
+      "codeEmpty": "AWS からのメールに記載されたコードを入力してください。",
+      "codeHelp": "AWS が {email} にワンタイムコードを送りました。Motir はそれを AWS に渡すだけで、保存することはありません。",
+      "codeHelpUnknown": "AWS が新しい所有者にワンタイムコードを送りました。Motir はそれを AWS に渡すだけで、保存することはありません。",
+      "codeRefusedHelp": "{email} 宛ての AWS からの最新メールを確認し（新しいコードが古いコードに代わります）、もう一度お試しください。",
+      "codeRefusedHelpUnknown": "新しい所有者宛ての AWS からの最新メールを確認し（新しいコードが古いコードに代わります）、もう一度お試しください。",
+      "standaloneIntro": "{email} が AWS で次の操作を行います：",
+      "standaloneIntroUnknown": "新しい所有者が AWS で次の操作を行います：",
+      "standalone": {
+        "rootSignIn": "ルートユーザーとしてアカウントにサインインし、パスワードを設定する",
+        "payment": "支払い方法を追加する",
+        "contact": "連絡先情報を確認する",
+        "agreement": "AWS のカスタマーアグリーメントに同意する"
+      },
+      "standaloneNote": "これらはここではなく AWS 上で行います。Motir が支払い情報やルートパスワードを尋ねることはありません。",
+      "checkAgain": "もう一度確認",
+      "signIn": "AWS のサインインページを開く（新しいタブで開きます）",
+      "notReady": "まだ準備ができていません。AWS が必要としているもの：",
+      "missing": {
+        "wait_period": "時間の経過（AWS は新しいアカウントを離脱可能になるまで数日間保持します）",
+        "delegated_administrator": "アカウントが委任管理者でなくなること",
+        "payment_method": "支払い方法",
+        "support_plan": "サポートプラン",
+        "contact_information": "アカウントの連絡先情報"
+      },
+      "actionFailed": "処理できませんでした。何も変更されていません。しばらくしてからもう一度お試しください。",
+      "upstreamsTitle": "Motir なしでアプリが応答する場所",
+      "upstreamsLead": "Motir のアクセスが削除されると、Motir のアドレス（…motir.site）は応答しなくなります。それまでに各ドメインをそのアドレスに向けてください。",
+      "upstreamsLoading": "アドレスを読み込んでいます…",
+      "upstreamsEmpty": "表示するアプリはまだありません。",
+      "upstreamsError": "アドレスを読み込めませんでした",
+      "upstreamsErrorBody": "引き渡しには影響ありません。しばらくしてからもう一度お試しください。",
+      "ownAddress": "自身のアドレス",
+      "upstreamNotOpen": "まだ開いていません",
+      "noDomains": "カスタムドメインはありません。向け直すものはありません。",
+      "pointAt": "の向け先",
+      "copy": "コピー",
+      "copied": "コピーしました",
+      "copyOwnLabel": "{app} のアドレスをコピー",
+      "copyDomainLabel": "{host} の向け先をコピー"
     }
   },
   "apiDocs": {

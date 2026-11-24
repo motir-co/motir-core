@@ -10726,6 +10726,154 @@
       "stateUnfinishedYours": "La rimozione non è terminata",
       "unfinishedDetailYours": "Motir si è fermato a metà mentre arrestava ciò che esegue da questo repository. Il repository resta nel tuo account GitHub, e riprovare completa il resto.",
       "retryDelete": "Riprova"
+    },
+    "awsHandover": {
+      "takeOver": "Prendi in carico l’hosting AWS",
+      "takeOverLabel": "Prendi in carico l’hosting AWS di {repo}",
+      "rowHelperMember": "Gira sull’account AWS di {org}, che lascia Motir per intero: lo consegna un amministratore dell’organizzazione.",
+      "refusalTitle": "{repo} si sposta insieme ad {count, plural, one {un altro repository} other {altri # repository}}",
+      "refusalLead": "La sua app gira sull’account AWS di {org}, come queste. Un account AWS lascia Motir per intero (un account per organizzazione), quindi possono essere presi in carico solo insieme.",
+      "startLead": "L’app di questo repository gira sull’account AWS di {org} dentro Motir. Quell’account lascia Motir per intero, con le sue app ancora attive: su AWS prendi quindi in carico l’hosting, e i repository lo seguono.",
+      "refusalOthersLabel": "Gli altri repository dell’account",
+      "oneAccountTitle": "Un account AWS per organizzazione",
+      "oneAccountBody": "Ogni repository di {org} che gira su AWS viene consegnato insieme agli altri, in un passaggio che puoi seguire e riprendere.",
+      "nothingChanged": "Non è cambiato nulla.",
+      "stillHosted": "{repo} è ancora ospitato da Motir, come gli altri.",
+      "askAnAdmin": "Un amministratore dell’organizzazione può prendere in carico l’hosting AWS di tutti insieme.",
+      "cancel": "Annulla",
+      "close": "Chiudi",
+      "back": "Indietro",
+      "continue": "Continua",
+      "stepEyebrow": "Prendi in carico l’hosting AWS · passaggio {step} di 2",
+      "stepTitle": "Consegna l’account AWS di {org}",
+      "stepLead": "L’account lascia Motir con tutte le sue app ancora attive. Indica chi ne sarà il proprietario e dove vanno i repository.",
+      "ownerEmailLabel": "Email del proprietario",
+      "ownerEmailPlaceholder": "nome@example.com",
+      "ownerEmailHelp": "L’indirizzo che sarà proprietario dell’account AWS. AWS invia qui un codice monouso.",
+      "ownerEmailInvalid": "Inserisci un indirizzo email, come nome@example.com.",
+      "githubOwnerLabel": "Proprietario GitHub",
+      "githubOwnerPlaceholder": "tua-organizzazione",
+      "githubOwnerHelp": "L’account o l’organizzazione GitHub che riceve i repository.",
+      "githubOwnerInvalid": "Inserisci il nome di un account o di un’organizzazione GitHub: lettere, cifre e trattini singoli.",
+      "handedOverTogether": "Consegnati insieme",
+      "noAwsRepositories": "{org} non ha repository che girano su AWS, quindi non c’è nulla da consegnare.",
+      "awsStepsNote": "Alcuni passaggi avvengono in AWS stesso: l’accesso come utente root, l’aggiunta di un metodo di pagamento. Motir non chiede mai dati di pagamento né una password root.",
+      "confirmTitle": "Avviare la consegna?",
+      "confirmNewOwner": "Nuovo proprietario dell’account AWS",
+      "confirmRepositoriesGoTo": "I repository vanno a",
+      "consequencePreviews": "{count, plural, one {Le anteprime di questo repository vengono eliminate e Motir smette di distribuirlo.} other {Le anteprime di questi # repository vengono eliminate e Motir smette di distribuirli.}}",
+      "consequenceRunning": "Le app restano attive. Punti i tuoi domini ai loro indirizzi prima che l’accesso di Motir finisca.",
+      "consequenceIrreversible": "Una volta che l’account ha lasciato l’AWS Organization di Motir, non si può tornare indietro.",
+      "start": "Avvia la consegna",
+      "starting": "Avvio…",
+      "startRefused": {
+        "notReady": "Impossibile avviare la consegna: l’account AWS di {org} non è ancora pronto. Non è stato modificato nulla: riprova tra qualche minuto.",
+        "alreadyStarted": "Impossibile avviare la consegna: è già stata avviata per l’account AWS di {org}. Non è stato modificato nulla: ricarica la pagina per seguirla.",
+        "githubIdentity": "Impossibile avviare la consegna: collega prima il tuo account GitHub, così i repository possono essere trasferiti. Non è stato modificato nulla.",
+        "input": "Impossibile avviare la consegna: controlla l’email del proprietario e il proprietario GitHub. Non è stato modificato nulla.",
+        "failed": "Impossibile avviare la consegna. Non è stato modificato nulla: riprova tra un momento."
+      },
+      "checklistEyebrow": "Consegna dell’hosting AWS",
+      "checklistTitle": "Account AWS di {org}",
+      "accountLabel": "ID account",
+      "repositoryCount": "{count, plural, one {# repository} other {# repository}}",
+      "checklistLoading": "Lettura della consegna…",
+      "checklistError": "Impossibile leggere la consegna",
+      "checklistErrorBody": "Non è cambiato nulla. Riprova tra un momento.",
+      "tryAgain": "Riprova",
+      "stepsLabel": "Passaggi della consegna",
+      "stepFailedUnknown": "Questo passaggio non è riuscito. Nulla dopo di esso è stato eseguito.",
+      "retry": "Ritenta",
+      "status": {
+        "pending": "In attesa",
+        "running": "In esecuzione",
+        "waitingOnYou": "Attende te",
+        "done": "Fatto",
+        "failed": "Non riuscito"
+      },
+      "overall": {
+        "inProgress": "In corso",
+        "waiting": "Attende te",
+        "failed": "Da ritentare",
+        "done": "Consegnato"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Anteprime rimosse",
+          "body": "{count, plural, one {Gli ambienti di anteprima del repository vengono eliminati.} other {Gli ambienti di anteprima dei # repository vengono eliminati.}}"
+        },
+        "create_deploy_role": {
+          "label": "Ruolo di deploy creato per la tua CI",
+          "body": "Da ora i workflow dei tuoi repository distribuiscono con questo ruolo."
+        },
+        "open_upstream": {
+          "label": "App raggiungibili senza Motir",
+          "body": "Ogni app risponde al proprio indirizzo, elencato qui sotto."
+        },
+        "move_email": {
+          "label": "Email dell’account cambiata",
+          "body": "L’email dell’account AWS diventa quella del nuovo proprietario."
+        },
+        "await_standalone": {
+          "label": "Passaggi in AWS",
+          "body": "Accesso root, metodo di pagamento, dati di contatto e accordi, svolti in AWS."
+        },
+        "remove_access": {
+          "label": "Accesso di Motir rimosso",
+          "body": "I ruoli di Motir nell’account vengono eliminati; gli indirizzi motir.site smettono di rispondere."
+        },
+        "leave_organization": {
+          "label": "L’account ha lasciato l’AWS Organization di Motir",
+          "body": "L’account è ora un account AWS autonomo."
+        },
+        "transfer_repositories": {
+          "label": "Ogni repository trasferito",
+          "body": "GitHub trasferisce ogni repository al nuovo proprietario.",
+          "bodyOwner": "GitHub trasferisce ogni repository a {owner}."
+        }
+      },
+      "codeLabel": "Codice da AWS",
+      "confirmCode": "Conferma codice",
+      "codeRefused": "AWS non ha accettato quel codice.",
+      "codeEmpty": "Inserisci il codice dell’email di AWS.",
+      "codeHelp": "AWS ha inviato un codice monouso a {email}. Motir lo passa ad AWS e non lo conserva mai.",
+      "codeHelpUnknown": "AWS ha inviato un codice monouso al nuovo proprietario. Motir lo passa ad AWS e non lo conserva mai.",
+      "codeRefusedHelp": "Controlla l’ultima email di AWS a {email} (un nuovo codice sostituisce il precedente) e riprova.",
+      "codeRefusedHelpUnknown": "Controlla l’ultima email di AWS al nuovo proprietario (un nuovo codice sostituisce il precedente) e riprova.",
+      "standaloneIntro": "{email} fa questi passaggi in AWS:",
+      "standaloneIntroUnknown": "Il nuovo proprietario fa questi passaggi in AWS:",
+      "standalone": {
+        "rootSignIn": "Accedere all’account come utente root e impostare una password",
+        "payment": "Aggiungere un metodo di pagamento",
+        "contact": "Confermare i dati di contatto",
+        "agreement": "Accettare il contratto cliente di AWS"
+      },
+      "standaloneNote": "Si fanno in AWS, non qui. Motir non chiede mai dati di pagamento né una password root.",
+      "checkAgain": "Controlla di nuovo",
+      "signIn": "Apri la pagina di accesso AWS (si apre in una nuova tab)",
+      "notReady": "Non ancora pronto: ad AWS serve ancora:",
+      "missing": {
+        "wait_period": "tempo: AWS trattiene un account nuovo per qualche giorno prima che possa uscire",
+        "delegated_administrator": "che l’account smetta di essere amministratore delegato",
+        "payment_method": "un metodo di pagamento",
+        "support_plan": "un piano di supporto",
+        "contact_information": "i dati di contatto dell’account"
+      },
+      "actionFailed": "Non è andato a buon fine. Non è stato modificato nulla: riprova tra un momento.",
+      "upstreamsTitle": "Dove rispondono le tue app senza Motir",
+      "upstreamsLead": "Gli indirizzi di Motir (…motir.site) smettono di rispondere quando l’accesso di Motir viene rimosso. Punta prima ogni dominio al suo indirizzo.",
+      "upstreamsLoading": "Lettura degli indirizzi…",
+      "upstreamsEmpty": "Ancora nessuna app da elencare.",
+      "upstreamsError": "Impossibile leggere gli indirizzi",
+      "upstreamsErrorBody": "La consegna non è interessata. Riprova tra un momento.",
+      "ownAddress": "Il suo indirizzo",
+      "upstreamNotOpen": "Non ancora aperto",
+      "noDomains": "Nessun dominio personalizzato: nulla da ripuntare.",
+      "pointAt": "punta a",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "copyOwnLabel": "Copia l’indirizzo di {app}",
+      "copyDomainLabel": "Copia dove punta {host}"
     }
   },
   "apiDocs": {

@@ -10726,6 +10726,154 @@
       "stateUnfinishedYours": "Usuwanie nie zostało ukończone",
       "unfinishedDetailYours": "Motir zatrzymał się w trakcie wyłączania tego, co uruchamia z tego repozytorium. Samo repozytorium pozostaje na Twoim koncie GitHub, a ponowna próba dokończy resztę.",
       "retryDelete": "Spróbuj ponownie"
+    },
+    "awsHandover": {
+      "takeOver": "Przejmij hosting AWS",
+      "takeOverLabel": "Przejmij hosting AWS dla {repo}",
+      "rowHelperMember": "Działa na koncie AWS organizacji {org}, które opuszcza Motir w całości — przekazuje je administrator organizacji.",
+      "refusalTitle": "{repo} przenosi się razem z {count, plural, one {jednym innym repozytorium} few {# innymi repozytoriami} many {# innymi repozytoriami} other {# innymi repozytoriami}}",
+      "refusalLead": "Jego aplikacja działa na koncie AWS organizacji {org}, tak jak te. Konto AWS opuszcza Motir w całości — jedno konto na organizację — więc można je przejąć tylko razem.",
+      "startLead": "Aplikacja tego repozytorium działa na własnym koncie AWS organizacji {org} w Motir. To konto opuszcza Motir w całości, a jego aplikacje nadal działają — na AWS przejmujesz więc hosting, a repozytoria idą razem z nim.",
+      "refusalOthersLabel": "Pozostałe repozytoria na koncie",
+      "oneAccountTitle": "Jedno konto AWS na organizację",
+      "oneAccountBody": "Każde repozytorium organizacji {org} działające na AWS jest przekazywane razem z innymi, w jednym kroku, który możesz śledzić i wznowić.",
+      "nothingChanged": "Nic się nie zmieniło.",
+      "stillHosted": "{repo} nadal jest hostowane przez Motir, podobnie jak pozostałe.",
+      "askAnAdmin": "Administrator organizacji może przejąć hosting AWS dla wszystkich naraz.",
+      "cancel": "Anuluj",
+      "close": "Zamknij",
+      "back": "Wstecz",
+      "continue": "Dalej",
+      "stepEyebrow": "Przejmij hosting AWS · krok {step} z 2",
+      "stepTitle": "Przekaż konto AWS organizacji {org}",
+      "stepLead": "Konto opuszcza Motir, a każda aplikacja w nim nadal działa. Wskaż, kto będzie jego właścicielem i dokąd trafią repozytoria.",
+      "ownerEmailLabel": "E-mail właściciela",
+      "ownerEmailPlaceholder": "imie@example.com",
+      "ownerEmailHelp": "Adres, do którego będzie należeć konto AWS. AWS wyśle na niego kod jednorazowy.",
+      "ownerEmailInvalid": "Wpisz adres e-mail, na przykład imie@example.com.",
+      "githubOwnerLabel": "Właściciel na GitHubie",
+      "githubOwnerPlaceholder": "twoja-organizacja",
+      "githubOwnerHelp": "Konto lub organizacja GitHub, które otrzymają repozytoria.",
+      "githubOwnerInvalid": "Wpisz nazwę konta lub organizacji GitHub: litery, cyfry i pojedyncze łączniki.",
+      "handedOverTogether": "Przekazywane razem",
+      "noAwsRepositories": "{org} nie ma repozytoriów działających na AWS, więc nie ma czego przekazać.",
+      "awsStepsNote": "Kilka kroków odbywa się w samym AWS — logowanie jako użytkownik root, dodanie metody płatności. Motir nigdy nie prosi o dane płatnicze ani hasło root.",
+      "confirmTitle": "Rozpocząć przekazanie?",
+      "confirmNewOwner": "Nowy właściciel konta AWS",
+      "confirmRepositoriesGoTo": "Repozytoria trafią do",
+      "consequencePreviews": "{count, plural, one {Podglądy tego repozytorium zostaną usunięte, a Motir przestanie je wdrażać.} few {Podglądy tych # repozytoriów zostaną usunięte, a Motir przestanie je wdrażać.} many {Podglądy tych # repozytoriów zostaną usunięte, a Motir przestanie je wdrażać.} other {Podglądy tych # repozytoriów zostaną usunięte, a Motir przestanie je wdrażać.}}",
+      "consequenceRunning": "Aplikacje nadal działają. Kierujesz swoje domeny na ich własne adresy, zanim dostęp Motir się skończy.",
+      "consequenceIrreversible": "Gdy konto opuści AWS Organization Motir, tego nie da się cofnąć.",
+      "start": "Rozpocznij przekazanie",
+      "starting": "Uruchamianie…",
+      "startRefused": {
+        "notReady": "Nie udało się rozpocząć przekazania: konto AWS organizacji {org} nie jest jeszcze gotowe. Nic nie zostało zmienione — spróbuj ponownie za kilka minut.",
+        "alreadyStarted": "Nie udało się rozpocząć przekazania: zostało już rozpoczęte dla konta AWS organizacji {org}. Nic nie zostało zmienione — odśwież stronę, aby je śledzić.",
+        "githubIdentity": "Nie udało się rozpocząć przekazania: najpierw połącz swoje konto GitHub, aby można było przenieść repozytoria. Nic nie zostało zmienione.",
+        "input": "Nie udało się rozpocząć przekazania: sprawdź e-mail właściciela i właściciela na GitHubie. Nic nie zostało zmienione.",
+        "failed": "Nie udało się rozpocząć przekazania. Nic nie zostało zmienione — spróbuj ponownie za chwilę."
+      },
+      "checklistEyebrow": "Przekazanie hostingu AWS",
+      "checklistTitle": "Konto AWS organizacji {org}",
+      "accountLabel": "Konto",
+      "repositoryCount": "{count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}}",
+      "checklistLoading": "Odczytywanie przekazania…",
+      "checklistError": "Nie udało się odczytać przekazania",
+      "checklistErrorBody": "Nic się nie zmieniło. Spróbuj ponownie za chwilę.",
+      "tryAgain": "Spróbuj ponownie",
+      "stepsLabel": "Kroki przekazania",
+      "stepFailedUnknown": "Ten krok się nie powiódł. Nic po nim nie zostało wykonane.",
+      "retry": "Ponów",
+      "status": {
+        "pending": "Oczekuje",
+        "running": "W toku",
+        "waitingOnYou": "Czeka na ciebie",
+        "done": "Gotowe",
+        "failed": "Niepowodzenie"
+      },
+      "overall": {
+        "inProgress": "W toku",
+        "waiting": "Czeka na ciebie",
+        "failed": "Wymaga ponowienia",
+        "done": "Przekazano"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Podglądy usunięte",
+          "body": "{count, plural, one {Środowiska podglądu repozytorium zostaną usunięte.} few {Środowiska podglądu # repozytoriów zostaną usunięte.} many {Środowiska podglądu # repozytoriów zostaną usunięte.} other {Środowiska podglądu # repozytoriów zostaną usunięte.}}"
+        },
+        "create_deploy_role": {
+          "label": "Utworzono rolę wdrożeniową dla twojego CI",
+          "body": "Workflowy twoich repozytoriów wdrażają od teraz przy jej użyciu."
+        },
+        "open_upstream": {
+          "label": "Aplikacje osiągalne bez Motir",
+          "body": "Każda aplikacja odpowiada pod własnym adresem, podanym poniżej."
+        },
+        "move_email": {
+          "label": "E-mail konta zmieniony",
+          "body": "E-mail konta AWS staje się e-mailem nowego właściciela."
+        },
+        "await_standalone": {
+          "label": "Kroki po stronie AWS",
+          "body": "Logowanie root, metoda płatności, dane kontaktowe i umowy, wykonywane w AWS."
+        },
+        "remove_access": {
+          "label": "Dostęp Motir usunięty",
+          "body": "Role Motir na koncie zostają usunięte; adresy motir.site przestają odpowiadać."
+        },
+        "leave_organization": {
+          "label": "Konto opuściło AWS Organization Motir",
+          "body": "Konto jest teraz samodzielnym kontem AWS."
+        },
+        "transfer_repositories": {
+          "label": "Każde repozytorium przeniesione",
+          "body": "GitHub przenosi każde repozytorium do nowego właściciela.",
+          "bodyOwner": "GitHub przenosi każde repozytorium do {owner}."
+        }
+      },
+      "codeLabel": "Kod z AWS",
+      "confirmCode": "Potwierdź kod",
+      "codeRefused": "AWS nie przyjął tego kodu.",
+      "codeEmpty": "Wpisz kod z e-maila od AWS.",
+      "codeHelp": "AWS wysłał kod jednorazowy na {email}. Motir przekazuje go do AWS i nigdy go nie przechowuje.",
+      "codeHelpUnknown": "AWS wysłał kod jednorazowy do nowego właściciela. Motir przekazuje go do AWS i nigdy go nie przechowuje.",
+      "codeRefusedHelp": "Sprawdź najnowszy e-mail od AWS na {email} — nowy kod zastępuje stary — i spróbuj ponownie.",
+      "codeRefusedHelpUnknown": "Sprawdź najnowszy e-mail od AWS do nowego właściciela — nowy kod zastępuje stary — i spróbuj ponownie.",
+      "standaloneIntro": "{email} robi to w AWS:",
+      "standaloneIntroUnknown": "Nowy właściciel robi to w AWS:",
+      "standalone": {
+        "rootSignIn": "Zalogować się do konta jako użytkownik root i ustawić hasło",
+        "payment": "Dodać metodę płatności",
+        "contact": "Potwierdzić dane kontaktowe",
+        "agreement": "Zaakceptować umowę klienta AWS"
+      },
+      "standaloneNote": "To robi się w AWS, nie tutaj. Motir nigdy nie prosi o dane płatnicze ani hasło root.",
+      "checkAgain": "Sprawdź ponownie",
+      "signIn": "Otwórz stronę logowania AWS (otwiera się w nowej zakładce)",
+      "notReady": "Jeszcze nie gotowe — AWS nadal potrzebuje:",
+      "missing": {
+        "wait_period": "czasu: AWS przytrzymuje nowe konto przez kilka dni, zanim może odejść",
+        "delegated_administrator": "aby konto przestało być administratorem delegowanym",
+        "payment_method": "metody płatności",
+        "support_plan": "planu wsparcia",
+        "contact_information": "danych kontaktowych konta"
+      },
+      "actionFailed": "To się nie udało. Nic nie zostało zmienione — spróbuj ponownie za chwilę.",
+      "upstreamsTitle": "Gdzie twoje aplikacje odpowiadają bez Motir",
+      "upstreamsLead": "Adresy Motir (…motir.site) przestają odpowiadać, gdy dostęp Motir zostanie usunięty. Wcześniej skieruj każdą domenę na jej adres.",
+      "upstreamsLoading": "Odczytywanie adresów…",
+      "upstreamsEmpty": "Nie ma jeszcze aplikacji do wyświetlenia.",
+      "upstreamsError": "Nie udało się odczytać adresów",
+      "upstreamsErrorBody": "Przekazanie nie zostało naruszone. Spróbuj ponownie za chwilę.",
+      "ownAddress": "Własny adres",
+      "upstreamNotOpen": "Jeszcze nieotwarty",
+      "noDomains": "Brak własnych domen — nie ma czego przekierować.",
+      "pointAt": "wskazuje na",
+      "copy": "Kopiuj",
+      "copied": "Skopiowano",
+      "copyOwnLabel": "Kopiuj adres {app}",
+      "copyDomainLabel": "Kopiuj cel {host}"
     }
   },
   "apiDocs": {

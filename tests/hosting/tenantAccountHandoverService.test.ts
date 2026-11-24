@@ -961,3 +961,56 @@ describe('edges', () => {
     expect((await account()).state).toBe('handed_over');
   });
 });
+
+// THE REPOSITORIES ROOM'S READ (MOTIR-12137) — what the room shows an
+// organisation admin: the AWS-target repositories handed over together and
+// whether a handover has started. Anyone else reads null, so the room draws no
+// entry for them.
+describe('roomOverview — the Repositories room’s read of the AWS hosting', () => {
+  it('lists the AWS-target repositories with their project for an admin, not yet started', async () => {
+    const room = await handover.roomOverview(world.organizationId, world.fx.ownerId);
+    expect(room).not.toBeNull();
+    expect(room!.organizationId).toBe(world.organizationId);
+    expect(room!.tenantAccountId).toBe(world.tenantAccountId);
+    expect(room!.accountState).toBe('ready');
+    expect(room!.handoverStarted).toBe(false);
+    expect(room!.repositories.map((r) => r.id).sort()).toEqual(world.repos.map((r) => r.id).sort());
+    for (const repo of room!.repositories) {
+      expect(repo.repoRef).toBe(`motir-projects/${repo.name}`);
+      expect(repo.projectName).toBe(world.fx.project.name);
+    }
+  });
+
+  it('says the handover started once it has', async () => {
+    await start();
+    const room = await handover.roomOverview(world.organizationId, world.fx.ownerId);
+    expect(room!.handoverStarted).toBe(true);
+    expect(room!.accountState).not.toBe('ready');
+  });
+
+  it('answers null for a member who is not an admin, and for a non-member', async () => {
+    const member = await createTestUser();
+    await adminDb.organizationMembership.create({
+      data: { organizationId: world.organizationId, userId: member.id, role: 'member' },
+    });
+    expect(await handover.roomOverview(world.organizationId, member.id)).toBeNull();
+    const stranger = await createTestUser();
+    expect(await handover.roomOverview(world.organizationId, stranger.id)).toBeNull();
+  });
+
+  it('answers an organisation with no tenant account and no AWS repository', async () => {
+    await adminDb.projectRepo.updateMany({
+      where: { id: { in: world.repos.map((r) => r.id) } },
+      data: { hostingTarget: 'serverless' },
+    });
+    await adminDb.hostingTenantAccount.delete({ where: { id: world.tenantAccountId } });
+    const room = await handover.roomOverview(world.organizationId, world.fx.ownerId);
+    expect(room).toEqual({
+      organizationId: world.organizationId,
+      tenantAccountId: null,
+      accountState: null,
+      handoverStarted: false,
+      repositories: [],
+    });
+  });
+});

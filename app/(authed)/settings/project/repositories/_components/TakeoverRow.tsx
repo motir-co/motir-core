@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import {
   BadgeCheck,
   CircleCheckBig,
+  Cloud,
   Clock,
   ExternalLink,
   FolderGit2,
@@ -95,6 +96,13 @@ export interface TakeoverRowProps {
    * the room's confirm. Absent, the row draws no such action.
    */
   onRemove?: (row: ProjectRepoDto) => void;
+  /**
+   * The AWS hosting handover's entry on an AWS-target row (MOTIR-12137; design
+   * takeover--aws-handover panels 1 and 3). `admin` draws Take over AWS hosting
+   * beside the move; `member` draws no entry and says in the helper line that an
+   * organisation admin hands the account over. Absent on every other row.
+   */
+  awsHandover?: { kind: 'admin'; onTakeOver: () => void } | { kind: 'member'; org: string };
 }
 
 export function TakeoverRow({
@@ -110,10 +118,12 @@ export function TakeoverRow({
   seedRefusal = null,
   onRepoint,
   onRemove,
+  awsHandover,
 }: TakeoverRowProps) {
   const t = useTranslations('repositoryTakeover');
   const tr = useTranslations('repositoryTakeover.hostedRemove');
   const ts = useTranslations('repositorySet');
+  const ta = useTranslations('repositoryTakeover.awsHandover');
   const format = useFormatter();
 
   const mode = rowMode(row);
@@ -192,7 +202,9 @@ export function TakeoverRow({
 
         {/* ── The body copy, per state. Every waiting state names the CONSEQUENCE
             and what to go do, not just the chore. ─────────────────────────── */}
-        {mode === 'hosted' ? (
+        {mode === 'hosted' && awsHandover?.kind === 'member' ? (
+          <Helper>{ta('rowHelperMember', { org: awsHandover.org })}</Helper>
+        ) : mode === 'hosted' ? (
           <Helper>
             {seedEntry === null
               ? ts('createdDetailNoSeed')
@@ -293,6 +305,19 @@ export function TakeoverRow({
               leftIcon={<MoveUpRight className="size-3.5 shrink-0" />}
             >
               {t('moveAction')}
+            </Button>
+          ) : null}
+
+          {mode === 'hosted' && awsHandover?.kind === 'admin' ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              aria-label={ta('takeOverLabel', { repo: repoRef })}
+              onClick={awsHandover.onTakeOver}
+              leftIcon={<Cloud className="size-3.5 shrink-0" />}
+            >
+              {ta('takeOver')}
             </Button>
           ) : null}
 

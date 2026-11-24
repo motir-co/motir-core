@@ -56,3 +56,28 @@ export interface TenantAccountHandoverDto {
   steps: TenantHandoverStepDto[];
   applications: TenantHandoverApplicationDto[];
 }
+
+/** One AWS-target repository of the organisation, as the Repositories room
+ *  lists it in the handover step (MOTIR-12137). */
+export interface TenantHandoverRepositoryDto {
+  id: string;
+  name: string;
+  /** `owner/name` of the realized repository, or null before it exists. */
+  repoRef: string | null;
+  projectName: string;
+}
+
+/** What the Repositories room reads of the organisation's AWS hosting
+ *  (MOTIR-12137), for an organisation admin only: the AWS-target repositories
+ *  handed over together and, once a handover has started, which one. */
+export interface TenantHandoverRoomDto {
+  organizationId: string;
+  /** The organisation's tenant account, or null when it has none. */
+  tenantAccountId: string | null;
+  accountState: HostingTenantAccountState | null;
+  /** Whether a handover has started on the account (it is in a handover
+   *  state): the room then shows its checklist, not the entry. */
+  handoverStarted: boolean;
+  /** Every AWS-target repository of the organisation, oldest first. */
+  repositories: TenantHandoverRepositoryDto[];
+}

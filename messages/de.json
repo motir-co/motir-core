@@ -10726,6 +10726,154 @@
       "stateUnfinishedYours": "Entfernen nicht abgeschlossen",
       "unfinishedDetailYours": "Motir hat das Herunterfahren dessen, was es aus diesem Repository betreibt, mittendrin abgebrochen. Das Repository selbst bleibt in Ihrem GitHub-Konto, und ein erneuter Versuch schließt den Rest ab.",
       "retryDelete": "Erneut versuchen"
+    },
+    "awsHandover": {
+      "takeOver": "AWS-Hosting übernehmen",
+      "takeOverLabel": "AWS-Hosting für {repo} übernehmen",
+      "rowHelperMember": "Läuft im AWS-Konto von {org}, das Motir als Ganzes verlässt – ein Organisations-Admin übergibt es.",
+      "refusalTitle": "{repo} wird zusammen mit {count, plural, one {einem weiteren Repository} other {# weiteren Repositorys}} verschoben",
+      "refusalLead": "Seine App läuft im AWS-Konto von {org}, genau wie diese. Ein AWS-Konto verlässt Motir als Ganzes – ein Konto pro Organisation –, daher können sie nur gemeinsam übernommen werden.",
+      "startLead": "Die App dieses Repositorys läuft im eigenen AWS-Konto von {org} innerhalb von Motir. Dieses Konto verlässt Motir als Ganzes, und seine Apps laufen weiter – auf AWS übernehmen Sie also das Hosting, und die Repositorys ziehen mit.",
+      "refusalOthersLabel": "Die anderen Repositorys im Konto",
+      "oneAccountTitle": "Ein AWS-Konto pro Organisation",
+      "oneAccountBody": "Jedes Repository von {org}, das auf AWS läuft, wird gemeinsam übergeben – in einem Schritt, den Sie verfolgen und fortsetzen können.",
+      "nothingChanged": "Es hat sich nichts geändert.",
+      "stillHosted": "{repo} wird weiterhin von Motir gehostet, ebenso die anderen.",
+      "askAnAdmin": "Ein Organisations-Admin kann das AWS-Hosting für alle gemeinsam übernehmen.",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "back": "Zurück",
+      "continue": "Weiter",
+      "stepEyebrow": "AWS-Hosting übernehmen · Schritt {step} von 2",
+      "stepTitle": "Das AWS-Konto von {org} übergeben",
+      "stepLead": "Das Konto verlässt Motir, und jede App darin läuft weiter. Geben Sie an, wem es künftig gehört und wohin die Repositorys gehen.",
+      "ownerEmailLabel": "E-Mail des Inhabers",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "Die Adresse, der das AWS-Konto gehören wird. AWS sendet einen Einmalcode an diese Adresse.",
+      "ownerEmailInvalid": "Geben Sie eine E-Mail-Adresse ein, etwa name@example.com.",
+      "githubOwnerLabel": "GitHub-Inhaber",
+      "githubOwnerPlaceholder": "ihre-organisation",
+      "githubOwnerHelp": "Das GitHub-Konto oder die Organisation, die die Repositorys erhält.",
+      "githubOwnerInvalid": "Geben Sie den Namen eines GitHub-Kontos oder einer Organisation ein: Buchstaben, Ziffern und einzelne Bindestriche.",
+      "handedOverTogether": "Gemeinsam übergeben",
+      "noAwsRepositories": "{org} hat keine Repositorys, die auf AWS laufen – es gibt nichts zu übergeben.",
+      "awsStepsNote": "Einige Schritte finden in AWS selbst statt – die Anmeldung als Root-Benutzer, das Hinzufügen einer Zahlungsmethode. Motir fragt nie nach Zahlungsdaten oder einem Root-Passwort.",
+      "confirmTitle": "Übergabe starten?",
+      "confirmNewOwner": "Neuer Inhaber des AWS-Kontos",
+      "confirmRepositoriesGoTo": "Repositorys gehen an",
+      "consequencePreviews": "{count, plural, one {Die Vorschauen dieses Repositorys werden gelöscht, und Motir stellt es nicht mehr bereit.} other {Die Vorschauen dieser # Repositorys werden gelöscht, und Motir stellt sie nicht mehr bereit.}}",
+      "consequenceRunning": "Die Apps laufen weiter. Sie richten Ihre Domains auf deren eigene Adressen aus, bevor Motirs Zugriff endet.",
+      "consequenceIrreversible": "Sobald das Konto Motirs AWS Organization verlassen hat, lässt sich das nicht rückgängig machen.",
+      "start": "Übergabe starten",
+      "starting": "Wird gestartet…",
+      "startRefused": {
+        "notReady": "Die Übergabe konnte nicht starten: Das AWS-Konto von {org} ist noch nicht bereit zur Übergabe. Es wurde nichts geändert – versuchen Sie es in ein paar Minuten erneut.",
+        "alreadyStarted": "Die Übergabe konnte nicht starten: Für das AWS-Konto von {org} wurde sie bereits gestartet. Es wurde nichts geändert – laden Sie die Seite neu, um sie zu verfolgen.",
+        "githubIdentity": "Die Übergabe konnte nicht starten: Verbinden Sie zuerst Ihr GitHub-Konto, damit die Repositorys übertragen werden können. Es wurde nichts geändert.",
+        "input": "Die Übergabe konnte nicht starten: Prüfen Sie die E-Mail des Inhabers und den GitHub-Inhaber. Es wurde nichts geändert.",
+        "failed": "Die Übergabe konnte nicht starten. Es wurde nichts geändert – versuchen Sie es gleich noch einmal."
+      },
+      "checklistEyebrow": "Übergabe des AWS-Hostings",
+      "checklistTitle": "AWS-Konto von {org}",
+      "accountLabel": "Konto",
+      "repositoryCount": "{count, plural, one {# Repository} other {# Repositorys}}",
+      "checklistLoading": "Übergabe wird gelesen…",
+      "checklistError": "Die Übergabe konnte nicht gelesen werden",
+      "checklistErrorBody": "Es hat sich nichts geändert. Versuchen Sie es gleich noch einmal.",
+      "tryAgain": "Erneut versuchen",
+      "stepsLabel": "Schritte der Übergabe",
+      "stepFailedUnknown": "Dieser Schritt ist fehlgeschlagen. Nichts danach wurde ausgeführt.",
+      "retry": "Wiederholen",
+      "status": {
+        "pending": "Ausstehend",
+        "running": "Läuft",
+        "waitingOnYou": "Wartet auf Sie",
+        "done": "Erledigt",
+        "failed": "Fehlgeschlagen"
+      },
+      "overall": {
+        "inProgress": "In Arbeit",
+        "waiting": "Wartet auf Sie",
+        "failed": "Muss wiederholt werden",
+        "done": "Übergeben"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Vorschauen entfernt",
+          "body": "{count, plural, one {Die Vorschauumgebungen des Repositorys werden gelöscht.} other {Die Vorschauumgebungen der # Repositorys werden gelöscht.}}"
+        },
+        "create_deploy_role": {
+          "label": "Deploy-Rolle für Ihre CI erstellt",
+          "body": "Die Workflows Ihrer Repositorys stellen ab jetzt damit bereit."
+        },
+        "open_upstream": {
+          "label": "Apps ohne Motir erreichbar",
+          "body": "Jede App antwortet unter ihrer eigenen Adresse, unten aufgeführt."
+        },
+        "move_email": {
+          "label": "Konto-E-Mail umgestellt",
+          "body": "Die E-Mail des AWS-Kontos wird die des neuen Inhabers."
+        },
+        "await_standalone": {
+          "label": "Schritte in AWS",
+          "body": "Root-Anmeldung, Zahlungsmethode, Kontaktdaten und Vereinbarungen – in AWS erledigt."
+        },
+        "remove_access": {
+          "label": "Motirs Zugriff entfernt",
+          "body": "Motirs Rollen im Konto werden gelöscht; motir.site-Adressen antworten nicht mehr."
+        },
+        "leave_organization": {
+          "label": "Konto hat Motirs AWS Organization verlassen",
+          "body": "Das Konto ist jetzt ein eigenständiges AWS-Konto."
+        },
+        "transfer_repositories": {
+          "label": "Jedes Repository übertragen",
+          "body": "GitHub überträgt jedes Repository an seinen neuen Inhaber.",
+          "bodyOwner": "GitHub überträgt jedes Repository an {owner}."
+        }
+      },
+      "codeLabel": "Code von AWS",
+      "confirmCode": "Code bestätigen",
+      "codeRefused": "AWS hat diesen Code nicht akzeptiert.",
+      "codeEmpty": "Geben Sie den Code aus der E-Mail von AWS ein.",
+      "codeHelp": "AWS hat einen Einmalcode an {email} gesendet. Motir gibt ihn an AWS weiter und speichert ihn nie.",
+      "codeHelpUnknown": "AWS hat einen Einmalcode an den neuen Inhaber gesendet. Motir gibt ihn an AWS weiter und speichert ihn nie.",
+      "codeRefusedHelp": "Prüfen Sie die neueste E-Mail von AWS an {email} – ein neuer Code ersetzt den alten – und versuchen Sie es erneut.",
+      "codeRefusedHelpUnknown": "Prüfen Sie die neueste E-Mail von AWS an den neuen Inhaber – ein neuer Code ersetzt den alten – und versuchen Sie es erneut.",
+      "standaloneIntro": "{email} erledigt in AWS:",
+      "standaloneIntroUnknown": "Der neue Inhaber erledigt in AWS:",
+      "standalone": {
+        "rootSignIn": "Als Root-Benutzer beim Konto anmelden und ein Passwort festlegen",
+        "payment": "Eine Zahlungsmethode hinzufügen",
+        "contact": "Die Kontaktdaten bestätigen",
+        "agreement": "Die Kundenvereinbarung von AWS annehmen"
+      },
+      "standaloneNote": "Das geschieht in AWS, nicht hier. Motir fragt nie nach Zahlungsdaten oder einem Root-Passwort.",
+      "checkAgain": "Erneut prüfen",
+      "signIn": "Die AWS-Anmeldeseite öffnen (öffnet in einem neuen Tab)",
+      "notReady": "Noch nicht bereit – AWS braucht noch:",
+      "missing": {
+        "wait_period": "Zeit: AWS hält ein neues Konto einige Tage, bevor es gehen kann",
+        "delegated_administrator": "dass das Konto kein delegierter Administrator mehr ist",
+        "payment_method": "eine Zahlungsmethode",
+        "support_plan": "einen Support-Plan",
+        "contact_information": "die Kontaktdaten des Kontos"
+      },
+      "actionFailed": "Das hat nicht geklappt. Es wurde nichts geändert – versuchen Sie es gleich noch einmal.",
+      "upstreamsTitle": "Wo Ihre Apps ohne Motir antworten",
+      "upstreamsLead": "Motirs Adressen (…motir.site) antworten nicht mehr, sobald Motirs Zugriff entfernt ist. Richten Sie jede Domain vorher auf ihre Adresse aus.",
+      "upstreamsLoading": "Adressen werden gelesen…",
+      "upstreamsEmpty": "Noch keine Apps aufzulisten.",
+      "upstreamsError": "Die Adressen konnten nicht gelesen werden",
+      "upstreamsErrorBody": "Die Übergabe ist davon nicht betroffen. Versuchen Sie es gleich noch einmal.",
+      "ownAddress": "Eigene Adresse",
+      "upstreamNotOpen": "Noch nicht geöffnet",
+      "noDomains": "Keine eigenen Domains – nichts umzustellen.",
+      "pointAt": "zeigt auf",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "copyOwnLabel": "Adresse von {app} kopieren",
+      "copyDomainLabel": "Kopieren, worauf {host} zeigt"
     }
   },
   "apiDocs": {

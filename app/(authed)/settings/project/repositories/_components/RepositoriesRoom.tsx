@@ -15,6 +15,13 @@ import { TakeoverModal } from './TakeoverModal';
 import { HostedRepositoryRemoveDialog } from './HostedRepositoryRemoveDialog';
 import { OrganizationRepositories } from './OrganizationRepositories';
 import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
+import { AwsHandoverRefusal } from './AwsHandoverRefusal';
+import { AwsHandoverStep } from './AwsHandoverStep';
+import { AwsHandoverChecklist } from './AwsHandoverChecklist';
+import type {
+  TenantAccountHandoverDto,
+  TenantHandoverRoomDto,
+} from '@/lib/dto/tenantAccountHandover';
 import type { OrgRepoOptionDto, OrgRepoProviderDto } from '@/lib/dto/organizationRepos';
 import type {
   HostedRunRepoAccessMapDto,
@@ -122,6 +129,32 @@ export interface RepositoriesRoomProps {
    * after a return from GitHub (below) — a `useState` seed would ignore both.
    */
   hostedRunAccess?: HostedRunRepoAccessMapDto;
+  /**
+   * The organisation's AWS hosting, for an ORGANISATION ADMIN only (MOTIR-12137):
+   * the AWS-target repositories handed over together and the handover under way,
+   * if any. Null for anyone else — the room then draws no Take over AWS hosting
+   * and no checklist, and the handover routes keep their own gate.
+   */
+  awsHandover?: TenantHandoverRoomDto | null;
+}
+
+/** The takeover route's refusal of a single AWS repository whose account holds
+ *  others (MOTIR-12131) — routed to the Single-repository refusal, never to the
+ *  room's generic failure. */
+const SHARED_AWS_ACCOUNT = 'TAKEOVER_SHARED_AWS_ACCOUNT';
+
+/** The AWS handover dialog showing, if any (design takeover--aws-handover). */
+type AwsDialog =
+  | { kind: 'refusal'; row: ProjectRepoDto; others: string[] }
+  | { kind: 'step' }
+  | null;
+
+/** The handover this room follows: its account, and what this session knows of
+ *  it — the start's answer and who it was handed to. */
+interface FollowedHandover {
+  tenantAccountId: string;
+  initial: TenantAccountHandoverDto | null;
+  owner: { ownerEmail: string; githubOwner: string } | null;
 }
 
 export function RepositoriesRoom({
@@ -134,6 +167,7 @@ export function RepositoriesRoom({
   organizationInventoryHref,
   nowIso,
   hostedRunAccess = {},
+  awsHandover = null,
 }: RepositoriesRoomProps) {
   const t = useTranslations('repositoryTakeover');
   // The inventory link keeps its own namespace: the STRING is the picker's
@@ -169,6 +203,16 @@ export function RepositoriesRoom({
   const [options, setOptions] = useState<OrgRepoOptionDto[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsFailed, setOptionsFailed] = useState(false);
+  // The AWS hosting handover (MOTIR-12137): the dialog showing, and the
+  // handover the room follows — seeded from the server when one has started,
+  // and set in place by the start's answer (this island is out of
+  // `router.refresh()`'s reach).
+  const [awsDialog, setAwsDialog] = useState<AwsDialog>(null);
+  const [followed, setFollowed] = useState<FollowedHandover | null>(
+    awsHandover?.handoverStarted && awsHandover.tenantAccountId
+      ? { tenantAccountId: awsHandover.tenantAccountId, initial: null, owner: null }
+      : null,
+  );
 
   const takeoverUrl = (rowId: string) =>
     `/api/projects/${encodeURIComponent(projectKey)}/repositories/${encodeURIComponent(rowId)}/takeover`;
@@ -303,6 +347,19 @@ export function RepositoriesRoom({
           body: JSON.stringify(body),
         });
         if (!res.ok) {
+          const refusal = (await res.json().catch(() => null)) as {
+            code?: string;
+            repositories?: unknown;
+          } | null;
+          if (refusal?.code === SHARED_AWS_ACCOUNT) {
+            // Nothing changed on the server (the refusal is checked before any
+            // write), so there is nothing to re-read: show who shares the account.
+            const others = Array.isArray(refusal.repositories)
+              ? refusal.repositories.filter((r): r is string => typeof r === 'string')
+              : [];
+            setAwsDialog({ kind: 'refusal', row, others });
+            return;
+          }
           setFailed(true);
           // The row may still have MOVED (a refused transfer records `failed` on
           // it), so re-read rather than leaving the surface asserting a state the
@@ -334,6 +391,44 @@ export function RepositoriesRoom({
   );
 
   const onCheckAgain = useCallback((row: ProjectRepoDto) => void call(row, {}), [call]);
+
+  /**
+   * MOVE TO MY GITHUB. An AWS-target row of an organisation whose account holds
+   * ONLY that repository opens the flow's own start (panel 2): the hosting leaves
+   * with the account, so its one primary is Take over AWS hosting. Every other
+   * row opens the shipped target picker; a shared account is refused by the route
+   * and shown as the Single-repository refusal (panel 4).
+   */
+  const onMove = useCallback(
+    (row: ProjectRepoDto) => {
+      const aloneOnAws =
+        row.hostingTarget === 'aws' &&
+        awsHandover !== null &&
+        !followed &&
+        awsHandover.repositories.every((repo) => repo.id === row.id);
+      if (aloneOnAws) setAwsDialog({ kind: 'refusal', row, others: [] });
+      else setModalRow(row);
+    },
+    [awsHandover, followed],
+  );
+
+  const onHandoverStarted = useCallback(
+    (handover: TenantAccountHandoverDto, owner: { ownerEmail: string; githubOwner: string }) => {
+      setAwsDialog(null);
+      setFollowed({ tenantAccountId: handover.tenantAccountId, initial: handover, owner });
+    },
+    [],
+  );
+
+  /** The AWS-target row's handover entry: Take over AWS hosting for an
+   *  organisation admin while no handover has started; the helper line for
+   *  anyone else; nothing on every other row. */
+  const awsEntryOf = (row: ProjectRepoDto) => {
+    if (row.hostingTarget !== 'aws') return undefined;
+    if (!awsHandover) return { kind: 'member' as const, org: organizationName };
+    if (followed) return undefined;
+    return { kind: 'admin' as const, onTakeOver: () => setAwsDialog({ kind: 'step' }) };
+  };
 
   /**
    * DELETE / REMOVE A MOTIR-HOSTED ROW (MOTIR-11981; design §19.6 + §19.12) — the
@@ -556,6 +651,20 @@ export function RepositoriesRoom({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* THE HANDOVER CHECKLIST — at the top of the room, for an organisation
+          admin, from the moment a handover starts (panels 11–25). */}
+      {followed && awsHandover ? (
+        <AwsHandoverChecklist
+          key={followed.tenantAccountId}
+          organizationId={awsHandover.organizationId}
+          organizationName={organizationName}
+          tenantAccountId={followed.tenantAccountId}
+          repositoryCount={awsHandover.repositories.length}
+          initial={followed.initial}
+          owner={followed.owner}
+        />
+      ) : null}
+
       {failed || deleteFailedRepo ? (
         <p
           role="alert"
@@ -612,13 +721,14 @@ export function RepositoriesRoom({
                 installHref={view.installHref}
                 nowIso={nowIso}
                 busy={busyRowId === row.id}
-                onMove={setModalRow}
+                onMove={onMove}
                 onCheckAgain={onCheckAgain}
                 onRetry={setModalRow}
                 seed={view.seeds[row.id]}
                 seedRefusal={seedRefusals[row.id] ?? null}
                 onRepoint={onRepoint}
                 onRemove={setRemoveRow}
+                awsHandover={awsEntryOf(row)}
               />
             ))}
           </div>
@@ -681,6 +791,27 @@ export function RepositoriesRoom({
           onClose={() => setRemoveRow(null)}
           onConfirm={(row) => void onConfirmRemove(row)}
           onTakeOver={onTakeOverInstead}
+        />
+      ) : null}
+
+      {awsDialog?.kind === 'refusal' ? (
+        <AwsHandoverRefusal
+          repo={awsDialog.row.realizedRepo?.name ?? awsDialog.row.name}
+          organizationName={organizationName}
+          others={awsDialog.others}
+          canHandOver={awsHandover !== null && !followed}
+          onClose={() => setAwsDialog(null)}
+          onTakeOverAws={() => setAwsDialog({ kind: 'step' })}
+        />
+      ) : null}
+
+      {awsDialog?.kind === 'step' && awsHandover ? (
+        <AwsHandoverStep
+          organizationId={awsHandover.organizationId}
+          organizationName={organizationName}
+          repositories={awsHandover.repositories}
+          onClose={() => setAwsDialog(null)}
+          onStarted={onHandoverStarted}
         />
       ) : null}
 

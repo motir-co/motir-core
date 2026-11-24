@@ -10717,6 +10717,154 @@
       "stateUnfinishedYours": "移除未完成",
       "unfinishedDetailYours": "Motir 在关闭它从此仓库运行的内容时中途停止。仓库本身仍保留在你的 GitHub 账户中，重试即可完成剩余部分。",
       "retryDelete": "重试"
+    },
+    "awsHandover": {
+      "takeOver": "接管 AWS 托管",
+      "takeOverLabel": "接管 {repo} 的 AWS 托管",
+      "rowHelperMember": "运行在 {org} 的 AWS 账号上，该账号会整体离开 Motir——由组织管理员移交。",
+      "refusalTitle": "{count, plural, other {{repo} 会与另外 # 个代码仓库一起迁移}}",
+      "refusalLead": "它的应用运行在 {org} 的 AWS 账号上，下面这些也是。AWS 账号会整体离开 Motir（每个组织一个账号），所以只能一起接管。",
+      "startLead": "这个代码仓库的应用运行在 Motir 内 {org} 自己的 AWS 账号上。该账号会整体离开 Motir，其中的应用照常运行——所以在 AWS 上要接管的是托管，代码仓库随之迁移。",
+      "refusalOthersLabel": "该账号上的其他代码仓库",
+      "oneAccountTitle": "每个组织一个 AWS 账号",
+      "oneAccountBody": "{org} 在 AWS 上运行的所有代码仓库会一起移交，在一个可跟进、可继续的步骤中完成。",
+      "nothingChanged": "没有任何改动。",
+      "stillHosted": "{repo} 仍由 Motir 托管，其他代码仓库也一样。",
+      "askAnAdmin": "组织管理员可以一次性接管它们全部的 AWS 托管。",
+      "cancel": "取消",
+      "close": "关闭",
+      "back": "上一步",
+      "continue": "继续",
+      "stepEyebrow": "接管 AWS 托管 · 第 {step} 步，共 2 步",
+      "stepTitle": "移交 {org} 的 AWS 账号",
+      "stepLead": "账号离开 Motir 时，其中的每个应用照常运行。请填写新的所有者，以及代码仓库的去向。",
+      "ownerEmailLabel": "所有者邮箱",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "将拥有该 AWS 账号的邮箱地址。AWS 会向它发送一次性验证码。",
+      "ownerEmailInvalid": "请输入邮箱地址，例如 name@example.com。",
+      "githubOwnerLabel": "GitHub 所有者",
+      "githubOwnerPlaceholder": "your-organization",
+      "githubOwnerHelp": "接收代码仓库的 GitHub 账号或组织。",
+      "githubOwnerInvalid": "请输入 GitHub 账号或组织名：字母、数字和单个连字符。",
+      "handedOverTogether": "一起移交",
+      "noAwsRepositories": "{org} 没有在 AWS 上运行的代码仓库，无需移交。",
+      "awsStepsNote": "有几步在 AWS 中完成——以根用户登录、添加付款方式。Motir 从不索要付款信息或根用户密码。",
+      "confirmTitle": "开始移交？",
+      "confirmNewOwner": "AWS 账号的新所有者",
+      "confirmRepositoriesGoTo": "代码仓库移交给",
+      "consequencePreviews": "{count, plural, other {这 # 个代码仓库的预览会被删除，Motir 停止部署它们。}}",
+      "consequenceRunning": "应用照常运行。在 Motir 的访问权限结束前，把你的域名指向它们自己的地址。",
+      "consequenceIrreversible": "账号一旦离开 Motir 的 AWS Organization，就无法撤销。",
+      "start": "开始移交",
+      "starting": "正在开始…",
+      "startRefused": {
+        "notReady": "移交未能开始：{org} 的 AWS 账号还没准备好移交。没有任何改动——请几分钟后重试。",
+        "alreadyStarted": "移交未能开始：{org} 的 AWS 账号已经开始移交。没有任何改动——刷新页面即可跟进。",
+        "githubIdentity": "移交未能开始：请先连接你的 GitHub 账号，以便转移代码仓库。没有任何改动。",
+        "input": "移交未能开始：请检查所有者邮箱和 GitHub 所有者。没有任何改动。",
+        "failed": "移交未能开始。没有任何改动——请稍后重试。"
+      },
+      "checklistEyebrow": "AWS 托管移交",
+      "checklistTitle": "{org} 的 AWS 账号",
+      "accountLabel": "账号",
+      "repositoryCount": "{count, plural, other {# 个代码仓库}}",
+      "checklistLoading": "正在读取移交进度…",
+      "checklistError": "无法读取移交进度",
+      "checklistErrorBody": "没有任何改动。请稍后重试。",
+      "tryAgain": "重试",
+      "stepsLabel": "移交步骤",
+      "stepFailedUnknown": "这一步失败了。之后的步骤都没有执行。",
+      "retry": "再试一次",
+      "status": {
+        "pending": "等待中",
+        "running": "进行中",
+        "waitingOnYou": "等你操作",
+        "done": "已完成",
+        "failed": "失败"
+      },
+      "overall": {
+        "inProgress": "进行中",
+        "waiting": "等你操作",
+        "failed": "需要重试",
+        "done": "已移交"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "已删除预览",
+          "body": "{count, plural, other {删除 # 个代码仓库的预览环境。}}"
+        },
+        "create_deploy_role": {
+          "label": "已为你的 CI 创建部署角色",
+          "body": "此后代码仓库的工作流用它来部署。"
+        },
+        "open_upstream": {
+          "label": "应用无需 Motir 即可访问",
+          "body": "每个应用在自己的地址上响应，见下方列表。"
+        },
+        "move_email": {
+          "label": "已更换账号邮箱",
+          "body": "AWS 账号的邮箱改为新所有者的邮箱。"
+        },
+        "await_standalone": {
+          "label": "AWS 自身的步骤",
+          "body": "根用户登录、付款方式、联系信息和协议，在 AWS 中完成。"
+        },
+        "remove_access": {
+          "label": "已移除 Motir 的访问权限",
+          "body": "删除账号中 Motir 的角色；motir.site 地址停止响应。"
+        },
+        "leave_organization": {
+          "label": "账号已离开 Motir 的 AWS Organization",
+          "body": "该账号现在是独立的 AWS 账号。"
+        },
+        "transfer_repositories": {
+          "label": "已转移每个代码仓库",
+          "body": "GitHub 把每个代码仓库转移给新的所有者。",
+          "bodyOwner": "GitHub 把每个代码仓库转移给 {owner}。"
+        }
+      },
+      "codeLabel": "AWS 发来的验证码",
+      "confirmCode": "确认验证码",
+      "codeRefused": "AWS 没有接受这个验证码。",
+      "codeEmpty": "请输入 AWS 邮件中的验证码。",
+      "codeHelp": "AWS 已向 {email} 发送一次性验证码。Motir 只把它转交给 AWS，从不保存。",
+      "codeHelpUnknown": "AWS 已向新所有者发送一次性验证码。Motir 只把它转交给 AWS，从不保存。",
+      "codeRefusedHelp": "查看 AWS 发给 {email} 的最新邮件（新验证码会取代旧的），然后重试。",
+      "codeRefusedHelpUnknown": "查看 AWS 发给新所有者的最新邮件（新验证码会取代旧的），然后重试。",
+      "standaloneIntro": "{email} 需要在 AWS 中完成：",
+      "standaloneIntroUnknown": "新所有者需要在 AWS 中完成：",
+      "standalone": {
+        "rootSignIn": "以根用户登录账号并设置密码",
+        "payment": "添加付款方式",
+        "contact": "确认联系信息",
+        "agreement": "接受 AWS 客户协议"
+      },
+      "standaloneNote": "这些在 AWS 中完成，不在这里。Motir 从不索要付款信息或根用户密码。",
+      "checkAgain": "再次检查",
+      "signIn": "打开 AWS 登录页面（在新标签页中打开）",
+      "notReady": "还没准备好——AWS 仍需要：",
+      "missing": {
+        "wait_period": "等待一段时间：AWS 会把新账号保留几天后才允许离开",
+        "delegated_administrator": "该账号不再担任委派管理员",
+        "payment_method": "付款方式",
+        "support_plan": "支持计划",
+        "contact_information": "账号的联系信息"
+      },
+      "actionFailed": "操作没有完成。没有任何改动——请稍后重试。",
+      "upstreamsTitle": "应用在没有 Motir 时的访问地址",
+      "upstreamsLead": "Motir 的访问权限移除后，Motir 的地址（…motir.site）将停止响应。在此之前，把每个域名指向它的地址。",
+      "upstreamsLoading": "正在读取地址…",
+      "upstreamsEmpty": "暂无可列出的应用。",
+      "upstreamsError": "无法读取地址",
+      "upstreamsErrorBody": "移交不受影响。请稍后重试。",
+      "ownAddress": "自己的地址",
+      "upstreamNotOpen": "尚未开放",
+      "noDomains": "没有自定义域名——无需重新指向。",
+      "pointAt": "指向",
+      "copy": "复制",
+      "copied": "已复制",
+      "copyOwnLabel": "复制 {app} 的地址",
+      "copyDomainLabel": "复制 {host} 指向的地址"
     }
   },
   "apiDocs": {

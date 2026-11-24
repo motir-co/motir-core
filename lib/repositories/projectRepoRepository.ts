@@ -1328,6 +1328,7 @@ export const projectRepoRepository = {
         projectId: true,
         name: true,
         takeoverState: true,
+        project: { select: { name: true } },
         githubRepo: { select: { repoId: true, owner: true, name: true, installationId: true } },
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

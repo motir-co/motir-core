@@ -86,10 +86,32 @@ const USAGE_AMOUNTS = ['hours', 'gbSeconds', 'vcpuHours', 'gbHours', 'cuHours', 
   (k) => `settings.production.usage.amount.${k}`,
 );
 const USAGE_CREDITS = 'settings.production.usage.col.credits';
+// The AWS hosting handover (MOTIR-12137) shows an example address and an
+// example GitHub login as its two placeholders. An email address and a GitHub
+// login are ASCII identifiers, so German, Japanese, Korean and Chinese keep the
+// English example as it is rather than inventing a non-ASCII one.
+const HANDOVER_EMAIL_PLACEHOLDER = 'repositoryTakeover.awsHandover.ownerEmailPlaceholder';
+const HANDOVER_GITHUB_PLACEHOLDER = 'repositoryTakeover.awsHandover.githubOwnerPlaceholder';
+
 const SAME_WORD: Record<string, string[]> = {
-  zh: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
-  ko: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
-  ja: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
+  zh: [
+    ...USAGE_AMOUNTS,
+    ...FINDINGS_NAMES,
+    HANDOVER_EMAIL_PLACEHOLDER,
+    HANDOVER_GITHUB_PLACEHOLDER,
+  ],
+  ko: [
+    ...USAGE_AMOUNTS,
+    ...FINDINGS_NAMES,
+    HANDOVER_EMAIL_PLACEHOLDER,
+    HANDOVER_GITHUB_PLACEHOLDER,
+  ],
+  ja: [
+    ...USAGE_AMOUNTS,
+    ...FINDINGS_NAMES,
+    HANDOVER_EMAIL_PLACEHOLDER,
+    HANDOVER_GITHUB_PLACEHOLDER,
+  ],
   it: [
     ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
@@ -159,6 +181,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.attribution.corpus',
   ],
   de: [
+    HANDOVER_EMAIL_PLACEHOLDER,
     ...USAGE_AMOUNTS,
     USAGE_CREDITS,
     LIVE_OPS_RELEASE,

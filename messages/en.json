@@ -10723,6 +10723,154 @@
       "stateUnfinishedYours": "Removal didn’t finish",
       "unfinishedDetailYours": "Motir stopped part way through shutting down what it runs from this repository. The repository itself stays in your GitHub account, and trying again finishes the rest.",
       "retryDelete": "Try again"
+    },
+    "awsHandover": {
+      "takeOver": "Take over AWS hosting",
+      "takeOverLabel": "Take over AWS hosting for {repo}",
+      "rowHelperMember": "Runs on {org}’s AWS account, which leaves Motir whole — an organization admin hands it over.",
+      "refusalTitle": "{repo} moves with {count, plural, one {one other repository} other {# other repositories}}",
+      "refusalLead": "Its app runs on {org}’s AWS account, and so do these. An AWS account leaves Motir whole — one account per organization — so they can only be taken over together.",
+      "startLead": "This repository’s app runs on {org}’s own AWS account inside Motir. That account leaves Motir whole, with its apps still running — so on AWS you take over the hosting, and the repositories move with it.",
+      "refusalOthersLabel": "The other repositories on the account",
+      "oneAccountTitle": "One AWS account per organization",
+      "oneAccountBody": "Every {org} repository that runs on AWS is handed over together, in one step you can follow and resume.",
+      "nothingChanged": "Nothing has changed.",
+      "stillHosted": "{repo} is still hosted by Motir, and so are the others.",
+      "askAnAdmin": "An organization admin can take over AWS hosting for all of them together.",
+      "cancel": "Cancel",
+      "close": "Close",
+      "back": "Back",
+      "continue": "Continue",
+      "stepEyebrow": "Take over AWS hosting · step {step} of 2",
+      "stepTitle": "Hand {org}’s AWS account over",
+      "stepLead": "The account leaves Motir with every app in it still running. Name who owns it next, and where the repositories go.",
+      "ownerEmailLabel": "Owner email",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "The address that will own the AWS account. AWS emails a one-time code here.",
+      "ownerEmailInvalid": "Enter an email address, like name@example.com.",
+      "githubOwnerLabel": "GitHub owner",
+      "githubOwnerPlaceholder": "your-organization",
+      "githubOwnerHelp": "The GitHub account or organization that receives the repositories.",
+      "githubOwnerInvalid": "Enter a GitHub account or organization name: letters, digits and single hyphens.",
+      "handedOverTogether": "Handed over together",
+      "noAwsRepositories": "{org} has no repositories running on AWS, so there is nothing to hand over.",
+      "awsStepsNote": "A few steps happen in AWS itself — signing in as the root user, adding a payment method. Motir never asks for a payment detail or a root password.",
+      "confirmTitle": "Start the handover?",
+      "confirmNewOwner": "New owner of the AWS account",
+      "confirmRepositoriesGoTo": "Repositories go to",
+      "consequencePreviews": "{count, plural, one {The previews of this repository are deleted, and Motir stops deploying it.} other {Previews of these # repositories are deleted, and Motir stops deploying them.}}",
+      "consequenceRunning": "The apps keep running. You point your domains at their own addresses before Motir’s access ends.",
+      "consequenceIrreversible": "Once the account has left Motir’s AWS Organization, this cannot be undone.",
+      "start": "Start handover",
+      "starting": "Starting…",
+      "startRefused": {
+        "notReady": "The handover couldn’t start: {org}’s AWS account isn’t ready to hand over yet. Nothing was changed — try again in a few minutes.",
+        "alreadyStarted": "The handover couldn’t start: it has already been started for {org}’s AWS account. Nothing was changed — reload the page to follow it.",
+        "githubIdentity": "The handover couldn’t start: connect your GitHub account first, so the repositories can be transferred. Nothing was changed.",
+        "input": "The handover couldn’t start: check the owner email and the GitHub owner. Nothing was changed.",
+        "failed": "The handover couldn’t start. Nothing was changed — try again in a moment."
+      },
+      "checklistEyebrow": "AWS hosting handover",
+      "checklistTitle": "{org}’s AWS account",
+      "accountLabel": "Account",
+      "repositoryCount": "{count, plural, one {# repository} other {# repositories}}",
+      "checklistLoading": "Reading the handover…",
+      "checklistError": "The handover couldn’t be read",
+      "checklistErrorBody": "Nothing has changed. Try again in a moment.",
+      "tryAgain": "Try again",
+      "stepsLabel": "Handover steps",
+      "stepFailedUnknown": "This step failed. Nothing after it has run.",
+      "retry": "Retry",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "waitingOnYou": "Waiting on you",
+        "done": "Done",
+        "failed": "Failed"
+      },
+      "overall": {
+        "inProgress": "In progress",
+        "waiting": "Waiting on you",
+        "failed": "Needs a retry",
+        "done": "Handed over"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Previews removed",
+          "body": "{count, plural, one {The preview environments of the repository are deleted.} other {The preview environments of the # repositories are deleted.}}"
+        },
+        "create_deploy_role": {
+          "label": "Deploy role for your CI created",
+          "body": "Your repositories’ workflows deploy with it from now on."
+        },
+        "open_upstream": {
+          "label": "Apps reachable without Motir",
+          "body": "Each app answers on its own address, listed below."
+        },
+        "move_email": {
+          "label": "Account email moved",
+          "body": "The AWS account’s email becomes the new owner’s."
+        },
+        "await_standalone": {
+          "label": "AWS’s own steps",
+          "body": "Root sign-in, payment method, contact details and agreements, done in AWS."
+        },
+        "remove_access": {
+          "label": "Motir’s access removed",
+          "body": "Motir’s roles in the account are deleted; motir.site addresses stop answering."
+        },
+        "leave_organization": {
+          "label": "Account left Motir’s AWS Organization",
+          "body": "The account is now a standalone AWS account."
+        },
+        "transfer_repositories": {
+          "label": "Each repository transferred",
+          "body": "GitHub moves each repository to its new owner.",
+          "bodyOwner": "GitHub moves each repository to {owner}."
+        }
+      },
+      "codeLabel": "Code from AWS",
+      "confirmCode": "Confirm code",
+      "codeRefused": "AWS didn’t accept that code.",
+      "codeEmpty": "Enter the code from AWS’s email.",
+      "codeHelp": "AWS emailed a one-time code to {email}. Motir passes it to AWS and never stores it.",
+      "codeHelpUnknown": "AWS emailed a one-time code to the new owner. Motir passes it to AWS and never stores it.",
+      "codeRefusedHelp": "Check the latest email from AWS to {email} — a new code replaces the old one — and try again.",
+      "codeRefusedHelpUnknown": "Check the latest email from AWS to the new owner — a new code replaces the old one — and try again.",
+      "standaloneIntro": "{email} does these in AWS:",
+      "standaloneIntroUnknown": "The new owner does these in AWS:",
+      "standalone": {
+        "rootSignIn": "Sign in to the account as its root user and set a password",
+        "payment": "Add a payment method",
+        "contact": "Confirm the contact details",
+        "agreement": "Accept AWS’s customer agreement"
+      },
+      "standaloneNote": "These are done in AWS, not here. Motir never asks for a payment detail or a root password.",
+      "checkAgain": "Check again",
+      "signIn": "Open the AWS sign-in page (opens in a new tab)",
+      "notReady": "Not ready yet — AWS still needs:",
+      "missing": {
+        "wait_period": "time to pass: AWS holds a new account for a few days before it can leave",
+        "delegated_administrator": "the account to stop being a delegated administrator",
+        "payment_method": "a payment method",
+        "support_plan": "a support plan",
+        "contact_information": "the account’s contact details"
+      },
+      "actionFailed": "That didn’t go through. Nothing was changed — try again in a moment.",
+      "upstreamsTitle": "Where your apps answer without Motir",
+      "upstreamsLead": "Motir’s addresses (…motir.site) stop answering when Motir’s access is removed. Point each domain at its address before then.",
+      "upstreamsLoading": "Reading the addresses…",
+      "upstreamsEmpty": "No apps to list yet.",
+      "upstreamsError": "The addresses couldn’t be read",
+      "upstreamsErrorBody": "The handover is unaffected. Try again in a moment.",
+      "ownAddress": "Its own address",
+      "upstreamNotOpen": "Not open yet",
+      "noDomains": "No custom domains — nothing to repoint.",
+      "pointAt": "point at",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyOwnLabel": "Copy the address of {app}",
+      "copyDomainLabel": "Copy where {host} points"
     }
   },
   "apiDocs": {
