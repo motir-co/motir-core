@@ -207,21 +207,30 @@ export const SETTINGS_REDIRECTS = [
   },
 ] as const;
 
+/** `next build` on a GitHub Actions runner — see `typescript` below. */
+const ON_GITHUB_HOSTED_CI = process.env['GITHUB_ACTIONS'] === 'true';
+
 const nextConfig: NextConfig = {
-  // ⚠️ ON A GITHUB-HOSTED CI RUNNER, `next build` DOES NOT TYPE-CHECK — the
-  // `TypeScript` job does (MOTIR-9799). The build's own check starts a second
-  // full `tsc` program (~4.6 GB at `d232a7ab`) while Turbopack still holds the
-  // compile's native memory, and on the hosted runner that sum crossed the box:
-  // every `Next.js build` lane of MOTIR-9799's branch (8 of 8, all three lanes)
-  // died at "Running TypeScript" with "The runner has received a shutdown
-  // signal" and no error named, while `main` — a few dozen files smaller —
-  // still fit. The check is a duplicate there: ci.yml's `typecheck` job runs
-  // `tsc -b` over `tsconfig.app.json`, the program this build reads, and gates
-  // the same pull request. `GITHUB_ACTIONS` is not forwarded into the Docker
-  // image build, so a deploy image and a local `pnpm build` still type-check.
+  // ⚠️ ON A GITHUB-HOSTED CI RUNNER, `next build` DOES NOT TYPE-CHECK, AND IT
+  // COLLECTS PAGE DATA IN ONE WORKER (MOTIR-9799). Turbopack keeps the
+  // compile's native memory resident through the steps after it, and on the
+  // hosted runner what those steps add on top crossed the box: every
+  // `Next.js build` lane of MOTIR-9799's branch (8 of 8, all three lanes) died
+  // at "Running TypeScript" — a second full `tsc` program, ~4.6 GB at
+  // `d232a7ab` — and, with that skipped, at "Collecting page data using 3
+  // workers", each with "The runner has received a shutdown signal" and no
+  // error named, while `main`, a few models smaller, still fit.
+  //
+  // The type check is a duplicate there: ci.yml's `typecheck` job runs `tsc -b`
+  // over `tsconfig.app.json`, the program this build reads, and gates the same
+  // pull request. One page-data worker costs seconds (303 pages generate in
+  // ~2s). `GITHUB_ACTIONS` is not forwarded into the Docker image build, so a
+  // deploy image and a local `pnpm build` are unchanged. The lasting answer is
+  // a bigger build runner, which is a workflow change.
   typescript: {
-    ignoreBuildErrors: process.env['GITHUB_ACTIONS'] === 'true',
+    ignoreBuildErrors: ON_GITHUB_HOSTED_CI,
   },
+  ...(ON_GITHUB_HOSTED_CI ? { experimental: { cpus: 1 } } : {}),
   async redirects() {
     return [
       ...DOCS_REDIRECTS,
