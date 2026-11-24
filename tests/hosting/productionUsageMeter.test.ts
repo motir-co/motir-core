@@ -138,6 +138,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -443,6 +444,30 @@ describe('the daily charge', () => {
       { id: live.appId, workspaceId: live.fx.workspaceId, organizationId: live.organizationId },
       now,
     );
+    expect(debits).toHaveLength(1);
+  });
+
+  // MOTIR-12172 — the cases above read the real clock, so the last UTC hour
+  // (where a window ending an hour ahead is tomorrow) and the first one (where
+  // a day back is barely yesterday) were only ever exercised by whoever ran the
+  // suite then. Pin the clock to each edge and charge the fixture's day there.
+  it.each([
+    ['in the last UTC hour', '2026-11-23T23:30:00.000Z'],
+    ['in the first UTC hour', '2026-11-24T00:30:00.000Z'],
+  ])('charges the fixture’s ended day when the pass runs %s', async (_edge, at) => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(at) });
+    const live = await slicedYesterday();
+    const now = new Date();
+
+    const charged = await meter.chargeEndedDays(
+      { id: live.appId, workspaceId: live.fx.workspaceId, organizationId: live.organizationId },
+      now,
+    );
+
+    const [slice] = await slices(live.appId);
+    expect(slice!.chargeDay.getTime()).toBeLessThan(Date.parse(at.slice(0, 10)));
+    expect(charged).toBe(1);
+    expect(slice!.chargeState).toBe('charged');
     expect(debits).toHaveLength(1);
   });
 
