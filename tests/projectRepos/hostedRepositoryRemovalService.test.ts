@@ -22,6 +22,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -34,12 +35,15 @@ import { truncateAuthTables } from '../helpers/db';
 //   2. the end state (§19.2) — the GitHub repository deleted, production's app,
 //      database and application row gone (releases with it, custom domains
 //      released), previews torn down, environment values and work-item links gone
-//      with the row, the `github_repo` mirror KEPT for history;
+//      with the row, the `github_repo` mirror KEPT for history but RETIRED from
+//      the organisation's connected set (bug MOTIR-12192);
 //   3. a repository already gone from GitHub is removable (the
 //      `cmwpi5yqc02fc01adg4jxu42y` case) and nothing is deleted there;
 //   4. a step that fails leaves the row MARKED, and a retry finishes the rest;
 //   5. an organisation link still goes through `removeRow`, untouched;
-//   6. `repository:manage` gates both doors.
+//   6. `repository:manage` gates both doors;
+//   7. the mirror retires only when Motir hosts it and no other row holds it, and
+//      a retire that fails never fails the removal (MOTIR-12192).
 //
 // The host boundaries are faked where they are crossed: the orchestrator's fake
 // hosting and database ports, the preview services and the GitHub delete client.
@@ -400,6 +404,10 @@ describe('remove — the delete sequence (§19.6)', () => {
     });
     expect(await adminDb.workItem.count({ where: { id: item.id } })).toBe(1);
     expect(await adminDb.githubRepo.count({ where: { id: mirror!.id } })).toBe(1);
+    // …but no longer connected to the organisation (MOTIR-12192).
+    expect(
+      (await adminDb.githubRepo.findUnique({ where: { id: mirror!.id } }))?.retiredAt,
+    ).toBeInstanceOf(Date);
   });
 
   it('removes a row whose repository is already gone from GitHub (cmwpi5yqc02fc01adg4jxu42y)', async () => {
@@ -619,6 +627,95 @@ describe('remove — the delete sequence (§19.6)', () => {
 
   it('is a no-op for a row that is already gone', async () => {
     await expect(hostedRepositoryRemovalService.remove('gone', fx.ctx)).resolves.toBeUndefined();
+  });
+
+  it('retires the mirror of a repository already gone from GitHub (MOTIR-12192)', async () => {
+    vi.mocked(repoDeletionClient.deleteRepo).mockResolvedValue('absent');
+    const { row, mirror } = await hostedRow({ name: 'motir-envcheck-sandbox' });
+    await adminDb.githubPullRequest.create({
+      data: { repoId: mirror!.id, number: 3, state: 'closed', merged: true, headRef: 'x' },
+    });
+
+    await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
+
+    const kept = await adminDb.githubRepo.findUnique({
+      where: { id: mirror!.id },
+      include: { pullRequests: true },
+    });
+    expect(kept?.retiredAt).toBeInstanceOf(Date);
+    expect(kept?.pullRequests.map((pr) => pr.number)).toEqual([3]);
+  });
+
+  it('keeps a taken-over repository’s mirror connected — it is the person’s now', async () => {
+    const { row, mirror } = await hostedRow({ takeoverState: 'done', owner: 'yue' });
+    await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
+    expect((await adminDb.githubRepo.findUnique({ where: { id: mirror!.id } }))?.retiredAt).toBe(
+      null,
+    );
+  });
+
+  it('keeps an organisation repository connected when its link is removed (criterion 4)', async () => {
+    const { row, mirror } = await hostedRow({
+      name: 'org-repo',
+      owner: 'acme',
+      state: 'connected',
+      seedSource: SEED_SOURCE_ORGANIZATION,
+    });
+    await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
+    expect((await adminDb.githubRepo.findUnique({ where: { id: mirror!.id } }))?.retiredAt).toBe(
+      null,
+    );
+  });
+
+  it('retires a hosted mirror only when its LAST row goes', async () => {
+    const { row, mirror } = await hostedRow({ name: 'shared-hosted' });
+    // A second project linked it through the organisation picker before the
+    // picker stopped offering hosted repositories.
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'OTH',
+    });
+    const link = await adminDb.projectRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: other.id,
+        role: 'web',
+        name: 'shared-hosted',
+        seedSource: SEED_SOURCE_ORGANIZATION,
+        state: 'connected',
+        githubRepoId: mirror!.id,
+        position: 'a0',
+      },
+    });
+
+    await hostedRepositoryRemovalService.remove(link.id, fx.ctx);
+    expect((await adminDb.githubRepo.findUnique({ where: { id: mirror!.id } }))?.retiredAt).toBe(
+      null,
+    );
+
+    await hostedRepositoryRemovalService.remove(row.id, fx.ctx);
+    expect(
+      (await adminDb.githubRepo.findUnique({ where: { id: mirror!.id } }))?.retiredAt,
+    ).toBeInstanceOf(Date);
+  });
+
+  it('a retire that fails never fails the removal the database already kept', async () => {
+    const { row } = await hostedRow({ name: 'retire-fails' });
+    const { hostedMirrorRetirementService } =
+      await import('@/lib/services/hostedMirrorRetirementService');
+    vi.spyOn(hostedMirrorRetirementService, 'retireIfHostedAndUnheld').mockRejectedValue(
+      new Error('database went away'),
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(hostedRepositoryRemovalService.remove(row.id, fx.ctx)).resolves.toBeUndefined();
+
+    expect(await adminDb.projectRepo.count({ where: { id: row.id } })).toBe(0);
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('retire-hosted-mirrors'),
+      expect.any(Error),
+    );
   });
 
   it('hands an organisation link to removeRow, exactly as before', async () => {

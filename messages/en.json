@@ -8745,8 +8745,7 @@
       },
       "usedBy": "{count, plural, one {Used by # project} other {Used by # projects}}",
       "usedByNone": "Used by no project yet",
-      "usedByExpanded": "Projects working on this repository",
-      "hostedByMotir": "Hosted by Motir"
+      "usedByExpanded": "Projects working on this repository"
     },
     "organization": {
       "subtitle": "Connect {org} to GitHub or GitLab once. Every project in the organisation can then work on a connected repository — picking one never indexes it again.",

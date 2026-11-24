@@ -23,6 +23,7 @@ import { repoDeletionClient } from '@/lib/github/repoDeletion';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
+import { hostedMirrorRetirementService } from '@/lib/services/hostedMirrorRetirementService';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import type { HostedRepositoryRemovalDto } from '@/lib/dto/projectRepos';
 import {
@@ -64,9 +65,16 @@ import {
 // `removeRow`, exactly as the route did before this card; only a Motir-hosted row
 // takes the sequence.
 //
-// ⚠️ WHAT IS KEPT. The `github_repo` row and its pull-request records stay (as
-// `removeRow` already un-claims rather than deletes the mirror), so a work item's
-// history — including the pull requests it links — survives the delete.
+// ⚠️ WHAT IS KEPT, AND WHAT LEAVES (bug MOTIR-12192). The `github_repo` row and
+// its pull-request records stay, so a work item's history — including the pull
+// requests it links — survives the delete. But the mirror no longer stays
+// CONNECTED: `removeRow` un-claims it, which is right for an organisation's own
+// repository and wrong for one Motir hosts, so once the row is gone a hosted
+// mirror no other row holds is RETIRED (`hostedMirrorRetirementService`) and
+// leaves every connected-set read — the organisation inventory, the first-index
+// pass, the inventory motir-ai's reconcile reads. That holds on BOTH arms: a
+// hosted repository a second project linked through the organisation picker
+// (before the picker stopped offering one) is retired when its last row goes.
 
 /** The takeover states in which the repository is on its way to the person's own
  *  account: neither a delete nor a remove is offered until it lands (§19.3). */
@@ -180,6 +188,7 @@ export const hostedRepositoryRemovalService = {
     if (!existing) return;
     if (isOrganizationSeedSource(existing.seedSource)) {
       await projectRepoSetService.removeRow(rowId, ctx);
+      await this.retireMirrorQuietly(existing.githubRepo, rowId);
       return;
     }
 
@@ -247,6 +256,32 @@ export const hostedRepositoryRemovalService = {
     // ── 5 · the row LAST — its cascades, the merge-mode seed and the runner-group
     //       re-sync are `removeRow`'s own, unchanged.
     await projectRepoSetService.removeRow(rowId, ctx);
+
+    // ── 6 · its mirror leaves the organisation's connected set (MOTIR-12192).
+    await this.retireMirrorQuietly(row.githubRepo, rowId);
+  },
+
+  /**
+   * Retire the removed row's mirror if Motir hosts it and nothing else holds it.
+   *
+   * POST-COMMIT AND QUIET: the row is already gone when this runs, so a failure
+   * here must not turn a removal the database kept into a 500 (notes.html #39).
+   * It is logged with the row and the mirror; the `retire-hosted-mirrors` data
+   * script retires whatever such a failure leaves behind, by the same rule.
+   */
+  async retireMirrorQuietly(
+    mirror: { id: string; owner: string } | null,
+    rowId: string,
+  ): Promise<void> {
+    try {
+      await hostedMirrorRetirementService.retireIfHostedAndUnheld(mirror);
+    } catch (err) {
+      console.error(
+        `[hostedRepositoryRemoval] could not retire mirror ${mirror?.id} after removing row ${rowId}; ` +
+          'the retire-hosted-mirrors data script retires it:',
+        err,
+      );
+    }
   },
 
   /** Production's teardown. Each call is idempotent on a second run: a destroyed

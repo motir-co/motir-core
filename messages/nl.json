@@ -8748,8 +8748,7 @@
       },
       "usedBy": "{count, plural, one {Gebruikt door # project} other {Gebruikt door # projecten}}",
       "usedByNone": "Nog door geen enkel project gebruikt",
-      "usedByExpanded": "Projecten die aan deze repository werken",
-      "hostedByMotir": "Gehost door Motir"
+      "usedByExpanded": "Projecten die aan deze repository werken"
     },
     "organization": {
       "subtitle": "Koppel {org} één keer aan GitHub of GitLab. Elk project in de organisatie kan dan aan een gekoppelde repository werken — als je er een kiest, wordt hij nooit opnieuw geïndexeerd.",

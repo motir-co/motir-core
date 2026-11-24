@@ -8745,8 +8745,7 @@
       },
       "usedBy": "{count, plural, other {# 件のプロジェクトで使用中}}",
       "usedByNone": "まだどのプロジェクトでも使用されていません",
-      "usedByExpanded": "このリポジトリで作業しているプロジェクト",
-      "hostedByMotir": "Motir がホスト"
+      "usedByExpanded": "このリポジトリで作業しているプロジェクト"
     },
     "organization": {
       "subtitle": "{org} を GitHub または GitLab に一度接続すれば、組織内のすべてのプロジェクトが接続済みのリポジトリで作業できます。リポジトリを選択しても再びインデックスが作成されることはありません。",

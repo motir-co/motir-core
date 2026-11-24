@@ -134,6 +134,10 @@ interface JoinedRow {
    *  column itself is nullable. Reassembled below with the same `?? false` an
    *  absent value reads as everywhere else. */
   repoArchived: boolean | null;
+  /** When a hosted mirror left the connected set (MOTIR-12192) — a held row's
+   *  mirror is never retired, so this reads null in practice; carried so the
+   *  reassembled `GithubRepo` is whole. */
+  repoRetiredAt: Date | null;
   repoCreatedAt: Date | null;
   repoUpdatedAt: Date | null;
 }
@@ -223,6 +227,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             name: r.repoName!,
             defaultBranch: r.repoDefaultBranch!,
             archived: r.repoArchived ?? false,
+            retiredAt: r.repoRetiredAt,
             createdAt: r.repoCreatedAt!,
             updatedAt: r.repoUpdatedAt!,
           },
@@ -394,6 +399,7 @@ export const projectRepoRepository = {
         gr."name"              AS "repoName",
         gr."default_branch"    AS "repoDefaultBranch",
         gr."archived"          AS "repoArchived",
+        gr."retired_at"        AS "repoRetiredAt",
         gr."created_at"        AS "repoCreatedAt",
         gr."updated_at"        AS "repoUpdatedAt",
         -- THE INDEX-STATE COLUMNS RIDE ALONG (MOTIR-4724). They are here because

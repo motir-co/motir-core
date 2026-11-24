@@ -8739,8 +8739,7 @@
       },
       "usedBy": "{count, plural, other {# 个项目在使用}}",
       "usedByNone": "暂无项目使用",
-      "usedByExpanded": "正在使用该仓库的项目",
-      "hostedByMotir": "由 Motir 托管"
+      "usedByExpanded": "正在使用该仓库的项目"
     },
     "organization": {
       "subtitle": "将 {org} 与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
