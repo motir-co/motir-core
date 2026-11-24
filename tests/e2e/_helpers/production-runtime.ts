@@ -113,6 +113,27 @@ export async function setProductionSecret(
   );
 }
 
+/** The job that turns a saved production variable or secret into a redeploy
+ *  (`lib/jobs/definitions/productionConfigRedeploy.ts`), and its debounce key. */
+const CONFIG_REDEPLOY_JOB = 'hosting/production-config-redeploy';
+const FINISHED_RUN_STATES = new Set(['succeeded', 'failed', 'cancelled']);
+
+/**
+ * Whether every config-redeploy run a production save queued for `repo` has
+ * finished. A save emits `environment.config.changed`, which the job worker
+ * debounces for 30 s and then turns into a redeploy of whatever is live by then
+ * (MOTIR-10032). A walk that saves a secret before its first merge waits for this
+ * so the run ends `skipped_no_live_release` instead of redeploying a release the
+ * walk made meanwhile (MOTIR-12182). False until the run has been queued.
+ */
+export async function configRedeploySettled(repo: ProductionRepo): Promise<boolean> {
+  const runs = await adminDb.jobQueueRun.findMany({
+    where: { jobId: CONFIG_REDEPLOY_JOB, debounceKey: `${repo.id}/production` },
+    select: { state: true },
+  });
+  return runs.length > 0 && runs.every((r) => FINISHED_RUN_STATES.has(r.state));
+}
+
 /** One accrual pass, as the hourly job runs it. */
 export async function accrueUsage(): Promise<void> {
   await productionUsageMeterService.accrue();
