@@ -139,26 +139,6 @@ export function RepositoryInventory({
                     {t(`provider.${row.repo.provider}`)}
                   </span>
 
-                  {/* ⚠️ WHOSE THIS REPOSITORY IS, SAID ON THE ROW (bug MOTIR-4892).
-                      A repository MOTIR hosts is legitimately in this list — the
-                      organisation's projects dispatch into it and it carries the
-                      organisation's tenancy on purpose (MOTIR-1931, MOTIR-4649) —
-                      but the row drew `owner/name`, an index state and a usage
-                      count and nothing else, so telling it apart from a repository
-                      the organisation CONNECTED required knowing
-                      `provisioningOrgLogin()`'s value by heart. Under a heading
-                      reading "Every repository connected to this organisation",
-                      silence is a claim, and on this row the claim is about whose
-                      property it is.
-
-                      A NEUTRAL chip, not a tint: it is a FACT about the
-                      repository, not a step in a flow or a state to act on — the
-                      rule `design/repository-set/` §17.3 sets for
-                      `already indexed · shared`, and the same `Hosted by Motir`
-                      words the room uses one tier down. It sits before the index
-                      pill because ownership reads ahead of freshness. */}
-                  {row.repo.hostedByMotir ? <Pill tone="neutral">{t('hostedByMotir')}</Pill> : null}
-
                   {/* The design's tones: Indexed mint · Stale peach · Indexing
                       sky · Never indexed the neutral chip.
                       ⚠️ `indexed` renders as `Indexed`, NOT `Current` (MOTIR-4817).
@@ -205,31 +185,13 @@ export function RepositoryInventory({
                     </button>
                   )}
 
-                  {/* ⚠️ AND A REPOSITORY MOTIR HOSTS CARRIES NO REMOVAL CONTROL AT
-                      ALL (bug MOTIR-4892) — the §16.6 rule the room already
-                      applies to a `domain` entry: *a control that cannot keep its
-                      promise is worse than its absence*.
-
-                      The GitHub hand-off was computed ONCE for the page from
-                      `soleInstallation` (`page.tsx`) and handed to every row. That
-                      is right for an organisation-wide affordance and wrong for a
-                      PER-ROW act, and the two are indistinguishable for as long as
-                      every row belongs to the same installation — which is why it
-                      is now per repository (MOTIR-8223). A repository Motir
-                      hosts does not: it sits under the SHARED provisioning
-                      installation, which is `organizationId: null` on purpose
-                      because it spans tenants. So `Continue on GitHub` sent the
-                      reader to their own installation screen, where the repository
-                      does not appear and nothing they do can disconnect it.
-
-                      Withholding it is not merely safer — `Disconnect` is the WRONG
-                      ACT for this row. A repository Motir hosts is handed over by
-                      the TAKEOVER (MOTIR-711), per row, from the project's own
-                      Repositories settings. The service refuses it on the same
-                      grounds and names that act, so a caller that never rendered
-                      this page gets the same answer
-                      (`MotirHostedRepoIsTakenOverError`). */}
-                  {canDisconnect && !row.repo.hostedByMotir ? (
+                  {/* No row here is a repository Motir hosts (bug MOTIR-12192):
+                      the service leaves them out of the inventory, so every row
+                      is the organisation's own and its Disconnect keeps its
+                      promise. The service still refuses a hosted one
+                      (`MotirHostedRepoIsTakenOverError`) for a caller that never
+                      rendered this page. */}
+                  {canDisconnect ? (
                     <span className="flex shrink-0 flex-col items-end gap-0.5">
                       {row.repo.provider === 'gitlab' ? (
                         <Button

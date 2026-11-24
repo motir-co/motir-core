@@ -3230,6 +3230,10 @@
           "production_app_crashed": {
             "label": "Aplikacja produkcyjna uległa awarii",
             "desc": "Aplikacja hostowana przez Motir dla projektu, którym administrujesz, uległa awarii lub nie przeszła kontroli stanu."
+          },
+          "production_credits_exhausted": {
+            "label": "Kredyty wyczerpane, gdy aplikacje działają",
+            "desc": "Saldo kredytów Twojej organizacji spadło poniżej zera, gdy Motir hostuje jej aplikacje w produkcji."
           }
         },
         "soon": "Wkrótce",
@@ -6560,12 +6564,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>",
+      "productionCreditsExhausted": "Kredyty Twojej organizacji spadły poniżej zera, gdy {count, plural, one {w produkcji działa <s>{apps}</s>} few {w produkcji działają <s>{apps}</s>} many {w produkcji działa <s>{apps}</s>} other {w produkcji działa <s>{apps}</s>}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> nie przechodzi kontroli stanu w środowisku produkcyjnym} other {<s>{repository}</s> uległa awarii w środowisku produkcyjnym}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci.",
+      "productionCreditsExhausted": "Od {date} aplikacje zawsze włączone będą wstrzymywane przy bezczynności",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, one {# więcej} few {# więcej} many {# więcej} other {# więcej}}"
   },
   "orgAdmin": {
     "menu": {
@@ -8860,8 +8867,7 @@
       },
       "usedBy": "{count, plural, one {Używane przez # projekt} few {Używane przez # projekty} many {Używane przez # projektów} other {Używane przez # projektu}}",
       "usedByNone": "Jeszcze nieużywane przez żaden projekt",
-      "usedByExpanded": "Projekty pracujące nad tym repozytorium",
-      "hostedByMotir": "Hostowane przez Motir"
+      "usedByExpanded": "Projekty pracujące nad tym repozytorium"
     },
     "organization": {
       "subtitle": "Połącz {org} z GitHubem lub GitLabem jeden raz. Każdy projekt w organizacji może wtedy pracować na połączonym repozytorium — jego wybór nigdy nie indeksuje go ponownie.",

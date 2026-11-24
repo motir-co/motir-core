@@ -8754,12 +8754,12 @@ model GithubInstallationOrgLink {
 /// internal installation modelled on BOTH sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedRepo (owner/name/defaultBranch).
 model GithubRepo {
-  id             String  @id @default(cuid())
+  id             String    @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider       String  @default("github")
+  provider       String    @default("github")
   /// FK → GithubInstallation.id (the internal cuid, NOT GitHub's numeric
   /// installation id). The parent installation this repo was selected on.
-  installationId String  @map("installation_id")
+  installationId String    @map("installation_id")
   /// WHOSE this repo is (MOTIR-1931). Tenancy is a property of the REPOSITORY,
   /// not of the installation: Motir's provisioning org holds every tenant's
   /// created repos behind ONE installation, so workspace A's repo and workspace
@@ -8767,7 +8767,7 @@ model GithubRepo {
   /// ONLY tenancy read — the installation still SELECTS which mirror rows a
   /// delivery may touch, the repo row ATTRIBUTES them. Mirrors `ProjectRepo`,
   /// which already gates on its own `workspace_id` rather than a join through.
-  workspaceId    String  @map("workspace_id")
+  workspaceId    String    @map("workspace_id")
   /// WHOSE this repository is, at the tier that actually owns it (Story
   /// MOTIR-4669 · MOTIR-4649). A repository is connected ONCE, to the
   /// ORGANISATION, and which projects use it is visibility configuration —
@@ -8810,12 +8810,12 @@ model GithubRepo {
   ///
   /// `workspaceId` above is KEPT and still non-null: it is the tier a repository
   /// is connected FROM, and it is what the `FOR ALL` policy authorises writes on.
-  organizationId String  @map("organization_id")
+  organizationId String    @map("organization_id")
   /// GitHub's numeric repository id (as a string) — stable across renames.
-  repoId         String  @map("repo_id")
+  repoId         String    @map("repo_id")
   owner          String
   name           String
-  defaultBranch  String  @map("default_branch")
+  defaultBranch  String    @map("default_branch")
   /// Whether the repository is ARCHIVED on the host (MOTIR-1959). An archived
   /// repo is READ-ONLY: it rejects a push and a pull request from an admin, so a
   /// card resolving to one dispatches an agent that cannot open a PR at all.
@@ -8832,7 +8832,21 @@ model GithubRepo {
   /// `@default(false)` rather than nullable: every pre-existing row was accepted
   /// as live, and `false` says exactly that — "not known to be archived" — with no
   /// backfill pass and no third state for consumers to interpret.
-  archived       Boolean @default(false)
+  archived       Boolean   @default(false)
+  /// When a MOTIR-HOSTED repository left the organisation's CONNECTED SET (bug
+  /// MOTIR-12192). A repository Motir hosts belongs to the project it was made
+  /// for; once no `project_repository` row holds it — its project removed it, or
+  /// it was left behind before this column existed — it is no longer anybody's
+  /// repository, and every connected-set read (the organisation inventory and
+  /// picker, the first-index pass, the index and refresh sweeps, the inventory
+  /// motir-ai's code-graph reconcile subtracts from) leaves it out.
+  ///
+  /// The row is KEPT rather than deleted because `github_pull_request` cascades
+  /// from it: a work item's linked pull requests must stay readable after its
+  /// repository is gone. Null on every connected row, and on every imported
+  /// repository always — an organisation's own repository leaves Motir by being
+  /// disconnected, which deletes the row.
+  retiredAt      DateTime? @map("retired_at")
 
   /// THE DEFAULT BRANCH'S CURRENT HEAD, as the push webhook last saw it (Story
   /// MOTIR-4669 · MOTIR-4724).

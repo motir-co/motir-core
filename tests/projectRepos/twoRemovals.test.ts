@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { db } from '@/lib/db';
+import { SEED_SOURCE_FLY_STARTER } from '@/lib/projectRepos/vocabulary';
 import { adminDb } from '../helpers/adminDb';
 import { setProjectAccess } from '../helpers/projectAccess';
 import type { ProjectAccessMode } from '@/generated/prisma/client';
@@ -560,7 +561,20 @@ describe('DISCONNECT FROM THE ORGANISATION — the cascade', () => {
       'gh-hosted',
       'motir-projects',
     );
-    await link(fx.projectId, hosted.id, fx.ctx, 'hosted');
+    // Held the way the creation primitive leaves it — a project's `created` row.
+    // `linkExistingRepo` no longer links a repository Motir hosts (MOTIR-12192).
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        role: 'api',
+        name: 'hosted',
+        seedSource: SEED_SOURCE_FLY_STARTER,
+        state: 'created',
+        githubRepoId: hosted.id,
+        position: 'a0',
+      },
+    });
     enqueueSpy.mockClear();
 
     const err = await organizationRepoService.disconnectFromOrganisation(hosted.id, fx.ctx).then(

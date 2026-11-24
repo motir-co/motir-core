@@ -36,6 +36,7 @@ import {
 export * from './names';
 export * from './dataApi';
 export * from './connectionSecret';
+export * from './usage';
 
 export interface TenantDatabaseOptions {
   /** The Data API's resume backoff. */

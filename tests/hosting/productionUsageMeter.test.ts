@@ -20,15 +20,21 @@ import { HOSTED_IDLE_SECONDS_DEFAULT } from '@/lib/hosting/idlePolicy';
 import type { HostingManifest } from '@/lib/hosting/manifest';
 import { linuxMinutesPerUnit, PRODUCTION_USAGE_RATES } from '@/lib/hosting/productionRates';
 import type { HostingTarget } from '@/lib/hosting/vocabulary';
+import { getAwsDatabaseUsageReader } from '@/lib/orchestrator/awsHosting';
 import { getDatabasePort, resetDatabaseFakes } from '@/lib/orchestrator/database';
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
+import { notificationsService } from '@/lib/services/notificationsService';
+import { toNotificationDto } from '@/lib/mappers/notificationMappers';
+import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { productionUsageSliceRepository } from '@/lib/repositories/productionUsageSliceRepository';
+import { productionCreditsNotificationService } from '@/lib/services/productionCreditsNotificationService';
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
 import { productionUsageMeterService as meter } from '@/lib/services/productionUsageMeterService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
+import { createTestUser } from '../fixtures/userFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -138,6 +144,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -391,9 +398,112 @@ describe('the stop rules', () => {
     const live = await liveApp();
     await adminDb.hostedApplication.update({ where: { id: live.appId }, data: { target: 'aws' } });
     const usageSince = vi.spyOn(port('aws'), 'usageSince');
+    const auroraUsage = vi.spyOn(getAwsDatabaseUsageReader(), 'usageSince');
 
     expect((await meter.accrue()).slices).toBe(0);
     expect(usageSince).not.toHaveBeenCalled();
+    expect(auroraUsage).not.toHaveBeenCalled();
+  });
+
+  /** An AWS application whose organisation's tenant account is ready, and an
+   *  Aurora read answering `computeSeconds` ACU-seconds and `storageBytes` up
+   *  to `until` for every window (MOTIR-12191). */
+  async function awsAppWithAurora(computeSeconds: number, storageBytes: number, until: Date) {
+    const live = await liveApp();
+    await adminDb.hostedApplication.update({ where: { id: live.appId }, data: { target: 'aws' } });
+    await adminDb.hostingTenantAccount.create({
+      data: {
+        organizationId: live.organizationId,
+        awsAccountId: '210987654321',
+        state: 'ready',
+        region: 'us-east-1',
+      },
+    });
+    // The release's own units are pinned elsewhere; here it reports none.
+    vi.spyOn(port('aws'), 'usageSince').mockImplementation(async (handle, since) => ({
+      target: handle.target,
+      appRef: handle.appRef,
+      releaseId: handle.releaseId,
+      since,
+      until: since,
+      runningSeconds: 0,
+    }));
+    const aurora = vi
+      .spyOn(getAwsDatabaseUsageReader(), 'usageSince')
+      .mockImplementation(async ({ repositoryId }, since) => ({
+        provider: 'aws',
+        applicationRef: repositoryId,
+        since,
+        until,
+        computeSeconds,
+        storageBytes,
+      }));
+    return { live, aurora };
+  }
+
+  it('slices an AWS application’s Aurora compute and storage at the decision’s factors', async () => {
+    const liveAt = new Date();
+    const until = new Date(liveAt.getTime() + HOUR);
+    // 2 ACU for the hour, and 3 GiB stored.
+    const { live, aurora } = await awsAppWithAurora(2 * 3600, 3 * 2 ** 30, until);
+
+    const result = await meter.accrue({ now: () => until });
+
+    expect(result).toMatchObject({ slices: 2, failed: 0 });
+    expect(aurora).toHaveBeenCalledWith({ repositoryId: live.rowId }, live.liveAt);
+    const written = await slices(live.appId);
+    expect(written.map((s) => s.unit)).toEqual(['aurora_compute_hours', 'aurora_storage_gb_hours']);
+    const [compute, storage] = written;
+    expect(compute).toMatchObject({
+      sliceStart: live.liveAt,
+      sliceEnd: until,
+      releaseId: live.releaseId,
+    });
+    expect(compute!.quantity.toNumber()).toBeCloseTo(2, 9);
+    expect(compute!.credits.toNumber()).toBeCloseTo(
+      2 * linuxMinutesPerUnit('aurora_compute_hours'),
+      6,
+    );
+    expect(compute!.motirCostUsd.toNumber()).toBeCloseTo(
+      2 * PRODUCTION_USAGE_RATES.aurora_compute_hours.usdPerUnit,
+      9,
+    );
+    const storedHours = (until.getTime() - live.liveAt.getTime()) / HOUR;
+    expect(storage!.quantity.toNumber()).toBeCloseTo(3 * storedHours, 6);
+    expect(storage!.credits.toNumber()).toBeCloseTo(
+      3 * storedHours * linuxMinutesPerUnit('aurora_storage_gb_hours'),
+      6,
+    );
+  });
+
+  it('writes no Aurora slice for a replayed window, and reads on from the last one', async () => {
+    const liveAt = new Date();
+    const until = new Date(liveAt.getTime() + HOUR);
+    const { live, aurora } = await awsAppWithAurora(3600, 2 ** 30, until);
+    await meter.accrue({ now: () => until });
+
+    // The read has nothing newer than the window already sliced.
+    expect((await meter.accrue({ now: () => until })).slices).toBe(0);
+
+    expect(await slices(live.appId)).toHaveLength(2);
+    expect(aurora.mock.calls.at(-1)?.[1]).toEqual(until);
+  });
+
+  it('writes no Aurora slice while the cluster has nothing to report', async () => {
+    const live = await liveApp();
+    await adminDb.hostedApplication.update({ where: { id: live.appId }, data: { target: 'aws' } });
+    await adminDb.hostingTenantAccount.create({
+      data: {
+        organizationId: live.organizationId,
+        awsAccountId: '210987654321',
+        state: 'ready',
+        region: 'us-east-1',
+      },
+    });
+
+    // The fake reader measures nothing: its window ends where it starts.
+    expect((await meter.accrue()).slices).toBe(0);
+    expect(await slices(live.appId)).toEqual([]);
   });
 
   it('counts one application’s failure and moves on', async () => {
@@ -443,6 +553,30 @@ describe('the daily charge', () => {
       { id: live.appId, workspaceId: live.fx.workspaceId, organizationId: live.organizationId },
       now,
     );
+    expect(debits).toHaveLength(1);
+  });
+
+  // MOTIR-12172 — the cases above read the real clock, so the last UTC hour
+  // (where a window ending an hour ahead is tomorrow) and the first one (where
+  // a day back is barely yesterday) were only ever exercised by whoever ran the
+  // suite then. Pin the clock to each edge and charge the fixture's day there.
+  it.each([
+    ['in the last UTC hour', '2026-11-23T23:30:00.000Z'],
+    ['in the first UTC hour', '2026-11-24T00:30:00.000Z'],
+  ])('charges the fixture’s ended day when the pass runs %s', async (_edge, at) => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(at) });
+    const live = await slicedYesterday();
+    const now = new Date();
+
+    const charged = await meter.chargeEndedDays(
+      { id: live.appId, workspaceId: live.fx.workspaceId, organizationId: live.organizationId },
+      now,
+    );
+
+    const [slice] = await slices(live.appId);
+    expect(slice!.chargeDay.getTime()).toBeLessThan(Date.parse(at.slice(0, 10)));
+    expect(charged).toBe(1);
+    expect(slice!.chargeState).toBe('charged');
     expect(debits).toHaveLength(1);
   });
 
@@ -672,6 +806,373 @@ describe('out of credits (§9)', () => {
     );
 
     expect(await meter.accrue({ now: () => now })).toMatchObject({ suspended: 0, failed: 0 });
+  });
+});
+
+describe('the administrators are told when the credits run out (MOTIR-12166)', () => {
+  const TYPE = 'production_credits_exhausted';
+  const notices = () =>
+    adminDb.notification.findMany({ where: { type: TYPE }, orderBy: [{ createdAt: 'asc' }] });
+
+  /** An organisation admin and a plain member beside the fixture's owner. */
+  async function members(organizationId: string): Promise<{ adminId: string; memberId: string }> {
+    const admin = await createTestUser();
+    const member = await createTestUser();
+    await adminDb.organizationMembership.createMany({
+      data: [
+        { organizationId, userId: admin.id, role: 'admin' },
+        { organizationId, userId: member.id, role: 'member' },
+      ],
+    });
+    return { adminId: admin.id, memberId: member.id };
+  }
+
+  /** A second Motir repository of the same project, live in production. */
+  async function secondLiveApp(live: Live, name = 'repo-api'): Promise<string> {
+    const row = await projectRepoSetService.addRow(
+      live.fx.projectId,
+      { role: 'api', name },
+      live.fx.ctx,
+    );
+    await adminDb.projectRepo.update({
+      where: { id: row.id },
+      data: { seedSource: 'initialised', state: 'created', hostingTarget: 'fly' },
+    });
+    await productionReleaseService.deployProductionRelease({
+      projectRepositoryId: row.id,
+      commitSha: SHA_B,
+      artifactRef: `registry.example/mh-${row.id}:${SHA_B}`,
+      cause: 'merge',
+    });
+    return (
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { projectRepositoryId: row.id } })
+    ).id;
+  }
+
+  /** Two workspaces of ONE organisation, each with a live app: BETA's workspace is
+   *  moved into ACME's organisation, and BETA's owner is made an admin of it. */
+  async function twoWorkspaces(): Promise<{ a: Live; b: Live }> {
+    const a = await liveApp();
+    const b = await liveApp({ identifier: 'BETA' });
+    await adminDb.workspace.update({
+      where: { id: b.fx.workspaceId },
+      data: { organizationId: a.organizationId },
+    });
+    await adminDb.organizationMembership.create({
+      data: { organizationId: a.organizationId, userId: b.fx.ownerId, role: 'admin' },
+    });
+    return { a, b };
+  }
+
+  it('tells each owner and admin once on the transition below zero, naming the running apps and the switch date', async () => {
+    const live = await liveApp();
+    const { adminId, memberId } = await members(live.organizationId);
+    releaseUsage(live.liveAt);
+    balance = -40;
+    const now = new Date();
+
+    await meter.accrue({ now: () => now });
+
+    const rows = await notices();
+    expect(rows.map((r) => r.recipientUserId).sort()).toEqual([adminId, live.fx.ownerId].sort());
+    expect(rows.map((r) => r.recipientUserId)).not.toContain(memberId);
+    for (const row of rows) {
+      expect(row).toMatchObject({
+        category: 'direct',
+        actorId: null,
+        workItemId: null,
+        workspaceId: live.fx.workspaceId,
+        readAt: null,
+      });
+      expect(row.data).toEqual({
+        kind: TYPE,
+        apps: [{ repositoryName: 'repo-web', projectKey: 'ACME' }],
+        exhaustedSince: now.toISOString(),
+        suspendFrom: new Date(now.getTime() + 7 * DAY).toISOString(),
+      });
+    }
+
+    // A later pass still below zero tells nobody again.
+    await meter.accrue({ now: () => new Date(now.getTime() + HOUR) });
+    expect(await notices()).toHaveLength(2);
+  });
+
+  it('tells them again after a top-up and a later drop below zero', async () => {
+    const live = await liveApp();
+    releaseUsage(live.liveAt);
+    const first = new Date();
+    balance = -40;
+    await meter.accrue({ now: () => first });
+    expect(await notices()).toHaveLength(1);
+
+    balance = 500;
+    await meter.accrue({ now: () => new Date(first.getTime() + HOUR) });
+    expect(await notices()).toHaveLength(1);
+
+    const second = new Date(first.getTime() + 2 * HOUR);
+    balance = -5;
+    await meter.accrue({ now: () => second });
+
+    const rows = await notices();
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => (r.data as { exhaustedSince: string }).exhaustedSince).sort()).toEqual(
+      [first.toISOString(), second.toISOString()].sort(),
+    );
+  });
+
+  it('tells them on the transition the daily charge makes, too', async () => {
+    const live = await liveApp();
+    const until = new Date(live.liveAt.getTime() + HOUR);
+    releaseUsage(until);
+    await meter.accrue({ now: () => until });
+    await shiftSlices(live.appId, DAY);
+    balance = 1;
+
+    await meter.accrue({ now: () => until });
+
+    const rows = await notices();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.data).toMatchObject({ exhaustedSince: until.toISOString() });
+  });
+
+  it('names every running app of the organisation in one notification', async () => {
+    const live = await liveApp();
+    await secondLiveApp(live);
+    releaseUsage(live.liveAt);
+    balance = -40;
+
+    await meter.accrue();
+
+    const rows = await notices();
+    expect(rows).toHaveLength(1);
+    expect((rows[0]!.data as { apps: unknown[] }).apps).toEqual([
+      { repositoryName: 'repo-web', projectKey: 'ACME' },
+      { repositoryName: 'repo-api', projectKey: 'ACME' },
+    ]);
+  });
+
+  it('writes a row into every workspace that holds a running app, so each workspace’s bell shows it', async () => {
+    const { a, b } = await twoWorkspaces();
+    releaseUsage(a.liveAt);
+    balance = -40;
+    const now = new Date();
+
+    await meter.accrue({ now: () => now });
+
+    const rows = await notices();
+    const admins = [a.fx.ownerId, b.fx.ownerId].sort();
+    for (const [workspaceId, projectKey] of [
+      [a.fx.workspaceId, 'ACME'],
+      [b.fx.workspaceId, 'BETA'],
+    ] as const) {
+      const here = rows.filter((r) => r.workspaceId === workspaceId);
+      expect(here.map((r) => r.recipientUserId).sort()).toEqual(admins);
+      for (const row of here)
+        expect((row.data as { apps: unknown[] }).apps).toEqual([
+          { repositoryName: 'repo-web', projectKey },
+        ]);
+    }
+    expect(rows).toHaveLength(4);
+
+    // Each workspace's bell — read under that workspace — carries the warning.
+    const bellA = await notificationsService.listNotifications({}, a.fx.ctx);
+    const bellB = await notificationsService.listNotifications({}, b.fx.ctx);
+    expect(bellA.notifications.map((n) => n.type)).toContain(TYPE);
+    expect(bellB.notifications.map((n) => n.type)).toContain(TYPE);
+  });
+
+  it('still tells them after a pass that failed half-way: the state is written all at once', async () => {
+    const { a } = await twoWorkspaces();
+    releaseUsage(a.liveAt);
+    balance = -40;
+    // The FIRST workspace's write lands, the SECOND one's fails.
+    const set = hostedApplicationRepository.setCreditsExhaustedSince.bind(
+      hostedApplicationRepository,
+    );
+    const spy = vi
+      .spyOn(hostedApplicationRepository, 'setCreditsExhaustedSince')
+      .mockImplementationOnce(set)
+      .mockImplementationOnce(async () => {
+        throw new Error('the second workspace’s write failed');
+      });
+
+    await meter.accrue();
+    // The failed pass left no application marked, and told nobody.
+    expect(
+      await adminDb.hostedApplication.count({ where: { creditsExhaustedSince: { not: null } } }),
+    ).toBe(0);
+    expect(await notices()).toHaveLength(0);
+
+    spy.mockRestore();
+    await meter.accrue();
+
+    expect(await adminDb.hostedApplication.count({ where: { creditsExhaustedSince: null } })).toBe(
+      0,
+    );
+    expect(await notices()).toHaveLength(4);
+  });
+
+  it('tells nobody about an application that starts while the balance is already below zero', async () => {
+    const live = await liveApp();
+    const since = new Date(Date.now() - DAY);
+    await adminDb.hostedApplication.update({
+      where: { id: live.appId },
+      data: { creditsExhaustedSince: since },
+    });
+    const added = await secondLiveApp(live);
+    releaseUsage(live.liveAt);
+    balance = -40;
+
+    await meter.accrue();
+
+    expect(
+      (await adminDb.hostedApplication.findUniqueOrThrow({ where: { id: added } }))
+        .creditsExhaustedSince,
+    ).not.toBeNull();
+    expect(await notices()).toHaveLength(0);
+  });
+
+  it('writes nothing for an administrator who turned the row off', async () => {
+    const live = await liveApp();
+    await adminDb.notificationPreference.create({
+      data: { userId: live.fx.ownerId, eventType: TYPE, channel: 'in_app', enabled: false },
+    });
+    releaseUsage(live.liveAt);
+    balance = -40;
+
+    await meter.accrue();
+
+    expect(await notices()).toHaveLength(0);
+  });
+
+  it('names no application that is not running, and writes nothing when none is', async () => {
+    const live = await liveApp();
+    await adminDb.hostedRelease.update({
+      where: { id: live.releaseId },
+      data: { state: 'replaced' },
+    });
+
+    expect(
+      await productionCreditsNotificationService.notifyCreditsExhausted({
+        organizationId: live.organizationId,
+        applicationIds: [live.appId],
+        since: new Date(),
+      }),
+    ).toBe(0);
+    expect(
+      await productionCreditsNotificationService.notifyCreditsExhausted({
+        organizationId: live.organizationId,
+        applicationIds: [],
+        since: new Date(),
+      }),
+    ).toBe(0);
+    expect(await notices()).toHaveLength(0);
+  });
+
+  it('names no customer repository', async () => {
+    const live = await liveApp();
+    await adminDb.projectRepo.update({
+      where: { id: live.rowId },
+      data: { seedSource: 'organization' },
+    });
+
+    expect(
+      await productionCreditsNotificationService.notifyCreditsExhausted({
+        organizationId: live.organizationId,
+        applicationIds: [live.appId],
+        since: new Date(),
+      }),
+    ).toBe(0);
+  });
+
+  it('writes nothing when the organisation has no owner or admin', async () => {
+    const live = await liveApp();
+    await adminDb.organizationMembership.deleteMany({
+      where: { organizationId: live.organizationId },
+    });
+
+    expect(
+      await productionCreditsNotificationService.notifyCreditsExhausted({
+        organizationId: live.organizationId,
+        applicationIds: [live.appId],
+        since: new Date(),
+      }),
+    ).toBe(0);
+  });
+
+  it('maps the stored row to the drawer DTO, and a damaged payload to an empty list', async () => {
+    const live = await liveApp();
+    releaseUsage(live.liveAt);
+    balance = -40;
+    const now = new Date();
+    await meter.accrue({ now: () => now });
+    const [row] = await notices();
+
+    expect(toNotificationDto(row!, new Map())).toMatchObject({
+      type: TYPE,
+      actor: null,
+      workItemId: null,
+      data: {
+        kind: TYPE,
+        apps: [{ repositoryName: 'repo-web', projectKey: 'ACME' }],
+        exhaustedSince: now.toISOString(),
+        suspendFrom: new Date(now.getTime() + 7 * DAY).toISOString(),
+      },
+    });
+    expect(
+      toNotificationDto(
+        { ...row!, data: { kind: TYPE, apps: [null, { repositoryName: 7 }] } },
+        new Map(),
+      ).data,
+    ).toEqual({
+      kind: TYPE,
+      apps: [
+        { repositoryName: '', projectKey: '' },
+        { repositoryName: '', projectKey: '' },
+      ],
+      exhaustedSince: '',
+      suspendFrom: '',
+    });
+    expect(
+      toNotificationDto({ ...row!, data: { kind: TYPE, apps: 'x' } }, new Map()).data,
+    ).toMatchObject({
+      apps: [],
+    });
+  });
+
+  it('never throws: a read that fails is logged and the pass goes on', async () => {
+    const live = await liveApp();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(hostedApplicationRepository, 'listRunningForCreditsNotice').mockRejectedValueOnce(
+      'not an error',
+    );
+
+    expect(
+      await productionCreditsNotificationService.notifyCreditsExhausted({
+        organizationId: live.organizationId,
+        applicationIds: [live.appId],
+        since: new Date(),
+      }),
+    ).toBe(0);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('could not notify'),
+      expect.objectContaining({ organizationId: live.organizationId, error: 'UnknownError' }),
+    );
+
+    vi.spyOn(hostedApplicationRepository, 'listRunningForCreditsNotice').mockRejectedValueOnce(
+      new TypeError('db'),
+    );
+    expect(
+      await productionCreditsNotificationService.notifyCreditsExhausted({
+        organizationId: live.organizationId,
+        applicationIds: [live.appId],
+        since: new Date(),
+      }),
+    ).toBe(0);
+    expect(error).toHaveBeenLastCalledWith(
+      expect.stringContaining('could not notify'),
+      expect.objectContaining({ error: 'TypeError' }),
+    );
   });
 });
 

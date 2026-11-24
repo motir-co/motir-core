@@ -22,6 +22,7 @@ import {
   type UnitQuantity,
 } from '@/lib/hosting/productionUsage';
 import { releaseHandleFor } from '@/lib/hosting/releaseUsage';
+import { getAwsDatabaseUsageReader } from '@/lib/orchestrator/awsHosting';
 import { getDatabasePort } from '@/lib/orchestrator/database';
 import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
@@ -35,24 +36,32 @@ import {
   type ProductionUsageSliceInput,
 } from '@/lib/repositories/productionUsageSliceRepository';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
+import { productionCreditsNotificationService } from '@/lib/services/productionCreditsNotificationService';
 import {
   EXHAUSTED_SUSPEND_AFTER_MS,
-  productionUsageService,
-} from '@/lib/services/productionUsageService';
-import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+  productionCreditBalanceService,
+} from '@/lib/services/productionCreditBalanceService';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import type { ProductionUsageUnit } from '@/generated/prisma/client';
 
 // THE PRODUCTION USAGE METER (Story MOTIR-9799 · MOTIR-12108; Decision
 // MOTIR-12100). A Motir repository's production application runs on Motir's Fly,
-// serverless or AWS accounts, and its database on Neon; this meter charges that
+// serverless or AWS accounts, and its database on Neon (an AWS application's on
+// an Aurora cluster in its tenant account, MOTIR-12191); this meter charges that
 // to the organisation's credits WHILE it runs, after the preview meter's shape
 // (`ciPreviewUsageMeterService`):
 //
 //   · HOURLY SLICES (§5). Each pass reads the live release's usage through the
 //     deploy port's `usageSince`, and the production database's through the
-//     database port's, from the end of the application's last slice, and writes
-//     one slice per unit, priced at the decision's derived factor with Motir's
-//     own list-price cost beside it. Port calls hold no transaction. The writes
+//     database port's (an AWS application's through the tenant account's
+//     CloudWatch, `getAwsDatabaseUsageReader`), from the end of the
+//     application's last slice, and writes one slice per unit, priced at the
+//     decision's derived factor with Motir's own list-price cost beside it.
+//     Port calls hold no transaction. The writes
 //     run under the application's row lock, and a pass whose window another
 //     writer advanced writes nothing; `(application, unit, slice end)` is unique.
 //   · THE FINAL SLICE. Before a release is replaced, rolled back or removed, the
@@ -70,6 +79,8 @@ import type { ProductionUsageUnit } from '@/generated/prisma/client';
 //     clears it once the balance is zero or above; after 7 days still below zero,
 //     an always-on application whose target can suspend is switched to suspend
 //     when idle through the idle-policy path. Nothing here ever stops an app.
+//     The organisation's transition below zero notifies its owners and admins
+//     once (`productionCreditsNotificationService`, MOTIR-12166).
 //   · STOP RULES (§8). A customer repository is never metered or charged; an
 //     application with no live release is not sliced; an AWS application whose
 //     organisation's tenant account is not `ready` (it has left Motir's
@@ -209,23 +220,34 @@ async function accrueRelease(app: Meterable): Promise<{ count: number; raced: bo
   });
 }
 
-/** One window of the production database's compute and storage. Only Neon
- *  reports usage today; the AWS tenant database has no usage read yet. */
+/** Where the meter reads an application's production database: an AWS
+ *  application's Aurora cluster in its tenant account (MOTIR-12191), any
+ *  other's Neon project through the database port; null when it has none. */
+function databaseSource(app: Meterable): ((start: Date) => Promise<DatabaseUsage>) | null {
+  if (app.target === 'aws') {
+    return (start) =>
+      getAwsDatabaseUsageReader().usageSince({ repositoryId: app.projectRepositoryId }, start);
+  }
+  const databaseRef = app.databaseProjectId;
+  if (databaseRef === null) return null;
+  return (start) => {
+    const port = getDatabasePort();
+    return port.usageSince(
+      { provider: port.provider, applicationRef: app.projectRepositoryId, databaseRef },
+      start,
+    );
+  };
+}
+
+/** One window of the production database's compute and storage. */
 async function accrueDatabase(app: Meterable): Promise<number> {
-  if (app.target === 'aws' || app.databaseProjectId === null) return 0;
-  const port = getDatabasePort();
+  const read = databaseSource(app);
+  if (!read) return 0;
   const recorded = await withWorkspaceServiceContext(app.workspaceId, (tx) =>
     productionUsageSliceRepository.lastSliceEnd(app.id, DATABASE_UNITS, tx),
   );
   const start = later(recorded, app.currentRelease.liveAt!);
-  const usage: DatabaseUsage = await port.usageSince(
-    {
-      provider: port.provider,
-      applicationRef: app.projectRepositoryId,
-      databaseRef: app.databaseProjectId,
-    },
-    start,
-  );
+  const usage = await read(start);
   if (usage.until.getTime() <= start.getTime()) return 0;
   const window = { start, end: usage.until };
   const quantities = databaseUnitQuantities(usage, window);
@@ -242,16 +264,42 @@ async function accrueDatabase(app: Meterable): Promise<number> {
 /** Record the organisation's balance after a debit or a read on all of its
  *  applications: the transition below zero, or back to zero or above. */
 async function recordBalance(organizationId: string, balance: number, at: Date): Promise<void> {
-  const apps = await withSystemContext((tx) =>
-    hostedApplicationRepository.listByOrganization(organizationId, tx),
-  );
-  const byWorkspace = new Map<string, string[]>();
-  for (const a of apps)
-    byWorkspace.set(a.workspaceId, [...(byWorkspace.get(a.workspaceId) ?? []), a.id]);
-  for (const [workspaceId, ids] of byWorkspace) {
-    await withWorkspaceServiceContext(workspaceId, (tx) =>
-      hostedApplicationRepository.setCreditsExhaustedSince(ids, balance < 0 ? at : null, tx),
-    );
+  // ONE transaction for the whole organisation, each workspace bound in turn before
+  // its write. The transition is decided from the state READ in that transaction
+  // before any write — no application of the organisation was below zero — never
+  // from how many rows one pass changed: with a transaction per workspace, a pass
+  // that failed half-way left some rows set, and every later pass then changed
+  // fewer than all of them, so nobody was ever told (MOTIR-12166 review).
+  const { changed, transition } = await withSystemContext(async (tx) => {
+    const apps = await hostedApplicationRepository.listByOrganization(organizationId, tx);
+    const wasExhausted = apps.some((a) => a.creditsExhaustedSince !== null);
+    const byWorkspace = new Map<string, string[]>();
+    for (const a of apps)
+      byWorkspace.set(a.workspaceId, [...(byWorkspace.get(a.workspaceId) ?? []), a.id]);
+    const ids: string[] = [];
+    for (const [workspaceId, wsIds] of byWorkspace) {
+      // A trusted id: the workspace of a row this transaction just read.
+      await bindWorkspaceContext(tx, workspaceId);
+      ids.push(
+        ...(await hostedApplicationRepository.setCreditsExhaustedSince(
+          wsIds,
+          balance < 0 ? at : null,
+          tx,
+        )),
+      );
+    }
+    return { changed: ids, transition: balance < 0 && !wasExhausted && ids.length > 0 };
+  });
+  // THE ORGANISATION'S TRANSITION below zero — none of its applications was below
+  // zero before this pass — tells its administrators once (MOTIR-12166). A later
+  // pass still below zero, and an application added while below zero, find one
+  // already set: neither notifies.
+  if (transition) {
+    await productionCreditsNotificationService.notifyCreditsExhausted({
+      organizationId,
+      applicationIds: changed,
+      since: at,
+    });
   }
 }
 
@@ -358,7 +406,7 @@ async function enforceCredits(
   apps: readonly HostedApplicationMeterTarget[],
   now: Date,
 ): Promise<number> {
-  const balance = await productionUsageService.readOrganizationBalance(organizationId);
+  const balance = await productionCreditBalanceService.readOrganizationBalance(organizationId);
   if (balance === null) return 0;
   await recordBalance(organizationId, balance, now);
   if (balance >= 0) return 0;
@@ -368,7 +416,7 @@ async function enforceCredits(
     if (
       !app?.creditsExhaustedSince ||
       app.idleMode !== 'always_on' ||
-      !productionUsageService.canSuspend(app) ||
+      !productionCreditBalanceService.canSuspend(app) ||
       now.getTime() - app.creditsExhaustedSince.getTime() < EXHAUSTED_SUSPEND_AFTER_MS
     ) {
       continue;

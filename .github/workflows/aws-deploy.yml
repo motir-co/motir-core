@@ -170,6 +170,23 @@ jobs:
           [ "$digest" = "None" ] && digest=""
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
+      # The hosted runner's memory no longer holds `next build` (MOTIR-9799):
+      # the image build's `next build` was SIGKILLed after the compile
+      # (BuildKit's `ResourceExhausted`) twice on 56279e3, the same death the
+      # CI and acceptance build lanes got swap for. BuildKit's build container
+      # draws on the host's memory, so swap on the host lets the post-compile
+      # steps page instead of being killed. A fleet runner sizes its own
+      # machine, so this is hosted-only, as in ci.yml.
+      - name: Add swap for next build
+        if: steps.existing.outputs.digest == ''
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then exit 0; fi
+          sudo fallocate -l 8G /mnt/next-build.swap
+          sudo chmod 600 /mnt/next-build.swap
+          sudo mkswap /mnt/next-build.swap
+          sudo swapon /mnt/next-build.swap
+          free -m
+
       # ⚠️ THE BUILD ARGUMENTS ARE THE ONLY WAY the browser half of monitoring is
       # configured: `next build` inlines a `NEXT_PUBLIC_*` value into the client
       # bundle, and a runtime secret cannot reach it (the Dockerfile's `ARG`

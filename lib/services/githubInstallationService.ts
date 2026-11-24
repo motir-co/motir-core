@@ -754,6 +754,10 @@ export const githubInstallationService = {
           // rather than assumed, so there is one rule for how the column is
           // filled and no path that hardcodes an answer (MOTIR-1959).
           archived: input.repo.archived,
+          // Mirroring a repository FOR A PROJECT is what connects it: a mirror a
+          // removal retired (MOTIR-12192) and a project now adopts again rejoins
+          // the connected set rather than staying invisible to its own index.
+          retiredAt: null,
         },
         tx,
       );

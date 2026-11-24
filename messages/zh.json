@@ -3230,6 +3230,10 @@
           "production_app_crashed": {
             "label": "生产应用崩溃了",
             "desc": "Motir 为你管理的项目托管的应用崩溃了，或未通过健康检查。"
+          },
+          "production_credits_exhausted": {
+            "label": "应用运行期间额度用尽",
+            "desc": "Motir 在生产环境托管组织的应用时，组织的额度余额降到了零以下。"
           }
         },
         "soon": "即将推出",
@@ -6560,12 +6564,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠",
       "pageMentioned": "<s>{actor}</s> 在 <s>{page}</s> 中提到了你",
       "pageReplied": "<s>{actor}</s> 回复了 <s>{page}</s> 上的一个讨论",
+      "productionCreditsExhausted": "{count, plural, other {<s>{apps}</s> 正在生产环境运行，但你组织的额度已低于零}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> 在生产环境中未通过健康检查} other {<s>{repository}</s> 在生产环境中崩溃了}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。",
+      "productionCreditsExhausted": "从 {date} 起，常开的应用将在空闲时暂停",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, other {另外 # 个}}"
   },
   "orgAdmin": {
     "menu": {
@@ -8851,8 +8858,7 @@
       },
       "usedBy": "{count, plural, other {# 个项目在使用}}",
       "usedByNone": "暂无项目使用",
-      "usedByExpanded": "正在使用该仓库的项目",
-      "hostedByMotir": "由 Motir 托管"
+      "usedByExpanded": "正在使用该仓库的项目"
     },
     "organization": {
       "subtitle": "将 {org} 与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",

@@ -119,6 +119,14 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'crash notification (Story MOTIR-9799 · MOTIR-12106) — the org-manager read, under the ' +
       "workspace's own org, org_membership_visible_active_or_own",
   },
+  'lib/services/productionCreditsNotificationService.ts#notifyCreditsExhausted': {
+    tables: ['organization_membership'],
+    source: 'scan',
+    why:
+      "the organisation's Owner and Admins, told once when its credits go below zero while its " +
+      'production apps run (Bug MOTIR-12166 · Decision MOTIR-12100 §9) — the org-manager read, ' +
+      "under the charged organisation's own org, org_membership_visible_active_or_own",
+  },
   'lib/services/projectMembersService.ts#previewAccessModeChange': {
     tables: ['organization_membership'],
     source: 'scan',

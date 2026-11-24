@@ -3230,6 +3230,10 @@
           "production_app_crashed": {
             "label": "Une app de production a planté",
             "desc": "Une app hébergée par Motir pour un projet que vous administrez a planté ou a échoué à son contrôle de santé."
+          },
+          "production_credits_exhausted": {
+            "label": "Crédits épuisés pendant que des apps sont en production",
+            "desc": "Le solde de crédits de votre organisation est passé sous zéro alors que Motir héberge ses apps en production."
           }
         },
         "soon": "Bientôt",
@@ -6560,12 +6564,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> a mis votre agent <s>{agent}</s> en veille",
       "pageMentioned": "<s>{actor}</s> vous a mentionné dans <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> a répondu à un fil dans <s>{page}</s>",
+      "productionCreditsExhausted": "Les crédits de votre organisation sont passés sous zéro alors que {count, plural, one {<s>{apps}</s> est en production} other {<s>{apps}</s> sont en production}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> échoue à sa vérification d’état en production} other {<s>{repository}</s> a planté en production}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Un administrateur de l’organisation l’a arrêté à {time}. Ses fichiers sont conservés ; réveillez-le depuis Agents.",
+      "productionCreditsExhausted": "Dès le {date}, les apps toujours actives se mettent en veille si inactives",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, one {# de plus} other {# de plus}}"
   },
   "orgAdmin": {
     "menu": {
@@ -8860,8 +8867,7 @@
       },
       "usedBy": "{count, plural, one {Utilisé par # projet} other {Utilisé par # projets}}",
       "usedByNone": "Utilisé par aucun projet pour l'instant",
-      "usedByExpanded": "Projets travaillant sur ce dépôt",
-      "hostedByMotir": "Hébergé par Motir"
+      "usedByExpanded": "Projets travaillant sur ce dépôt"
     },
     "organization": {
       "subtitle": "Connectez {org} à GitHub ou GitLab une seule fois. Chaque projet de l'organisation peut ensuite travailler sur un dépôt connecté — le choisir ne le réindexe jamais.",

@@ -3230,6 +3230,10 @@
           "production_app_crashed": {
             "label": "本番アプリがクラッシュしました",
             "desc": "あなたが管理するプロジェクトで Motir がホストしているアプリがクラッシュしたか、ヘルスチェックに失敗しました。"
+          },
+          "production_credits_exhausted": {
+            "label": "アプリの稼働中にクレジットが不足しました",
+            "desc": "Motir が組織のアプリを本番でホストしている間に、組織のクレジット残高がマイナスになりました。"
           }
         },
         "soon": "近日提供",
@@ -6560,12 +6564,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました",
       "pageMentioned": "<s>{actor}</s> さんが <s>{page}</s> であなたをメンションしました",
       "pageReplied": "<s>{actor}</s> さんが <s>{page}</s> のスレッドに返信しました",
+      "productionCreditsExhausted": "{count, plural, other {<s>{apps}</s> が本番で稼働中に、組織のクレジットがマイナスになりました}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> が本番環境でヘルスチェックに失敗しています} other {<s>{repository}</s> が本番環境でクラッシュしました}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。",
+      "productionCreditsExhausted": "{date} から、常時稼働のアプリはアイドル時に一時停止します",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, other {ほか # 件}}"
   },
   "orgAdmin": {
     "menu": {
@@ -8857,8 +8864,7 @@
       },
       "usedBy": "{count, plural, other {# 件のプロジェクトで使用中}}",
       "usedByNone": "まだどのプロジェクトでも使用されていません",
-      "usedByExpanded": "このリポジトリで作業しているプロジェクト",
-      "hostedByMotir": "Motir がホスト"
+      "usedByExpanded": "このリポジトリで作業しているプロジェクト"
     },
     "organization": {
       "subtitle": "{org} を GitHub または GitLab に一度接続すれば、組織内のすべてのプロジェクトが接続済みのリポジトリで作業できます。リポジトリを選択しても再びインデックスが作成されることはありません。",

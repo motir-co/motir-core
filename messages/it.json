@@ -3230,6 +3230,10 @@
           "production_app_crashed": {
             "label": "Un'app di produzione si è arrestata",
             "desc": "Un'app che Motir ospita per un progetto che amministri si è arrestata in modo anomalo o non ha superato il controllo di integrità."
+          },
+          "production_credits_exhausted": {
+            "label": "Crediti esauriti con app in produzione",
+            "desc": "Il saldo crediti della tua organizzazione è sceso sotto zero mentre Motir ospita le sue app in produzione."
           }
         },
         "soon": "Presto",
@@ -6560,12 +6564,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> ha ibernato il tuo agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> ti ha menzionato in <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> ha risposto a un thread in <s>{page}</s>",
+      "productionCreditsExhausted": "I crediti della tua organizzazione sono sotto zero mentre {count, plural, one {<s>{apps}</s> è in produzione} other {<s>{apps}</s> sono in produzione}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> non supera il controllo di integrità in produzione} other {<s>{repository}</s> si è arrestata in produzione}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Un amministratore dell’organizzazione lo ha arrestato alle {time}. I suoi file vengono conservati; risveglialo da Agenti.",
+      "productionCreditsExhausted": "Dal {date}, le app sempre attive si sospendono quando inattive",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, one {altra #} other {altre #}}"
   },
   "orgAdmin": {
     "menu": {
@@ -8860,8 +8867,7 @@
       },
       "usedBy": "{count, plural, one {Usato da # progetto} other {Usato da # progetti}}",
       "usedByNone": "Non ancora usato da alcun progetto",
-      "usedByExpanded": "Progetti che lavorano su questo repository",
-      "hostedByMotir": "Ospitato da Motir"
+      "usedByExpanded": "Progetti che lavorano su questo repository"
     },
     "organization": {
       "subtitle": "Collega {org} a GitHub o GitLab una sola volta. Ogni progetto dell’organizzazione potrà poi lavorare su un repository collegato: sceglierne uno non lo indicizza di nuovo.",

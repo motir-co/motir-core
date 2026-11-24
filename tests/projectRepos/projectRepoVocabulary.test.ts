@@ -98,6 +98,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
       name: 'acme-web',
       defaultBranch: 'main',
       archived: false,
+      retiredAt: null,
       organizationId: 'org-1',
       defaultBranchHeadSha: null,
       indexedHeadSha: null,

@@ -754,17 +754,59 @@ export const hostedApplicationRepository = {
     return changing.map((c) => c.id);
   },
 
-  /** The applications of the organisation's workspaces, with their workspace —
-   *  the set a balance reading of that organisation updates. */
+  /** The applications of the organisation's workspaces, with their workspace and
+   *  whether each is already below zero — the set a balance reading of that
+   *  organisation updates, and the state its transition is decided from. */
   async listByOrganization(
     organizationId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string; workspaceId: string }>> {
+  ): Promise<Array<{ id: string; workspaceId: string; creditsExhaustedSince: Date | null }>> {
     return tx.hostedApplication.findMany({
       where: { workspace: { organizationId } },
       orderBy: { id: 'asc' },
-      select: { id: true, workspaceId: true },
+      select: { id: true, workspaceId: true, creditsExhaustedSince: true },
     });
+  },
+
+  /**
+   * Of the applications in `ids`, those RUNNING in production — a live current
+   * release, on a repository Motir made — with the names the out-of-credits
+   * notification shows (MOTIR-12166): oldest first. Run under the system context:
+   * an organisation's applications span its workspaces.
+   */
+  async listRunningForCreditsNotice(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      workspaceId: string;
+      projectKey: string;
+      repositoryName: string;
+      seedSource: string;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    const rows = await tx.hostedApplication.findMany({
+      where: {
+        id: { in: [...ids] },
+        currentRelease: { is: { state: 'live', liveAt: { not: null } } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        workspaceId: true,
+        project: { select: { identifier: true } },
+        projectRepository: { select: { name: true, seedSource: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      workspaceId: r.workspaceId,
+      projectKey: r.project.identifier,
+      repositoryName: r.projectRepository.name,
+      seedSource: r.projectRepository.seedSource,
+    }));
   },
 
   async lockForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {

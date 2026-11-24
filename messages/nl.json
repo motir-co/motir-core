@@ -3230,6 +3230,10 @@
           "production_app_crashed": {
             "label": "Een productie-app is gecrasht",
             "desc": "Een app die Motir host voor een project dat je beheert, is gecrasht of heeft de statuscontrole niet doorstaan."
+          },
+          "production_credits_exhausted": {
+            "label": "Credits op terwijl apps live zijn",
+            "desc": "Het creditsaldo van je organisatie is onder nul gezakt terwijl Motir haar apps in productie host."
           }
         },
         "soon": "Binnenkort",
@@ -6560,12 +6564,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet",
       "pageMentioned": "<s>{actor}</s> heeft je vermeld op <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>",
+      "productionCreditsExhausted": "De credits van je organisatie staan onder nul terwijl {count, plural, one {<s>{apps}</s> in productie draait} other {<s>{apps}</s> in productie draaien}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> slaagt in productie niet voor de statuscontrole} other {<s>{repository}</s> is in productie gecrasht}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents.",
+      "productionCreditsExhausted": "Vanaf {date} pauzeren altijd-aan-apps bij inactiviteit",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, one {nog #} other {nog #}}"
   },
   "orgAdmin": {
     "menu": {
@@ -8860,8 +8867,7 @@
       },
       "usedBy": "{count, plural, one {Gebruikt door # project} other {Gebruikt door # projecten}}",
       "usedByNone": "Nog door geen enkel project gebruikt",
-      "usedByExpanded": "Projecten die aan deze repository werken",
-      "hostedByMotir": "Gehost door Motir"
+      "usedByExpanded": "Projecten die aan deze repository werken"
     },
     "organization": {
       "subtitle": "Koppel {org} één keer aan GitHub of GitLab. Elk project in de organisatie kan dan aan een gekoppelde repository werken — als je er een kiest, wordt hij nooit opnieuw geïndexeerd.",

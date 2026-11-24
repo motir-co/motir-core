@@ -199,7 +199,7 @@ describe('runDataScriptEntry', () => {
 });
 
 describe('the script registry', () => {
-  it('names exactly the nine production data scripts', () => {
+  it('names exactly the ten production data scripts', () => {
     expect(Object.keys(DATA_SCRIPTS)).toEqual([
       'backfill-boards',
       'backfill-ci-state',
@@ -210,6 +210,7 @@ describe('the script registry', () => {
       'backfill-aws-costs',
       'first-index-pass',
       'report-open-pull-requests',
+      'retire-hosted-mirrors',
     ]);
     expect(isDataScriptName('backfill-boards')).toBe(true);
     expect(isDataScriptName(undefined)).toBe(false);
@@ -232,6 +233,7 @@ describe('the script registry', () => {
     expect(pkg.scripts['codegraph:report-open-pull-requests']).toBe(
       `${entry} report-open-pull-requests`,
     );
+    expect(pkg.scripts['db:retire:hosted-mirrors']).toBe(`${entry} retire-hosted-mirrors`);
     expect(pkg.scripts['db:converge:ejected-cards']).toBe(`${entry} converge-unlanded-cards`);
     expect(pkg.scripts['build:data-script']).toBe('node scripts/build-data-script.mjs');
 

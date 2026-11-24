@@ -29,6 +29,8 @@ import type {
   TenantFunctionState,
   TenantFunctionVersion,
   TenantLambda,
+  TenantMetricPoint,
+  TenantMetricSeriesQuery,
   TenantMetricSum,
 } from './function/lambdaClient';
 
@@ -659,16 +661,41 @@ export interface FakeTenantCloudWatch extends TenantCloudWatch {
   /** The `Duration` sum (ms) each function answers, whatever the window. */
   readonly durationSums: Map<string, number>;
   readonly queries: TenantMetricSum[];
-  failAt(operation: 'sumMetric', n: number, when?: 'before' | 'after'): void;
+  /** The recorded points of each series, keyed by `fakeMetricKey`; a series
+   *  answers the points inside the query's window, oldest first (MOTIR-12191). */
+  readonly series: Map<string, TenantMetricPoint[]>;
+  readonly seriesQueries: TenantMetricSeriesQuery[];
+  failAt(operation: 'sumMetric' | 'metricPoints', n: number, when?: 'before' | 'after'): void;
+}
+
+/** The fake's key of one metric series: its name and its dimension values. */
+export function fakeMetricKey(metricName: string, dimensions: Readonly<Record<string, string>>) {
+  const parts = Object.keys(dimensions)
+    .sort()
+    .map((name) => `${name}=${dimensions[name]}`);
+  return [metricName, ...parts].join(':');
 }
 
 export function createFakeTenantCloudWatch(): FakeTenantCloudWatch {
   const durationSums = new Map<string, number>();
   const queries: TenantMetricSum[] = [];
+  const series = new Map<string, TenantMetricPoint[]>();
+  const seriesQueries: TenantMetricSeriesQuery[] = [];
   const counter = faultCounter('cloudwatch');
   return {
     durationSums,
     queries,
+    series,
+    seriesQueries,
+    async metricPoints(query) {
+      const lost = counter.enter('metricPoints');
+      seriesQueries.push(query);
+      const points = (series.get(fakeMetricKey(query.metricName, query.dimensions)) ?? [])
+        .filter((p) => p.at >= query.start && p.at < query.end)
+        .sort((a, b) => a.at.getTime() - b.at.getTime());
+      if (lost) throw counter.injected();
+      return points;
+    },
     failAt: (operation, n, when) => counter.failAt(operation, n, when),
     async sumMetric(query) {
       const lost = counter.enter('sumMetric');

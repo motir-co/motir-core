@@ -72,6 +72,7 @@ export const DATA_SCRIPTS = {
   'backfill-aws-costs': () => import('./backfill-aws-costs'),
   'first-index-pass': () => import('./first-index-pass'),
   'report-open-pull-requests': () => import('./report-open-pull-requests'),
+  'retire-hosted-mirrors': () => import('./retire-hosted-mirrors'),
 } satisfies Record<string, () => Promise<DataScript>>;
 
 export type DataScriptName = keyof typeof DATA_SCRIPTS;
