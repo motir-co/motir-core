@@ -13,19 +13,16 @@
 //   - GET    /users/{login}                                    → the account's numeric id
 //                                                                (the handover deploy role's
 //                                                                destination owner)
-//   - PUT    /repos/{owner}/{repo}/actions/permissions         → 204 (§G: Actions re-enabled)
-//   - DELETE /repos/{owner}/{repo}/actions/secrets/{name}      → 204 (the preview push secret)
-//   - DELETE /repos/{owner}/{repo}/actions/variables/{name}    → 204 (preview + production
-//                                                                variables)
-//   - DELETE /repos/{owner}/{repo}/environments/{env}          → 204 (the `production`
-//                                                                environment)
-//   - DELETE /repos/{owner}/{repo}/environments/{env}/secrets/{name}
-//                                                              → 204 (the production push
-//                                                                credential)
-//   - POST   /repos/{owner}/{repo}/transfer                    → 202 with `owner.login` set to
-//                                                                `new_owner`, so the transfer
-//                                                                reads completed and a grace
-//                                                                window starts at once
+//   - under the repository's own path, /repos/{owner}/{repo}/…:
+//       PUT    actions/permissions                → 204 (§G: Actions re-enabled)
+//       DELETE actions/secrets/{name}             → 204 (the preview push secret)
+//       DELETE actions/variables/{name}           → 204 (preview + production variables)
+//       DELETE environments/{env}                 → 204 (the `production` environment)
+//       DELETE environments/{env}/secrets/{name}  → 204 (the production push credential)
+//       POST   transfer                           → 202 with `owner.login` set to
+//                                                  `new_owner`, so the transfer reads
+//                                                  completed and a grace window starts
+//                                                  at once
 // The org installation read and the installation-token mint are NOT here: the repos
 // seam answers them in the webServer and the production-release and merge seams in the
 // worker, exactly as for every other job that reaches GitHub.
