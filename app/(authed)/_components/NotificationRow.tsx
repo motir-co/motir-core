@@ -194,8 +194,10 @@ export function NotificationRow({
         projectSettingsHref('/settings/project/code-access', data.projectKey)
       : data.kind === 'production_app_crashed'
         ? // The Production panel selects the repository and opens the event
-          // (`event`, read by the page since MOTIR-12109); the link names the crash's
-          // own project, as the code-access row does (MOTIR-12169, MOTIR-12170).
+          // (`event`, read by the page since MOTIR-12109). The link names the
+          // crash's own project, so a crash outside the active project opens
+          // there rather than on not-found (MOTIR-12170, MOTIR-12169) — as the
+          // code-access row does.
           projectSettingsHref('/settings/project/production', data.projectKey, {
             repository: data.projectRepositoryId,
             event: data.eventId,
