@@ -24,6 +24,7 @@ import { getDatabasePort, resetDatabaseFakes } from '@/lib/orchestrator/database
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
+import { notificationsService } from '@/lib/services/notificationsService';
 import { toNotificationDto } from '@/lib/mappers/notificationMappers';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { productionUsageSliceRepository } from '@/lib/repositories/productionUsageSliceRepository';
@@ -719,6 +720,21 @@ describe('the administrators are told when the credits run out (MOTIR-12166)', (
     ).id;
   }
 
+  /** Two workspaces of ONE organisation, each with a live app: BETA's workspace is
+   *  moved into ACME's organisation, and BETA's owner is made an admin of it. */
+  async function twoWorkspaces(): Promise<{ a: Live; b: Live }> {
+    const a = await liveApp();
+    const b = await liveApp({ identifier: 'BETA' });
+    await adminDb.workspace.update({
+      where: { id: b.fx.workspaceId },
+      data: { organizationId: a.organizationId },
+    });
+    await adminDb.organizationMembership.create({
+      data: { organizationId: a.organizationId, userId: b.fx.ownerId, role: 'admin' },
+    });
+    return { a, b };
+  }
+
   it('tells each owner and admin once on the transition below zero, naming the running apps and the switch date', async () => {
     const live = await liveApp();
     const { adminId, memberId } = await members(live.organizationId);
@@ -804,6 +820,67 @@ describe('the administrators are told when the credits run out (MOTIR-12166)', (
       { repositoryName: 'repo-web', projectKey: 'ACME' },
       { repositoryName: 'repo-api', projectKey: 'ACME' },
     ]);
+  });
+
+  it('writes a row into every workspace that holds a running app, so each workspace’s bell shows it', async () => {
+    const { a, b } = await twoWorkspaces();
+    releaseUsage(a.liveAt);
+    balance = -40;
+    const now = new Date();
+
+    await meter.accrue({ now: () => now });
+
+    const rows = await notices();
+    const admins = [a.fx.ownerId, b.fx.ownerId].sort();
+    for (const [workspaceId, projectKey] of [
+      [a.fx.workspaceId, 'ACME'],
+      [b.fx.workspaceId, 'BETA'],
+    ] as const) {
+      const here = rows.filter((r) => r.workspaceId === workspaceId);
+      expect(here.map((r) => r.recipientUserId).sort()).toEqual(admins);
+      for (const row of here)
+        expect((row.data as { apps: unknown[] }).apps).toEqual([
+          { repositoryName: 'repo-web', projectKey },
+        ]);
+    }
+    expect(rows).toHaveLength(4);
+
+    // Each workspace's bell — read under that workspace — carries the warning.
+    const bellA = await notificationsService.listNotifications({}, a.fx.ctx);
+    const bellB = await notificationsService.listNotifications({}, b.fx.ctx);
+    expect(bellA.notifications.map((n) => n.type)).toContain(TYPE);
+    expect(bellB.notifications.map((n) => n.type)).toContain(TYPE);
+  });
+
+  it('still tells them after a pass that failed half-way: the state is written all at once', async () => {
+    const { a } = await twoWorkspaces();
+    releaseUsage(a.liveAt);
+    balance = -40;
+    // The FIRST workspace's write lands, the SECOND one's fails.
+    const set = hostedApplicationRepository.setCreditsExhaustedSince.bind(
+      hostedApplicationRepository,
+    );
+    const spy = vi
+      .spyOn(hostedApplicationRepository, 'setCreditsExhaustedSince')
+      .mockImplementationOnce(set)
+      .mockImplementationOnce(async () => {
+        throw new Error('the second workspace’s write failed');
+      });
+
+    await meter.accrue();
+    // The failed pass left no application marked, and told nobody.
+    expect(
+      await adminDb.hostedApplication.count({ where: { creditsExhaustedSince: { not: null } } }),
+    ).toBe(0);
+    expect(await notices()).toHaveLength(0);
+
+    spy.mockRestore();
+    await meter.accrue();
+
+    expect(await adminDb.hostedApplication.count({ where: { creditsExhaustedSince: null } })).toBe(
+      0,
+    );
+    expect(await notices()).toHaveLength(4);
   });
 
   it('tells nobody about an application that starts while the balance is already below zero', async () => {

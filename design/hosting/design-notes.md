@@ -545,11 +545,13 @@ same destination as the Usage section's **Top up credits** button.
 | `settings.account.notifications.events.production_credits_exhausted.label` / `.desc` | Credits ran out while apps are live / Your organization's credit balance went below zero while Motir hosts its apps in production.    |
 
 - `{apps}` is the repository names of the organisation's **running** production apps (a live release,
-  on a repository Motir made), oldest first, joined as a list in the reader's language; past three it
-  reads the first three and "{count} more".
+  on a repository Motir made) **in the workspace whose bell shows the row**, oldest first, joined as a
+  list in the reader's language; past three it reads the first three and "{count} more". The bell is a
+  per-workspace surface, so every workspace that holds a running app gets its own row.
 - `{date}` is the day the 7-day switch falls on (the transition plus 7 days), short month and day in the
   reader's calendar. It comes **first** in the excerpt because the excerpt is one truncated line and the
-  date is what the administrator acts on.
+  date is what the administrator acts on. A payload without the date draws no excerpt at all, never a
+  sentence with a hole in it.
 - No balance or amount is named: the row says that the credits ran out, the billing page says by how much.
 
 ### Tokens and parts

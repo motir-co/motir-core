@@ -182,12 +182,16 @@ export function NotificationRow({
           : data.kind === 'production_credits_exhausted'
             ? // The 7-day switch, as the day it falls on in the reader's calendar,
               // FIRST: the excerpt is one truncated line, and the date is what the
-              // administrator acts on.
-              t('excerpt.productionCreditsExhausted', {
-                date: data.suspendFrom
-                  ? format.dateTime(new Date(data.suspendFrom), { month: 'short', day: 'numeric' })
-                  : '',
-              })
+              // administrator acts on. A payload without the date draws no excerpt
+              // rather than a sentence with a hole in it.
+              data.suspendFrom
+              ? t('excerpt.productionCreditsExhausted', {
+                  date: format.dateTime(new Date(data.suspendFrom), {
+                    month: 'short',
+                    day: 'numeric',
+                  }),
+                })
+              : null
             : data.kind === 'agent_hibernated_by_admin'
               ? t('excerpt.agentHibernatedByAdmin', {
                   time: data.hibernatedAt

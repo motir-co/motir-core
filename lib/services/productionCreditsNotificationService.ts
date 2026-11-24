@@ -22,8 +22,15 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // It follows the shipped producers whose subject is not a work item
 // (`orgFleetNotificationService`, the crash notification): the shared
 // `notifyProjectEvent` write, which gates on the recipient's in-app cell and
-// dedupes on `(dedupeKey, recipient)`. The dedupe key is the organisation and the
-// time of the transition, so a retried pass writes nothing twice.
+// dedupes on `(dedupeKey, recipient)`. The dedupe key is the organisation, the
+// workspace and the time of the transition, so a retried pass writes nothing twice.
+//
+// ⚠️ ONE ROW PER ADMINISTRATOR PER WORKSPACE. The bell is a per-workspace surface:
+// `notificationsService.listNotifications` reads under the active workspace, and
+// the `notification_active_workspace` policy shows only that workspace's rows. An
+// organisation's apps can span its workspaces, so every workspace that holds a
+// running app gets its own row, naming that workspace's apps — an administrator
+// working in any of them sees the warning there.
 //
 // ⚠️ BEST-EFFORT. It never throws: a notification that cannot be written must not
 // fail the meter's pass or undo the state it recorded.
@@ -38,7 +45,8 @@ export const productionCreditsNotificationService = {
   /**
    * Tell the owners and admins of `organizationId` that its balance went below
    * zero at `since` while the RUNNING applications among `applicationIds` serve
-   * production. Returns how many notifications were written; none when no listed
+   * production — one row per administrator in each workspace that holds one of
+   * them. Returns how many notifications were written; none when no listed
    * application is running (a customer repository never is).
    */
   async notifyCreditsExhausted(args: {
@@ -65,30 +73,33 @@ export const productionCreditsNotificationService = {
       const type = NOTIFICATION_EVENT_TYPE.productionCreditsExhausted;
       const exhaustedSince = args.since.toISOString();
       const suspendFrom = new Date(args.since.getTime() + EXHAUSTED_SUSPEND_AFTER_MS).toISOString();
-      // ONE row per administrator, however many workspaces the apps span. The
-      // feed is read by recipient, so the row's workspace is only where it is
-      // stored: the oldest running application's.
-      const workspaceId = running[0]!.workspaceId;
+      // The running apps by workspace, each list oldest first (the read's order).
+      const byWorkspace = new Map<string, typeof running>();
+      for (const a of running)
+        byWorkspace.set(a.workspaceId, [...(byWorkspace.get(a.workspaceId) ?? []), a]);
+      const admins = [...new Set(recipients)].sort();
       let written = 0;
-      for (const recipientUserId of [...new Set(recipients)].sort()) {
-        const ok = await notificationFanInService.notifyProjectEvent({
-          workspaceId,
-          recipientUserId,
-          type,
-          // DIRECT: it is about the recipient's own organisation's apps.
-          category: 'direct',
-          dedupeKey: `${type}:${args.organizationId}:${exhaustedSince}`,
-          data: {
-            kind: 'production_credits_exhausted',
-            apps: running.map((a) => ({
-              repositoryName: a.repositoryName,
-              projectKey: a.projectKey,
-            })),
-            exhaustedSince,
-            suspendFrom,
-          },
-        });
-        if (ok) written += 1;
+      for (const [workspaceId, apps] of byWorkspace) {
+        for (const recipientUserId of admins) {
+          const ok = await notificationFanInService.notifyProjectEvent({
+            workspaceId,
+            recipientUserId,
+            type,
+            // DIRECT: it is about the recipient's own organisation's apps.
+            category: 'direct',
+            dedupeKey: `${type}:${args.organizationId}:${workspaceId}:${exhaustedSince}`,
+            data: {
+              kind: 'production_credits_exhausted',
+              apps: apps.map((a) => ({
+                repositoryName: a.repositoryName,
+                projectKey: a.projectKey,
+              })),
+              exhaustedSince,
+              suspendFrom,
+            },
+          });
+          if (ok) written += 1;
+        }
       }
       return written;
     } catch (error) {

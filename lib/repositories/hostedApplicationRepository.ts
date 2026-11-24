@@ -529,16 +529,17 @@ export const hostedApplicationRepository = {
     return changing.map((c) => c.id);
   },
 
-  /** The applications of the organisation's workspaces, with their workspace —
-   *  the set a balance reading of that organisation updates. */
+  /** The applications of the organisation's workspaces, with their workspace and
+   *  whether each is already below zero — the set a balance reading of that
+   *  organisation updates, and the state its transition is decided from. */
   async listByOrganization(
     organizationId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string; workspaceId: string }>> {
+  ): Promise<Array<{ id: string; workspaceId: string; creditsExhaustedSince: Date | null }>> {
     return tx.hostedApplication.findMany({
       where: { workspace: { organizationId } },
       orderBy: { id: 'asc' },
-      select: { id: true, workspaceId: true },
+      select: { id: true, workspaceId: true, creditsExhaustedSince: true },
     });
   },
 

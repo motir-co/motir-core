@@ -642,13 +642,14 @@ describe('NotificationDrawer — the credits-exhausted row', () => {
     expect(row.textContent).not.toContain('repo-4');
   });
 
-  it('drops the date, never the sentence, from a payload without one', async () => {
+  it('draws no excerpt, never a sentence with a hole, from a payload without the date', async () => {
     const row = creditsRow([app(1)]);
     row.data.suspendFrom = '';
     renderDrawer(pageDTO({ notifications: [row] as never, totalCount: 1 }));
 
-    expect((await screen.findByRole('link', { name: /repo-1/ })).textContent).toContain(
-      'From , always-on apps suspend when idle',
-    );
+    const text = (await screen.findByRole('link', { name: /repo-1/ })).textContent;
+    expect(text).toContain('repo-1 is live in production');
+    expect(text).not.toContain('always-on apps suspend when idle');
+    expect(text).not.toContain('From ,');
   });
 });
