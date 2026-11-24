@@ -297,8 +297,11 @@ describe('the 404-vs-403 posture is NOT flattened (MOTIR-2469)', () => {
     );
     expect(layout).toContain('canBrowse');
     expect(layout).toContain('NoAccessState');
-    // And it still short-circuits BEFORE rendering children.
-    expect(layout.indexOf('if (!canBrowse)')).toBeLessThan(layout.indexOf('return children;'));
+    // And it still short-circuits BEFORE rendering children — which it returns
+    // inside the MOTIR-12169 project-link gate.
+    expect(layout.indexOf('if (!canBrowse)')).toBeLessThan(
+      layout.indexOf('{children}</ProjectLinkGate>'),
+    );
   });
 
   it('the guard itself makes no browse decision — it would be the wrong altitude', () => {

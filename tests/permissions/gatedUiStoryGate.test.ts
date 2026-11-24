@@ -362,7 +362,11 @@ describe('the settings guard never decides BROWSE — the 404 arm stays the layo
   it('and the layout still answers a non-browser first', () => {
     const layout = read('app/(authed)/settings/project/layout.tsx');
     expect(layout.indexOf('if (!canBrowse)')).toBeGreaterThan(-1);
-    expect(layout.indexOf('if (!canBrowse)')).toBeLessThan(layout.indexOf('return children;'));
+    // Every answer is wrapped in the MOTIR-12169 link gate; the room itself is
+    // still returned only after the browse check.
+    expect(layout.indexOf('if (!canBrowse)')).toBeLessThan(
+      layout.indexOf('{children}</ProjectLinkGate>'),
+    );
   });
 });
 
