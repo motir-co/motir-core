@@ -153,6 +153,16 @@ describe('NotificationDrawer — the access-refused row', () => {
     expect(row.getAttribute('href')).not.toContain('/items/');
   });
 
+  it('names its PROJECT in the link, so it opens on that project whatever is active (MOTIR-12169)', async () => {
+    renderDrawer(pageDTO({ notifications: [refusedRow()] as never, totalCount: 1 }));
+
+    const row = await screen.findByRole('link', { name: new RegExp('Acme booking') });
+    // The settings area layout switches to the named project before the room
+    // renders (`tests/settings/projectSettingsLinkProject.test.tsx`), so the
+    // row must carry the key — without it Code access shows the active project.
+    expect(row.getAttribute('href')).toBe('/settings/project/code-access?project=ACME');
+  });
+
   it('draws NO actor — no initial letter, and no fallback name in the sentence', async () => {
     renderDrawer(pageDTO({ notifications: [refusedRow()] as never, totalCount: 1 }));
 

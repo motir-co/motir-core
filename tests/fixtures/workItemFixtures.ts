@@ -184,6 +184,71 @@ export async function createTestWorkItem(
   });
 }
 
+export interface CreateTestWorkItemsInput {
+  kind: WorkItemKind;
+  /** One title per row; the rows are created in this order. */
+  titles: readonly string[];
+  parentId?: string | null;
+  /** File every row into this folder (a ROOT row's placement; MOTIR-12144). */
+  folderId?: string | null;
+}
+
+/**
+ * Create MANY sibling work items in ONE bound transaction and ONE insert
+ * (MOTIR-12181) — the bulk twin of {@link createTestWorkItem}, for a case whose
+ * subject is a LEVEL's size rather than any one card on it.
+ *
+ * Seeding forty cards through `workItemsService.createWorkItem` costs forty
+ * transactions of a dozen statements each, and a size case that did that took
+ * 3–12 s of a 15 s test budget locally and crossed it on a loaded CI shard. Here
+ * the keys are allocated in one statement (the same counter
+ * `projectRepository.allocateWorkItemNumber` bumps, moved by N instead of 1 so a
+ * later service create never collides with these keys), the positions are one
+ * ascending chain from {@link nextTestPosition} (read its warning), and the rows
+ * land in one `INSERT`, which fires the same kind-parent / depth triggers a
+ * single create does.
+ *
+ * It writes the ROW only: no revision, no activity, no search refresh — exactly
+ * what {@link createTestWorkItem} writes. Seed a card a case reads a revision of
+ * through the service instead.
+ */
+export async function createTestWorkItems(
+  fx: WorkItemFixture,
+  input: CreateTestWorkItemsInput,
+): Promise<WorkItem[]> {
+  const count = input.titles.length;
+  if (count === 0) return [];
+  return withWorkspaceContext(fx.ctx, async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ n: number }>>`
+      UPDATE "project" SET "lastWorkItemNumber" = "lastWorkItemNumber" + ${count}
+      WHERE "id" = ${fx.projectId} RETURNING "lastWorkItemNumber" AS n`;
+    if (rows.length === 0) throw new Error(`createTestWorkItems: no project ${fx.projectId}`);
+    const firstKey = Number(rows[0]!.n) - count + 1;
+    // One ascending chain, appended after the highest key the project holds.
+    let position = await nextTestPosition(fx.projectId, tx);
+    const data = input.titles.map((title, i) => {
+      if (i > 0) position = keyForAppend(position);
+      const key = firstKey + i;
+      return {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        parentId: input.parentId ?? null,
+        folderId: input.folderId ?? null,
+        kind: input.kind,
+        key,
+        identifier: `${fx.projectIdentifier}-${key}`,
+        title,
+        reporterId: fx.ownerId,
+        position,
+      };
+    });
+    const made = await tx.workItem.createManyAndReturn({ data });
+    // `createManyAndReturn` does not promise input order, and callers index by it.
+    const byKey = new Map(made.map((w) => [w.key, w]));
+    return data.map((d) => byKey.get(d.key)!);
+  });
+}
+
 export interface CreateTestLinkInput {
   workspaceId: string;
   fromId: string;

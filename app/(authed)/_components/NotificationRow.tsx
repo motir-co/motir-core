@@ -16,6 +16,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { agentVerdictHref } from '@/lib/agentReview/verdictActivity';
+import { projectSettingsHref } from '@/lib/settings/projectSettingsLink';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationData, NotificationDTO } from '@/lib/dto/notifications';
 import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
@@ -188,18 +189,17 @@ export function NotificationRow({
   const href = page
     ? `/pages/${encodeURIComponent(page.pageId)}?thread=${encodeURIComponent(page.threadRootId)}`
     : data.kind === 'code_access_refused'
-      ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
+      ? // The link names its project, so the room opens on it whatever the reader's
+        // active project is (MOTIR-12169) — `projectSettingsHref` is the one spelling.
+        projectSettingsHref('/settings/project/code-access', data.projectKey)
       : data.kind === 'production_app_crashed'
         ? // The Production panel selects the repository and opens the event
-          // (`event`, read by the page since MOTIR-12109). `project` names the
-          // crash's own project, so a crash outside the active project opens
-          // there rather than on not-found (MOTIR-12170; the settings area
-          // switches to it, MOTIR-12169) — as the code-access row does.
-          `/settings/project/production?repository=${encodeURIComponent(
-            data.projectRepositoryId,
-          )}&event=${encodeURIComponent(data.eventId)}&project=${encodeURIComponent(
-            data.projectKey,
-          )}`
+          // (`event`, read by the page since MOTIR-12109); the link names the crash's
+          // own project, as the code-access row does (MOTIR-12169, MOTIR-12170).
+          projectSettingsHref('/settings/project/production', data.projectKey, {
+            repository: data.projectRepositoryId,
+            event: data.eventId,
+          })
         : issueKey
           ? // A send-back lands on its own activity entry, whose findings open there — on the
             // All tab, since the default Comments tab does not draw it (MOTIR-10458).
