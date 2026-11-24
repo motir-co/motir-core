@@ -459,6 +459,17 @@ describe('the tenant deploy policy — the front door (MOTIR-11846)', () => {
 });
 
 describe('the tenant deploy policy — its narrow IAM', () => {
+  it('grants the log-event read only on the hosting log groups (MOTIR-12104)', () => {
+    expect(AWS_FUNCTION_DEPLOY_ACTIONS).toContain('logs:FilterLogEvents');
+    expect(AWS_CONTAINER_DEPLOY_ACTIONS).toContain('logs:FilterLogEvents');
+    const grants = grantsOf('logs:FilterLogEvents');
+    expect(grants).toHaveLength(1);
+    expect(list(grants[0]!.Resource)).toEqual([
+      `arn:aws:logs:${TENANT_ACCOUNT_REGION}:*:log-group:/aws/lambda/mh-*`,
+      `arn:aws:logs:${TENANT_ACCOUNT_REGION}:*:log-group:/motir/*`,
+    ]);
+  });
+
   it('grants SSM only on the usage parameters', () => {
     for (const action of [
       'ssm:GetParameter',

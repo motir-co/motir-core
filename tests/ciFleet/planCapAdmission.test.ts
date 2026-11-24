@@ -197,18 +197,18 @@ describe('a hosted-agent run is held to its plan’s parallel-run figure', () =>
   });
 
   // The decision reads the hosted-agent count, never the cross-workload total.
-  it('a CI burst and index containers far above the figure do not stop the first agent run', async () => {
+  it('a CI burst and agent instances far above the figure do not stop the first agent run', async () => {
     const fx = await seedTenant();
     onPlan(fx, 'standard', 'Standard');
     await seedRunningCi(fx, 40);
-    for (let i = 0; i < 6; i += 1) await reserve('code_graph_index', fx);
+    for (let i = 0; i < 6; i += 1) await reserve('agent_instance', fx);
 
     const { verdict } = await reserve('hosted_agent', fx);
 
     expect(verdict).toMatchObject({
       outcome: 'reserved',
       pool: 1,
-      census: { byWorkload: { ci_runner: 40, code_graph_index: 6, hosted_agent: 0 } },
+      census: { byWorkload: { ci_runner: 40, hosted_agent: 0 } },
     });
   });
 

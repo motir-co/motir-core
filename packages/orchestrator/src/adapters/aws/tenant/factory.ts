@@ -9,6 +9,7 @@ import {
   sdkTenantElb,
   sdkTenantIam,
   sdkTenantLambda,
+  sdkTenantLogs,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   sdkTenantSsm,
@@ -57,6 +58,7 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     ec2: sdkTenantEc2(factory('ec2', config)),
     // IAM is global: its endpoint answers whatever the region.
     iam: sdkTenantIam(factory('iam', config)),
+    logs: sdkTenantLogs(factory('logs', config)),
   };
 }
 

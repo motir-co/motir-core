@@ -1098,7 +1098,10 @@ jobs:
     # Observed 3.6–4.5 min → 15 (~3.3x). `next build` grows with the app and
     # is the one short job whose normal duration has moved, so it gets a
     # multiple rather than the floor.
-    timeout-minutes: 15
+    # MOTIR-9799: with the swap step below the build pages instead of dying,
+    # and took ~11 min to the artifact upload (compile 5.1 min, ~3 min paging
+    # after it), so the upload's ~3.5 min ran into 15. 25 covers that.
+    timeout-minutes: 25
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
@@ -1188,6 +1191,20 @@ jobs:
       # Vercel — which runs that script too — gets it as well; package.json
       # cannot carry a comment, which is why the reasoning lives at this call
       # site.
+      # The hosted runner's memory no longer holds `next build` (MOTIR-9799):
+      # every build lane of that story's branch died about a minute after the
+      # compile with "The runner has received a shutdown signal" and no error,
+      # with the type check skipped and with one page-data worker alike. Swap
+      # lets the post-compile steps page instead of the box killing the runner.
+      # A fleet runner sizes its own machine, so this is hosted-only.
+      - name: Add swap for next build
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then exit 0; fi
+          sudo fallocate -l 8G /mnt/next-build.swap
+          sudo chmod 600 /mnt/next-build.swap
+          sudo mkswap /mnt/next-build.swap
+          sudo swapon /mnt/next-build.swap
+          free -m
       - run: pnpm build
       # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
       # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly
@@ -1508,7 +1525,6 @@ jobs:
         run: >-
           pnpm vitest run
           tests/ciFleet/awsPoolDeferral.test.ts
-          tests/ciFleet/awsIndexPoolSeam.test.ts
           tests/ciFleet/fleetGrowthIntegration.test.ts
           tests/ciFleet/fleetGrowthWalk.test.ts
           tests/ciFleet/fleetPoolGrowthService.test.ts
@@ -1519,7 +1535,6 @@ jobs:
           tests/ciFleet/fleetAttributionAws.test.ts
           tests/ciFleet/fleetAttributionHoster.test.ts
           tests/ciFleet/fleetAttributionOrgOwned.test.ts
-          tests/ciFleet/codeGraphIndexAwsE2E.test.ts
           tests/agentInstances/agentHosterCharging.test.ts
 
   coverage:

@@ -1,9 +1,6 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import {
-  INDEX_CAPACITY_PAUSE_REASONS,
-  INDEX_SIZE_REFUSED_PAUSE_REASON,
-} from '@/lib/ciFleet/indexAllowance';
+import { INDEX_SIZE_REFUSED_PAUSE_REASON } from '@/lib/ciFleet/indexAllowance';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table
 // (Story 7.10 · MOTIR-891). `installationId` here is the INTERNAL
@@ -136,9 +133,6 @@ function pausedOrgsCte(search: string | null): Prisma.Sql {
         (ARRAY_AGG(gr."index_paused_reason" ORDER BY gr."index_paused_at" DESC NULLS LAST))[1] AS "reason"
       FROM "github_repo" gr
       WHERE gr."index_paused_reason" IS NOT NULL AND gr."archived" = false
-        -- A full indexer pool, or one with no account, is Motir's capacity, not
-        -- the org's stop (MOTIR-9451, MOTIR-10600).
-        AND gr."index_paused_reason" NOT IN (${Prisma.join([...INDEX_CAPACITY_PAUSE_REASONS])})
       GROUP BY gr."organization_id"
     ),
     stopped AS (
@@ -673,8 +667,8 @@ export const githubRepoRepository = {
     return tx.githubRepo.findMany({
       where: {
         organizationId: { in: organizationIds },
-        // The same rows the Stopped orgs list counts: never Motir's indexer capacity.
-        indexPausedReason: { not: null, notIn: [...INDEX_CAPACITY_PAUSE_REASONS] },
+        // The same rows the Stopped orgs list counts.
+        indexPausedReason: { not: null },
         archived: false,
       },
       select: {
@@ -696,10 +690,9 @@ export const githubRepoRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<{ indexPausedReason: string | null; indexPausedAt: Date | null } | null> {
     return tx.githubRepo.findFirst({
-      // Motir's indexer capacity is not the organisation's stop (MOTIR-9451, MOTIR-10600).
       where: {
         organizationId,
-        indexPausedReason: { not: null, notIn: [...INDEX_CAPACITY_PAUSE_REASONS] },
+        indexPausedReason: { not: null },
         archived: false,
       },
       orderBy: { indexPausedAt: 'desc' },

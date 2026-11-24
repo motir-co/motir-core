@@ -114,7 +114,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
   // This is the guard the card's "delete one edge → suite fails" step exercises:
   // the seed and the behavioral sweep both read DEFAULT_TRANSITIONS, so only a
   // pin against literals catches an edit to the constant itself.
-  it('declares exactly the nine default statuses', () => {
+  it('declares exactly the ten default statuses', () => {
     expect(STATUS_KEYS).toEqual([
       'todo',
       'blocked',
@@ -128,6 +128,9 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
       // plan is reconsidered. It is in this literal pin for the same reason
       // every other key is: adding a status has to be a deliberate edit here.
       'planning',
+      // MOTIR-12174 — planned and stale: a decision it rests on was corrected.
+      // In the in_progress category so neither claim door takes it.
+      'to_plan',
       'in_review',
       // MOTIR-5139 — a person's YES: approved, and not yet shipped. Same reason
       // as every other key here, and one more: its CATEGORY (`in_progress`) is
@@ -139,7 +142,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the forty-one default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5643)', () => {
+  it('declares exactly the forty-six default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5643 + MOTIR-12174)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -209,16 +212,26 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'approved>in_review',
         'approved>implemented',
         'in_review>implemented',
+        // MOTIR-12174: To plan. IN from the two not-started states the mark
+        // moves; OUT to the park, the queue and cancellation. Deliberately NOT
+        // to `blocked`, `in_progress` or `done` — a stale card is not started or
+        // closed without a re-plan — and no `planning>to_plan`: a declined plan
+        // restores it by a system write.
+        'todo>to_plan',
+        'blocked>to_plan',
+        'to_plan>planning',
+        'to_plan>todo',
+        'to_plan>cancelled',
       ]),
     );
-    expect(EDGES).toHaveLength(41);
+    expect(EDGES).toHaveLength(46);
   });
 
-  it('partitions the 9×9 grid into 41 edges + 9 self-loops + 31 non-edges', () => {
+  it('partitions the 10×10 grid into 46 edges + 10 self-loops + 44 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(31);
+    expect(NON_EDGES).toHaveLength(44);
   });
 });
 

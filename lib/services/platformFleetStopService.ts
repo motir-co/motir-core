@@ -19,7 +19,6 @@ import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositor
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifecycleService';
-import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { fleetStopService } from '@/lib/services/fleetStopService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { assertReasonSatisfied, platformAuditService } from '@/lib/services/platformAuditService';
@@ -38,10 +37,9 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //      releases it at its next poll.
 //   3. AGENT INSTANCES — `hibernateAllForOrganization(org, 'admin_stop')`.
 //
-// ⚠️ INDEX CONTAINERS ARE NOT STOPPED, deliberately. Motir does not charge for
-// indexing, so they cannot be a charging leak; they are capped at three per org
-// (`fleet-per-org-pool.md` §7) and end on their own. The preview still counts
-// them, so the admin sees what is left running.
+// The preview counts exactly what the stop acts on: motir-core runs no index
+// containers since the code-graph indexer left it (Story MOTIR-11026), so there
+// is no fourth, never-stopped line to count (MOTIR-12040).
 //
 // ⚠️ NO OTHER ORGANISATION IS TOUCHED. Every step is scoped by `organizationId`
 // — never by app, fleet or workload alone — and that holds under every partial
@@ -116,14 +114,13 @@ export const platformFleetStopService = {
     await requirePlatformStaff('support');
     const org = await requireOrganization(organizationId);
 
-    const [ciRuns, ciContainers, hostedRuns, instances, census] = await Promise.all([
+    const [ciRuns, ciContainers, hostedRuns, instances] = await Promise.all([
       countActiveRuns(organizationId),
       withSystemContext((tx) => intents.countInFlightForOrganization(organizationId, tx)),
       liveHostedRuns(organizationId, now),
       withSystemContext((tx) =>
         agentInstanceRepository.listLiveForOrganization(organizationId, tx),
       ),
-      withSystemContext((tx) => fleetCeilingService.orgCensus(organizationId, now, tx)),
     ]);
 
     await platformAuditService.record(principal, {
@@ -139,7 +136,6 @@ export const platformFleetStopService = {
       ciContainers,
       hostedRuns: hostedRuns.length,
       agentInstances: instances.filter((row) => row.state === 'running').length,
-      indexContainers: census.byWorkload.code_graph_index,
     };
   },
 

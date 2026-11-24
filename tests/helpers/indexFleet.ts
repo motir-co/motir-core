@@ -4,45 +4,25 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
-import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
-import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
-import { fakeOrchestrator } from '@motir/orchestrator';
 import { adminDb } from './adminDb';
 import { linkWorkspaceReposToProject } from './projectRepoLink';
 
-// THE `system.code-graph-index` TEST WORLD (Story MOTIR-1981 · MOTIR-1992) —
-// the fake-orchestrator fixture the index-fleet suites drive the REAL job
-// through, against a REAL Postgres.
+// THE `system.code-graph-index` TEST WORLD'S SEED (Story MOTIR-1981 · MOTIR-1992)
+// — the workspace, installation, projects and events the index-job suites drive
+// the REAL job through, against a REAL Postgres.
 //
-// ⚠️ IT LIVES HERE BECAUSE TWO SUITES DRIVE IT. `tests/jobs/code-graph-index.test.ts`
-// covers the durable STEP SHAPE; `tests/jobs/code-graph-index-ledger-seam.test.ts`
-// covers what the ledger's REAL readers see. A copied harness is how the two
-// would silently drift onto different worlds — one stubbing a tarball redirect
-// the other buffers — and a seam suite that measures a world the shape suite
-// never runs proves nothing about the shipped path. One fixture, one world.
+// ⚠️ THE CONTAINER WORLD LEFT WITH THE INDEXER FLEET (MOTIR-12036). This file
+// used to also stub the fake orchestrator, motir-ai's run-credential mint, the
+// run-verdict read and the tarball-body trap for the container dispatch. Both
+// jobs hand the build off to motir-codegraph now, and that world is
+// `tests/helpers/indexHandoff.ts`'s `stubIndexHandoff()`. What stays here is the
+// part every index suite still shares: the seed, the motir-ai address and token
+// the handoff world answers on, and the event builders.
 
 const PASSWORD = 'hunter2hunter2';
 
-/** The pre-signed URL the resolver reads off GitHub's 302 — what the CONTAINER
- *  is handed, in place of the bytes this process no longer fetches. */
-export const INDEX_TARBALL_URL =
-  'https://codeload.github.com/moooon/motir-core/legacy.tar.gz/refs/heads/main?token=PRESIGNED';
 export const INDEX_AI_URL = 'https://ai.example.test';
-/**
- * The address the CONTAINER is given for motir-ai (MOTIR-4518) — a DIFFERENT
- * value from {@link INDEX_AI_URL} on purpose, because in production they are
- * different: motir-core reaches motir-ai over a private, organization-scoped
- * address, and an index container runs in another organization where that name
- * does not resolve. Every suite driving the index job therefore proves the two
- * are told apart, not just that one of them is present.
- *
- * It is never FETCHED here — nothing in this process talks to it; it only has to
- * arrive in the container spec — so its host is deliberately absent from the
- * stubbed `fetch` below.
- */
-export const INDEX_CONTAINER_AI_URL = 'https://ai-public.example.test';
 export const INDEX_SERVICE_TOKEN = 'svc-token-must-never-reach-a-container';
-export const INDEX_RUN_CREDENTIAL = 'mrc1.payload.signature';
 /** The repo `seedIndexWorkspace` connects by default. */
 export const INDEX_REPO_REF = 'moooon/motir-core';
 
@@ -54,58 +34,6 @@ export interface IndexRepoSeed {
 
 const DEFAULT_REPOS: IndexRepoSeed[] = [{ owner: 'moooon', name: 'motir-core' }];
 
-/** Set by the tarball response's traps: TRUE means something buffered the body. */
-let tarballBodyTouched = false;
-
-/** Did anything in the index path read the tarball RESPONSE BODY? The §2 OOM,
- *  inverted — a container-based index must never make this true. */
-export function tarballBodyWasTouched(): boolean {
-  return tarballBodyTouched;
-}
-
-/** Per-test reset for the byte trap. Call from `beforeEach`, beside
- *  `fakeOrchestrator.reset()`. */
-export function resetTarballBodyTrap(): void {
-  tarballBodyTouched = false;
-}
-
-/**
- * THE INDEX ALLOWANCE, AS THIS WORLD ANSWERS IT (MOTIR-4593). The neutral state is
- * `ok` for the pre-boot ask and `ok` for every draw, so suites about the index
- * SHAPE are unaffected. It is matched explicitly for the same reason the verdict
- * read is: the fall-through below is the credential MINT, and a check that parsed
- * a credential body as "could not ask" would boot for the wrong reason.
- *
- * `indexAllowanceWorld.checkOutcome` is a verdict outcome, or `'http_500'` for a
- * motir-ai that could not answer. Every draw body is recorded, in order.
- */
-export const indexAllowanceWorld: {
-  checkOutcome: string;
-  drawOutcome: string;
-  checks: { coreOrganizationId: string }[];
-  draws: { coreOrganizationId: string; containerSeconds: number; idempotencyKey: string }[];
-  /** Every motir-ai path this world was asked for, in order. */
-  aiPaths: string[];
-} = { checkOutcome: 'ok', drawOutcome: 'ok', checks: [], draws: [], aiPaths: [] };
-
-function allowanceVerdict(outcome: string, attributedCredits: number): unknown {
-  return {
-    outcome,
-    mayIndex: !outcome.startsWith('hard_stop_'),
-    window: '2026-09',
-    grantedCredits: 400,
-    consumedCredits: 0,
-    attributedCredits,
-  };
-}
-
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
 /** A real RSA key pair, so `appAuth` can actually sign the App JWT. */
 export function stubAppCredentials(): void {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -116,148 +44,6 @@ export function stubAppCredentials(): void {
   vi.stubEnv('GITHUB_APP_ID', '999');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
 }
-
-/**
- * The INDEX job's world: the `fake` orchestrator, motir-ai reachable for the
- * run-credential mint, and GitHub answering the tarball request with the 302 the
- * resolver reads a `Location` off.
- *
- * ⚠️ THE REDIRECT'S BODY IS A TRAP, not a payload. Reading it is the §2 OOM this
- * whole architecture removes, so every buffering method fails loudly instead of
- * quietly costing a few hundred megabytes.
- */
-export function stubIndexFleet(): void {
-  indexAllowanceWorld.checkOutcome = 'ok';
-  indexAllowanceWorld.drawOutcome = 'ok';
-  indexAllowanceWorld.checks = [];
-  indexAllowanceWorld.draws = [];
-  indexAllowanceWorld.aiPaths = [];
-  stubAppCredentials();
-  vi.stubEnv('MOTIR_AI_URL', INDEX_AI_URL);
-  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', INDEX_SERVICE_TOKEN);
-  // ⚠️ REQUIRED, and separate from the line above (MOTIR-4518). The address the
-  // container is handed has no fallback to motir-core's own — a default is what
-  // let every production index run die at `getaddrinfo ENOTFOUND
-  // motir-ai.internal` for two weeks — so `bootIndexContainer` throws without it
-  // and no supervised run in any of these suites can settle.
-  vi.stubEnv('MOTIR_AI_CONTAINER_URL', INDEX_CONTAINER_AI_URL);
-  // Select the FAKE adapter the way a deployment selects Fly.
-  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
-
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
-      // Matched on the PARSED url, never `includes()` — a substring host check is
-      // a HIGH CodeQL alert in this repo, test fixtures included.
-      const parsed = new URL(String(url));
-      if (parsed.host === new URL(INDEX_AI_URL).host) {
-        indexAllowanceWorld.aiPaths.push(parsed.pathname);
-        if (parsed.pathname.endsWith('/v1/credits/index-check')) {
-          indexAllowanceWorld.checks.push(JSON.parse(String(init?.body)));
-          const outcome = indexAllowanceWorld.checkOutcome;
-          return outcome === 'http_500'
-            ? json(500, { code: 'internal_error' })
-            : json(200, allowanceVerdict(outcome, 0));
-        }
-        if (parsed.pathname.endsWith('/v1/credits/index-draw')) {
-          const body = JSON.parse(String(init?.body));
-          indexAllowanceWorld.draws.push(body);
-          return json(200, allowanceVerdict(indexAllowanceWorld.drawOutcome, 1));
-        }
-        // ⚠️ THE CODE-AUDIT READ ANSWERS "ALREADY AUDITED", AND THAT IS THE
-        // NEUTRAL STATE FOR THESE SUITES (MOTIR-2266). A successful index now
-        // ends in a `derive-first-audit` step whose gate asks motir-ai whether
-        // this repo has a derived audit. Left to the credential-mint branch
-        // below, that read would answer with a body carrying no `audit`, the
-        // gate would read "not audited", and every index test would submit a
-        // real derivation — costing a logged, failed `refreshCodeAudit` per
-        // project per test in suites that are about the INDEX shape, not the
-        // trigger. Answering `audited` makes the trigger a clean no-op here.
-        // The trigger's OWN suite
-        // (`tests/jobs/code-graph-index-first-audit.test.ts`) mocks these two
-        // calls directly and drives both answers.
-        if (parsed.pathname.endsWith('/v1/code-audit')) {
-          return json(200, {
-            audit: {
-              id: 'audit_fixture',
-              healthSummary: {},
-              codeGraphRef: 'cg_fixture',
-              repoKey: INDEX_REPO_REF,
-              createdAt: new Date(0).toISOString(),
-            },
-            findings: [],
-            total: 0,
-            nextOffset: null,
-          });
-        }
-        // ⚠️ THE RUN-VERDICT READ ANSWERS "NOTHING RECORDED", WHICH IS THIS
-        // WORLD'S HONEST STATE (MOTIR-5058). A settled run now asks motir-ai what
-        // the CONTAINER itself reported, and this fixture has no container — the
-        // orchestrator is fake and nothing ever posted a verdict. Answering
-        // `{ verdict: null }` says exactly that.
-        //
-        // ⚠️ AND IT MUST BE MATCHED EXPLICITLY, because the fall-through below is
-        // the CREDENTIAL MINT: without this branch the verdict read would receive
-        // a 201 carrying a `credential`, and `fetchCodeGraphRunVerdict` would
-        // correctly find no verdict in it and return null. Same answer, arrived at
-        // by accident — and a fixture that is right by accident stops being right
-        // the moment either shape changes. A suite that wants a verdict wraps this
-        // stub and answers this path itself.
-        if (parsed.pathname.endsWith('/v1/code-graph/run/verdict')) {
-          return json(200, { verdict: null });
-        }
-        // ⚠️ THE MINT HONOURS `ttlSeconds`, INCLUDING ITS CLAMP (MOTIR-4923).
-        // motir-ai's `clampTtlSeconds` defaults to fifteen minutes and bounds a
-        // request to [60, 3600]; a fixture that answered a flat fifteen minutes
-        // whatever it was asked for is what made a container permitted THIRTY
-        // minutes against a credential minted for fifteen untestable here — the
-        // production defect this transcription exists to keep out.
-        const requested = (
-          typeof init?.body === 'string'
-            ? (JSON.parse(init.body) as { ttlSeconds?: unknown })
-            : null
-        )?.ttlSeconds;
-        const ttlSeconds =
-          typeof requested === 'number' && Number.isFinite(requested)
-            ? Math.min(3600, Math.max(60, Math.floor(requested)))
-            : 15 * 60;
-        return json(201, {
-          credential: INDEX_RUN_CREDENTIAL,
-          expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
-        });
-      }
-      if (parsed.pathname.endsWith('/access_tokens')) {
-        return json(201, {
-          token: 'ghs_installation_must_never_reach_a_container',
-          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-        });
-      }
-      if (parsed.pathname.includes('/tarball/')) {
-        const res = new Response(null, {
-          status: 302,
-          headers: { location: INDEX_TARBALL_URL },
-        });
-        const trap = (name: string) => () => {
-          tarballBodyTouched = true;
-          throw new Error(`the index path read the tarball body via ${name}()`);
-        };
-        for (const name of ['arrayBuffer', 'blob', 'text', 'json'] as const) {
-          Object.defineProperty(res, name, { value: trap(name) });
-        }
-        return res;
-      }
-      throw new Error(`unexpected fetch to ${parsed.href}`);
-    }),
-  );
-}
-
-// ⚠️ THERE IS NO BYTES-FETCHING WORLD TO STUB ANY MORE (MOTIR-2057). This file
-// used to export `stubGithubTarballBytes` — GitHub answering `/tarball/` with a
-// 200 and a body — as "the REFRESH job's world, unchanged". Refresh now drives
-// the same fleet path as the first index, so BOTH jobs run against
-// `stubIndexFleet()` above, whose `/tarball/` response is a 302 whose body is a
-// TRAP. That is deliberate: a regression that re-fetches bytes in-process has no
-// fixture that would let it pass.
 
 export interface SeededIndexWorkspace {
   workspaceId: string;
@@ -361,7 +147,6 @@ export async function seedIndexWorkspace(
   };
 }
 
-/** The step ids a run passed to `step.run`, in call order. */
 /**
  * The step ids a run passed through, FIRST-SEEN ORDER, de-duplicated.
  *
@@ -373,84 +158,10 @@ export async function seedIndexWorkspace(
  * and a 30-poll supervision would report `index-boot:<pid>` thirty times.
  *
  * What the suites using this actually assert is the set of steps a run RECORDS —
- * one `job_step` row each — which is exactly this list. `admit / boot / settle
- * as the only steps` and `no step per poll` are both still exact.
+ * one `job_step` row each — which is exactly this list.
  */
 export function indexStepIds(ctx: { step: { run: { mock: { calls: unknown[][] } } } }): string[] {
   return [...new Set(ctx.step.run.mock.calls.map((call) => String(call[0])))];
-}
-
-/**
- * MILLISECOND SUPERVISION BUDGETS for a JOB-level test (MOTIR-3484).
- *
- * ⚠️ IT REPLACES `indexSleepSteps`, AND THE REASON IS THE COLLAPSE. That helper
- * pre-fulfilled `step.sleep` state for `index-wait:*` / `index-admit-wait:*`,
- * because an un-stubbed sleep is re-found forever by `JobTestEngine` and
- * `execute()` never resolves. There are no sleeps left in this job: the interval
- * is an ordinary `await` inside `codeGraphIndexDispatchService.runIndexContainer`
- * (`docs/decisions/job-queue-foundation.md` §13 — the durable boundary is the
- * SIDE EFFECT, never the WAIT).
- *
- * The problem it leaves behind is the mirror image: a real `await` at the SHIPPED
- * cadence would make a four-poll test wait 3 + 6 + 12 + 24 seconds. So a
- * job-level suite shortens the cadence through the seam the service already
- * exposes for its own suite, and asserts the SHAPE and the LEDGER rather than the
- * timing — the cadence itself is asserted BY VALUE against
- * `INDEX_FLEET_TIME_BUDGETS`, which is the honest place for it.
- */
-export const INDEX_FAST_SUPERVISION = {
-  pollIntervalMs: 1,
-  maxPollIntervalMs: 2,
-  admissionWaitMs: 1,
-  maxAdmissionWaitMs: 2,
-} as const;
-
-/**
- * Point the JOB's supervision at {@link INDEX_FAST_SUPERVISION}, keeping the real
- * composition, the real steps, the real admission gate and the real ledger.
- *
- * A spy that calls through, exactly as this suite already does for
- * `pollIndexContainer` — the only thing it changes is how long the loop sleeps.
- * A caller's own options still win, so a test may narrow further.
- */
-export function driveIndexFleetFast(): void {
-  // The IN-PROCESS composition — scripts, harnesses, and this suite's own
-  // service-level tests.
-  const runReal = codeGraphIndexDispatchService.runIndexContainer.bind(
-    codeGraphIndexDispatchService,
-  );
-  vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer').mockImplementation(
-    (input, options) => runReal(input, { ...INDEX_FAST_SUPERVISION, ...options }),
-  );
-
-  // ⚠️ AND THE JOB'S ONE-PASS ENTRY (MOTIR-3828), which is what
-  // `runIndexFleetSteps` actually calls now. Two things are injected, and both
-  // are test-only uses of a seam the service already exposes:
-  //
-  //   * the millisecond budgets above, for the same reason as ever;
-  //   * an IN-MEMORY supervision store, because `JobTestEngine` synthesises a
-  //     `runId` (`test-run-<jobId>`) rather than claiming a real `job_queue`
-  //     row, and the durable store's row FKs to that table. The store is what
-  //     carries a supervision's poll count and observation across passes — and
-  //     `JobTestEngine` drives those passes, so the two together model the
-  //     engine faithfully without a worker.
-  //
-  // ONE store per call to this helper, so a test's supervisions share it and
-  // two tests never do. The run id is widened with the repoRef because a suite
-  // that dispatches TWO repos in one test would otherwise collide on
-  // `(runId, subject)` — the harness pins one `runId` per job.
-  const supervisionStore = inMemorySupervisionStore();
-  const advanceReal = codeGraphIndexDispatchService.advanceIndexContainer.bind(
-    codeGraphIndexDispatchService,
-  );
-  vi.spyOn(codeGraphIndexDispatchService, 'advanceIndexContainer').mockImplementation(
-    (runId, input, options) =>
-      advanceReal(`${runId}|${input.repoRef}`, input, {
-        ...INDEX_FAST_SUPERVISION,
-        supervisionStore,
-        ...options,
-      }),
-  );
 }
 
 /**
@@ -488,8 +199,8 @@ export function indexEventFor(args: {
  * One `system.code-graph-refresh` event — a default-branch push.
  *
  * The payload is the index event's (`CodeGraphRefreshData = CodeGraphIndexData`),
- * which is WHY the two jobs can share `runIndexFleetSteps` since MOTIR-2057. The
- * event id is pinned for the reason above.
+ * which is WHY the two jobs share `runIndexHandoffSteps`. The event id is pinned
+ * for the reason above.
  */
 export function refreshEventFor(args: {
   installationId: string;
@@ -500,34 +211,6 @@ export function refreshEventFor(args: {
 }) {
   const indexEvent = indexEventFor(args);
   return { ...indexEvent, name: 'system.code-graph-refresh' as const };
-}
-
-/** The `system.code-graph-refresh` ledger rows, newest last. */
-export async function refreshJobRuns() {
-  return adminDb.jobRun.findMany({
-    where: { functionId: 'system.code-graph-refresh' },
-    orderBy: { startedAt: 'asc' },
-  });
-}
-
-/**
- * The container exits WHILE SUPERVISION SLEEPS — which is what really happens,
- * and the only way a real poll ever sees a terminal machine. Wraps the genuine
- * `pollIndexContainer` rather than replacing it, so the classification, the
- * deadlines and the read-failure tolerance are all still the shipped ones.
- */
-export function containerExitsWith(exitCode: number | null): void {
-  const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
-    codeGraphIndexDispatchService,
-  );
-  vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockImplementation(
-    async (session, previous, options) => {
-      for (const id of fakeOrchestrator.liveContainerIds()) {
-        fakeOrchestrator.completeJob(id, { exitCode });
-      }
-      return realPoll(session, previous, options);
-    },
-  );
 }
 
 /** The `system.code-graph-index` ledger rows, newest last. */

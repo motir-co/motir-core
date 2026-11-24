@@ -117,7 +117,6 @@ function pools(blocks: PlatformPoolBlockDTO[]): PoolsRead {
 
 const FLY_REST: PlatformPoolBlockDTO[] = [
   { fleetKind: 'hosted_agent', provider: 'fly' },
-  { fleetKind: 'code_graph_index', provider: 'fly' },
   { fleetKind: 'agent_instance', provider: 'fly' },
 ];
 
@@ -151,13 +150,11 @@ describe('the Pools section', () => {
     expect(blocks.map((b) => b.getAttribute('data-testid'))).toEqual([
       'pool-ci_runner',
       'pool-hosted_agent',
-      'pool-code_graph_index',
       'pool-agent_instance',
     ]);
     expect(blocks.map((b) => b.querySelector('h3')!.textContent)).toEqual([
       'Pool · CI runner',
       'Pool · Agent runner',
-      'Pool · Indexer',
       'Pool · Agent hoster',
     ]);
     expect(block(root, 'ci_runner').textContent).toContain(p.provider.aws);
@@ -166,9 +163,9 @@ describe('the Pools section', () => {
 
   it('a Fly kind shows words only: no figure, no account, no spare, no list', async () => {
     const root = await render(pools([aws(), ...FLY_REST]));
-    const fly = block(root, 'code_graph_index');
+    const fly = block(root, 'agent_instance');
     expect(fly.getAttribute('data-state')).toBe('fly');
-    expect(fly.textContent).toContain('Indexer runs on Fly');
+    expect(fly.textContent).toContain('Agent hoster runs on Fly');
     expect(fly.textContent).toContain(p.fly.body);
     for (const el of ['pool-total', 'account-rows', 'spare-line', 'quota-request-list']) {
       expect(fly.querySelector(`[data-element="${el}"]`)).toBeNull();
@@ -437,7 +434,7 @@ describe('the Pools section', () => {
     expect(failed.textContent).not.toContain(p.provider.fly);
     expect(failed.textContent).not.toMatch(/\d/);
     expect(block(root, 'ci_runner').getAttribute('data-state')).toBe('aws');
-    expect(block(root, 'code_graph_index').getAttribute('data-state')).toBe('fly');
+    expect(block(root, 'agent_instance').getAttribute('data-state')).toBe('fly');
   });
 
   it('a whole read that failed renders one error for the section and no block', async () => {
@@ -539,6 +536,9 @@ describe('the Pools catalogue', () => {
       // `| \`key\` | en |` rows; a `*` row summarises a group and is not a string.
       const m = /^\|\s*`([A-Za-z0-9_.]+)`\s*\|\s*(.*?)\s*\|\s*$/.exec(line);
       if (!m || NOT_RENDERED.has(m[1]!)) continue;
+      // The notes are a record of the moment they were drawn: a fleet kind retired
+      // since (MOTIR-12041) keeps its `kind.*` row there and has left the catalogue.
+      if (m[1]!.startsWith('kind.') && !enPools.has(m[1]!)) continue;
       rows += 1;
       // The catalogue carries the two rich-text tags the table does not: drop them.
       const ours = RICH_TAGS.reduce((text, tag) => text?.split(tag).join(''), enPools.get(m[1]!));

@@ -303,7 +303,7 @@ export function describeOrchestratorContract(
     });
 
     it('12 · a spec with no job id provisions and meters as itself', async () => {
-      const jobless = harness.joblessSpec ?? { workload: 'code_graph_index' as const };
+      const jobless = harness.joblessSpec ?? { workload: 'hosted_agent' as const };
       const handle = await orchestrator.provision(
         harness.spec({ ...jobless, workflowJobId: null }),
       );

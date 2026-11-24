@@ -74,9 +74,8 @@ const EMAIL_TRANSPORT = {
  * Fleet status page's EC2 vCPU quota read (MOTIR-10887) is the same kind of read
  * and lives beside it, in `lib/awsServices/ec2VcpuQuotaReader.ts`, as does its
  * indexer image read of core's own ECR repository (MOTIR-10986),
- * `lib/awsServices/ecrImagesReader.ts`, and so is the index-fleet preflight's
- * ECR login (MOTIR-11277), `lib/awsServices/ecrRegistryCredential.ts`, which
- * hands the probe a plain username/password pair.
+ * `lib/awsServices/ecrImagesReader.ts`. (The index-fleet preflight's ECR login,
+ * `ecrRegistryCredential.ts`, left with the index fleet in MOTIR-12037.)
  */
 const SERVICES_READ = {
   dir: join('lib', 'awsServices'),

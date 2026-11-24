@@ -665,6 +665,9 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
     // pill and the `conflict` withdrawal band name (design/github § 30).
     // MOTIR-10099 ADDS `preview` — the pull request's preview deployment, or null when
     // it has none, which the row's preview line draws (design/preview).
+    // MOTIR-12115 ADDS `readerAccess` — the CURRENT reader's access to the row's
+    // repository when Motir created it, or null, which decides the row's code
+    // link-out and its access line (design/github § 35).
     expect(Object.keys(dto).sort()).toEqual(
       [
         'baseRef',
@@ -675,6 +678,7 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
         'id',
         'number',
         'preview',
+        'readerAccess',
         'repo',
         'state',
         'title',

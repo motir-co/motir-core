@@ -410,8 +410,10 @@ function levelWithOffBlocker(stub: {
   };
 }
 // The flag's NAME is its sentence; the committed card shows the short `blocked`
-// label (MOTIR-10508), so the assertions read `aria-label`, not the text.
-const A1_FLAG = 'cross-blocked-flag';
+// label (MOTIR-10508), so the assertions read `aria-label`, not the text. Since
+// MOTIR-12158 the flag is the BLOCKED TAB on the card's top edge (design
+// MOTIR-12157), not a tag in the row: A1 is never "You are here" in these levels.
+const A1_FLAG = 'blocked-tab';
 
 describe('buildWorkItemLevel — off-level dependency signal', () => {
   it('PROJECT scope: an off-level blocker is the bad-plan tangle (red edge + anchor + "blocked elsewhere" flag)', () => {
@@ -420,6 +422,18 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(nodes.some((n) => n.id === 'X')).toBe(true); // ghost anchor
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
     expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain('blocked elsewhere');
+    // The tab moved off the row: no tag-row flag on a card that is not here.
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+    // …and the canvas fans the card's top-side edges right of the tab (MOTIR-12158).
+    expect(nodes.find((n) => n.id === 'A1')!.topTab).toBe(true);
+  });
+
+  it('only a cross-blocked or here card is TABBED — every other card keeps the shared band (MOTIR-12158)', () => {
+    const blocked = buildWorkItemLevel(levelWithOffBlocker({ isDone: false }));
+    // The ghost anchor wears no tab.
+    expect(blocked.nodes.find((n) => n.id === 'X')!.topTab).toBeUndefined();
+    const plain = buildWorkItemLevel(level([item({ id: 'S1', kind: 'subtask', parentId: 'P1' })]));
+    expect(plain.nodes.find((n) => n.id === 'S1')!.topTab).toBeUndefined();
   });
 
   it('the ghost anchor is VIEWABLE so the off-level blocker is peekable (MOTIR-1586)', () => {
@@ -585,19 +599,22 @@ describe('buildWorkItemLevel — not-in-sprint node signal (MOTIR-1379)', () => 
     expect(document.querySelector('[data-node-state="not-in-sprint"]')).toBeNull();
   });
 
-  it('a cross-blocked non-member shows ONLY the cross-blocked flag (no double tag)', () => {
-    // A1 in levelWithOffBlocker has no `inActiveSprint` → defaults to a non-member;
-    // in sprint scope it is BOTH cross-blocked and not-in-sprint. The red flag wins
-    // the slot; the neutral tag is suppressed so the card never carries two tags.
+  it('a cross-blocked non-member shows BOTH the blocked tab and the "not in sprint" tag (MOTIR-12158)', () => {
+    // A1 is made a NON-member here (`inActiveSprint: false`), so in sprint scope it
+    // is BOTH cross-blocked and not-in-sprint. The two used to share the row's
+    // right-hand slot, so the neutral tag gave way to the red flag. With blocked on
+    // the card's top-edge TAB (design MOTIR-12157 § "The tag row") they no longer
+    // compete, and both facts show.
+    const base = levelWithOffBlocker({ isDone: false, inActiveSprint: false });
     const { nodes } = buildWorkItemLevel(
-      levelWithOffBlocker({ isDone: false, inActiveSprint: false }),
+      { ...base, items: [item({ id: 'A1', kind: 'subtask', inActiveSprint: false })] },
       { scope: 'sprint' },
     );
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
     expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain(
       'blocker not in sprint',
     );
-    expect(screen.queryByTestId(NOT_IN_SPRINT_TAG)).toBeNull();
+    expect(screen.getByTestId(NOT_IN_SPRINT_TAG).textContent).toContain('not in sprint');
   });
 
   // MOTIR-1582 (regression): the sprint-scope cross-blocked flag must name the

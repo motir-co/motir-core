@@ -226,9 +226,10 @@ describe('a terminal GREEN promotes the cards a pull request delivers', () => {
     for (const item of items) expect(await statusOf(item.id)).toBe('in_review');
   });
 
-  it('leaves a sibling that is NOT at implemented exactly where it is', async () => {
-    // A human who moved one card back to In Progress to rework it must not have it
-    // yanked forward by a green run — while its siblings still promote.
+  it('leaves a sibling that is NOT at a source status exactly where it is', async () => {
+    // A card a person parked at Blocked must not be yanked forward by a green run —
+    // while its siblings still promote. (Since MOTIR-12094 a sibling at In Progress
+    // IS promoted: a green, ready set is the evidence, whatever the card says.)
     const s = await makeScenario('ci-sibling@example.com');
     const branch = 'motir/auto-20260819-030000';
     const promoted = await workItemsService.createWorkItem(
@@ -243,13 +244,13 @@ describe('a terminal GREEN promotes the cards a pull request delivers', () => {
       await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
       await workItemsService.markIntegrated(item.id, branch, s.ctx);
     }
-    await workItemsService.updateStatus(reworking.id, 'in_progress', s.ctx);
+    await workItemsService.updateStatus(reworking.id, 'blocked', s.ctx);
     await openPr(branch, 13);
 
     await ci({ conclusion: 'success', headSha: 'sha-b', prNumbers: [13] });
 
     expect(await statusOf(promoted.id)).toBe('in_review');
-    expect(await statusOf(reworking.id)).toBe('in_progress');
+    expect(await statusOf(reworking.id)).toBe('blocked');
   });
 });
 
@@ -316,9 +317,10 @@ describe('everything that is not a terminal green promotes nothing', () => {
     expect(await statusOf(item.id)).toBe('implemented');
   });
 
-  it('never promotes from in_progress — the window is not closed by widening the source', async () => {
-    // The reflex this rules out: a card whose agent died before it finished is
-    // still `in_progress`, and a green run must not carry it into In Review.
+  it('promotes from in_progress DIRECTLY to in_review — the source is widened (MOTIR-12094)', async () => {
+    // This test used to pin the opposite: a card whose agent never reported stayed
+    // `in_progress` on a green run. The rule was overruled — the green, ready set is
+    // the evidence — and the move is straight to In Review, never through Implemented.
     const s = await makeScenario('ci-source@example.com');
     const item = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'task', title: 'Never finished' },
@@ -332,7 +334,17 @@ describe('everything that is not a terminal green promotes nothing', () => {
 
     await ci({ conclusion: 'success', headSha: 'sha1', prNumbers: [17] });
 
-    expect(await statusOf(item.id)).toBe('in_progress');
+    expect(await statusOf(item.id)).toBe('in_review');
+    const revisions = await adminDb.workItemRevision.findMany({
+      where: { workItemId: item.id },
+      orderBy: { changedAt: 'asc' },
+      select: { diff: true },
+    });
+    const moves = revisions
+      .map((r) => (r.diff as { status?: { from: string; to: string } }).status)
+      .filter((m) => m !== undefined);
+    // The LAST move is the promotion, and it starts at In Progress.
+    expect(moves.at(-1)).toEqual({ from: 'in_progress', to: 'in_review' });
   });
 });
 
@@ -349,12 +361,14 @@ describe('the LATCH — a card that arrives at implemented AFTER the green', () 
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     await linkOne(item.identifier, 18);
     await openPr(`subtask/${item.identifier}-work`, 18);
-    // Put it back to in_progress: the pull-request delivery moved it to
-    // implemented, and this test is about the card NOT being there when CI reports.
-    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    // Park it at Blocked: the pull-request delivery moved it to implemented, and this
+    // test is about the card NOT being at a source status when CI reports. Since
+    // MOTIR-12094 In Progress IS a source (the green would promote it there), so the
+    // window the latch exists for is a card at a status that is not one.
+    await workItemsService.updateStatus(item.id, 'blocked', s.ctx);
 
     await ci({ conclusion: 'success', headSha: 'sha1', prNumbers: [18] });
-    expect(await statusOf(item.id)).toBe('in_progress');
+    expect(await statusOf(item.id)).toBe('blocked');
 
     // The agent's own transition, arriving late — and landing at in_review.
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
@@ -472,7 +486,8 @@ describe('idempotence — the two edges never promote twice', () => {
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     await linkOne(item.identifier, 24);
     await openPr(`subtask/${item.identifier}-work`, 24);
-    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    // Blocked, not In Progress — In Progress is a source since MOTIR-12094.
+    await workItemsService.updateStatus(item.id, 'blocked', s.ctx);
 
     // Edge 2 first: the green is recorded, then the card arrives.
     await ci({ conclusion: 'success', headSha: 'sha1', prNumbers: [24] });

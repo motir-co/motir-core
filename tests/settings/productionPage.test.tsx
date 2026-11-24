@@ -144,8 +144,16 @@ describe('the Production page', () => {
         repositoryId: webId,
         repositoryName: 'shop',
         actor: { userId: fx.ownerId, workspaceId: fx.workspaceId },
+        focusEventId: null,
       },
     ]);
+  });
+
+  it('hands the panel the crash event a notification opened it on (MOTIR-12109)', async () => {
+    const { fx, webId } = await setup();
+    asActor(fx, fx.ownerId);
+    await renderPage({ repository: webId, event: 'ev-1' });
+    expect(sectionProps[0]).toMatchObject({ repositoryId: webId, focusEventId: 'ev-1' });
   });
 
   it('offers only the Motir repositories, and each opens its own panel', async () => {

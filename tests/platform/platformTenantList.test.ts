@@ -63,6 +63,7 @@ function spendRow(entityId: string, i: number): RawSpendRow {
       // A sort column whose values TIE across orgs, so the tiebreak is exercised.
       ci: i % 3,
       search: 0,
+      hosting_production: 0,
     },
     indexingSeconds: i * 60,
     chargedCredits: ((i * 7) % 11) + i + (i % 3),
@@ -75,6 +76,7 @@ function spendRow(entityId: string, i: number): RawSpendRow {
       agent_storage: 0,
       ci: 0,
       search: 0,
+      hosting_production: 0,
       indexing: 0,
     },
   };

@@ -30,7 +30,6 @@ import {
   AgentInstancesSection,
   CiJobsSection,
   HostedRunsSection,
-  IndexJobsSection,
   MotirStopsSection,
   ownerOf,
   type RowState,
@@ -282,7 +281,7 @@ export function FleetClient({
 
       {result ? <StopResultBanner result={result} onDismiss={() => setResult(null)} /> : null}
 
-      <FleetTiles tiles={fleet.tiles} indexJobs={fleet.indexJobs} onRetry={() => void read()} />
+      <FleetTiles tiles={fleet.tiles} onRetry={() => void read()} />
 
       <HostedRunsSection
         part={fleet.hostedRuns}
@@ -297,10 +296,7 @@ export function FleetClient({
         rowState={agentState}
       />
       <CiJobsSection part={fleet.ciJobs} onRetry={() => void read()} />
-      <div className="grid gap-6 md:grid-cols-2">
-        <IndexJobsSection part={fleet.indexJobs} onRetry={() => void read()} />
-        <MotirStopsSection part={fleet.motirStops} onRetry={() => void read()} />
-      </div>
+      <MotirStopsSection part={fleet.motirStops} onRetry={() => void read()} />
 
       <CancelRunDialog
         run={cancelling}
@@ -448,7 +444,6 @@ function StopResultBanner({
               : t('agents', { count: result.agentsHibernated })}
             {failures.agents > 0 ? fail(t('agentsFailed', { count: failures.agents })) : null}
           </li>
-          <li>{t('index')}</li>
         </ul>
         <p className="mt-2 text-xs">{t('byYou', { when: time.when(result.stoppedAt) })}</p>
       </div>

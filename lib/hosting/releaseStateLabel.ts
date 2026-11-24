@@ -62,6 +62,7 @@ export interface ReleaseTriggerLabel {
     | 'trigger.merge'
     | 'trigger.mergeDefault'
     | 'trigger.redeploy'
+    | 'trigger.idlePolicy'
     | 'trigger.rollback'
     | 'trigger.rollbackUnnamed'
     | 'trigger.ref'
@@ -102,6 +103,8 @@ export function releaseTriggerLabel(
         : { kind: 'merge', labelKey: 'trigger.mergeDefault', values: {} };
     case 'config_change':
       return { kind: 'redeploy', labelKey: 'trigger.redeploy', values: {} };
+    case 'idle_policy':
+      return { kind: 'redeploy', labelKey: 'trigger.idlePolicy', values: {} };
     case 'rollback':
       return { kind: 'rollback', labelKey: 'trigger.rollbackUnnamed', values: {} };
     case 'ref':

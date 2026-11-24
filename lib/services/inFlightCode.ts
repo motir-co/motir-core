@@ -14,6 +14,18 @@ import type { AiInFlightCodeFields, InFlightCodeDto } from '@/lib/dto/ai';
 //   3. MERGED IS NOT IN-FLIGHT — an own merged delivery contributes to
 //      `mergedRepos` instead, unless the repository still has an in-flight entry.
 //
+// ⚠️ AN INHERITED ROW IS NOBODY'S BRANCH (Bug MOTIR-12098). With "Complete children
+// when a parent is done" on, a child's explicit link is copied onto every non-epic
+// ancestor as an `inherited = true` row (MOTIR-11835), only so the ancestor's
+// completion waits for that pull request to merge. The row is DERIVED from the
+// child's link and says nothing about which branch the ancestor is built on. Read as
+// the ancestor's own, it made the story report its child's pull request as `own`,
+// and every SIBLING of that child report it as the parent run it rides — a dispatch
+// told a card to commit onto another card's bug branch. So inherited rows take no
+// part in any of the three rules above, at any level: only an EXPLICIT link
+// (`inherited = false`) is where a card's code lives — the same rule MOTIR-12091
+// makes for the gate sets (`lib/approvalGates/ownDeliveries.ts`).
+//
 // Several open deliveries at ONE level in ONE repository resolve to the newest
 // LINK (the last in the input's per-card link-age order), so the answer is a
 // function of the rows and not of a tie.
@@ -32,6 +44,9 @@ export interface InFlightDeliveryFact {
   /** Open AND not merged. */
   open: boolean;
   merged: boolean;
+  /** Written on an ancestor because a DESCENDANT delivers it (MOTIR-11835) — not
+   *  the ancestor's own branch, so it never enters the derivation. */
+  inherited: boolean;
 }
 
 export interface InFlightCodeInput {
@@ -39,7 +54,8 @@ export interface InFlightCodeInput {
   /** The card's ancestors inside the token's project, NEAREST FIRST (parent,
    *  grandparent, …), each with the key an inherited entry names. */
   ancestors: ReadonlyArray<{ id: string; key: string }>;
-  /** Every delivery of the card AND of its ancestors, in link-age order per card. */
+  /** Every delivery of the card AND of its ancestors, in link-age order per card,
+   *  inherited rows included — the derivation leaves those out itself. */
   deliveries: readonly InFlightDeliveryFact[];
 }
 
@@ -57,14 +73,14 @@ function toEntryBase(f: InFlightDeliveryFact): EntryBase {
   };
 }
 
-/** The newest-linked OPEN delivery per repository, for one card. */
+/** The newest-linked OPEN explicit delivery per repository, for one card. */
 function openByRepo(
   deliveries: readonly InFlightDeliveryFact[],
   workItemId: string,
 ): Map<string, InFlightDeliveryFact> {
   const out = new Map<string, InFlightDeliveryFact>();
   for (const f of deliveries) {
-    if (f.workItemId === workItemId && f.open) out.set(f.repo, f);
+    if (f.workItemId === workItemId && f.open && !f.inherited) out.set(f.repo, f);
   }
   return out;
 }
@@ -86,7 +102,9 @@ export function deriveInFlightCode(input: InFlightCodeInput): AiInFlightCodeFiel
 
   const merged = new Set<string>();
   for (const f of input.deliveries) {
-    if (f.workItemId === input.itemId && f.merged && !entries.has(f.repo)) merged.add(f.repo);
+    if (f.workItemId === input.itemId && f.merged && !f.inherited && !entries.has(f.repo)) {
+      merged.add(f.repo);
+    }
   }
 
   const byRepo = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);

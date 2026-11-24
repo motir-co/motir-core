@@ -5,6 +5,7 @@ import {
   type HostedApplicationTeardown,
 } from '@/lib/repositories/hostedApplicationRepository';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // THE TWO PROVIDER HALVES OF A PRODUCTION TEARDOWN, shared by the hosted
@@ -38,15 +39,22 @@ export function hasProductionApp(app: ProductionTeardownSubject): boolean {
 
 export const productionTeardownService = {
   /**
-   * Stop serving: settle the live release's usage (never throws), destroy the
-   * production app (an already-gone app returns no usage), then forget its
-   * releases and its name, so a retry neither re-settles usage nor destroys it
-   * again. A no-op for an application with nothing left on the provider.
+   * Stop serving: settle the live release's usage and charge its last metered
+   * window (neither throws), destroy the production app (an already-gone app
+   * returns no usage), then forget its releases and its name, so a retry
+   * neither re-settles usage nor destroys it again. A no-op for an application
+   * with nothing left on the provider.
    */
   async removeProductionApp(app: ProductionTeardownSubject, workspaceId: string): Promise<void> {
     if (!hasProductionApp(app)) return;
     if (app.currentReleaseId) {
+      // Never throws: a usage the port cannot read is logged and skipped.
       await hostedReleaseUsageService.settleReleaseUsage(app.currentReleaseId);
+      // Its last window charged, and every open day with it (MOTIR-12108).
+      // Never throws.
+      await productionUsageMeterService.accrueOutgoingRelease(app.currentReleaseId, {
+        chargeNow: true,
+      });
     }
     const port = getHostingDeployPort(app.target);
     // The name enablement recorded, else the app the releases ran on, which the

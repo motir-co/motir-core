@@ -1459,7 +1459,9 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'gate (cause `agent_changes_requested`) and puts the card in To fix; no status moves. A ' +
       'verdict about a version the card no longer has is stored as late ' +
       '(`REVIEW_VERDICT_LATE`, 409); one about a version already reviewed is stored as second ' +
-      '(`REVIEW_VERDICT_SECOND`, 409); neither decides anything. A card that delivers no pull ' +
+      '(`REVIEW_VERDICT_SECOND`, 409); neither decides anything. With the gate ON and no review ' +
+      'waiting at the current version yet, the verdict is refused and nothing is stored ' +
+      '(`REVIEW_NOT_YET_ASKED`, 409) — submit it again once the review is asked. A card that delivers no pull ' +
       'request of its own and is tested through an ancestor is refused naming that run target ' +
       '(`REVIEW_TARGET_NOT_RUN_TARGET`, 422); a child with its own pull request is reviewed ' +
       'on its own key.',
@@ -1485,7 +1487,8 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       description: 'What the verdict did — decided the review gate, or was recorded.',
     },
     // 403 without `work_item:edit` or with a run token; 404 for an unknown card or one that
-    // delivers no pull request; 409 late or second; 422 a malformed body or not a run target.
+    // delivers no pull request; 409 late, second or not yet asked; 422 a malformed body or not
+    // a run target.
     errorStatuses: [403, 404, 409, 422],
   }),
   defineOperation({

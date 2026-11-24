@@ -5,6 +5,7 @@ import {
   deriveApplicationSlug,
 } from '@/lib/hosting/applicationAddress';
 import { deployEligibilityRefusal } from '@/lib/hosting/deployEligibility';
+import { defaultIdlePolicy, idlePolicyColumns } from '@/lib/hosting/idlePolicy';
 import {
   ApplicationNotFoundError,
   CustomerRepositoryNotDeployableError,
@@ -190,8 +191,10 @@ export const hostedApplicationService = {
    * The repository's application, created on first call. Refuses a customer
    * repository, a row that is not established and one with no hosting target,
    * writing nothing. A new application gets its slug (unique in the workspace),
-   * its production address when the workspace has claimed a label, and becomes
-   * the workspace's default application when it has none.
+   * its production address when the workspace has claimed a label, its idle
+   * policy (suspend when idle, unless its target's shape runs always on only —
+   * MOTIR-12107), and becomes the workspace's default application when it has
+   * none.
    *
    * ⚠️ Concurrency: the WORKSPACE row is locked first, so every first deploy of
    * one workspace is serialised — two calls for one repository yield one row,
@@ -226,6 +229,8 @@ export const hostedApplicationService = {
           target: repo.hostingTarget!,
           slug,
           productionAddress: await addressFor(repo.workspaceId, slug, tx),
+          // Suspend when idle wherever the target's shape can (MOTIR-12107).
+          ...idlePolicyColumns(defaultIdlePolicy(repo.hostingTarget!, repo.hostingShape)),
         },
         tx,
       );

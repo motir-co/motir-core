@@ -1,5 +1,6 @@
 import type { ApprovalGate, Prisma, ReviewVerdictRecord } from '@/generated/prisma/client';
 import {
+  ReviewNotYetAskedError,
   ReviewNothingToReviewError,
   ReviewTargetNotRunTargetError,
   ReviewVerdictAnswerExistsError,
@@ -9,6 +10,7 @@ import {
   ReviewVerdictSecondError,
 } from '@/lib/agentReview/errors';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { agentReviewStanding } from '@/lib/approvalGates/gateSet';
 import { withoutAncestorDeliveries } from '@/lib/approvalGates/ownDeliveries';
 import {
   ApprovalGateAlreadyDecidedError,
@@ -26,6 +28,8 @@ import {
 } from '@/lib/dto/agentReview';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { reviewDismissalRepository } from '@/lib/repositories/reviewDismissalRepository';
 import {
   reviewVerdictRecordRepository,
   type ReviewVerdictRecordCreateRow,
@@ -62,9 +66,13 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //   2. GATE ON — an awaiting `agent_review` gate at the current version: the verdict
 //      decides it through `approvalGatesService.decideAgentReview`, whatever the source,
 //      and a hosted run still in flight for it is cancelled after commit.
-//   3. GATE OFF — no awaiting review: the verdict IS the record (`recorded`). A pass
+//   3. NOT YET ASKED (Bug MOTIR-12147) — the review gate is ON and the review at this
+//      version is owed, but no gate is awaiting yet (the set is not green and in review, or
+//      the raise is late). Refused with a typed 409 and STORED NOTHING: a `recorded` row
+//      would answer the version, and the gate raised later could never be decided.
+//   4. GATE OFF — no review is owed: the verdict IS the record (`recorded`). A pass
 //      decides and moves nothing.
-//   4. A SEND-BACK, either way (§12.14): no status moves, an awaiting approve-and-merge
+//   5. A SEND-BACK, either way (§12.14): no status moves, an awaiting approve-and-merge
 //      gate is withdrawn under `agent_changes_requested`, and `resolveGateSet` does not
 //      raise it again at this version while the send-back stands. The card's To fix
 //      answer is recomputed in the same transaction.
@@ -224,6 +232,40 @@ export async function reviewSubjectDeliveries(
   return own;
 }
 
+/**
+ * Is the review at `current` OWED but not asked yet (Bug MOTIR-12147)? True when the
+ * project's review gate stands in front of this card's merge question at `current` —
+ * {@link agentReviewStanding} answers `owed`, the same rule `resolveGateSet` raises the gate
+ * by — and no gate is awaiting there (the caller has already routed an awaiting one to the
+ * decide). A verdict stored as `recorded` here would answer the version, so every verdict
+ * on the `agent_review` gate raised later would be refused SECOND and that gate could never
+ * be decided. `not_required` — the switch off, `auto`, or a merge question already asked at
+ * this version — is the gate-off branch, unchanged.
+ */
+async function reviewOwedButNotAsked(
+  item: { id: string; projectId: string },
+  current: string,
+  latestReview: ApprovalGate | null,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const settings = await projectRepository.findMergeSettings(item.projectId, tx);
+  if (!settings?.reviewAgentEnabled) return false;
+  const [latestMergeGate, latestDismissal] = await Promise.all([
+    approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
+    reviewDismissalRepository.findLatestByWorkItem(item.id, tx),
+  ]);
+  const standing = agentReviewStanding({
+    reviewAgentEnabled: settings.reviewAgentEnabled,
+    prMergeMode: settings.prMergeMode,
+    workItemId: item.id,
+    version: current,
+    latestAgentReviewGate: latestReview,
+    latestMergeGate,
+    dismissedVersion: latestDismissal?.subjectVersion ?? null,
+  });
+  return standing === 'owed';
+}
+
 /** Why a verdict was refused, once its record is stored. */
 type Refused = { refused: 'late'; currentVersion: string } | { refused: 'second' };
 
@@ -263,7 +305,9 @@ export const reviewVerdictService = {
   /**
    * Submit ONE agent verdict for a run-target card (§12.11). Returns what it did —
    * `decided` (gate on) or `recorded` (gate off); a late or second verdict is stored and
-   * refused with {@link ReviewVerdictLateError} / {@link ReviewVerdictSecondError}.
+   * refused with {@link ReviewVerdictLateError} / {@link ReviewVerdictSecondError}; a
+   * verdict before the review gate asks is refused, storing nothing, with
+   * {@link ReviewNotYetAskedError}.
    *
    * Throws before anything is stored: `ProjectNotFoundError` / `WorkItemNotFoundError`
    * (not visible), `PermissionDeniedError` (no `work_item:edit`),
@@ -349,6 +393,10 @@ export const reviewVerdictService = {
         if (review && review.state === 'awaiting' && review.subjectVersion === current) {
           return { decide: { gateId: review.id } };
         }
+        // NOT YET ASKED — refused before anything is stored (the transaction holds no write).
+        if (await reviewOwedButNotAsked(item, current, review, tx)) {
+          throw new ReviewNotYetAskedError(item.identifier, current);
+        }
         // GATE OFF — the verdict is the record.
         const recorded = await reviewVerdictRecordService.record(rowOf('recorded', null), tx);
         // Motir's App bot posts it on the pull requests once this commits (MOTIR-10335).
@@ -428,8 +476,8 @@ export const reviewVerdictService = {
       });
     } catch (err) {
       /* v8 ignore next 5 -- the door's lock decided this version for us; an answering
-         record can only exist beside it if a gate-off verdict landed at the same version
-         before the switch was turned on and the review raised over it. */
+         record beside it would be a gate-off verdict at the same version, and since Bug
+         MOTIR-12147 the gate set never raises a review over a version already answered. */
       if (err instanceof ReviewVerdictAnswerExistsError) return refuseSecond(gateId);
       throw err;
     }

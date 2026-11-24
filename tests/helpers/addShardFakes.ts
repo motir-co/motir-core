@@ -560,7 +560,7 @@ export const POOL_DEFINITION = {
   unitId: (fleetKind: string) => `ou-test-${fleetKind.replaceAll('_', '-')}`,
 } as const;
 
-const FLEET_KINDS = ['ci_runner', 'code_graph_index', 'hosted_agent', 'agent_instance'];
+const FLEET_KINDS = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 export function stubPoolDefinitionEnv(): void {
   vi.stubEnv(AWS_POOL_DEFINITION_ENV.stackSetName, POOL_DEFINITION.stackSetName);

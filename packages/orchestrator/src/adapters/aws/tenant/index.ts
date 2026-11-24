@@ -14,6 +14,7 @@ export {
   sdkTenantEcs,
   sdkTenantElb,
   sdkTenantLambda,
+  sdkTenantLogs,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   sdkTenantSsm,

@@ -90,6 +90,10 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // Checking cues, MOTIR-11254), the same way: new tokens only.
   // And for the `--el-editing` / `--el-fixing` pair (the planner's Editing and
   // Fixing cues, MOTIR-11362), the same way: new tokens only.
+  // And for `--el-notif-production-crashed` (the production-crash notification
+  // hue, MOTIR-12113), the same way: new tokens only.
+  // And for `--el-status-to-plan` / `--el-tint-clay` (the To plan status's hue
+  // and its state-tag tint, MOTIR-12174), the same way: new tokens only.
   const before = JSON.parse(
     readFileSync(join(process.cwd(), 'tests/fixtures/paletteRename6471.before.json'), 'utf8'),
   ) as Record<string, Record<string, string>>;

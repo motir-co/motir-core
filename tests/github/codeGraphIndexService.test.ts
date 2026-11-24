@@ -149,8 +149,8 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     // still on after MOTIR-2027. That method is deleted, and this assertion is
     // what keeps it deleted: a service that can pull a repo into the function is
     // one import away from re-creating the 180 s-bounded path that failed ~68% of
-    // `motir-core`'s refreshes. Building now happens in a container, dispatched
-    // by `codeGraphIndexDispatchService` from `lib/jobs/indexFleetSteps.ts`.
+    // `motir-core`'s refreshes. Building is handed off to motir-codegraph
+    // (`lib/jobs/indexHandoffSteps.ts`, MOTIR-11883).
     expect('indexRepoIntoProject' in codeGraphIndexService).toBe(false);
     // The upload it used to drive is gone too (MOTIR-2138), so "never called"
     // has become "cannot be called" — there is no byte-upload method left on the

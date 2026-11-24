@@ -615,6 +615,9 @@ function logsAndMetricsStatements(): Statement[] {
       ['logs:DescribeLogGroups', 'logs:ListTagsForResource', 'logs:ListTagsLogGroup'],
       '*',
     ),
+    // A release's own output, read by the logs view and the health read
+    // (MOTIR-12104) — the hosting log groups only, never *.
+    allow('LogsEventsRead', ['logs:FilterLogEvents'], LOG_GROUPS),
     // A function's billed duration; metrics support no resource.
     allow('MetricsRead', ['cloudwatch:GetMetricData', 'cloudwatch:GetMetricStatistics'], '*'),
     // The container shape's usage accrual, one parameter per release.

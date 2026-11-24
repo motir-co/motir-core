@@ -1,4 +1,5 @@
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import { isMarkChangeField } from '@/lib/dto/planReview';
 import { folderIdFromNodeId, folderNodeId } from '@/lib/planning/projectCanvasModel';
 
 // THE SHAPE OF A PLAN — how its proposals are spread across containers
@@ -78,7 +79,8 @@ export function planContainers(
  * review's canvas draws folders, so a folder-filed proposal sits on its folder's
  * level and the arrival rule counts it there, with folder crumbs counted in the
  * depth tie-break. Off, the count is the shipped one — by `parentNodeId` — which
- * the review read's arrival-size and the derived default view still read.
+ * the straddle question (`planContainerCount`) still reads. The review read's
+ * arrival-size counts with folders on, through `arrivalLevelId` (Bug MOTIR-12144).
  */
 export interface PlanShapeOptions {
   folders?: boolean;
@@ -95,6 +97,31 @@ export function proposalLevelKey(
 ): string | null {
   if (item.parentNodeId != null) return item.parentNodeId;
   return item.folderId != null && !item.folderMissing ? folderNodeId(item.folderId) : null;
+}
+
+/**
+ * The node ids a plan TOUCHES — the rows the plan review canvas keeps on the road
+ * at the root rather than folding into the "Not in epic" group (Part XVI decision
+ * 2, the grouping's third conjunct).
+ *
+ * Every proposal's own node id (a `modify` / `remove` keys by its TARGET, a
+ * materialized `add` by the card it became; a pending `add`'s id is its
+ * `planItemId`, which no committed row carries, so it is inert), plus a pending
+ * `add`'s PARENT: grouping that row away would file the proposal behind a door the
+ * reviewer cannot open.
+ *
+ * ONE definition for the two readers that must agree on it: the canvas, which
+ * groups by it, and the review read's arrival-level size, which counts the group
+ * as the one node the canvas draws (Bug MOTIR-12162).
+ */
+export function planTouchedNodeIds(
+  items: readonly Pick<PlanReviewItemDto, 'nodeId' | 'op' | 'parentNodeId'>[],
+): Set<string> {
+  const ids = new Set(items.map((i) => i.nodeId));
+  for (const i of items) {
+    if (i.op === 'add' && i.parentNodeId !== null) ids.add(i.parentNodeId);
+  }
+  return ids;
 }
 
 /** How many folder crumbs stand above a proposal's committed chain. `?? []`: a
@@ -147,14 +174,50 @@ export function planContainerCount(items: PlanReviewItemDto[]): number {
 }
 
 /**
+ * Is this proposal a MARK-ONLY `modify` (Bug MOTIR-12097) — one whose every
+ * changed field is in the {@link PLAN_ITEM_MARK_CHANGE_FIELDS} group, so it only
+ * records that a card's standing changed (outdated, deprecated, superseded) and
+ * moves nothing about the card itself?
+ *
+ * Read off `proposal.changedFields`, the key set `buildChanges` emits, through the
+ * same field predicate the canvas's lock rule uses (`isLockedProposal`), so the two
+ * cannot disagree about which `modify` is a mark. An EMPTY change set is not
+ * mark-only — it marks nothing — which is `isMarkOnlyPatch`'s rule on the patch.
+ */
+export function isMarkOnlyProposal(item: Pick<PlanReviewItemDto, 'op' | 'proposal'>): boolean {
+  if (item.op !== 'modify') return false;
+  const fields = item.proposal.changedFields;
+  return fields.length > 0 && fields.every((field) => isMarkChangeField(field));
+}
+
+/**
  * The container the plan most FILLS — where the canvas should open — or `null`
  * for a plan with no proposals, or one that lives entirely at the top level.
+ *
+ * ⚠️ ONLY A CONTAINER WHERE THE PLAN DOES WORK CAN WIN (Bug MOTIR-12097). A plan
+ * that replaces old work typically marks several FINISHED cards outdated and adds
+ * a few new ones elsewhere; counted alike, the marks out-number the adds and the
+ * canvas opened on a finished story whose cards are not changing, with the new
+ * cards one hidden level away. So the candidates are the containers holding at
+ * least one `add`, `remove` or non-mark `modify`. Within those the ranking is
+ * {@link planContainers}' own, over EVERY item — a mark-only proposal beside an
+ * add still counts toward its container. Only a plan made of nothing but marks
+ * falls back to every container, because the marks are then its whole content.
+ *
+ * `planContainers` and {@link planContainerCount} are untouched: the rail, the
+ * list and the straddle question still see every item.
  */
 export function fullestContainer(
   items: PlanReviewItemDto[],
   opts: PlanShapeOptions = {},
 ): PlanContainer | null {
-  const [first] = planContainers(items, opts);
+  const keyOf = opts.folders ? proposalLevelKey : (item: PlanReviewItemDto) => item.parentNodeId;
+  const workLevels = new Set(items.filter((item) => !isMarkOnlyProposal(item)).map(keyOf));
+  const containers = planContainers(items, opts);
+  const [first] =
+    workLevels.size > 0
+      ? containers.filter((container) => workLevels.has(container.parentNodeId))
+      : containers;
   if (!first || first.parentNodeId === null) return null;
   return first;
 }

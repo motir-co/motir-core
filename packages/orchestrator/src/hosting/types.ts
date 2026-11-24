@@ -215,6 +215,68 @@ export interface ReleaseCommandResult {
   readonly timedOut: boolean;
 }
 
+/** Whose line a log line is: the app's own output (`app`), or the target's
+ *  lines about it (`platform`) — Fly's runner, Lambda's START / END / REPORT,
+ *  an ECS task event. */
+export type ReleaseLogStream = 'app' | 'platform';
+
+/**
+ * What `readLogs` reads (MOTIR-12099). `since` / `until` bound the window
+ * (inclusive); `filter` keeps only lines whose message contains it, compared
+ * case-insensitively; at most `limit` lines come back. `cursor` is the opaque
+ * value a previous page returned, and asks for the page of OLDER lines after it.
+ */
+export interface ReleaseLogQuery {
+  readonly since?: Date;
+  readonly until?: Date;
+  readonly filter?: string;
+  readonly limit: number;
+  readonly cursor?: string;
+}
+
+/** One line of a release's output, exactly as the target holds it. */
+export interface ReleaseLogLine {
+  readonly at: Date;
+  readonly stream: ReleaseLogStream;
+  readonly message: string;
+}
+
+/** A page of a release's output, NEWEST FIRST. `cursor` pages to older lines
+ *  and is null when there are none. */
+export interface ReleaseLogPage {
+  readonly lines: readonly ReleaseLogLine[];
+  readonly cursor: string | null;
+}
+
+/** The most recent exit of a release's process that the target has already
+ *  restarted it from (Fly's restart policy, a replaced Fargate task), so a crash
+ *  recovered between two reads is still visible. `exitCode` is null when the
+ *  target does not report one. */
+export interface ReleaseLastExit {
+  readonly exitCode: number | null;
+  readonly oomKilled: boolean;
+  readonly at: Date;
+}
+
+/**
+ * What the TARGET reports about a release's running process (MOTIR-12099) —
+ * the adapter half of health. It knows nothing of the manifest's health-check
+ * path: a caller combines the two. Each state carries `since`, when it began.
+ *
+ * - `running` — the process is up; `lastExit` is the exit it was restarted
+ *   from, absent when there was none.
+ * - `suspended` — stopped while idle, and woken by the next request.
+ * - `deploying` — the release is being rolled out, or is held before it runs.
+ * - `exited` — the process stopped and the target did not restart it;
+ *   `exitCode` is null when the target does not report one.
+ * - `oom_killed` — the target killed the process for exceeding its memory.
+ */
+export type ReleaseRuntimeHealth =
+  | { readonly state: 'running'; readonly since: Date; readonly lastExit?: ReleaseLastExit }
+  | { readonly state: 'suspended' | 'deploying'; readonly since: Date }
+  | { readonly state: 'exited'; readonly exitCode: number | null; readonly since: Date }
+  | { readonly state: 'oom_killed'; readonly since: Date };
+
 export interface HostingDeployPort {
   readonly target: HostingDeployTarget;
   /** Create (or find) the isolation unit for one (repository, environment).
@@ -263,4 +325,18 @@ export interface HostingDeployPort {
    *  what ran it. It never serves traffic and never touches the live release.
    *  A target that cannot throws `ReleaseCommandUnsupportedError`. */
   runReleaseCommand(input: RunReleaseCommandInput): Promise<ReleaseCommandResult>;
+  /** The release's recent output, NEWEST FIRST, read from the target: the lines
+   *  inside the query's window whose message contains its filter, at most
+   *  `limit` of them, and a cursor to the older ones. Lines come back exactly
+   *  as the target holds them — the port neither masks nor stores them, so a
+   *  caller showing them to a person masks secret values itself. Throws
+   *  `ReleaseNotFoundError` when the app holds no live or pending release, and
+   *  `LogsUnavailableError` when the target cannot answer. */
+  readLogs(handle: ReleaseHandle, query: ReleaseLogQuery): Promise<ReleaseLogPage>;
+  /** What the target reports about the release's process: running (with the
+   *  exit it was last restarted from), suspended, deploying, exited with its
+   *  code, or killed for memory. Throws `ReleaseNotFoundError` when the app
+   *  holds no live or pending release, and `RuntimeHealthUnavailableError` when
+   *  the target cannot answer — a caller then falls back to its own probe. */
+  readHealth(handle: ReleaseHandle): Promise<ReleaseRuntimeHealth>;
 }

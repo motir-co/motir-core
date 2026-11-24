@@ -30,7 +30,8 @@ import { reviewVerdictService } from '@/lib/services/reviewVerdictService';
 //       `work_item:edit` on the card;
 //   404 — an unknown card, or `REVIEW_NOTHING_TO_REVIEW` (it delivers no pull request);
 //   409 `REVIEW_VERDICT_LATE` / `REVIEW_VERDICT_SECOND` — stored with that outcome, nothing
-//       decided;
+//       decided; `REVIEW_NOT_YET_ASKED` — the review gate is on and no review is waiting at
+//       the current version yet: nothing stored (Bug MOTIR-12147);
 //   422 `INVALID_BODY` — a missing field, findings missing on a send-back, a `met` row with
 //       no evidence; `REVIEW_TARGET_NOT_RUN_TARGET` — names the run target to review.
 export const POST = withV1Route<{ key: string }>(

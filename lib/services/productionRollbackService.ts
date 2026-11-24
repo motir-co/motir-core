@@ -28,6 +28,7 @@ import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseReposit
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
+import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -222,6 +223,8 @@ async function rollbackProduction(input: RollbackProductionInput): Promise<Hoste
       const plan = await planRollback(app.id);
 
       await hostedReleaseUsageService.settleReleaseUsage(plan.currentId);
+      // Its last window charged too (MOTIR-12108); never throws.
+      await productionUsageMeterService.accrueOutgoingRelease(plan.currentId);
       const port = getHostingDeployPort(app.target);
       const { appRef } = await inStep(app.id, 'app', () =>
         port.ensureApp({ repositoryId: projectRepositoryId, environment: { kind: 'production' } }),

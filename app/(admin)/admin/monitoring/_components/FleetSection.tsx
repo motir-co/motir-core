@@ -228,12 +228,6 @@ async function OrgsCard({
                 >
                   {t('orgs.group.plan')}
                 </th>
-                <th
-                  scope="colgroup"
-                  className="border-b-2 border-l border-dashed border-(--el-border-strong) pb-1 pl-2 pt-2 text-center font-sans text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)"
-                >
-                  {t('orgs.group.uncapped')}
-                </th>
                 <th colSpan={3} />
               </tr>
               <tr className="border-b border-(--el-border) text-left">
@@ -242,9 +236,6 @@ async function OrgsCard({
                 <Th numeric>{t('orgs.col.ciRunner')}</Th>
                 <Th numeric>{t('orgs.col.hostedAgent')}</Th>
                 <Th numeric>{t('orgs.col.agentInstance')}</Th>
-                <Th numeric own>
-                  {t('orgs.col.index')}
-                </Th>
                 <Th numeric>{t('orgs.col.accrued', { minutes })}</Th>
                 <Th numeric>{t('orgs.col.credits')}</Th>
                 <Th>{t('orgs.col.verdict')}</Th>
@@ -302,8 +293,6 @@ async function OrgRow({ row, now }: { row: FleetOrgRowDTO; now: Date }) {
       />
       {/* The org's LIVE agents, running or asleep — what its figure counts (MOTIR-9954). */}
       <UsedOf n={row.agentsLive} figure={capped(row.plan)?.agentsPerOrg ?? null} />
-      {/* Indexing is held to no plan figure: a bare count, always. */}
-      <Count n={row.byWorkload.code_graph_index} own />
       <Td numeric>
         {row.accruedMinutesInWindow === 0 ? (
           <>
@@ -919,9 +908,9 @@ export function MiniStat({
   );
 }
 
-function Count({ n, own }: { n: number; own?: boolean }) {
+function Count({ n }: { n: number }) {
   return (
-    <Td numeric own={own} className="tabular-nums">
+    <Td numeric className="tabular-nums">
       <span className={n === 0 ? 'text-(--el-text-secondary)' : 'text-(--el-text)'}>{n}</span>
     </Td>
   );
@@ -943,20 +932,18 @@ export function Th({
   children,
   numeric,
   sorted,
-  own,
   scope,
 }: {
   children?: React.ReactNode;
   numeric?: boolean;
   sorted?: boolean;
-  own?: boolean;
   scope?: 'col';
 }) {
   return (
     <th
       scope={scope}
       aria-sort={sorted ? 'descending' : undefined}
-      className={`py-2 pr-3 align-bottom font-sans text-xs font-medium uppercase tracking-wide first:pl-3 ${numeric ? 'text-right' : ''} ${own ? 'border-l border-dashed border-(--el-border-strong) pl-2' : ''} ${sorted ? 'text-(--el-text-strong)' : 'text-(--el-text-secondary)'}`}
+      className={`py-2 pr-3 align-bottom font-sans text-xs font-medium uppercase tracking-wide first:pl-3 ${numeric ? 'text-right' : ''} ${sorted ? 'text-(--el-text-strong)' : 'text-(--el-text-secondary)'}`}
     >
       {children}
     </th>
@@ -966,13 +953,11 @@ export function Th({
 export function Td({
   children,
   numeric,
-  own,
   rail,
   className = '',
 }: {
   children: React.ReactNode;
   numeric?: boolean;
-  own?: boolean;
   /** The 3px leading rail: danger on a mismatched or failed row (`true`), warning
    *  on a Pools account past 70% (`'warning'`). */
   rail?: boolean | 'warning';
@@ -982,7 +967,7 @@ export function Td({
   return (
     <td
       data-rail={railTone}
-      className={`py-2 pr-3 align-top ${numeric ? 'text-right' : ''} ${own ? 'border-l border-dashed border-(--el-border-strong) pl-2' : ''} ${rail === undefined ? '' : `border-l-[3px] pl-3 ${railTone === 'warning' ? 'border-l-(--el-warning)' : railTone === 'danger' ? 'border-l-(--el-danger)' : 'border-l-transparent'}`} ${className}`}
+      className={`py-2 pr-3 align-top ${numeric ? 'text-right' : ''} ${rail === undefined ? '' : `border-l-[3px] pl-3 ${railTone === 'warning' ? 'border-l-(--el-warning)' : railTone === 'danger' ? 'border-l-(--el-danger)' : 'border-l-transparent'}`} ${className}`}
     >
       {children}
     </td>

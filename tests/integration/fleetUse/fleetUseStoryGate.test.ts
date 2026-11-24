@@ -23,6 +23,14 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { GET } from '@/app/api/organizations/[orgId]/billing/fleet-use/route';
 import { POST } from '@/app/api/organizations/[orgId]/billing/fleet-use/capacity-requests/route';
+import en from '@/messages/en.json';
+import {
+  ACCOUNT_KIND_KEYS,
+  ACCOUNT_ROLE_KEYS,
+  FLEET_KIND_KEYS,
+  QUOTA_OUTCOME_KEYS,
+  REQUEST_STATUS_KEYS,
+} from '@/app/(authed)/settings/organization/billing/_components/fleetUseFormat';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateJobRuns } from '../../helpers/db';
@@ -490,7 +498,8 @@ async function ownAccount(
   return rows;
 }
 
-/** A Host org right after purchase: its three accounts, quota requested. */
+/** A Host org right after purchase: its three accounts, quota requested — the
+ *  agent hoster one `agent_instance` row since the re-home (MOTIR-12038). */
 async function hostAccounts(
   organizationId: string,
   options: {
@@ -500,12 +509,7 @@ async function hostAccounts(
 ) {
   const ci = await ownAccount(organizationId, ['ci_runner'], 64);
   const agentRunner = await ownAccount(organizationId, ['hosted_agent'], 64, options.agentRunner);
-  const merged = await ownAccount(
-    organizationId,
-    ['code_graph_index', 'agent_instance'],
-    128,
-    options.merged,
-  );
+  const merged = await ownAccount(organizationId, ['agent_instance'], 128, options.merged);
   return { ci, agentRunner, merged };
 }
 
@@ -520,12 +524,17 @@ const providerIn = (fleetUse: FleetUseDTO, kind: FleetWorkloadKind) =>
 
 // ── the harness ──────────────────────────────────────────────────────────────
 
-const SWITCHED: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const SWITCHED: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
+
+/** Whether `billing.fleetUse.<key>` is a message the English catalogue holds. */
+function fleetUseMessage(key: string): unknown {
+  return key
+    .split('.')
+    .reduce<unknown>(
+      (node, part) => (node as Record<string, unknown> | undefined)?.[part],
+      en.billing.fleetUse,
+    );
+}
 
 beforeEach(async () => {
   await setUpHarness();
@@ -604,7 +613,14 @@ describe('the page reads the figures and counts the gates enforce', () => {
       figureSource: 'plan',
     });
     expect(census.byWorkload.ci_runner).toBe(ci);
-    expect(fleetUse.codeGraphIndex.inUse).toBe(census.byWorkload.code_graph_index);
+    // No indexing line: the indexer left motir-core (MOTIR-12039).
+    expect(Object.keys(fleetUse).sort()).toEqual([
+      'countsRead',
+      'figures',
+      'hostAccounts',
+      'plan',
+      'whereItRuns',
+    ]);
   });
 
   it('a plan-limit wait and a full-pool wait are counted apart, and a freed pool clears its wait', async () => {
@@ -757,7 +773,7 @@ describe('the page reads the figures and counts the gates enforce', () => {
     // The rest of the read still returns.
     expect(fleetUse.countsRead).toBe(true);
     expect(fleetUse.figures.ciJobsInFlight.inUse).toBe(census.byWorkload.ci_runner);
-    expect(fleetUse.whereItRuns).toHaveLength(4);
+    expect(fleetUse.whereItRuns).toHaveLength(3);
   });
 
   it.each([{ isMeta: true }, { internalBilling: true }])(
@@ -798,10 +814,10 @@ describe('a Host org’s accounts read where admission places its jobs', () => {
     expect(accounts.map((a) => a.accountKind)).toEqual([
       'ci_runner',
       'hosted_agent',
-      'indexer_and_hoster',
+      'agent_hoster',
     ]);
-    const merged = accounts.find((a) => a.accountKind === 'indexer_and_hoster')!;
-    expect([...merged.fleetKinds].sort()).toEqual(['agent_instance', 'code_graph_index']);
+    const merged = accounts.find((a) => a.accountKind === 'agent_hoster')!;
+    expect(merged).toMatchObject({ fleetKinds: ['agent_instance'], requestKind: 'agent_instance' });
     for (const account of accounts) {
       expect(account).toMatchObject({ state: 'quota_requested', onSharedFloor: true });
     }
@@ -842,10 +858,10 @@ describe('a Host org’s accounts read where admission places its jobs', () => {
       FleetUseDTO['hostAccounts'],
       null | { kind: 'not_read' }
     >;
-    const merged = accounts.find((a) => a.accountKind === 'indexer_and_hoster')!;
+    const merged = accounts.find((a) => a.accountKind === 'agent_hoster')!;
     expect(merged).toMatchObject({ quotaOutcome: 'denied', onSharedFloor: true });
-    expect(providerIn(fleetUse, 'code_graph_index')).toBe('shared_aws_pool');
     expect(providerIn(fleetUse, 'agent_instance')).toBe('shared_aws_pool');
+    expect(fleetUse.whereItRuns.map((row) => row.fleetKind)).toEqual(SWITCHED);
   });
 
   it('an admin’s capacity request on the merged account comes back once, on that account, in the POST’s own shape', async () => {
@@ -857,12 +873,12 @@ describe('a Host org’s accounts read where admission places its jobs', () => {
       FleetUseDTO['hostAccounts'],
       null | { kind: 'not_read' }
     >;
-    const merged = accounts.find((a) => a.accountKind === 'indexer_and_hoster')!;
+    const merged = accounts.find((a) => a.accountKind === 'agent_hoster')!;
 
     const posted = await requestCapacity(admin, orgId(), {
       fleetKind: merged.requestKind,
       desiredVcpu: 256,
-      reason: 'The indexer runs out at the end of the month.',
+      reason: 'Our agents run out at the end of the month.',
     });
     expect(posted.status).toBe(200);
     const request = posted.body['request'] as { id: string };
@@ -875,12 +891,81 @@ describe('a Host org’s accounts read where admission places its jobs', () => {
     const listed = afterAccounts.flatMap((a) =>
       a.capacityRequests.filter((r) => r.id === request.id).map(() => a.accountKind),
     );
-    expect(listed).toEqual(['indexer_and_hoster']);
+    expect(listed).toEqual(['agent_hoster']);
     expect(
       afterAccounts
-        .find((a) => a.accountKind === 'indexer_and_hoster')!
+        .find((a) => a.accountKind === 'agent_hoster')!
         .capacityRequests.find((r) => r.id === request.id),
     ).toEqual(request);
+  });
+});
+
+describe('past index usage on the merged account still renders (MOTIR-12039)', () => {
+  it('a past raise and a past code_graph_index capacity request stay listed on the agent hoster, and neither reads a removed key', async () => {
+    onPlan(TIERS.host);
+    // The merged account as the re-home left it: ONE `agent_instance` row, its
+    // past raise re-pointed there, and a past capacity request on that row whose
+    // stored kind is still `code_graph_index`.
+    const [shard] = await ownAccount(orgId(), ['agent_instance'], 128, {
+      granted: 96,
+      status: 'approved',
+    });
+    const past = await adminDb.fleetCapacityRequest.create({
+      data: {
+        organizationId: orgId(),
+        shardId: shard!.id,
+        awsAccountId: shard!.awsAccountId!,
+        fleetKind: 'code_graph_index',
+        desiredVcpu: 192,
+        reasonMd: 'More index capacity for the monorepo.',
+        status: 'closed',
+        requestedByUserId: fx.owner.id,
+        createdAt: new Date(Date.now() - 7 * 86_400_000),
+        filedAt: new Date(Date.now() - 7 * 86_400_000),
+        closedAt: new Date(Date.now() - 6 * 86_400_000),
+      },
+    });
+
+    const fleetUse = await fleetUseOf(owner(), orgId());
+    const accounts = fleetUse.hostAccounts as Exclude<
+      FleetUseDTO['hostAccounts'],
+      null | { kind: 'not_read' }
+    >;
+    expect(accounts).toHaveLength(1);
+    const [hoster] = accounts;
+    expect(hoster).toMatchObject({
+      accountKind: 'agent_hoster',
+      vcpuAsked: 128,
+      vcpuGranted: 96,
+      quotaOutcome: 'approved',
+    });
+    expect(hoster!.capacityRequests.map((r) => [r.id, r.fleetKind, r.desiredVcpu])).toEqual([
+      [past.id, 'code_graph_index', 192],
+    ]);
+
+    // Neither row reads a removed key: the account by its own kind and role, the
+    // request by its status and AWS's outcome — never by the kind it named, which
+    // billing no longer labels.
+    expect(fleetUseMessage(ACCOUNT_KIND_KEYS[hoster!.accountKind])).toBe('Agent hoster');
+    expect(fleetUseMessage(ACCOUNT_ROLE_KEYS[hoster!.accountKind])).toBe('Hosts your agents');
+    expect(fleetUseMessage(QUOTA_OUTCOME_KEYS[hoster!.quotaOutcome!])).toEqual(expect.any(String));
+    const [request] = hoster!.capacityRequests;
+    expect(fleetUseMessage(REQUEST_STATUS_KEYS[request!.status])).toEqual(expect.any(String));
+    expect(Object.keys(FLEET_KIND_KEYS)).not.toContain(request!.fleetKind);
+    expect(fleetUseMessage('kind.code_graph_index')).toBeUndefined();
+    expect(fleetUseMessage('accounts.keptSpots')).toBeUndefined();
+    expect(fleetUseMessage('indexing')).toBeUndefined();
+
+    // A new period with only agent-hoster use: no indexer line, account or label.
+    expect(Object.keys(fleetUse).sort()).toEqual([
+      'countsRead',
+      'figures',
+      'hostAccounts',
+      'plan',
+      'whereItRuns',
+    ]);
+    expect(fleetUse.whereItRuns.map((row) => row.fleetKind)).toEqual(SWITCHED);
+    expect(JSON.stringify(fleetUse)).not.toContain('indexer');
   });
 });
 

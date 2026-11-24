@@ -228,6 +228,7 @@ export function toInFlightDeliveryFact(row: WorkItemDeliveryWithChecks): InFligh
     baseRef: row.pullRequest.baseRef,
     open: pr.state === 'open',
     merged: row.pullRequest.merged,
+    inherited: row.inherited,
   };
 }
 

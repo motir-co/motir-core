@@ -424,17 +424,6 @@ function indexWriterSeamEnv(): Record<string, string> {
   return {
     E2E_TEST_CODE_GRAPH: '1',
     MOTIR_AI_URL: 'http://motir-ai.index-e2e.local',
-    // ⚠️ THE CONTAINER'S OWN ADDRESS, AND IT IS REQUIRED (MOTIR-4518). It has no
-    // fallback to `MOTIR_AI_URL` by design — a default is what let every
-    // production index run build its graph and then die at
-    // `getaddrinfo ENOTFOUND motir-ai.internal` for two weeks — so without this
-    // line `bootIndexContainer` throws in its deployment gate and no supervised
-    // run in this lane can settle. A DIFFERENT host from the one above, because
-    // in production the worker and the container are in different organizations
-    // and reach motir-ai at different addresses; unresolvable for the same
-    // reason its neighbour is, and never actually fetched from here — the value
-    // only has to arrive in the container spec.
-    MOTIR_AI_CONTAINER_URL: 'http://motir-ai-public.index-e2e.local',
     MOTIR_AI_SERVICE_TOKEN: 'e2e-index-placeholder-token',
     GITHUB_APP_ID: '990001',
     GITHUB_APP_PRIVATE_KEY: privateKey,

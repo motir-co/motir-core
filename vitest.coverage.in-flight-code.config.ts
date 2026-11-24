@@ -42,6 +42,8 @@ export default defineConfig({
       // and the project-keyed `list_changed_files` over `repoChangesService`.
       'tests/mcp/get-work-item-in-flight.test.ts',
       'tests/mcp/list-changed-files.test.ts',
+      // MOTIR-12098 — an inherited delivery row is nobody's in-flight code.
+      'tests/integration/ai/inheritedDeliveryNotInFlight.test.ts',
     ],
     coverage: {
       provider: 'v8',

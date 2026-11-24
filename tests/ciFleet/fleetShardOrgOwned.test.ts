@@ -127,9 +127,9 @@ describe('the database holds the owner and the AWS uniqueness', () => {
     await expect(insert({ awsAccountId: '999900001111' })).rejects.toThrow(/Unique/);
   });
 
-  it('accepts one AWS account as two rows of two kinds — the merged indexer + hoster account', async () => {
+  it('accepts one AWS account as two rows of two kinds', async () => {
     const org = await seedOrganization();
-    await owned(org, { awsAccountId: '999900002222', fleetKind: 'code_graph_index' });
+    await owned(org, { awsAccountId: '999900002222', fleetKind: 'hosted_agent' });
     await expect(
       owned(org, { awsAccountId: '999900002222', fleetKind: 'agent_instance' }),
     ).resolves.toMatchObject({ fleetKind: 'agent_instance' });

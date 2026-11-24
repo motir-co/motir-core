@@ -55,6 +55,7 @@ function delivery(
       url: `https://github.com/${repoLabel}/pull/${number}`,
       githubReview: null,
       preview: null,
+      readerAccess: null,
       baseRef: 'main',
       conflicted: false,
     },

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { IdlePolicyUnsupportedError } from '../../../../hosting/errors';
+import { assertIdlePolicySupported } from '../../../../hosting/shape';
 import { deriveOriginSecret } from '../../../../hosting/originSecret';
 import type {
   HostingEnvironment,
   ReleaseEnvVar,
   ReleaseIdlePolicy,
   ReleaseRuntime,
+  ReleaseRuntimeHealth,
   ReleaseSize,
   ReleaseState,
   ReleaseUsage,
@@ -25,6 +26,7 @@ import {
 } from '../releaseTemplate';
 import { NETWORK_STACK_NAME, TAG_ORGANIZATION, TAG_REPOSITORY } from '../stackRunner';
 import type { TenantEcsTask } from './ecsClient';
+import { containerRuntimeHealth } from './health';
 import {
   ContainerRolloutFailedError,
   ContainerRolloutTimeoutError,
@@ -68,6 +70,7 @@ import { accrueStoppedTasks, parseAccrual, windowUsage, type UsageAccrual } from
 
 export * from './ecsClient';
 export * from './errors';
+export * from './health';
 export * from './names';
 export * from './usage';
 
@@ -306,9 +309,7 @@ async function sweep(
 export async function deployContainerRelease(
   input: DeployContainerReleaseInput,
 ): Promise<ContainerRelease> {
-  if (input.idle.mode !== 'always_on') {
-    throw new IdlePolicyUnsupportedError('aws', 'container', input.idle.mode);
-  }
+  assertIdlePolicySupported('aws', 'container', input.idle);
   const { account, repositoryId, environment } = input;
   const names = containerReleaseNames(repositoryId, environment);
   const { stackName, appRef } = names;
@@ -457,6 +458,21 @@ export async function describeContainerRelease(
   };
 }
 
+/** The release's runtime state (MOTIR-12104), from its service and tasks;
+ *  null when there is no release stack. */
+export async function readContainerHealth(
+  target: ContainerReleaseTarget,
+): Promise<ReleaseRuntimeHealth | null> {
+  const names = containerReleaseNames(target.repositoryId, target.environment);
+  const { runner, clients } = target.account;
+  const now = (target.now ?? (() => new Date()))();
+  const stack = await runner.describeStack(names.stackName);
+  if (!stack || stack.status.startsWith('DELETE_IN_PROGRESS')) return null;
+  const service = await clients.ecs.describeService(names.cluster, names.service);
+  const tasks = service ? await clients.ecs.listTasks(names.cluster, names.service) : [];
+  return containerRuntimeHealth({ service, tasks, stackCreatedAt: stack.createdAt ?? null, now });
+}
+
 /** Move the service to the revision below the stack's — no image, no new
  *  revision — and wait for it to be healthy. Repeating it changes nothing. */
 export async function rollbackContainerRelease(
@@ -589,6 +605,7 @@ export const AWS_CONTAINER_DEPLOY_ACTIONS: readonly string[] = [
   'ecs:DeregisterTaskDefinition',
   'ecs:ListTasks',
   'ecs:DescribeTasks',
+  'logs:FilterLogEvents',
   'elasticloadbalancing:DescribeTargetHealth',
   'elasticloadbalancing:DescribeRules',
   'secretsmanager:PutSecretValue',

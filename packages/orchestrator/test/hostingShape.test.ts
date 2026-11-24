@@ -4,8 +4,10 @@ import {
   CustomerRepositoryRefusedError,
   IdlePolicyUnsupportedError,
   ReleaseShapeRequiredError,
+  assertIdlePolicySupported,
   awsContainerSize,
   computeUsageFor,
+  idlePolicyRefusal,
   requireReleaseShape,
   type ReleaseShape,
 } from '../src/index';
@@ -24,6 +26,31 @@ describe('requireReleaseShape', () => {
     expect(() => requireReleaseShape('aws', {})).toThrow(ReleaseShapeRequiredError);
     const unknown = { shape: 'vm' as unknown as ReleaseShape };
     expect(() => requireReleaseShape('aws', unknown)).toThrow(/aws target needs a release shape/);
+  });
+});
+
+describe('the idle policy rule (MOTIR-12107)', () => {
+  const SUSPEND = { mode: 'suspend', idleSeconds: 300 } as const;
+  const ALWAYS_ON = { mode: 'always_on' } as const;
+
+  it('refuses suspend on an AWS container, naming the target, shape and mode', () => {
+    const refusal = idlePolicyRefusal('aws', 'container', SUSPEND);
+    expect(refusal).toBeInstanceOf(IdlePolicyUnsupportedError);
+    expect(refusal).toMatchObject({ target: 'aws', shape: 'container', mode: 'suspend' });
+    expect(() => assertIdlePolicySupported('aws', 'container', SUSPEND)).toThrow(
+      IdlePolicyUnsupportedError,
+    );
+  });
+
+  it('accepts every other pair', () => {
+    expect(idlePolicyRefusal('aws', 'container', ALWAYS_ON)).toBeNull();
+    expect(idlePolicyRefusal('aws', 'function', SUSPEND)).toBeNull();
+    expect(idlePolicyRefusal('aws', 'function', ALWAYS_ON)).toBeNull();
+    for (const target of ['fly', 'serverless'] as const) {
+      expect(idlePolicyRefusal(target, null, SUSPEND)).toBeNull();
+      expect(idlePolicyRefusal(target, undefined, ALWAYS_ON)).toBeNull();
+    }
+    expect(() => assertIdlePolicySupported('fly', null, SUSPEND)).not.toThrow();
   });
 });
 

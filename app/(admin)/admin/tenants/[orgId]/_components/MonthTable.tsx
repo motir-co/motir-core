@@ -68,7 +68,10 @@ export async function MonthTable({
         <tbody>
           {months.items.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-2 py-2 text-(--el-text-secondary)">
+              <td
+                colSpan={SPEND_CATEGORIES.length + 3}
+                className="px-2 py-2 text-(--el-text-secondary)"
+              >
                 {t('empty')}
               </td>
             </tr>

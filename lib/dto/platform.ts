@@ -399,7 +399,8 @@ export interface PlatformTenantSpendRowDTO {
     | 'agent_instance'
     | 'agent_storage'
     | 'ci'
-    | 'search',
+    | 'search'
+    | 'hosting_production',
     number
   >;
   indexingSeconds: number;
@@ -457,7 +458,7 @@ export interface PlatformOrgOverviewDTO {
   organization: PlatformOrganizationDetailDTO;
   /** The operator writes recorded against the org — the shipped action log. */
   actions: PlatformAuditLogDTO[];
-  /** This month's eight categories; null when motir-ai could not be read. */
+  /** This month's nine categories; null when motir-ai could not be read. */
   monthCategories: CategoryFigures[] | null;
   month: string;
   members: { items: PlatformOrgMemberDTO[]; nextCursor: string | null; total: number };

@@ -119,7 +119,10 @@ const levelLoad = (page: Page, parentId: string) =>
   );
 
 const node = (page: Page, id: string) => page.locator(`[data-node-id="${id}"]`);
-const pillOn = (page: Page, id: string) => node(page, id).getByTestId('cross-blocked-flag');
+// The blocked card's flag: its top-edge TAB (MOTIR-12158), or — on the "You are
+// here" card, whose here tab keeps the edge — the short tag in its row.
+const BLOCKED_FLAG = '[data-testid="blocked-tab"], [data-testid="cross-blocked-flag"]';
+const pillOn = (page: Page, id: string) => node(page, id).locator(BLOCKED_FLAG);
 
 /** Open the roadmap INSIDE a work item's level (`?item=`, MOTIR-3836). */
 async function openRoadmapLevel(page: Page, item: { id: string; identifier: string }) {
@@ -249,7 +252,6 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
   await chapter('A level with no off-level blocker carries no flag', async () => {
     await openRoadmapLevel(page, storyA);
     await expect(node(page, y.id)).toBeVisible();
-    await expect(page.getByTestId('cross-blocked-flag')).toHaveCount(0);
-    await expect(page.getByTestId('cross-flag')).toHaveCount(0);
+    await expect(page.locator(BLOCKED_FLAG)).toHaveCount(0);
   });
 });

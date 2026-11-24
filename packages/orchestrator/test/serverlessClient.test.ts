@@ -179,7 +179,17 @@ describe('the serverless client module', () => {
             ? { Functions: [{}, { FunctionName: 'mh-a' }] }
             : command === 'GetMetricDataCommand'
               ? { MetricDataResults: [{ Id: 'duration' }, { Id: 'other', Values: [5] }] }
-              : {},
+              : command === 'FilterLogEventsCommand'
+                ? {
+                    events: [
+                      { timestamp: 5 },
+                      { timestamp: Number.NaN, message: 'no instant' },
+                      { message: 'no timestamp' },
+                      { eventId: 'e1', timestamp: 6, logStreamName: 's', message: 'kept' },
+                    ],
+                    nextToken: '',
+                  }
+                : {},
       ),
     });
     expect(await partial.getFunction('f')).toEqual({
@@ -187,9 +197,31 @@ describe('the serverless client module', () => {
       arn: 'arn:f',
       state: 'Pending',
       lastUpdateStatus: 'InProgress',
+      lastModified: null,
       tags: {},
     });
     expect(await partial.listFunctionNames()).toEqual(['mh-a']);
+    // MOTIR-12103 — an event with no usable timestamp is dropped; one with no id
+    // is keyed by its stream, instant and text.
+    expect(
+      await createServerlessAwsApi(CONFIG, {
+        clientFactory: stubFactory(() => ({})),
+      }).filterLogEvents('g', { startMs: 0, endMs: 1 }),
+    ).toEqual({ events: [], nextToken: null });
+    expect(
+      await partial.filterLogEvents('g', {
+        startMs: 0,
+        endMs: 1,
+        filterPattern: 'REPORT',
+        nextToken: 't',
+      }),
+    ).toEqual({
+      events: [
+        { eventId: ':5:', timestamp: 5, logStreamName: '', message: '' },
+        { eventId: 'e1', timestamp: 6, logStreamName: 's', message: 'kept' },
+      ],
+      nextToken: null,
+    });
     expect(await partial.metricSums('f', new Date(0), new Date(1), 60)).toEqual({
       durationMs: 0,
       invocations: 0,

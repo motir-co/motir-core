@@ -63,6 +63,8 @@ function decision(twoRepos = false): DispatchRunRepair {
         branch: 'feat/PROD-7-a',
         baseRef: 'main',
         headSha: 'a'.repeat(40),
+        conflicted: false,
+        outOfDate: false,
       },
       ...(twoRepos
         ? [
@@ -73,6 +75,8 @@ function decision(twoRepos = false): DispatchRunRepair {
               branch: 'feat/PROD-7-b',
               baseRef: 'main',
               headSha: 'b'.repeat(40),
+              conflicted: false,
+              outOfDate: false,
             },
           ]
         : []),
@@ -359,6 +363,33 @@ describe('hosted `motir fix` — adopts the fix run, never claims (MOTIR-6929)',
     expect(h.locked).toHaveLength(1);
   });
 
+  it('in the person’s own agent, a GREEN pull request recorded out of date takes the base-merge turn before the watch (Bug MOTIR-12096)', async () => {
+    const stale = decision();
+    stale.pullRequests[0] = { ...stale.pullRequests[0]!, outOfDate: true };
+    setup({ repair: { ...stale, repairClass: 'ci', findings: null }, verdicts: [green()] });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    await fixCommand(KEY, {}, d);
+    // Before the fix the claim was rebuilt with neither flag, no agent ran, and the green
+    // checks closed the repair `completed` with nothing pushed.
+    expect(h.agentRuns).toHaveLength(1);
+    expect(h.agentRuns[0]!.prompt).toContain('# Bring the branch up to date with its base');
+    expect(h.agentRuns[0]!.prompt).toContain('**acme/app-a#3** is OUT OF DATE with `main`');
+    expect(h.events.filter((e) => e.kind === 'agent_started').map((e) => e.data)).toEqual([
+      { step: 'base_merge' },
+    ]);
+    expect(h.closed).toEqual(['completed']);
+  });
+
+  it('in the person’s own agent, a GREEN pull request recorded as neither is only watched — no agent turn', async () => {
+    setup({ repair: { ...decision(), repairClass: 'ci', findings: null }, verdicts: [green()] });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    await fixCommand(KEY, {}, d);
+    expect(h.agentRuns).toHaveLength(0);
+    expect(h.closed).toEqual(['completed']);
+  });
+
   it('in the person’s own agent, a ci repair’s watch fixes in the resolved session — and in a fresh one when it resolved none', async () => {
     const red = (): WorkItemDelivery[] => green().map((d) => ({ ...d, ci: 'failing' as const }));
     for (const [resume, sessionId] of [
@@ -570,6 +601,17 @@ describe('claimFromRun — the terminal claim, rebuilt from what the run recorde
     expect(claim.pullRequests.map((p) => [p.repo, p.headRef])).toEqual([
       ['acme/app-a', 'feat/PROD-7-a'],
       ['acme/app-b', 'feat/PROD-7-b'],
+    ]);
+  });
+
+  it('keeps each pull request’s recorded mergeability, so the base-merge turn can run (Bug MOTIR-12096)', () => {
+    const recorded = decision(true);
+    recorded.pullRequests[0] = { ...recorded.pullRequests[0]!, outOfDate: true };
+    recorded.pullRequests[1] = { ...recorded.pullRequests[1]!, conflicted: true };
+    const claim = claimFromRun({ key: KEY, runId: RUN, repair: recorded });
+    expect(claim.pullRequests.map((p) => [p.repo, p.conflicted, p.outOfDate])).toEqual([
+      ['acme/app-a', false, true],
+      ['acme/app-b', true, false],
     ]);
   });
 });

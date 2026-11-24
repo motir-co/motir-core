@@ -1,5 +1,6 @@
 import type { HostedApplication, HostedRelease } from '@/generated/prisma/client';
 import type { HostedApplicationDto, HostedReleaseDto } from '@/lib/dto/hostedApplications';
+import { idlePolicyOfRow } from '@/lib/hosting/idlePolicy';
 
 // Row → DTO for hosted applications and their releases (Story MOTIR-9797 ·
 // MOTIR-10026). The one rule that matters: `databaseUrlCiphertext` is never
@@ -53,6 +54,7 @@ export function toHostedApplicationDto(row: HostedApplicationWithReleases): Host
     productionAddress: row.productionAddress,
     currentRelease: row.currentRelease ? toHostedReleaseDto(row.currentRelease) : null,
     previousRelease: row.previousRelease ? toHostedReleaseDto(row.previousRelease) : null,
+    idlePolicy: idlePolicyOfRow(row),
     hasDatabase: row.databaseProjectId !== null,
     state: row.state,
     stopsAt: row.stopsAt?.toISOString() ?? null,

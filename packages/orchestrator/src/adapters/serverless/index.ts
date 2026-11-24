@@ -1,9 +1,12 @@
 import { OrchestratorApiError } from '../../errors';
 import {
+  LogsUnavailableError,
   NoPreviousReleaseError,
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
+  RuntimeHealthUnavailableError,
 } from '../../hosting/errors';
+import { readLogWindowNewestFirst } from '../../hosting/logWindow';
 import type {
   DeployCredential,
   HostingDeployPort,
@@ -35,6 +38,19 @@ import {
   serverlessPushNamespace,
   unitOf,
 } from './names';
+import {
+  lastLambdaInvocationBefore,
+  readLambdaRuntimeSignals,
+  type LambdaRuntimeSignal,
+} from '../../hosting/lambdaRuntime';
+import {
+  SERVERLESS_HEALTH_WINDOW_MS,
+  SERVERLESS_LOG_LIMITS,
+  SERVERLESS_RUNTIME_LINES,
+  logsUnavailable,
+  serverlessRuntimeHealth,
+  serverlessSliceReader,
+} from './logs';
 import { assertServerlessRunnable } from './preflight';
 import { computeSecondsOf, metricPeriodSeconds } from './usage';
 
@@ -52,6 +68,13 @@ export {
 } from './names';
 export { LAMBDA_ENV_LIMIT_BYTES, SERVERLESS_ENV_SECRET_VAR } from './env';
 export { SERVERLESS_WARM_INSTANCES } from './idle';
+export {
+  SERVERLESS_HEALTH_WINDOW_MS,
+  SERVERLESS_LOG_LIMITS,
+  serverlessRuntimeHealth,
+  serverlessStreamOf,
+  type ServerlessRuntimeFacts,
+} from './logs';
 export { parseStartCommand, type ParsedStartCommand } from './startCommand';
 export type {
   ServerlessAwsService,
@@ -189,6 +212,35 @@ export function createServerlessHostingDeployPort(
       runningSeconds: computeSecondsOf(sums),
       invocations: Math.round(sums.invocations),
     };
+  }
+
+  /** Lambda's runtime lines in [since, until], read to the end (bounded), as
+   *  signals; none when the group does not exist yet. */
+  /** The runtime signals in [since, until] of the function's group. */
+  function runtimeSignals(group: string, since: Date, until: Date): Promise<LambdaRuntimeSignal[]> {
+    return readLambdaRuntimeSignals(
+      'serverless',
+      serverlessSliceReader(api, group, SERVERLESS_RUNTIME_LINES),
+      since,
+      until,
+      SERVERLESS_LOG_LIMITS,
+    );
+  }
+
+  /** The newest finished invocation before `before`, or null. */
+  function lastInvocationBefore(
+    group: string,
+    before: Date,
+    changed: Date | null,
+  ): Promise<Date | null> {
+    return lastLambdaInvocationBefore(
+      'aws',
+      group,
+      serverlessSliceReader(api, group, 'REPORT'),
+      before,
+      changed,
+      SERVERLESS_LOG_LIMITS,
+    );
   }
 
   /** Usage first, then the function and everything that is only its. */
@@ -363,6 +415,56 @@ export function createServerlessHostingDeployPort(
     // migration fails by name rather than going live unmigrated (MOTIR-10030).
     async runReleaseCommand() {
       throw new ReleaseCommandUnsupportedError('serverless');
+    },
+
+    // The runtime reads (MOTIR-12103): the function's log group, newest first
+    // through the shared window, and its state read from Lambda's own lines.
+    async readLogs(handle, query) {
+      const fn = await releaseFunction(handle.appRef).catch(logsUnavailable);
+      if (!fn) throw new ReleaseNotFoundError(handle.appRef);
+      return readLogWindowNewestFirst(
+        'aws',
+        handle.appRef,
+        query,
+        now(),
+        SERVERLESS_LOG_LIMITS,
+        serverlessSliceReader(api, logGroupName(fn.name)),
+      );
+    },
+
+    async readHealth(handle) {
+      try {
+        const fn = await releaseFunction(handle.appRef);
+        if (!fn) throw new ReleaseNotFoundError(handle.appRef);
+        const at = now();
+        const windowStart = new Date(at.getTime() - SERVERLESS_HEALTH_WINDOW_MS);
+        const liveVersion = await api.getAliasVersion(fn.name, SERVERLESS_LIVE_ALIAS);
+        const provisioned =
+          (await api.getProvisionedConcurrency(fn.name, SERVERLESS_LIVE_ALIAS))?.status ?? null;
+        const group = logGroupName(fn.name);
+        // A function never invoked has no log group yet: no lines, not a failure.
+        const recent = await runtimeSignals(group, windowStart, at);
+        const lastInvocation = recent.some((s) => s.kind === 'invocation')
+          ? null
+          : await lastInvocationBefore(group, windowStart, fn.lastModified);
+        return serverlessRuntimeHealth({
+          fn,
+          liveVersion,
+          provisioned,
+          recent,
+          lastInvocation,
+          windowStart,
+        });
+      } catch (error) {
+        if (error instanceof ReleaseNotFoundError) throw error;
+        if (error instanceof OrchestratorApiError) {
+          throw new RuntimeHealthUnavailableError('serverless', error.message);
+        }
+        if (error instanceof LogsUnavailableError) {
+          throw new RuntimeHealthUnavailableError('serverless', error.reason);
+        }
+        throw error;
+      }
     },
   };
 }

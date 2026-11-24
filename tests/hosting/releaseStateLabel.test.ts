@@ -78,6 +78,10 @@ describe('releaseTriggerLabel', () => {
     expect(
       releaseTriggerLabel({ cause: 'config_change', ref: null, restoredBy: null, ...UNNAMED }).kind,
     ).toBe('redeploy');
+    // MOTIR-12107: the serving release redeployed with a new idle policy.
+    expect(
+      releaseTriggerLabel({ cause: 'idle_policy', ref: null, restoredBy: null, ...UNNAMED }),
+    ).toEqual({ kind: 'redeploy', labelKey: 'trigger.idlePolicy', values: {} });
     expect(
       releaseTriggerLabel({ cause: 'ref', ref: 'v1.4.0', restoredBy: null, ...UNNAMED }),
     ).toEqual({

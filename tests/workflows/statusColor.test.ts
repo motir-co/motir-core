@@ -34,6 +34,15 @@ describe('statusElVar — per-status --el-* token name', () => {
     );
   });
 
+  it('gives To plan its own hue, not In Progress or Planning (MOTIR-12174)', () => {
+    // An in_progress-category status with no key entry would wear In Progress's
+    // dot in the status picker — the collapse the planning entry exists to avoid.
+    const toPlan = statusElVar({ key: 'to_plan', category: 'in_progress' });
+    expect(toPlan).toBe('--el-status-to-plan');
+    expect(toPlan).not.toBe(statusElVar({ key: 'in_progress', category: 'in_progress' }));
+    expect(toPlan).not.toBe(statusElVar({ key: 'planning', category: 'in_progress' }));
+  });
+
   it('falls back to the lifecycle CATEGORY token for a custom (non-default) key', () => {
     expect(statusElVar({ key: 'qa-review', category: 'in_progress' })).toBe(
       '--el-status-in-progress',

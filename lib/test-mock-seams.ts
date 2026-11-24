@@ -254,7 +254,7 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
   },
   {
     // ⚠️ THE ONE SEAM THE LANE TURNS ON IN THE WORKER ONLY (MOTIR-3564). The
-    // boundary it stubs is crossed only by the index SUPERVISOR, which is a job,
+    // boundary it stubs is crossed only by the index HANDOFF, which is a job,
     // so `tests/e2e/_helpers/job-worker-process.ts` gives the WORKER the flag and
     // no `webServer.env` sets it. (Before MOTIR-5837 the worker installed this
     // one seam by hand; it installs from this table now, like the server.)
@@ -264,7 +264,7 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     // reads exactly that pair process-wide, so it flips the whole lane
     // cloud-on and four specs assert the OFF state against this server.
     flag: 'E2E_TEST_CODE_GRAPH',
-    message: 'index-writer seam mocked (run-credential mint + tarball redirect).',
+    message: 'index-writer seam mocked (tarball redirect + index handoff and status).',
     install: async (agent) => {
       const { installCodeGraphBoundaryMock } = await import('@/lib/test-code-graph-mock');
       installCodeGraphBoundaryMock(agent);

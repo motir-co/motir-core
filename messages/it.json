@@ -738,6 +738,7 @@
       "in_progress": "In corso",
       "implemented": "Implementato",
       "planning": "In pianificazione",
+      "to_plan": "Da pianificare",
       "in_review": "In revisione",
       "approved": "Approvato",
       "done": "Completato",
@@ -3225,6 +3226,10 @@
           "review_sent_back": {
             "label": "Un agente ha chiesto modifiche",
             "desc": "Un agente di revisione ha rimandato indietro un elemento di lavoro assegnato a te, con i suoi rilievi."
+          },
+          "production_app_crashed": {
+            "label": "Un'app di produzione si è arrestata",
+            "desc": "Un'app che Motir ospita per un progetto che amministri si è arrestata in modo anomalo o non ha superato il controllo di integrità."
           }
         },
         "soon": "Presto",
@@ -4285,8 +4290,6 @@
           "agentsNote": "In esecuzione e in ibernazione",
           "ciJobs": "Job CI in corso",
           "ciWaiting": "{count, plural, =0 {Nessuno in attesa} other {# in attesa}}",
-          "index": "Job di indicizzazione",
-          "indexNote": "Non addebitato",
           "of": " su {figure}",
           "notRead": "Lettura non riuscita",
           "failedTitle": "Impossibile leggere i valori della flotta",
@@ -4356,12 +4359,6 @@
             "other": "altro"
           }
         },
-        "index": {
-          "title": "Job di indicizzazione",
-          "running": "<n>{count}</n> in esecuzione",
-          "note": "L’indicizzazione mantiene aggiornata la ricerca del codice. Non è addebitata e non viene fermata qui.",
-          "failed": "Impossibile leggere i job di indicizzazione"
-        },
         "motirStops": {
           "title": "Fermato da Motir · ultimi 7 giorni",
           "lead": "Le macchine che Motir stesso ha fermato per questa organizzazione, e perché.",
@@ -4372,7 +4369,6 @@
             "ci_runner": "Container di job CI",
             "hosted_agent": "Esecuzione agente",
             "agent_instance": "Istanza agente",
-            "code_graph_index": "Job di indicizzazione",
             "other": "Macchina"
           },
           "reason": {
@@ -4420,7 +4416,6 @@
           "ciUnknownRuns": "Job CI annullati",
           "hosted": "{count, plural, one {esecuzione agente terminata} other {esecuzioni agente terminate}}",
           "agents": "{count, plural, one {agente in esecuzione ibernato} other {agenti in esecuzione ibernati}}",
-          "index": "{count, plural, one {job di indicizzazione resta in esecuzione} other {job di indicizzazione restano in esecuzione}} — l’indicizzazione non viene fermata qui",
           "afterwards": "Dopo non resta nulla di bloccato: i membri possono avviare subito nuovo lavoro. I proprietari degli agenti ibernati vengono avvisati.",
           "countedAt": "Conteggiato alle {time}.",
           "unreadableTitle": "Impossibile contare ciò che è in esecuzione",
@@ -4442,7 +4437,6 @@
           "ciFailed": "{count, plural, one {# repository o container CI non si è fermato.} other {# repository o container CI non si sono fermati.}} Aggiorna e riprova Ferma tutto.",
           "hostedFailed": "{count, plural, one {# esecuzione agente non è terminata.} other {# esecuzioni agente non sono terminate.}} Prova Annulla sulla sua riga.",
           "agentsFailed": "{count, plural, one {# agente non si è fermato: l’arresto non è stato confermato. Prova Iberna sulla sua riga.} other {# agenti non si sono fermati: l’arresto non è stato confermato. Prova Iberna sulle loro righe.}}",
-          "index": "I job di indicizzazione sono rimasti in esecuzione.",
           "byYou": "Fermato da te, {when}.",
           "dismiss": "Chiudi",
           "dismissAria": "Chiudi il risultato dell’arresto"
@@ -4727,7 +4721,8 @@
         "rollback": "Ripristinato con rollback · {name}",
         "rollbackUnnamed": "Ripristinato con rollback",
         "ref": "Deploy di {ref} · {name}",
-        "refUnnamed": "Deploy di {ref}"
+        "refUnnamed": "Deploy di {ref}",
+        "idlePolicy": "Nuovo deploy · comportamento in inattività modificato"
       },
       "address": {
         "newTab": "(si apre in una nuova finestra)",
@@ -4775,7 +4770,7 @@
         "notFound": "Questo repository non è più disponibile per te."
       },
       "readOnly": {
-        "note": "Puoi vedere tutti i rilasci. Solo gli amministratori del progetto possono eseguire il rollback."
+        "note": "Puoi vedere ogni rilascio, il suo stato, i log e il consumo. Solo gli amministratori del progetto possono eseguire il rollback o cambiare quando l’app si sospende."
       },
       "empty": {
         "title": "Ancora niente in produzione",
@@ -4791,6 +4786,162 @@
         "title": "Repository non trovato",
         "body": "Motir gestisce la produzione solo per i repository che ospita. Scegli uno dei repository di questo progetto.",
         "back": "Torna a Produzione"
+      },
+      "idle": {
+        "refusal": {
+          "unsupported": "Su {target}, un {shape} può solo restare sempre attivo, quindi non può sospendersi quando è inattivo.",
+          "unsupportedKeeps": "Questa app resta sempre in esecuzione.",
+          "unsupportedShort": "L’hosting di questa app non supporta questa impostazione, quindi non è cambiato nulla.",
+          "credits": "«Sempre attiva» non è disponibile finché il saldo crediti della tua organizzazione è sotto zero. Ricarica i crediti, poi impostala di nuovo.",
+          "releaseInProgress": "Un rilascio è in corso. Modifica questa impostazione quando è terminato.",
+          "forbidden": "Solo gli amministratori del progetto possono modificarla.",
+          "noApplication": "Non c’è ancora nulla in produzione. Si applica quando il primo rilascio è online.",
+          "failed": "La nuova impostazione non è stata applicata, quindi non è cambiato nulla. Riprova."
+        },
+        "shape": {
+          "function": "funzione",
+          "container": "container"
+        },
+        "heading": "Quando inattiva",
+        "option": {
+          "suspend": "Sospendi se inattiva",
+          "alwaysOn": "Sempre attiva"
+        },
+        "help": {
+          "suspend": "L’app si sospende quando nessuno la richiede e si riattiva alla richiesta successiva. La prima richiesta dopo la sospensione è più lenta.",
+          "alwaysOn": "L’app resta sempre in esecuzione, quindi nessuna richiesta attende che si riattivi. Consuma crediti ogni ora."
+        },
+        "default": "Le nuove app partono con «Sospendi se inattiva». Si applica al primo rilascio.",
+        "switching": "Applicazione al rilascio in esecuzione…",
+        "switchingNote": "La stessa build viene ridistribuita con la nuova impostazione. Non viene ricompilato nulla.",
+        "readOnly": "Solo gli amministratori del progetto possono modificarla.",
+        "loading": "Caricamento dell’impostazione…",
+        "loadError": "Impossibile caricare questa impostazione."
+      },
+      "health": {
+        "heading": "Stato",
+        "state": {
+          "healthy": "Funzionante",
+          "unhealthy": "Con errori",
+          "suspended": "Sospesa",
+          "crashed": "Arrestata",
+          "deploying": "In distribuzione"
+        },
+        "since": "{state} da {duration}",
+        "line": {
+          "healthy": "Risponde al controllo di stato su {path}.",
+          "unhealthy": "Il controllo di stato su {path} non è riuscito due volte di seguito.",
+          "suspended": "Sospesa perché nessuno l’ha richiesta. La prossima richiesta la riattiva.",
+          "crashed": "Il processo si è arrestato. {target} lo sta riavviando.",
+          "crashedOom": "Il processo è stato arrestato: ha esaurito la memoria. {target} lo sta riavviando.",
+          "deploying": "Il rilascio {commit} è in distribuzione. Il rilascio attuale resta in servizio finché non è online.",
+          "deployingUnnamed": "Un nuovo rilascio è in distribuzione. Il rilascio attuale resta in servizio finché non è online."
+        },
+        "unreachable": "Motir non riesce a raggiungere {address} per controllarla. Questo è l’ultimo stato visto da Motir; l’app potrebbe funzionare correttamente.",
+        "unreachableNoAddress": "Motir non riesce a raggiungere questa app per controllarla. Questo è l’ultimo stato visto da Motir; l’app potrebbe funzionare correttamente.",
+        "pending": "Motir non ha ancora controllato questa app. Il primo controllo avviene entro un minuto da quando il rilascio è online.",
+        "loading": "Controllo dello stato…",
+        "failed": "Impossibile leggere lo stato di questa app.",
+        "retry": "Riprova"
+      },
+      "events": {
+        "heading": "Arresti anomali",
+        "empty": "Nessun arresto anomalo registrato per questa app.",
+        "reason": {
+          "exit": "Terminata con codice {code}",
+          "exited": "Terminata",
+          "oom": "Memoria esaurita",
+          "http": "Controllo di stato non riuscito: HTTP {status}",
+          "timeout": "Controllo di stato non riuscito: tempo scaduto"
+        },
+        "release": "Rilascio <code>{commit}</code>",
+        "rolledBackSince": "Annullato in seguito",
+        "showLines": "{count, plural, one {Mostra l’ultima riga precedente} other {Mostra le ultime # righe precedenti}}",
+        "hideLines": "Nascondi le ultime righe"
+      },
+      "logs": {
+        "heading": "Log",
+        "order": "Prima i più recenti",
+        "range": {
+          "label": "Intervallo",
+          "15m": "15 min",
+          "1h": "1 ora",
+          "24h": "24 ore",
+          "7d": "7 giorni"
+        },
+        "rangeSpan": {
+          "15m": "ultimi 15 minuti",
+          "1h": "ultima ora",
+          "24h": "ultime 24 ore",
+          "7d": "ultimi 7 giorni"
+        },
+        "filter": "Filtra le righe",
+        "stream": {
+          "app": "app",
+          "platform": "piattaforma"
+        },
+        "linesLabel": "Righe di log",
+        "line": {
+          "expand": "Mostra la riga intera",
+          "collapse": "Comprimi questa riga"
+        },
+        "more": "Mostra righe precedenti",
+        "moreError": "Impossibile caricare le righe precedenti. Riprova.",
+        "masked": "Ogni valore segreto dell’ambiente di questa app viene mostrato come ***.",
+        "asleep": "Le ultime righe prima che l’app venisse sospesa.",
+        "noMatch": "Nessuna riga corrisponde a “{filter}” in: {range}.",
+        "empty": "Nessuna riga in: {range}.",
+        "unavailable": "{target} non ha restituito i log di questa app. Si tratta del servizio di log di {target}, non dell’app: potrebbe funzionare correttamente. Nessuna riga più vecchia viene mostrata come attuale.",
+        "failed": "Impossibile caricare i log di questa app.",
+        "retry": "Riprova",
+        "loading": "Caricamento delle righe…",
+        "noRelease": "I log compaiono qui non appena il primo rilascio è online."
+      },
+      "usage": {
+        "heading": "Consumo del periodo",
+        "loading": "Caricamento del consumo…",
+        "loadError": "Impossibile caricare il consumo di questo periodo.",
+        "retry": "Riprova",
+        "col": {
+          "what": "Cosa ha usato",
+          "amount": "Quantità",
+          "credits": "Crediti"
+        },
+        "unit": {
+          "machine": "Macchina Fly · {size}",
+          "lambdaCompute": "Calcolo delle funzioni (GB-secondi)",
+          "lambdaRequests": "Richieste alle funzioni",
+          "containerCpu": "Container AWS · vCPU",
+          "containerMemory": "Container AWS · memoria",
+          "dbCompute": "Database {provider} · calcolo",
+          "dbStorage": "Database {provider} · archiviazione"
+        },
+        "size": {
+          "small": "piccola",
+          "medium": "media",
+          "large": "grande"
+        },
+        "total": "Crediti addebitati nel periodo",
+        "footnote": "1 credito è un minuto equivalente Linux. Il consumo di ogni giorno viene addebitato una volta, dopo la mezzanotte UTC, arrotondato al credito intero, quindi quello di oggi non è ancora nel totale.",
+        "noRelease": "Nessun consumo finora. Il consumo inizia con il primo rilascio online.",
+        "exhausted": {
+          "title": "Crediti esauriti · saldo {balance}",
+          "titleNoBalance": "Crediti esauriti",
+          "body": "Questa app resta in esecuzione. Se il saldo è ancora sotto zero il {date}, Motir la imposta su «Sospendi se inattiva», così si sospende quando nessuno la richiede. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "bodySuspended": "Questa app resta in esecuzione e si sospende quando nessuno la richiede. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "bodyCannotSuspend": "Questa app gira come container AWS, che non può essere sospeso, quindi resta sempre attiva e continua a consumare crediti finché il saldo non viene ricaricato. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "topUp": "Ricarica crediti",
+          "member": "Un proprietario o amministratore dell’organizzazione può ricaricare i crediti."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        }
       }
     },
     "workspaceAddress": {
@@ -6309,10 +6460,12 @@
       "reviewSentBack": "Un agente ha chiesto modifiche a <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> ha ibernato il tuo agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> ti ha menzionato in <s>{page}</s>",
-      "pageReplied": "<s>{actor}</s> ha risposto a un thread in <s>{page}</s>"
+      "pageReplied": "<s>{actor}</s> ha risposto a un thread in <s>{page}</s>",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> non supera il controllo di integrità in produzione} other {<s>{repository}</s> si è arrestata in produzione}}"
     },
     "excerpt": {
-      "agentHibernatedByAdmin": "Un amministratore dell’organizzazione lo ha arrestato alle {time}. I suoi file vengono conservati; risveglialo da Agenti."
+      "agentHibernatedByAdmin": "Un amministratore dell’organizzazione lo ha arrestato alle {time}. I suoi file vengono conservati; risveglialo da Agenti.",
+      "productionAppCrashed": "{reason} · {project}"
     }
   },
   "orgAdmin": {
@@ -7647,12 +7800,9 @@
         },
         "other": "Per un altro motivo"
       },
-      "indexing": "Indicizzazione del grafo del codice: {count} in esecuzione · non conta per alcun limite di piano",
-      "indexingNotRead": "Indicizzazione del grafo del codice: non letto · non conta per alcun limite di piano",
       "whereItRuns": "Dove viene eseguito",
       "kind": {
         "ci_runner": "Runner CI",
-        "code_graph_index": "Indicizzatore",
         "hosted_agent": "Runner di agenti",
         "agent_instance": "Hosting di agenti"
       },
@@ -7671,12 +7821,12 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner di agenti",
-          "indexer_and_hoster": "Indicizzatore + hosting di agenti"
+          "agent_hoster": "Hosting di agenti"
         },
         "role": {
           "ci_runner": "Esegue i tuoi job CI",
           "hosted_agent": "Esegue le tue esecuzioni dell’agente Motir",
-          "indexer_and_hoster": "Indicizza il tuo codice e ospita i tuoi agenti"
+          "agent_hoster": "Ospita i tuoi agenti"
         },
         "state": {
           "created": "Creato",
@@ -7692,11 +7842,10 @@
         "sharedFloor": {
           "ci_runner": "Ancora sulla soglia condivisa: CI {figure} runner.",
           "hosted_agent": "Ancora sulla soglia condivisa, con i limiti di Max: {figure} esecuzioni di agenti in contemporanea.",
-          "indexer_and_hoster": "Indicizzazione e hosting di agenti sono ancora sulla soglia condivisa: agenti ospitati {perPerson} per persona, {perOrg} per organizzazione."
+          "agent_hoster": "L’hosting di agenti è ancora sulla soglia condivisa: agenti ospitati {perPerson} per persona, {perOrg} per organizzazione."
         },
         "liveOnceNetwork": "Attivo non appena la rete dell’account è costruita.",
-        "deniedNote": "L’account resta a «{state}» finché AWS non concede un aumento.",
-        "keptSpots": "{count} posti macchina restano sempre riservati all’indicizzazione; le istanze degli agenti usano il resto."
+        "deniedNote": "L’account resta a «{state}» finché AWS non concede un aumento."
       },
       "quotaOutcome": {
         "pending": "In lavorazione presso AWS",
@@ -8566,7 +8715,15 @@
       "unlinkAria": "Rimuovi il collegamento a {target}",
       "unlinkConfirmBefore": "Rimuovere il collegamento a",
       "unlinkConfirmAfter": "? La pull request non viene modificata su GitHub: viene rimosso solo il collegamento.",
-      "unlinkAction": "Rimuovi collegamento"
+      "unlinkAction": "Rimuovi collegamento",
+      "access": {
+        "invited": "Il tuo invito a questo repository è in attesa su GitHub. <link>Accetta l’invito</link>",
+        "invitedNoLink": "Il tuo invito a questo repository è in attesa su GitHub. <link>Vai ad Accesso al codice</link>",
+        "notInvited": "Non hai ancora accesso al codice di questo repository. <link>Vai ad Accesso al codice</link>",
+        "roleCannotEdit": "Il tuo ruolo in questo progetto non include l’accesso al codice.",
+        "noGithubPreview": "Motir non conosce ancora il tuo account GitHub, quindi non puoi aprire il codice. <tone>Esamina questa modifica nell’anteprima qui sopra.</tone>",
+        "noGithubNoPreview": "Motir non conosce ancora il tuo account GitHub, quindi non puoi aprire il codice. <tone>Non è disponibile alcuna anteprima per questa pull request.</tone>"
+      }
     },
     "orgDisconnect": {
       "title": "Scollega {repo} dall’organizzazione",
@@ -11713,15 +11870,13 @@
             "mismatched": "non corrispondenti · esecuzione e addebito non concordano"
           },
           "group": {
-            "plan": "Limitato dal piano",
-            "uncapped": "Nessun valore del piano"
+            "plan": "Limitato dal piano"
           },
           "col": {
             "org": "Organizzazione",
             "plan": "Piano",
             "ciRunner": "Runner di CI",
             "hostedAgent": "Esecuzioni dell’agente Motir",
-            "index": "Container di indicizzazione",
             "agentInstance": "Istanze di agenti",
             "accrued": "Minuti di CI · ultimi {minutes} min",
             "credits": "Crediti di questo mese · confermati",
@@ -11753,7 +11908,7 @@
           "foot": "Visualizzate {from}–{to} di {total} · prima quelle non corrispondenti, poi quelle con più container · viene valutata solo la CI, l’unico carico di lavoro addebitato durante l’esecuzione",
           "empty": {
             "title": "Nessuna organizzazione ha un container della flotta in esecuzione",
-            "body": "Al momento nessuna organizzazione ha un runner di CI, un’esecuzione dell’agente Motir, un’istanza di agente o un container di indicizzazione, quindi non c’è nulla da confrontare con l’addebito. È una lettura sana, non un guasto."
+            "body": "Al momento nessuna organizzazione ha un runner di CI, un’esecuzione dell’agente Motir o un’istanza di agente, quindi non c’è nulla da confrontare con l’addebito. È una lettura sana, non un guasto."
           },
           "error": {
             "title": "Impossibile leggere la flotta",
@@ -11847,7 +12002,6 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner degli agenti",
-          "code_graph_index": "Indicizzatore",
           "agent_instance": "Host degli agenti"
         },
         "block": {
@@ -12817,6 +12971,7 @@
         "agent_storage": "Archiviazione degli agenti",
         "ci": "CI",
         "search": "Ricerca web",
+        "hosting_production": "Hosting di produzione",
         "indexing": "Indicizzazione"
       },
       "models": {
@@ -13586,14 +13741,12 @@
         "workload": {
           "ciRunner": "Runner di CI",
           "hostedAgent": "Esecuzioni dell’agente Motir",
-          "agentInstance": "Istanze di agenti",
-          "index": "Container di indicizzazione"
+          "agentInstance": "Istanze di agenti"
         },
         "charge": {
           "ciRunner": "Addebitato durante l’esecuzione",
           "hostedAgent": "Addebitato al termine dell’esecuzione",
-          "agentInstance": "Addebitato per intervallo di esecuzione",
-          "index": "Costo di Motir: mai addebitato"
+          "agentInstance": "Addebitato per intervallo di esecuzione"
         },
         "tile": {
           "of": " su {figure}",
@@ -13623,7 +13776,6 @@
           "ciUnknown": "Esecuzioni CI non conteggiate (non è stato possibile leggere GitHub; l’arresto le annulla comunque) e <strong>{containers}</strong> {containers, plural, one {container CI distrutto} other {container CI distrutti}}",
           "hosted": "{count, plural, one {esecuzione dell’agente Motir terminata} other {esecuzioni dell’agente Motir terminate}}",
           "instances": "{count, plural, one {istanza di agente ibernata} other {istanze di agenti ibernate}}",
-          "index": "{count, plural, one {container di indicizzazione lasciato} other {container di indicizzazione lasciati}} terminare: l’indicizzazione è un costo di Motir e non viene mai addebitata all’organizzazione",
           "notSuspension": "<strong>Non è una sospensione.</strong> Nulla viene bloccato: la prossima esecuzione CI, esecuzione di agente o avvio di agente di {org} passa per la normale ammissione.",
           "asOf": "Conteggiato alle {time}. L’arresto agisce su ciò che è in esecuzione nel momento in cui confermi.",
           "loading": "Conteggio di ciò che è in esecuzione…",
@@ -15034,10 +15186,6 @@
           "title": "Immagine del runner CI",
           "subtitle": "Ciò in cui gira ogni job CI della flotta. Fissata da MOTIR_RUNNER_IMAGE; la più recente è l’ultima release runner-v*."
         },
-        "indexer": {
-          "title": "Immagine dell’indicizzatore",
-          "subtitle": "Ciò che avvia ogni esecuzione di indicizzazione del grafo del codice. Fissata da MOTIR_INDEXER_IMAGE; la più recente è l’ultima release indexer-v*."
-        },
         "sandbox": {
           "title": "Immagini delle istanze agente",
           "subtitle": "La sandbox in cui girano gli agenti, un tag per profilo su ghcr.io/motir-co/motir-sandbox. Completa quando ogni profilo ha il suo tag all’ultima release cli-v*."
@@ -15046,7 +15194,6 @@
       "imageName": {
         "hosted": "immagine dell’agente Motir",
         "runner": "immagine del runner CI",
-        "indexer": "immagine dell’indicizzatore",
         "sandbox": "immagini delle istanze agente"
       },
       "source": {
@@ -15077,17 +15224,13 @@
         "hosted": "{count, plural, one {# commit} other {# commit}} su packages/cli tra la build fissata e la più recente.",
         "runner": "({tags}) · {days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} su infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} su infra/ci-runner.",
-        "indexer": "({tags}) · {days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} sull’indicizzatore.",
-        "indexerNoTags": "{days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} sull’indicizzatore.",
         "link": "Vedi i commit"
       },
       "unreleased": {
         "title": "Uniti dopo {release}, in nessuna release",
-        "count": "{count, plural, one {# modifica} other {# modifiche}} su infra/ci-runner",
-        "indexerCount": "{count, plural, one {# modifica unita sull’indicizzatore è arrivata dopo} other {# modifiche unite sull’indicizzatore sono arrivate dopo}}"
+        "count": "{count, plural, one {# modifica} other {# modifiche}} su infra/ci-runner"
       },
       "releaseNeeded": "<strong>Serve una release.</strong> Queste modifiche raggiungono la flotta solo in una nuova release del runner, e questa pagina non ne crea. Esegui il push del tag <mono>{tag}</mono>; la pipeline di release la pubblica e la riga offre Pubblica l’ultima.",
-      "releaseNeededIndexer": "<strong>Serve una release.</strong> Queste modifiche raggiungono le esecuzioni di indicizzazione solo in una nuova release dell’indicizzatore, e questa pagina non ne crea. Esegui il push del tag <mono>{tag}</mono> in motir-ai; la sua pipeline di release la pubblica e la riga offre Pubblica l’ultima.",
       "ami": {
         "title": "AMI del runner · sola lettura",
         "current": "Aggiornata",
@@ -15120,14 +15263,10 @@
         "note": {
           "hosted": "Fissa l’ultima build di main tramite il workflow di fissaggio dell’agente Motir. Web e worker passano a usarla.",
           "runner": "Fissa {release} tramite il workflow di fissaggio del runner. Web e worker passano a usarla.",
-          "indexer": "Fissa {release} tramite la pull request di fissaggio dell’indicizzatore. Web e worker passano a usarla.",
           "sandbox": "Ripubblica {release}. Vengono inviati solo i {count} tag mancanti; in produzione non cambia nulla.",
           "hostedCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima build di main.",
           "runnerCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima release del runner.",
           "runnerReleaseNeeded": "Niente di più recente da pubblicare: la produzione fissa l’ultima release. Le modifiche unite sopra richiedono prima una release.",
-          "indexerCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima release dell’indicizzatore.",
-          "indexerReleaseNeeded": "Niente di più recente da pubblicare: la produzione fissa l’ultima release dell’indicizzatore. Le modifiche unite sopra richiedono prima una release.",
-          "indexerNotRead": "Pubblica l’ultima resta disattivato finché il fissaggio e la release più recente non sono stati letti entrambi.",
           "sandboxCurrent": "Niente di più recente da pubblicare. Ogni profilo ha il suo tag all’ultima release.",
           "sandboxOld": "{release} è stata creata prima che una nuova esecuzione potesse inviare solo i tag mancanti, quindi rieseguirla invierebbe di nuovo ogni tag. Crea invece una nuova release cli-v*.",
           "running": "Un’esecuzione del workflow di pubblicazione di questa immagine è già in corso. Pubblica l’ultima è disattivato finché non termina.",
@@ -15145,21 +15284,12 @@
         "sandboxFrom": "{published} tag su {total} a {version}",
         "hostedBody": "Avvia il workflow di fissaggio dell’agente Motir. Sposta MOTIR_HOSTED_AGENT_IMAGE all’ultima build e fa il deploy: <strong>web e worker si aggiornano</strong> sul nuovo fissaggio, e le esecuzioni dell’agente Motir avviate dopo l’aggiornamento avviano la nuova immagine.",
         "runnerBody": "Avvia il workflow di fissaggio del runner. Sposta MOTIR_RUNNER_IMAGE a {release} e fa il deploy: <strong>web e worker si aggiornano</strong> sul nuovo fissaggio. L’AMI del runner non cambia.",
-        "indexerBody": "Apre la pull request di fissaggio dell’indicizzatore, che sposta MOTIR_INDEXER_IMAGE a {release} e viene messa in coda per l’unione. Il suo deploy poi <strong>aggiorna web e worker</strong>, e le esecuzioni di indicizzazione avviate dopo l’aggiornamento avviano la nuova immagine. Quelle già in corso finiscono su quella con cui sono partite.",
         "sandboxBody": "Riesegue la release della sandbox per {release} e invia solo i tag mancanti: {missing}. {published} sono già pubblicati e non vengono inviati di nuovo. <strong>In produzione non cambia nulla.</strong>",
         "sandboxBodyNonePublished": "Riesegue la release della sandbox per {release} e invia solo i tag mancanti: {missing}. <strong>In produzione non cambia nulla.</strong>"
       },
       "progress": {
         "title": "Pubblicazione in corso.",
         "body": "Il workflow di pubblicazione è in esecuzione; questa riga si aggiorna quando termina.",
-        "indexerQueued": {
-          "title": "Pull request di fissaggio in coda.",
-          "body": "Viene unita tramite la coda di merge, poi il suo deploy aggiorna web e worker; questa riga si aggiorna man mano."
-        },
-        "indexerRolling": {
-          "title": "Aggiornamento di web e worker.",
-          "body": "La pull request di fissaggio è stata unita e il suo deploy sta spostando web e worker su {release}. Le nuove esecuzioni di indicizzazione la avviano al termine dell’aggiornamento."
-        },
         "started": "· avviato {age} da {email}",
         "startedNoActor": "· avviato {age}",
         "button": "Pubblicazione…"
@@ -15178,7 +15308,6 @@
       "workflow": {
         "hosted": "Fissaggio dell’agente Motir",
         "runner": "Fissaggio del runner",
-        "indexer": "Fissaggio dell’indicizzatore",
         "sandbox": "Release della sandbox {tag}",
         "run": "{workflow} · esecuzione n. {number}",
         "runNoNumber": "{workflow} · esecuzione"
@@ -15195,26 +15324,7 @@
       },
       "unset": {
         "title": "Non configurato qui",
-        "body": "{variable} non è impostata su questo deployment, quindi non c’è alcun fissaggio da confrontare.",
-        "indexerBody": "MOTIR_INDEXER_IMAGE non è impostata su questo deployment, quindi questa installazione non indicizza: nessuna esecuzione di indicizzazione del grafo del codice parte e non c’è alcun fissaggio da confrontare."
-      },
-      "notRead": {
-        "pin": {
-          "title": "Impossibile leggere il fissaggio.",
-          "body": "ECR non ha risposto per il digest indicato da MOTIR_INDEXER_IMAGE, quindi non viene confrontato e nulla qui significa aggiornato."
-        },
-        "newest": {
-          "title": "Impossibile leggere le release.",
-          "body": "GitHub non ha risposto per le release indexer-v* di motir-ai, quindi il fissaggio non viene confrontato con nulla."
-        },
-        "newestEcr": {
-          "title": "Impossibile leggere le release.",
-          "body": "ECR non ha risposto per i tag di release indexer-* del repository dell’indicizzatore, quindi il fissaggio non viene confrontato con nulla."
-        },
-        "history": {
-          "title": "Impossibile leggere le modifiche unite",
-          "body": "GitHub non ha risposto per la cronologia dei commit di motir-ai, quindi le modifiche non contenute in alcuna release non sono elencate. Il fissaggio e la release più recente sopra vengono comunque confrontati."
-        }
+        "body": "{variable} non è impostata su questo deployment, quindi non c’è alcun fissaggio da confrontare."
       },
       "loading": "Caricamento: {image}",
       "publishError": {

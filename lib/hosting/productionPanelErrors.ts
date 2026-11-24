@@ -1,11 +1,20 @@
 import { ProjectRepoNotFoundError } from '@/lib/projectRepos/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
+  AlwaysOnRefusedOutOfCreditsError,
   ApplicationNotFoundError,
   CustomerRepositoryNotDeployableError,
+  IdlePolicyApplyFailedError,
+  IdlePolicyNotPermittedError,
+  IdlePolicyUnsupportedForTargetError,
   IllegalReleaseTransitionError,
+  InvalidIdlePolicyError,
+  InvalidLogCursorError,
+  InvalidLogLimitError,
+  InvalidLogRangeError,
   InvalidReleaseCursorError,
   NoPreviousReleaseError,
+  NoProductionApplicationError,
   ReleaseInProgressError,
   RepositoryTakenOverError,
   RollbackFailedError,
@@ -30,12 +39,22 @@ export type ProductionRouteErrorCode =
   | 'repository_taken_over'
   | 'rollback_conflict'
   | 'rollback_failed'
-  | 'invalid_cursor';
+  | 'invalid_cursor'
+  | 'invalid_idle_policy'
+  | 'idle_policy_not_permitted'
+  | 'HOSTING_IDLE_POLICY_UNSUPPORTED'
+  | 'no_application'
+  | 'idle_policy_failed'
+  | 'always_on_refused_out_of_credits'
+  | 'invalid_log_range'
+  | 'invalid_limit';
 
 export interface ProductionRouteError {
   status: number;
   code: ProductionRouteErrorCode;
   message: string;
+  /** What the panel's copy names — only the idle-policy refusal carries it. */
+  details?: { target: string; shape: string | null; mode: string };
 }
 
 const NOT_FOUND: ProductionRouteError = {
@@ -85,8 +104,60 @@ export function productionRouteError(err: unknown): ProductionRouteError | null 
   if (err instanceof RollbackFailedError) {
     return { status: 502, code: 'rollback_failed', message: 'The rollback did not complete.' };
   }
-  if (err instanceof InvalidReleaseCursorError) {
+  if (err instanceof InvalidReleaseCursorError || err instanceof InvalidLogCursorError) {
     return { status: 400, code: 'invalid_cursor', message: 'Invalid cursor.' };
+  }
+  // The idle policy (MOTIR-12107).
+  if (err instanceof InvalidIdlePolicyError) {
+    return { status: 400, code: 'invalid_idle_policy', message: 'Invalid idle policy.' };
+  }
+  if (err instanceof IdlePolicyNotPermittedError) {
+    return {
+      status: 403,
+      code: 'idle_policy_not_permitted',
+      message: 'Changing the idle policy needs the project administration permission.',
+    };
+  }
+  if (err instanceof IdlePolicyUnsupportedForTargetError) {
+    return {
+      status: 409,
+      code: 'HOSTING_IDLE_POLICY_UNSUPPORTED',
+      message: 'This hosting target and shape cannot run that idle policy.',
+      details: { target: err.target, shape: err.shape, mode: err.mode },
+    };
+  }
+  if (err instanceof NoProductionApplicationError) {
+    return { status: 409, code: 'no_application', message: 'Nothing is in production yet.' };
+  }
+  if (err instanceof IdlePolicyApplyFailedError) {
+    return {
+      status: 502,
+      code: 'idle_policy_failed',
+      message: 'The idle policy could not be applied.',
+    };
+  }
+  // Decision MOTIR-12100 §9 (MOTIR-12108).
+  if (err instanceof AlwaysOnRefusedOutOfCreditsError) {
+    return {
+      status: 409,
+      code: 'always_on_refused_out_of_credits',
+      message: 'Always on is not available while the organisation is out of credits.',
+    };
+  }
+  // The logs read (MOTIR-12105).
+  if (err instanceof InvalidLogRangeError) {
+    return {
+      status: 400,
+      code: 'invalid_log_range',
+      message: '`since` and `until` must be ISO 8601 instants, `until` not before `since`.',
+    };
+  }
+  if (err instanceof InvalidLogLimitError) {
+    return {
+      status: 400,
+      code: 'invalid_limit',
+      message: '`limit` must be a whole number from 1.',
+    };
   }
   return null;
 }
@@ -96,7 +167,13 @@ export function productionRouteErrorResponse(err: unknown): Response | null {
   const mapped = productionRouteError(err);
   if (!mapped) return null;
   return Response.json(
-    { error: { code: mapped.code, message: mapped.message } },
+    {
+      error: {
+        code: mapped.code,
+        message: mapped.message,
+        ...(mapped.details ? { details: mapped.details } : {}),
+      },
+    },
     { status: mapped.status },
   );
 }

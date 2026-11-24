@@ -156,13 +156,13 @@ afterAll(async () => {
 });
 
 describe('the HEALTHY run — boot → checkpoints → settle → the question answered (AC 1, 2)', () => {
-  it('the line grows between checkpoints, a replay adds nothing, the settle reconciles, and `agent` is disjoint from `ci` and `index`', async () => {
+  it('the line grows between checkpoints, a replay adds nothing, the settle reconciles, and `agent` is disjoint from `ci` and `instance`', async () => {
     const booted = await hostedAgentContainerService.boot(requestFor());
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     const { session } = booted;
     const started = new Date(session.handle.createdAt);
     await seedNeighbour('ci_runner', 100, started);
-    await seedNeighbour('code_graph_index', 200, started);
+    await seedNeighbour('agent_instance', 200, started);
 
     const at = (seconds: number) => ({ now: () => new Date(started.getTime() + seconds * 1000) });
 
@@ -200,9 +200,9 @@ describe('the HEALTHY run — boot → checkpoints → settle → the question a
       true,
     );
     // DISJOINT, not merely present: each neighbour keeps exactly its own figure.
-    expect(lines.map((line) => line.workload)).toEqual(['agent', 'ci', 'index']);
+    expect(lines.map((line) => line.workload)).toEqual(['agent', 'ci', 'instance']);
     expect(lines.find((line) => line.workload === 'ci')).toMatchObject({ containerSeconds: 100 });
-    expect(lines.find((line) => line.workload === 'index')).toMatchObject({
+    expect(lines.find((line) => line.workload === 'instance')).toMatchObject({
       containerSeconds: 200,
     });
 

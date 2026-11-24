@@ -151,7 +151,13 @@ export function serverlessDeployPolicy(scope: ServerlessRoleScope): AwsPolicyDoc
       {
         Sid: 'LogsMh',
         Effect: 'Allow',
-        Action: ['logs:CreateLogGroup', 'logs:DeleteLogGroup', 'logs:TagResource'],
+        Action: [
+          'logs:CreateLogGroup',
+          'logs:DeleteLogGroup',
+          'logs:TagResource',
+          // The runtime reads (MOTIR-12103): a release's log events.
+          'logs:FilterLogEvents',
+        ],
         Resource: serverlessLogGroupArns(scope),
       },
       {

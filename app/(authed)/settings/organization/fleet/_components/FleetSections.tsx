@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { CircleSlash, ExternalLink, Folder, Layers, Moon, Server, Sparkles } from 'lucide-react';
+import { CircleSlash, ExternalLink, Layers, Moon, Server, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import type {
@@ -335,39 +335,6 @@ export function CiJobsSection({
   );
 }
 
-export function IndexJobsSection({
-  part,
-  onRetry,
-}: {
-  part: OrgFleetDTO['indexJobs'];
-  onRetry: () => void;
-}) {
-  const t = useTranslations('settings.organization.fleet');
-  return (
-    <FleetSection
-      id="fleet-index"
-      testId="fleet-index"
-      icon={<Folder className={ICON} />}
-      chip="bg-(--el-surface-soft) text-(--el-text-secondary)"
-      title={t('index.title')}
-      failed={part.kind === 'read' ? null : t('index.failed')}
-      onRetry={onRetry}
-    >
-      {part.kind === 'read' ? (
-        <p className="font-sans text-sm text-(--el-text)">
-          {t.rich('index.running', {
-            count: part.running,
-            n: (chunks) => <strong className="font-semibold tabular-nums">{chunks}</strong>,
-          })}
-          <span className="block font-sans text-xs text-(--el-text-secondary)">
-            {t('index.note')}
-          </span>
-        </p>
-      ) : null}
-    </FleetSection>
-  );
-}
-
 export function MotirStopsSection({
   part,
   onRetry,
@@ -400,7 +367,9 @@ export function MotirStopsSection({
   );
 }
 
-const WORKLOADS = ['ci_runner', 'hosted_agent', 'agent_instance', 'code_graph_index'] as const;
+/** The workloads a Motir stop row names; any other (a retired kind still inside
+ *  the stops window) reads under `other`. */
+const WORKLOADS = ['ci_runner', 'hosted_agent', 'agent_instance'] as const;
 
 function MotirStopRow({ t, entry }: { t: T; entry: OrgFleetMotirStopDTO }) {
   const time = useFleetTime();

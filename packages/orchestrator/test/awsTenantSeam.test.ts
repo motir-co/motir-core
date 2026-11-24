@@ -17,7 +17,12 @@ import {
   createStackRunner,
   createTenantClients,
   createTenantSdkClient,
+  createFakeTenantLogs,
+  fakeFilterPatternMatches,
   sdkTenantCloudFormation,
+  sdkTenantEcs,
+  sdkTenantLambda,
+  sdkTenantLogs,
   tenantApiError,
   type ApplyStackInput,
   type AwsManagementClientFactory,
@@ -611,5 +616,195 @@ describe('the seam’s SDK boundary', () => {
     }
     const entry = readFileSync(join(DIR, 'index.ts'), 'utf8');
     expect(entry).not.toMatch(/export \* from '\.\/sdk'/);
+  });
+});
+
+describe('the runtime reads over the SDK (MOTIR-12104)', () => {
+  function stub(handlers: Record<string, (input: Record<string, unknown>) => unknown>) {
+    const sent: Array<{ command: string; input: Record<string, unknown> }> = [];
+    const client: AwsSdkClient = {
+      async send(command) {
+        const name = commandName(command);
+        sent.push({ command: name, input: inputOf(command) });
+        const handler = handlers[name];
+        if (!handler) throw sdkError('UnrecognizedClientException');
+        return handler(inputOf(command));
+      },
+    };
+    return { client, sent };
+  }
+
+  it('builds the CloudWatch Logs client, and the bundle carries it', () => {
+    const client = createTenantSdkClient('logs', {
+      region: 'us-east-1',
+      credentials: async () => ({ accessKeyId: 'a', secretAccessKey: 'b', sessionToken: 'c' }),
+    });
+    expect(client.constructor.name).toBe('CloudWatchLogsClient');
+    const real = createTenantClients({
+      management: { assumeTenantDeployRole: async () => ({ ...SESSION }) },
+      accountId: ACCOUNT,
+      region: 'us-east-1',
+    });
+    expect(real.logs.filterLogEvents).toBeTypeOf('function');
+  });
+
+  it('reads a FilterLogEvents page as plain events, a missing group as null, a refusal by code', async () => {
+    const { client, sent } = stub({
+      FilterLogEventsCommand: (i) => {
+        if (i['logGroupName'] === 'gone') throw sdkError('ResourceNotFoundException');
+        if (i['logGroupName'] === 'denied') {
+          throw sdkError('AccessDeniedException', 'arn:aws:logs:secret detail', 403);
+        }
+        if (i['logGroupName'] === 'empty') return { nextToken: '' };
+        return {
+          events: [
+            { eventId: 'e1', timestamp: 5, message: 'one\n', logStreamName: 'app/app/t1' },
+            { timestamp: 6, logStreamName: 's' },
+            { timestamp: Number.NaN, message: 'no instant' },
+            { message: 'no timestamp' },
+          ],
+          nextToken: 'n2',
+        };
+      },
+    });
+    const logs = sdkTenantLogs(client);
+    expect(
+      await logs.filterLogEvents('/motir/hosting/mh-a', {
+        startMs: 1,
+        endMs: 9,
+        filterPattern: '%[eE]%',
+        nextToken: 'n1',
+      }),
+    ).toEqual({
+      events: [
+        { eventId: 'e1', timestamp: 5, message: 'one\n' },
+        { eventId: 's:6:', timestamp: 6, message: '' },
+      ],
+      nextToken: 'n2',
+    });
+    expect(sent[0]!.input).toEqual({
+      logGroupName: '/motir/hosting/mh-a',
+      startTime: 1,
+      endTime: 9,
+      filterPattern: '%[eE]%',
+      nextToken: 'n1',
+    });
+    expect(await logs.filterLogEvents('empty', { startMs: 1, endMs: 2 })).toEqual({
+      events: [],
+      nextToken: null,
+    });
+    expect(sent[1]!.input).toEqual({ logGroupName: 'empty', startTime: 1, endTime: 2 });
+    expect(await logs.filterLogEvents('gone', { startMs: 1, endMs: 2 })).toBeNull();
+    const denied = await logs.filterLogEvents('denied', { startMs: 1, endMs: 2 }).catch((e) => e);
+    expect(denied).toBeInstanceOf(AwsTenantApiError);
+    expect(denied).toMatchObject({ service: 'logs', awsCode: 'AccessDeniedException' });
+    expect(String((denied as Error).message)).not.toContain('secret detail');
+  });
+
+  it('reads a version’s state, last update and change time, and the alias’s provisioned concurrency', async () => {
+    const { client } = stub({
+      GetFunctionConfigurationCommand: (i) => {
+        if (i['Qualifier'] === '9') throw sdkError('ResourceNotFoundException');
+        if (i['Qualifier'] === '8') throw sdkError('ServiceException', 'x', 500);
+        if (i['Qualifier'] === '7') return {};
+        if (i['Qualifier'] === '6') return { State: 'Active', LastModified: 'yesterday' };
+        return {
+          State: 'Failed',
+          LastUpdateStatus: 'Failed',
+          LastModified: '2026-11-23T10:00:00.000+0000',
+        };
+      },
+      GetProvisionedConcurrencyConfigCommand: (i) => {
+        if (i['FunctionName'] === 'none')
+          throw sdkError('ProvisionedConcurrencyConfigNotFoundException');
+        if (i['FunctionName'] === 'gone') throw sdkError('ResourceNotFoundException');
+        if (i['FunctionName'] === 'denied') throw sdkError('AccessDeniedException', 'x', 403);
+        if (i['FunctionName'] === 'bare') return {};
+        return { Status: 'READY' };
+      },
+    });
+    const lambda = sdkTenantLambda(client);
+    expect(await lambda.getFunctionVersion('f', '1')).toEqual({
+      state: 'failed',
+      lastUpdateStatus: 'failed',
+      lastModified: new Date('2026-11-23T10:00:00.000Z'),
+    });
+    expect(await lambda.getFunctionVersion('f', '7')).toEqual({
+      state: 'pending',
+      lastUpdateStatus: null,
+      lastModified: null,
+    });
+    expect((await lambda.getFunctionVersion('f', '6'))!.lastModified).toBeNull();
+    expect(await lambda.getFunctionVersion('f', '9')).toBeNull();
+    await expect(lambda.getFunctionVersion('f', '8')).rejects.toMatchObject({
+      awsCode: 'ServiceException',
+    });
+    expect(await lambda.getProvisionedConcurrency('f', 'live')).toBe('READY');
+    expect(await lambda.getProvisionedConcurrency('bare', 'live')).toBe('IN_PROGRESS');
+    expect(await lambda.getProvisionedConcurrency('none', 'live')).toBeNull();
+    expect(await lambda.getProvisionedConcurrency('gone', 'live')).toBeNull();
+    await expect(lambda.getProvisionedConcurrency('denied', 'live')).rejects.toMatchObject({
+      service: 'lambda',
+      awsCode: 'AccessDeniedException',
+    });
+  });
+
+  it('reads a stopped task’s exit from its only container when none is named app', async () => {
+    const { client } = stub({
+      ListTasksCommand: (i) => (i['desiredStatus'] === 'STOPPED' ? { taskArns: ['t1', 't2'] } : {}),
+      DescribeTasksCommand: () => ({
+        tasks: [
+          { taskArn: 't1', lastStatus: 'STOPPED', containers: [{ name: 'web', exitCode: 3 }] },
+          { taskArn: 't2', lastStatus: 'STOPPED', containers: [{ name: 'web' }] },
+        ],
+      }),
+    });
+    const tasks = await sdkTenantEcs(client).listTasks('c', 's');
+    expect(tasks.map((t) => t.container)).toEqual([{ exitCode: 3, reason: null }, null]);
+  });
+});
+
+describe('the fake CloudWatch Logs (MOTIR-12104)', () => {
+  it('matches the patterns the adapter sends as CloudWatch does: a regex, alternatives, a term', () => {
+    expect(fakeFilterPatternMatches('%[eE][rR]%', 'An ERror')).toBe(true);
+    expect(fakeFilterPatternMatches('%[eE][rR]%', 'none')).toBe(false);
+    expect(fakeFilterPatternMatches('?REPORT ?"Runtime exited"', 'x Runtime exited y')).toBe(true);
+    expect(fakeFilterPatternMatches('?REPORT ?"Runtime exited"', 'report')).toBe(false);
+    expect(fakeFilterPatternMatches('REPORT', 'REPORT RequestId: r')).toBe(true);
+    expect(fakeFilterPatternMatches('"a b"', 'x a b')).toBe(true);
+  });
+
+  it('pages a group forward, answers a missing group as null, and refuses or fails on demand', async () => {
+    const logs = createFakeTenantLogs();
+    logs.pageSize = 2;
+    for (let i = 0; i < 3; i += 1) logs.write('g', new Date(100 + i), `line ${i}`);
+    logs.write('g', 200, 'outside');
+    const first = await logs.filterLogEvents('g', { startMs: 100, endMs: 150 });
+    expect(first!.events.map((e) => e.message)).toEqual(['line 0', 'line 1']);
+    const second = await logs.filterLogEvents('g', {
+      startMs: 100,
+      endMs: 150,
+      nextToken: first!.nextToken!,
+    });
+    expect(second).toEqual({
+      events: [{ eventId: 'e000003', timestamp: 102, message: 'line 2' }],
+      nextToken: null,
+    });
+    expect(await logs.filterLogEvents('nope', { startMs: 0, endMs: 1 })).toBeNull();
+    expect(logs.queries.map((q) => q.group)).toEqual(['g', 'g', 'nope']);
+
+    logs.refuseNext('ThrottlingException', 400);
+    await expect(logs.filterLogEvents('g', { startMs: 0, endMs: 1 })).rejects.toMatchObject({
+      service: 'logs',
+      awsCode: 'ThrottlingException',
+    });
+    logs.failAt('filterLogEvents', 1, 'after');
+    await expect(logs.filterLogEvents('g', { startMs: 0, endMs: 1 })).rejects.toMatchObject({
+      awsCode: 'InjectedFault',
+    });
+    expect(await logs.filterLogEvents('g', { startMs: 0, endMs: 1 })).toEqual({
+      events: [],
+      nextToken: null,
+    });
   });
 });

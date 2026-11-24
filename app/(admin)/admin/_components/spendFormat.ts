@@ -20,6 +20,9 @@ export function formatMicroUsd(format: NumberFormatter, micro: number): string {
   });
 }
 
+/** No usage quantity to show — the category carries credits and cost only. */
+export const NO_USAGE = '—';
+
 /** A usage figure in its category's unit: tokens, minutes, GB-days or searches. */
 export function formatUsage(
   format: NumberFormatter,
@@ -27,6 +30,7 @@ export function formatUsage(
   value: number,
   units: { tokens: string; minutes: string; gbDays: string; searches: string },
 ): string {
+  if (unit === 'none') return NO_USAGE;
   if (unit === 'seconds') {
     return `${format.number(value / 60, { maximumFractionDigits: 0 })} ${units.minutes}`;
   }

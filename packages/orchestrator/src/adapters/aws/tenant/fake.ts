@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { CloudWatchFilterInput, CloudWatchLogEvent } from '../../../hosting/cloudWatchLogs';
 import type {
   TenantClients,
   TenantCloudFormation,
@@ -6,6 +7,7 @@ import type {
   TenantIam,
   TenantIamRole,
   TenantPolicyDocument,
+  TenantLogs,
   TenantRdsData,
   TenantSecretsManager,
   TenantSqlValue,
@@ -25,6 +27,7 @@ import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 import type {
   TenantCloudWatch,
   TenantFunctionState,
+  TenantFunctionVersion,
   TenantLambda,
   TenantMetricSum,
 } from './function/lambdaClient';
@@ -517,6 +520,15 @@ export interface FakeTenantLambda extends TenantLambda {
   readonly calls: string[];
   /** A version's state; every version is `active` unless set. */
   setState(functionName: string, version: string, state: TenantFunctionState): void;
+  /** A version's last update and change time (MOTIR-12104); `successful` and
+   *  no time unless set. */
+  setVersionFacts(
+    functionName: string,
+    version: string,
+    facts: Partial<Omit<TenantFunctionVersion, 'state'>>,
+  ): void;
+  /** The provisioned-concurrency status on an alias; none unless set. */
+  setProvisioned(functionName: string, alias: string, status: string | null): void;
   failAt(operation: FakeLambdaOperation, n: number, when?: 'before' | 'after'): void;
   /** What the release stack does to the function when it settles: create it,
    *  publish a version when the image or config hash changed, point `live` at
@@ -532,6 +544,8 @@ export interface FakeTenantLambda extends TenantLambda {
 export function createFakeTenantLambda(accountId: string, region: string): FakeTenantLambda {
   const functions = new Map<string, FakeFunction>();
   const states = new Map<string, TenantFunctionState>();
+  const versionFacts = new Map<string, Partial<Omit<TenantFunctionVersion, 'state'>>>();
+  const provisioned = new Map<string, string>();
   const calls: string[] = [];
   const counter = faultCounter('lambda');
   const missing = () => new AwsTenantApiError('lambda', 'ResourceNotFoundException', 404);
@@ -549,6 +563,13 @@ export function createFakeTenantLambda(accountId: string, region: string): FakeT
     calls,
     setState(functionName, version, state) {
       states.set(`${functionName}:${version}`, state);
+    },
+    setVersionFacts(functionName, version, facts) {
+      versionFacts.set(`${functionName}:${version}`, facts);
+    },
+    setProvisioned(functionName, alias, status) {
+      if (status === null) provisioned.delete(`${functionName}:${alias}`);
+      else provisioned.set(`${functionName}:${alias}`, status);
     },
     failAt: (operation, n, when) => counter.failAt(operation, n, when),
 
@@ -614,6 +635,23 @@ export function createFakeTenantLambda(accountId: string, region: string): FakeT
         if (!functions.get(functionName)?.versions.has(version)) return null;
         return states.get(`${functionName}:${version}`) ?? 'active';
       }),
+    getFunctionVersion: (functionName, version) =>
+      call('getFunctionVersion', functionName, () => {
+        if (!functions.get(functionName)?.versions.has(version)) return null;
+        const key = `${functionName}:${version}`;
+        const facts = versionFacts.get(key) ?? {};
+        return {
+          state: states.get(key) ?? 'active',
+          lastUpdateStatus:
+            facts.lastUpdateStatus === undefined ? 'successful' : facts.lastUpdateStatus,
+          lastModified: facts.lastModified ?? null,
+        };
+      }),
+    getProvisionedConcurrency: (functionName, alias) =>
+      call('getProvisionedConcurrency', functionName, () => {
+        if (!functions.has(functionName)) throw missing();
+        return provisioned.get(`${functionName}:${alias}`) ?? null;
+      }),
   };
 }
 
@@ -651,6 +689,18 @@ export interface FakeEcsTask extends TenantEcsTask {
   readonly service: string;
   lastStatus: string;
   stoppedAt: Date | null;
+  stopCode: string | null;
+  stoppedReason: string | null;
+  container: TenantEcsTask['container'];
+}
+
+/** How a task stopped, for `stopTask`: a crash of its essential container by
+ *  default. */
+export interface FakeTaskStop {
+  readonly stopCode?: string;
+  readonly stoppedReason?: string;
+  readonly exitCode?: number | null;
+  readonly reason?: string | null;
 }
 
 export interface FakeEcsService {
@@ -687,7 +737,10 @@ export interface FakeTenantEcs extends TenantEcs {
   /** ECS drops stopped tasks from its listing after a while. */
   forgetStoppedTasks(): void;
   /** Stop a running task, as a crash would — ECS starts no replacement here. */
-  stopTask(taskArn: string): void;
+  stopTask(taskArn: string, how?: FakeTaskStop): void;
+  /** Start a task of the service's current revision, as ECS does to replace a
+   *  stopped one. */
+  startTask(service: string): FakeEcsTask;
   applyReleaseStack(
     parameters: Readonly<Record<string, string>>,
     generation: number,
@@ -718,10 +771,10 @@ export function createFakeTenantEcs(
     return answer;
   }
 
-  function startTask(service: string, taskDefinition: string): void {
+  function startTask(service: string, taskDefinition: string): FakeEcsTask {
     const def = taskDefinitions.get(taskDefinition)!;
     taskSerial += 1;
-    tasks.push({
+    const task: FakeEcsTask = {
       service,
       taskArn: `arn:aws:ecs:${region}:${accountId}:task/${service}/t${String(taskSerial).padStart(4, '0')}`,
       taskDefinition,
@@ -730,12 +783,25 @@ export function createFakeTenantEcs(
       stoppedAt: null,
       cpu: def.cpu,
       memory: def.memory,
-    });
+      stopCode: null,
+      stoppedReason: null,
+      container: null,
+    };
+    tasks.push(task);
+    return task;
   }
 
-  function stop(task: FakeEcsTask): void {
+  /** ECS's own stop — a rollout's replacement, a scale-in or a delete: the
+   *  scheduler's code, the container stopped by signal. */
+  function stop(task: FakeEcsTask, how: FakeTaskStop = {}): void {
     task.lastStatus = 'STOPPED';
     task.stoppedAt = now();
+    task.stopCode = how.stopCode ?? 'ServiceSchedulerInitiated';
+    task.stoppedReason = how.stoppedReason ?? 'Scaling activity initiated by deployment';
+    task.container = {
+      exitCode: how.exitCode === undefined ? 143 : how.exitCode,
+      reason: how.reason ?? null,
+    };
   }
 
   const running = (service: string) =>
@@ -748,8 +814,14 @@ export function createFakeTenantEcs(
     svc.desiredCount = desired;
     svc.failing = failing.delete(name);
     svc.deployments = [
-      { taskDefinition, status: 'PRIMARY', rolloutState: 'IN_PROGRESS' },
-      ...(old ? [{ ...old, status: 'ACTIVE' }] : []),
+      {
+        taskDefinition,
+        status: 'PRIMARY',
+        rolloutState: 'IN_PROGRESS',
+        createdAt: now(),
+        updatedAt: now(),
+      },
+      ...(old ? [{ ...old, status: 'ACTIVE', updatedAt: now() }] : []),
     ];
     if (desired > 0) startTask(name, taskDefinition);
     svc.pendingPolls = fake.rolloutPolls;
@@ -760,11 +832,14 @@ export function createFakeTenantEcs(
     const primary = svc.deployments[0]!;
     if (svc.failing) {
       for (const t of running(name)) if (t.taskDefinition === primary.taskDefinition) stop(t);
-      svc.deployments = [{ ...primary, rolloutState: 'FAILED' }, ...svc.deployments.slice(1)];
+      svc.deployments = [
+        { ...primary, rolloutState: 'FAILED', updatedAt: now() },
+        ...svc.deployments.slice(1),
+      ];
       return;
     }
     for (const t of running(name)) if (t.taskDefinition !== primary.taskDefinition) stop(t);
-    svc.deployments = [{ ...primary, rolloutState: 'COMPLETED' }];
+    svc.deployments = [{ ...primary, rolloutState: 'COMPLETED', updatedAt: now() }];
   }
 
   const fake: FakeTenantEcs = {
@@ -782,9 +857,19 @@ export function createFakeTenantEcs(
         if (tasks[i]!.lastStatus === 'STOPPED') tasks.splice(i, 1);
       }
     },
-    stopTask(taskArn) {
+    stopTask(taskArn, how) {
       const task = tasks.find((t) => t.taskArn === taskArn);
-      if (task) stop(task);
+      if (task) {
+        stop(task, {
+          stopCode: 'EssentialContainerExited',
+          stoppedReason: 'Essential container in task exited',
+          exitCode: 1,
+          ...how,
+        });
+      }
+    },
+    startTask(service) {
+      return startTask(service, services.get(service)!.taskDefinition);
     },
 
     applyReleaseStack(parameters, generation) {
@@ -1453,6 +1538,96 @@ export function seedFakeTenantIam(account: FakeTenantIamAccount): void {
 const isContainerRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
   name.startsWith('motir-release-') && 'TaskCpu' in parameters;
 
+// ── CloudWatch Logs (MOTIR-12104) ───────────────────────────────────────────
+
+/** One event written into a fake log group. */
+export interface FakeLogEvent extends CloudWatchLogEvent {
+  readonly logStreamName: string;
+}
+
+export interface FakeTenantLogs extends TenantLogs {
+  /** Each group's events, in the order written. */
+  readonly groups: Map<string, FakeLogEvent[]>;
+  /** Every query, in order, with its group. */
+  readonly queries: Array<CloudWatchFilterInput & { group: string }>;
+  /** The most events one page answers (CloudWatch's is 10,000). */
+  pageSize: number;
+  /** Write a line into the group, creating it. */
+  write(group: string, at: Date | number, message: string, stream?: string): void;
+  failAt(operation: 'filterLogEvents', n: number, when?: 'before' | 'after'): void;
+  /** The next call answers this AWS error code (e.g. `AccessDeniedException`). */
+  refuseNext(awsCode: string, status: number): void;
+}
+
+/**
+ * Whether CloudWatch's filter pattern keeps the line, for the patterns the
+ * adapter sends: a `%regex%`, a set of `?term` alternatives, or one term —
+ * terms matched case-sensitively, as CloudWatch matches them.
+ */
+export function fakeFilterPatternMatches(pattern: string, message: string): boolean {
+  if (pattern.length > 1 && pattern.startsWith('%') && pattern.endsWith('%')) {
+    return new RegExp(pattern.slice(1, -1)).test(message);
+  }
+  const unquote = (term: string) => term.replace(/^"(.*)"$/, '$1');
+  const alternatives = [...pattern.matchAll(/\?("[^"]*"|\S+)/g)].map((m) => unquote(m[1]!));
+  if (alternatives.length > 0) return alternatives.some((term) => message.includes(term));
+  return message.includes(unquote(pattern));
+}
+
+export function createFakeTenantLogs(): FakeTenantLogs {
+  const groups = new Map<string, FakeLogEvent[]>();
+  const queries: FakeTenantLogs['queries'] = [];
+  const counter = faultCounter('logs');
+  let refusal: { awsCode: string; status: number } | null = null;
+  let serial = 0;
+  const fake: FakeTenantLogs = {
+    groups,
+    queries,
+    pageSize: 10_000,
+    write(group, at, message, stream = 'app/app/t0001') {
+      serial += 1;
+      const list = groups.get(group) ?? [];
+      list.push({
+        eventId: `e${String(serial).padStart(6, '0')}`,
+        timestamp: typeof at === 'number' ? at : at.getTime(),
+        message,
+        logStreamName: stream,
+      });
+      groups.set(group, list);
+    },
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    refuseNext(awsCode, status) {
+      refusal = { awsCode, status };
+    },
+    async filterLogEvents(group, input) {
+      queries.push({ group, ...input });
+      if (refusal) {
+        const { awsCode, status } = refusal;
+        refusal = null;
+        throw new AwsTenantApiError('logs', awsCode, status);
+      }
+      const lost = counter.enter('filterLogEvents');
+      const all = groups.get(group);
+      if (!all) return null;
+      const matching = all
+        .filter((e) => e.timestamp >= input.startMs && e.timestamp <= input.endMs)
+        .filter(
+          (e) => !input.filterPattern || fakeFilterPatternMatches(input.filterPattern, e.message),
+        )
+        .sort((a, b) => a.timestamp - b.timestamp);
+      const offset = input.nextToken ? Number(input.nextToken) : 0;
+      const page = matching.slice(offset, offset + fake.pageSize);
+      const next = offset + page.length;
+      if (lost) throw counter.injected();
+      return {
+        events: page.map(({ eventId, timestamp, message }) => ({ eventId, timestamp, message })),
+        nextToken: next < matching.length ? String(next) : null,
+      };
+    },
+  };
+  return fake;
+}
+
 /** A function release stack: the release template's parameters. */
 const isFunctionRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
   name.startsWith('motir-release-') && 'InvokePrincipalArn' in parameters;
@@ -1474,6 +1649,7 @@ export function createFakeTenantClients(
   readonly edge: FakeTenantEdge;
   /** The account's IAM; `iam` is its `motir-tenant-deploy` session. */
   readonly iamAccount: FakeTenantIamAccount;
+  readonly logs: FakeTenantLogs;
 } {
   const accountId = options.accountId ?? '210987654321';
   const region = options.region ?? 'us-east-1';
@@ -1532,5 +1708,6 @@ export function createFakeTenantClients(
     edge: createFakeTenantEdge(cloudformation),
     iam: iamAccount.session(DEPLOY_ROLE),
     iamAccount,
+    logs: createFakeTenantLogs(),
   };
 }

@@ -125,11 +125,11 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
       // Halcyon is on Standard (MOTIR-9377): its plan named, its CI against 2 (MOTIR-9668).
       await expect(halcyonRow.getByRole('cell').nth(1)).toContainText('Standard');
       await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 2');
-      // Every column is ON SCREEN, not merely in the DOM: the No plan figure group
-      // and the last column are inside the table's scroll box, not past its edge.
-      const ownPool = fleetOrgs.getByRole('columnheader', { name: fm.orgs.group.uncapped });
+      // Every column is ON SCREEN, not merely in the DOM: the plan group and the
+      // last column are inside the table's scroll box, not past its edge.
+      const planGroup = fleetOrgs.getByRole('columnheader', { name: fm.orgs.group.plan });
       const verdictCol = fleetOrgs.getByRole('columnheader', { name: fm.orgs.col.verdict });
-      await expect(ownPool).toBeInViewport({ ratio: 1 });
+      await expect(planGroup).toBeInViewport({ ratio: 1 });
       await expect(verdictCol).toBeInViewport({ ratio: 1 });
       await expect(fleetOrgs.getByText('1 mismatched')).toBeVisible();
       await expect(fleetOrgs.getByText('2 orgs running')).toBeVisible();

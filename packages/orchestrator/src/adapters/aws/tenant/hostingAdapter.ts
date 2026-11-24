@@ -1,11 +1,16 @@
 import { OrchestratorApiError } from '../../../errors';
+import { cloudWatchLiteralPattern } from '../../../hosting/cloudWatchLogs';
 import {
   CustomerRepositoryRefusedError,
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
+  LogsUnavailableError,
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
+  RuntimeHealthUnavailableError,
 } from '../../../hosting/errors';
+import { lambdaStreamOf } from '../../../hosting/lambdaRuntime';
+import { readLogWindowNewestFirst } from '../../../hosting/logWindow';
 import { hostingAppNames, sameEnvironment } from '../../../hosting/names';
 import { deriveOriginSecret } from '../../../hosting/originSecret';
 import { requireReleaseShape } from '../../../hosting/shape';
@@ -16,6 +21,7 @@ import type {
   ReleaseArtifact,
   ReleaseDescription,
   ReleaseHandle,
+  ReleaseRuntimeHealth,
   ReleaseShape,
   ReleaseSummary,
   ReleaseUsage,
@@ -23,6 +29,7 @@ import type {
 import {
   NoPreviousTaskDefinitionError,
   OPEN_RULE_SEED_SUFFIX,
+  containerLogGroup,
   containerReleaseNames,
   containerUsageSince,
   deployContainerRelease,
@@ -30,6 +37,7 @@ import {
   destroyContainerRelease,
   openParameters,
   pickRulePriority,
+  readContainerHealth,
   rollbackContainerRelease,
 } from './container';
 import {
@@ -40,15 +48,20 @@ import {
 } from './database';
 import type { TenantClientsFactory } from './factory';
 import {
+  LIVE_ALIAS,
   NoPreviousFunctionVersionError,
   deployFunctionRelease,
   frontDoorRevision,
   describeFunctionRelease,
   destroyFunctionRelease,
+  functionLogGroup,
   functionReleaseNames,
   functionUsageSince,
+  readFunctionHealth,
   rollbackFunctionRelease,
 } from './function';
+import { AWS_LOG_LIMITS, tenantLogsUnavailable, tenantSliceReader } from './logs';
+import { TenantRoleUnavailableError } from './errors';
 import { ensureTenantNetwork, stackOutput, type TenantAccountContext } from './network';
 import {
   GithubRepositoryIdsMissingError,
@@ -173,6 +186,8 @@ const OPEN_UPSTREAM_OUTPUT: Record<ReleaseShape, string> = {
 /** A release stack's template declares the open mode — a stack applied before
  *  MOTIR-12128 does not, and is opened by a deploy first. */
 const DECLARES_ORIGIN_ACCESS = new RegExp(`^  ${ORIGIN_ACCESS_PARAMETER}:\\s*$`, 'm');
+/** Why a release's logs cannot be read before its tenant account is ready. */
+export const TENANT_ACCOUNT_NOT_READY = 'the tenant account is not ready';
 
 /** A release that has not reached a shape module: no AWS call, no state. */
 function zeroUsage(appRef: string, releaseId: string, at: Date): ReleaseUsage {
@@ -725,6 +740,73 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): AwsHostingDepl
     // release that needs a migration fails by name (MOTIR-10030).
     async runReleaseCommand() {
       throw new ReleaseCommandUnsupportedError('aws');
+    },
+
+    // The runtime reads (MOTIR-12104): the release's CloudWatch Logs group in
+    // the tenant account, newest first through the shared window, and its
+    // runtime state from ECS (container) or from Lambda and its own lines
+    // (function). No tenant account yet: logs are unavailable, and the
+    // release is `deploying` — held, as `describe` answers it.
+    async readLogs(handle, query) {
+      const { account, shape } = await locate(handle.appRef).catch(tenantLogsUnavailable);
+      if (!account) throw new LogsUnavailableError('aws', TENANT_ACCOUNT_NOT_READY);
+      if (!shape) throw new ReleaseNotFoundError(handle.appRef);
+      const group =
+        shape === 'function' ? functionLogGroup(handle.appRef) : containerLogGroup(handle.appRef);
+      // The task's awslogs driver carries the app's output and nothing of ECS's.
+      const streamOf = shape === 'function' ? lambdaStreamOf : () => 'app' as const;
+      return readLogWindowNewestFirst(
+        'aws',
+        handle.appRef,
+        query,
+        now(),
+        AWS_LOG_LIMITS,
+        tenantSliceReader(
+          account.clients.logs,
+          group,
+          streamOf,
+          query.filter ? cloudWatchLiteralPattern(query.filter) : null,
+        ),
+      );
+    },
+
+    async readHealth(handle): Promise<ReleaseRuntimeHealth> {
+      try {
+        const { parsed, account, shape } = await locate(handle.appRef);
+        const at = now();
+        if (!account) return { state: 'deploying', since: at };
+        if (!shape) throw new ReleaseNotFoundError(handle.appRef);
+        if (shape === 'container') {
+          const health = await readContainerHealth({ ...target(account, parsed), now });
+          if (!health) throw new ReleaseNotFoundError(handle.appRef);
+          return health;
+        }
+        const stack = await account.runner.describeStack(
+          functionReleaseNames(parsed.repositoryId, parsed.environment).stackName,
+        );
+        return await readFunctionHealth({
+          account,
+          appRef: handle.appRef,
+          alias: LIVE_ALIAS,
+          stackCreatedAt: stack?.createdAt ?? null,
+          now: at,
+        });
+      } catch (error) {
+        if (error instanceof ReleaseNotFoundError) throw error;
+        if (error instanceof LogsUnavailableError) {
+          throw new RuntimeHealthUnavailableError('aws', error.reason);
+        }
+        if (error instanceof TenantRoleUnavailableError) {
+          throw new RuntimeHealthUnavailableError(
+            'aws',
+            `the tenant deploy role could not be assumed (${error.awsCode})`,
+          );
+        }
+        if (error instanceof OrchestratorApiError) {
+          throw new RuntimeHealthUnavailableError('aws', error.message);
+        }
+        throw error;
+      }
     },
   };
 }

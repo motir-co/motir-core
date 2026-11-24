@@ -552,7 +552,7 @@ describe('MOTIR-6301 · the poll → pane seam, against rows the planners wrote'
     expect(nodeEls(nb)).toHaveLength(1);
     expect(model().nodes).toContain(nb);
     expect(edgeKeys()).toContain(`${nb}→${n3}:cross`);
-    expect(node(n3)!.querySelector('[data-testid="cross-blocked-flag"]')).not.toBeNull();
+    expect(node(n3)!.querySelector('[data-testid="blocked-tab"]')).not.toBeNull();
     // …and the level it DOES sit on is counted, never jumped to.
     expect(screen.getByTestId('canvas-arrivals-offer').textContent).toBe(
       `1 new in ${tree.S2Key} · Go there`,

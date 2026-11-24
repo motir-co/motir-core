@@ -504,6 +504,8 @@ describe('the repositories', () => {
           target: 'aws',
           slug: 'other',
           productionAddress: null,
+          idleMode: 'always_on',
+          idleSeconds: null,
         },
         tx,
       ),

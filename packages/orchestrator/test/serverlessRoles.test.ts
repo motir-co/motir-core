@@ -300,6 +300,7 @@ describe('the deploy role grants every action the serverless adapter sends', () 
     await api.putSecret('mh-repo1', 'v');
     await api.deleteSecret('mh-repo1');
     await api.deleteLogGroup('/aws/lambda/mh-repo1');
+    await api.filterLogEvents('/aws/lambda/mh-repo1', { startMs: 0, endMs: 1 });
     await api.metricSums('mh-repo1', new Date(0), new Date(1), 60);
     await api.putProvisionedConcurrency('mh-repo1', 'live', 1);
     await api.getProvisionedConcurrency('mh-repo1', 'live');

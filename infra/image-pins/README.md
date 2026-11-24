@@ -1,20 +1,14 @@
 # Image pins
 
 Each file here (other than this note) is **one production image pin**. Its one
-line is a pull-by-digest reference, never a tag, and its name says where the
-deploy writes it:
+line is a pull-by-digest reference, never a tag
+(`ghcr.io/<owner>/<name>@sha256:<64 hex>`), and the deploy writes it into the
+Secrets Manager secret of its own name under `<prefix>/core/`.
 
-- a **GHCR image** pin writes the Secrets Manager secret of its own name under
-  `<prefix>/core/`, and holds `ghcr.io/<owner>/<name>@sha256:<64 hex>`;
-- the **indexer** pin writes the SSM parameter `/<prefix>/core/indexer-image`
-  (it holds no secret), and holds the indexer in this account's ECR,
-  `<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/indexer@sha256:<64 hex>`.
-
-| file                       | written to                                                                | read by                                                  | bumped by                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `motir-hosted-agent-image` | secret `motir/core/motir-hosted-agent-image` (`MOTIR_HOSTED_AGENT_IMAGE`) | the hosted-run orchestrator, on Fly and AWS              | `hosted-agent-image.yml`'s `pin` job, on every publish from `main` (MOTIR-10882)             |
-| `motir-runner-image`       | secret `motir/core/motir-runner-image` (`MOTIR_RUNNER_IMAGE`)             | the fleet's readiness and health probes, the Fly adapter | `release-runner-image.yml`, on every `runner-v*` tag                                         |
-| `motir-indexer-image`      | parameter `/motir/core/indexer-image` (`MOTIR_INDEXER_IMAGE`)             | web and worker, which boot every code-graph index run    | `indexer-image-pin.yml`, dispatched by Publish latest on `/admin/fleet-status` (MOTIR-10986) |
+| file                       | written to                                                                | read by                                                  | bumped by                                                                        |
+| -------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `motir-hosted-agent-image` | secret `motir/core/motir-hosted-agent-image` (`MOTIR_HOSTED_AGENT_IMAGE`) | the hosted-run orchestrator, on Fly and AWS              | `hosted-agent-image.yml`'s `pin` job, on every publish from `main` (MOTIR-10882) |
+| `motir-runner-image`       | secret `motir/core/motir-runner-image` (`MOTIR_RUNNER_IMAGE`)             | the fleet's readiness and health probes, the Fly adapter | `release-runner-image.yml`, on every `runner-v*` tag                             |
 
 ## How a pin moves (MOTIR-10883)
 
@@ -32,23 +26,10 @@ deploy writes it:
 3. **Rolling back is reverting the pull request.** The next deploy writes the
    previous reference.
 
-### The indexer pin (MOTIR-10986)
+### Publish latest
 
-The indexer is released in motir-ai: an `indexer-v<x.y.z>` tag runs that
-repository's `release-indexer-image.yml`, which publishes the image to GHCR and
-its `mirror-ecr` job copies the same digest into this account's ECR as
-`<prefix>/indexer:indexer-<x.y.z>`. No motir-core lane runs on that tag, so the
-pin moves from the console: **Publish latest** on the Fleet status page's
-Indexer image card dispatches `.github/workflows/indexer-image-pin.yml` with
-`pin_reference` set to the newest release's ECR reference. That workflow checks
-the reference, opens (or updates) the one pull request on
-`chore/indexer-image-pin` that writes it here, and queues it to merge. It needs
-no AWS credential. The deploy of the merge writes `/<prefix>/core/indexer-image`
-before it rolls `web` and `worker`, and index runs started after the roll boot
-the new image.
-
-Publish latest starts every image's workflow — this one, `hosted-agent-image.yml`,
-`release-runner-image.yml` and `release-sandbox.yml` — as the provisioning GitHub
+Publish latest on `/admin/fleet-status` starts every image's workflow —
+`hosted-agent-image.yml`, `release-runner-image.yml` and `release-sandbox.yml` — as the provisioning GitHub
 App, **Motir Studio**, on its `motir-co` installation. Starting a workflow
 (`POST /repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches`) needs
 **Actions: read and write**; with `Actions: read` alone GitHub answers 403
@@ -57,21 +38,14 @@ permission (MOTIR-11229). A token keeps the permissions it was minted with, so
 after granting it the next press retries its 403 once with a newly minted token
 rather than waiting out the cached one's hour.
 
-To move it by hand, dispatch the same workflow:
-
-```sh
-gh workflow run indexer-image-pin.yml -f pin_reference=<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/indexer@sha256:<64 hex> -f pin_version=<x.y.z>
-```
-
-This directory is the **only** place the value is written. Setting the secret or parameter by
+This directory is the **only** place the value is written. Setting the secret by
 hand is overwritten by the next deploy of `main`.
 
 ## Adding a pin
 
-A new file must also be added to `PINNED_SECRETS` (a secret) or
-`PINNED_PARAMETERS` (an SSM parameter) in `scripts/aws-deploy/imagePins.ts`, with
-the reference shape it must hold, and granted to the core deploy role in
-motir-infra (`DEPLOY_PINNED_SECRETS`, or the parameter statement beside
-`deployPinnedIndexerParameterName`, in `lib/constructs/core-deploy-role.ts`).
+A new file must also be added to `PINNED_SECRETS` in
+`scripts/aws-deploy/imagePins.ts`, with the reference shape it must hold, and
+granted to the core deploy role in motir-infra (`DEPLOY_PINNED_SECRETS` in
+`lib/constructs/core-deploy-role.ts`).
 `tests/awsDeploy/imagePins.test.ts` holds the lists to this directory and to the infra lists,
 and the deploy refuses a file whose name is not on them.

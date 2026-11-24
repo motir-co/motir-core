@@ -1402,7 +1402,7 @@ export interface paths {
         put?: never;
         /**
          * Submit your own review agent’s verdict on a card
-         * @description Submit ONE agent review verdict for a RUN-TARGET card with your own token (not a run token — a hosted review run uses `submitWorkItemAgentReview`). Any teammate holding `work_item:edit` on the card may submit. `verdict` is `approved` or `changes_requested` (`findingsMd` required, non-empty); `subjectVersion` is the delivery-set version reviewed; `checklist` rows judge each acceptance criterion (`evidence` required on `met`); `harness` and `model` say what reviewed. With the project’s review gate ON the verdict decides the awaiting `agent_review` gate (`outcome: decided`); OFF, it is stored as the review record (`outcome: recorded`). It is recorded under the authority `review_agent` and NEVER decides the approve-and-merge gate. A `changes_requested` withdraws an awaiting approve-and-merge gate (cause `agent_changes_requested`) and puts the card in To fix; no status moves. A verdict about a version the card no longer has is stored as late (`REVIEW_VERDICT_LATE`, 409); one about a version already reviewed is stored as second (`REVIEW_VERDICT_SECOND`, 409); neither decides anything. A card that delivers no pull request of its own and is tested through an ancestor is refused naming that run target (`REVIEW_TARGET_NOT_RUN_TARGET`, 422); a child with its own pull request is reviewed on its own key.
+         * @description Submit ONE agent review verdict for a RUN-TARGET card with your own token (not a run token — a hosted review run uses `submitWorkItemAgentReview`). Any teammate holding `work_item:edit` on the card may submit. `verdict` is `approved` or `changes_requested` (`findingsMd` required, non-empty); `subjectVersion` is the delivery-set version reviewed; `checklist` rows judge each acceptance criterion (`evidence` required on `met`); `harness` and `model` say what reviewed. With the project’s review gate ON the verdict decides the awaiting `agent_review` gate (`outcome: decided`); OFF, it is stored as the review record (`outcome: recorded`). It is recorded under the authority `review_agent` and NEVER decides the approve-and-merge gate. A `changes_requested` withdraws an awaiting approve-and-merge gate (cause `agent_changes_requested`) and puts the card in To fix; no status moves. A verdict about a version the card no longer has is stored as late (`REVIEW_VERDICT_LATE`, 409); one about a version already reviewed is stored as second (`REVIEW_VERDICT_SECOND`, 409); neither decides anything. With the gate ON and no review waiting at the current version yet, the verdict is refused and nothing is stored (`REVIEW_NOT_YET_ASKED`, 409) — submit it again once the review is asked. A card that delivers no pull request of its own and is tested through an ancestor is refused naming that run target (`REVIEW_TARGET_NOT_RUN_TARGET`, 422); a child with its own pull request is reviewed on its own key.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -3137,6 +3137,8 @@ export interface components {
                     branch: string;
                     baseRef: string | null;
                     headSha: string | null;
+                    conflicted: boolean;
+                    outOfDate: boolean;
                 }[];
                 resume?: {
                     profile: string;
@@ -3239,6 +3241,8 @@ export interface components {
                         branch: string;
                         baseRef: string | null;
                         headSha: string | null;
+                        conflicted: boolean;
+                        outOfDate: boolean;
                     }[];
                     resume?: {
                         profile: string;

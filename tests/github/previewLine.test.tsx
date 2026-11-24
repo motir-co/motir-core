@@ -125,6 +125,7 @@ describe('the row draws the line under its meta line', () => {
       url: `https://github.com/acme/svc/pull/${n}`,
       githubReview: null,
       preview: p,
+      readerAccess: null,
       baseRef: 'main',
       conflicted: false,
     };

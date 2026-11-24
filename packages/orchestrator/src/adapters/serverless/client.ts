@@ -1,5 +1,9 @@
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
-import { CloudWatchLogsClient, DeleteLogGroupCommand } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  CloudWatchLogsClient,
+  DeleteLogGroupCommand,
+  FilterLogEventsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 import { CreateRepositoryCommand, DeleteRepositoryCommand, ECRClient } from '@aws-sdk/client-ecr';
 import {
   CreateAliasCommand,
@@ -200,13 +204,50 @@ export function serverlessCredentialProvider(
   };
 }
 
+/** Lambda's `LastModified` (`2026-11-23T10:00:00.000+0000`, an offset with no
+ *  colon) → a Date, or null. */
+export function lambdaInstant(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const at = Date.parse(value.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isNaN(at) ? null : new Date(at);
+}
+
 /** A Lambda function as the adapter reads it. */
 export interface LambdaFunctionView {
   readonly name: string;
   readonly arn: string;
   readonly state: string;
   readonly lastUpdateStatus: string;
+  /** `Configuration.LastModified` — when the function was last created or
+   *  updated; null when Lambda sent none it could read (MOTIR-12103). */
+  readonly lastModified: Date | null;
   readonly tags: Readonly<Record<string, string>>;
+}
+
+/** One CloudWatch log event, as plain values (MOTIR-12103). */
+export interface LogEventView {
+  readonly eventId: string;
+  /** Milliseconds since the epoch. */
+  readonly timestamp: number;
+  readonly logStreamName: string;
+  readonly message: string;
+}
+
+/** A page of FilterLogEvents: its events, and the token for the next page
+ *  (null on the last). */
+export interface LogEventsPage {
+  readonly events: readonly LogEventView[];
+  readonly nextToken: string | null;
+}
+
+export interface FilterLogEventsInput {
+  /** Inclusive, in milliseconds. */
+  readonly startMs: number;
+  /** Inclusive, in milliseconds — CloudWatch's own `endTime`. */
+  readonly endMs: number;
+  /** A CloudWatch filter pattern; absent reads every event. */
+  readonly filterPattern?: string;
+  readonly nextToken?: string;
 }
 
 export interface LambdaFunctionSpec {
@@ -242,6 +283,9 @@ export interface ServerlessAwsApi {
   putSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string): Promise<void>;
   deleteLogGroup(name: string): Promise<void>;
+  /** One page of a log group's events in a time range, or null when the group
+   *  does not exist — told by its error code, never its message. */
+  filterLogEvents(group: string, input: FilterLogEventsInput): Promise<LogEventsPage | null>;
   metricSums(
     functionName: string,
     since: Date,
@@ -329,7 +373,12 @@ export function createServerlessAwsApi(
     async getFunction(name) {
       const response = await sendOr<
         {
-          Configuration?: { FunctionArn?: string; State?: string; LastUpdateStatus?: string };
+          Configuration?: {
+            FunctionArn?: string;
+            State?: string;
+            LastUpdateStatus?: string;
+            LastModified?: string;
+          };
           Tags?: Record<string, string>;
         },
         null
@@ -341,6 +390,7 @@ export function createServerlessAwsApi(
         arn: c.FunctionArn!,
         state: c.State ?? 'Pending',
         lastUpdateStatus: c.LastUpdateStatus ?? 'InProgress',
+        lastModified: lambdaInstant(c.LastModified),
         tags: { ...(response.Tags ?? {}) },
       };
     },
@@ -481,6 +531,49 @@ export function createServerlessAwsApi(
 
     async deleteLogGroup(name) {
       await sendOr('logs', new DeleteLogGroupCommand({ logGroupName: name }), NOT_FOUND, undefined);
+    },
+
+    async filterLogEvents(group, input) {
+      const page = await sendOr<
+        {
+          events?: Array<{
+            eventId?: string;
+            timestamp?: number;
+            logStreamName?: string;
+            message?: string;
+          }>;
+          nextToken?: string;
+        },
+        null
+      >(
+        'logs',
+        new FilterLogEventsCommand({
+          logGroupName: group,
+          startTime: input.startMs,
+          endTime: input.endMs,
+          ...(input.filterPattern ? { filterPattern: input.filterPattern } : {}),
+          ...(input.nextToken ? { nextToken: input.nextToken } : {}),
+        }),
+        NOT_FOUND,
+        null,
+      );
+      if (!page) return null;
+      return {
+        events: (page.events ?? []).flatMap((e) =>
+          typeof e.timestamp === 'number' && Number.isFinite(e.timestamp)
+            ? [
+                {
+                  eventId:
+                    e.eventId ?? `${e.logStreamName ?? ''}:${e.timestamp}:${e.message ?? ''}`,
+                  timestamp: e.timestamp,
+                  logStreamName: e.logStreamName ?? '',
+                  message: e.message ?? '',
+                },
+              ]
+            : [],
+        ),
+        nextToken: page.nextToken ? page.nextToken : null,
+      };
     },
 
     async metricSums(functionName, since, until, period) {

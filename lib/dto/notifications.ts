@@ -54,7 +54,8 @@ export type NotificationData =
   | NotificationReviewToRunData
   | NotificationReviewSentBackData
   | NotificationPageMentionedData
-  | NotificationPageRepliedData;
+  | NotificationPageRepliedData
+  | NotificationProductionAppCrashedData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -122,6 +123,33 @@ export interface NotificationAgentHibernatedByAdminData {
   agentName: string;
   /** When it was hibernated, ISO-8601. */
   hibernatedAt: string;
+}
+
+/**
+ * A Motir-hosted production application CRASHED or failed its health check
+ * (Story MOTIR-9799 · MOTIR-12106) — written once per crash event, to every
+ * user holding `project:administer` on its project. No actor: the prober saw
+ * it. The row links to the event on the repository's Production panel.
+ *
+ * ⚠️ NAMES, IDS AND A TIME ONLY — never a log line, a provider message or an
+ * environment value. `reason` is one of Motir's own fixed phrasings
+ * (`exit code <n>`, `out of memory`, `HTTP <status>`, `timed out`).
+ */
+export interface NotificationProductionAppCrashedData {
+  kind: 'production_app_crashed';
+  /** The project the repository belongs to. */
+  projectKey: string;
+  /** The repository row — with the key, the Production panel's address. */
+  projectRepositoryId: string;
+  /** The repository's name, the noun the drawer row names. */
+  repositoryName: string;
+  applicationId: string;
+  /** The crash event — the deep link lands on it. */
+  eventId: string;
+  eventKind: 'crashed' | 'health_check_failed';
+  reason: string;
+  /** When it happened, ISO-8601. */
+  occurredAt: string;
 }
 
 /**

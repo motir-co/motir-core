@@ -21,13 +21,50 @@ export interface SimMachine {
     type: string;
     status: string;
     timestamp: number;
-    request?: { exit_event: { exit_code: number } };
+    request?: {
+      exit_event: {
+        exit_code: number;
+        oom_killed?: boolean;
+        requested_stop?: boolean;
+        restarting?: boolean;
+      };
+    };
   }>;
   checks: Array<{ name: string; status: string }>;
 }
 
 export const FLY_API = 'https://api.machines.dev/v1';
 export const FLY_GRAPHQL = 'https://api.fly.io/graphql';
+/** Fly's logs API host (MOTIR-12102); a call's `path` keeps `/api/v1/…`. */
+export const FLY_LOGS_HOST = 'https://api.fly.io';
+
+/**
+ * One line the sim's logs API holds, in the shape Fly's logs document carries
+ * per `data[]` entry. The attribute names are fly-go's `LogEntry`
+ * (superfly/fly-go@6c5db230, `types.go`), which flyctl's `fly logs` decodes
+ * `data[].attributes` into; the document's `data` / `meta.next_token` frame is
+ * Fly's docs page "Logs API options" (read 2026-11-23).
+ */
+export interface SimLogEntry {
+  id: string;
+  /** RFC 3339 with nanosecond digits, as Fly sends it. */
+  timestamp: string;
+  message: string;
+  /** `meta.event.provider`: `app`, `runner`, `proxy`. */
+  provider: string;
+}
+
+/** An RFC 3339 instant with nanosecond digits, from milliseconds and an extra
+ *  number of nanoseconds. */
+export function flyLogTimestamp(ms: number, extraNs = 0): string {
+  const iso = new Date(ms).toISOString(); // 2026-11-23T10:00:00.123Z
+  return `${iso.slice(0, 23)}${String(extraNs).padStart(6, '0')}Z`;
+}
+
+function logNs(timestamp: string): bigint {
+  const [base, frac] = [timestamp.slice(0, 19), timestamp.slice(20, 29)];
+  return BigInt(Date.parse(`${base}Z`)) * 1_000_000n + BigInt(frac.padEnd(9, '0'));
+}
 
 /** A deploy token the sim minted for an app, as Fly's GraphQL lists it. */
 export interface SimToken {
@@ -73,6 +110,10 @@ export interface HostingFlySim {
    *  replacing". `stallWaits` is how many waits answer 408 before it settles;
    *  `settleState` is the state it settles in (`started` unless a test says). */
   readonly release: { stallWaits: number; settleState: string };
+  /** Each app's log lines, oldest first, as its logs API answers them. */
+  readonly logs: Map<string, SimLogEntry[]>;
+  /** How many lines one logs page holds (Fly's default read answers 100). */
+  readonly logPage: { size: number };
   /** A `fetch` to stub globally. */
   fetch(url: string, init: RequestInit): Promise<Response>;
 }
@@ -85,7 +126,51 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
   const overrides: Array<(call: FlyCall) => Response | null> = [];
   const exitCodes: number[] = [];
   const release = { stallWaits: 0, settleState: 'started' };
+  const logs = new Map<string, SimLogEntry[]>();
+  const logPage = { size: 100 };
   let seq = 0;
+
+  /** Fly's logs API: lines AFTER `next_token` (ns), a page at a time, with the
+   *  token of the last line answered; no token → the latest page of the last
+   *  24 hours. */
+  function logsApi(call: FlyCall): Response {
+    for (const o of overrides) {
+      const res = o(call);
+      if (res) return res;
+    }
+    const [path, search] = call.path.split('?');
+    const app = decodeURIComponent(path!.split('/')[4] ?? '');
+    if (!apps.has(app)) return flyJson(404, { error: 'app not found' });
+    const token = new URLSearchParams(search ?? '').get('next_token') ?? '';
+    const all = [...(logs.get(app) ?? [])].sort((a, b) =>
+      logNs(a.timestamp) < logNs(b.timestamp)
+        ? -1
+        : logNs(a.timestamp) > logNs(b.timestamp)
+          ? 1
+          : 0,
+    );
+    const page = token
+      ? all.filter((l) => logNs(l.timestamp) > BigInt(token)).slice(0, logPage.size)
+      : all
+          .filter((l) => logNs(l.timestamp) >= BigInt(clock() - 86_400_000) * 1_000_000n)
+          .slice(-logPage.size);
+    const last = page[page.length - 1];
+    return flyJson(200, {
+      data: page.map((l) => ({
+        id: l.id,
+        type: 'logs',
+        attributes: {
+          timestamp: l.timestamp,
+          message: l.message,
+          level: 'info',
+          instance: 'm-1',
+          region: 'iad',
+          meta: { instance: 'm-1', region: 'iad', event: { provider: l.provider } },
+        },
+      })),
+      meta: { next_token: last ? String(logNs(last.timestamp)) : token },
+    });
+  }
 
   const isCommand = (config: Record<string, unknown> | undefined) =>
     (config?.['metadata'] as Record<string, unknown> | undefined)?.['motir_hosting'] === 'command';
@@ -230,16 +315,25 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     overrides,
     exitCodes,
     release,
+    logs,
+    logPage,
     async fetch(url, init) {
       const headers = (init.headers ?? {}) as Record<string, string>;
+      const isLogs = url.startsWith(`${FLY_LOGS_HOST}/api/`);
       const call: FlyCall = {
-        path: url === FLY_GRAPHQL ? '/graphql' : url.slice(FLY_API.length),
+        path:
+          url === FLY_GRAPHQL
+            ? '/graphql'
+            : isLogs
+              ? url.slice(FLY_LOGS_HOST.length)
+              : url.slice(FLY_API.length),
         method: init.method ?? 'GET',
         body:
           typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null,
         auth: headers['authorization'] ?? null,
       };
       calls.push(call);
+      if (isLogs) return logsApi(call);
       return url === FLY_GRAPHQL ? graphql(call) : simulate(call);
     },
   };

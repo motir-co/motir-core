@@ -4,6 +4,7 @@ import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus, Replace } from 'lu
 import { memo } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  BlockedTab,
   CardEdgeTab,
   CrossBlockedFlag,
   GhostAnchor,
@@ -182,8 +183,9 @@ export const PlanItemNode = memo(function PlanItemNode({
   outcome?: PlanItemOutcome | null;
   /**
    * Blocked by a card OFF this level (bug MOTIR-5387) — the dependent's half of
-   * the roadmap's off-level treatment, drawn with the roadmap's own chip and in
-   * the slot `WorkItemNode` gives it. It is a DEPENDENCY fact, so it crosses
+   * the roadmap's off-level treatment, drawn with the roadmap's own BLOCKED TAB
+   * (MOTIR-12158) on the card's top edge, or — on a decided card, whose outcome
+   * tab keeps that edge — with the short flag in the tag row. It is a DEPENDENCY fact, so it crosses
    * every op and outcome rather than joining them: an `add` that will be blocked
    * from another container is exactly the bad plan the legend warns about, and
    * the warning belongs before approve.
@@ -251,7 +253,11 @@ export const PlanItemNode = memo(function PlanItemNode({
   // `To Do` beside `High` already overflows the room the op chip leaves. An
   // undecided `add` has no status, so it keeps its difficulty unless it gives way.
   const decided = outcome != null;
-  const textTag = crossBlocked || showStale;
+  // Blocked rides the top-edge TAB (MOTIR-12158; design MOTIR-12157 § "Both
+  // canvases") unless the card is decided: the outcome tab keeps the edge, and the
+  // short flag stays in the row. Only the row form is a text tag the give-way reads.
+  const blockedInRow = crossBlocked && decided;
+  const textTag = blockedInRow || showStale;
   const giveWay = textTag || supersedes.length > 0;
   const supersedesGlyphOnly = supersedes.length > 0;
   const supersedesInRow = supersedes.length > 0 && !textTag;
@@ -297,7 +303,14 @@ export const PlanItemNode = memo(function PlanItemNode({
       data-outcome={outcome ?? undefined}
       data-locked={locked ? 'true' : undefined}
       data-testid="plan-item-node"
-      tab={outcome ? <PlanItemOutcomeTab outcome={outcome} /> : null}
+      tab={
+        outcome ? (
+          <PlanItemOutcomeTab outcome={outcome} />
+        ) : crossBlocked ? (
+          // The plan canvas has no sprint scope, so it always reads "blocked elsewhere".
+          <BlockedTab />
+        ) : null
+      }
       // A locked proposal cannot be applied — the approve is refused server-side
       // for a finished target — so say so rather than imply it.
       aria-disabled={locked ? true : undefined}
@@ -374,9 +387,10 @@ export const PlanItemNode = memo(function PlanItemNode({
                 {supersedesGlyphOnly ? null : t('nodeSupersedes', { n: supersedes.length })}
               </span>
             ) : null}
-            {crossBlocked ? (
+            {blockedInRow ? (
               // The SHORT flag (`blocked`, the sentence on `title` / `aria-label`),
-              // the committed card's tag-row form (MOTIR-11545, MOTIR-11549).
+              // the committed card's tag-row form (MOTIR-11545, MOTIR-11549) — on a
+              // decided card only, whose outcome tab keeps the top edge.
               <CrossBlockedFlag short />
             ) : item.hasChildren ? (
               <ChevronRight

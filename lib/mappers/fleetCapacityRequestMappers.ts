@@ -1,6 +1,6 @@
 import type { FleetCapacityRequest, FleetQuotaRequest } from '@/generated/prisma/client';
-import type { FleetWorkloadKind } from '@motir/orchestrator';
 import type {
+  CapacityRequestFleetKind,
   FleetCapacityRequestDTO,
   OrgFleetCapacityRequestDTO,
 } from '@/lib/dto/fleetCapacityRequest';
@@ -17,7 +17,7 @@ export function toFleetCapacityRequestDTO(row: FleetCapacityRequestRow): FleetCa
     organizationId: row.organizationId,
     shardId: row.shardId,
     awsAccountId: row.awsAccountId,
-    fleetKind: row.fleetKind as FleetWorkloadKind,
+    fleetKind: row.fleetKind as CapacityRequestFleetKind,
     quotaCode: row.quotaCode,
     desiredVcpu: row.desiredVcpu,
     reasonMd: row.reasonMd,

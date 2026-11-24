@@ -176,7 +176,6 @@ describe('previewStopAction', () => {
       ciContainers: 0,
       hostedRuns: 0,
       agentInstances: 0,
-      indexContainers: 0,
     });
     expect(Number.isNaN(Date.parse(answer.countedAt))).toBe(false);
   });

@@ -7,7 +7,6 @@ import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { E2E_INSTALLATION_ID } from './_helpers/github-const';
 import { linkPr } from './_helpers/pr-link';
-import { closeOverlay, openDevelopmentOverlay } from './_helpers/development-decide';
 import { gotoLoadedBoard } from './_helpers/board';
 import {
   WEB_REPO,
@@ -43,13 +42,16 @@ import zh from '@/messages/zh.json';
 //
 //   Failed in the queue  a signed `pull_request` `dequeued` with reason `CI_FAILURE`, at the
 //                        pull request's head (the captured MOTIR-5627 body)
-//   Conflicts with main  the approve-and-merge PRESS, which reads the host's mergeability (the
-//                        merge seam, answering `dirty`), stores it and withdraws the question
+//   Conflicts with main  the green `check_suite` itself: CI's promotion reads the host's
+//                        mergeability first (the merge seam, answering `dirty`), stores it and
+//                        asks nothing — the card is held at Implemented (MOTIR-12094; before it
+//                        a green In Progress card was asked, and the approve-and-merge PRESS
+//                        was the read)
 //
 // and the repair is a signed green `check_suite` at a NEW head — a push whose build passed.
 //
-// ⚠️ EVERY WAIT IS AUTHORITATIVE: a webhook's response, a server action's response, a row's
-// text or attribute, or a read of the stored column. There is no `waitForTimeout`.
+// ⚠️ EVERY WAIT IS AUTHORITATIVE: a webhook's response, a row's text or
+// attribute, or a read of the stored column. There is no `waitForTimeout`.
 //
 // ⚠️ THE 23xxx BLOCK IS THIS SPEC'S (`tests/e2e-pull-request-number-blocks.test.ts`).
 //
@@ -105,11 +107,6 @@ const boardCard = (page: Page, card: SeededCard) =>
 /** The item page's To fix banner, scoped to the LIVE page (`main`): a page-rooted test
  *  id can match the copy React keeps mounted while the next page streams in. */
 const banner = (page: Page) => page.getByRole('main').getByTestId('to-fix-banner');
-
-const serverAction = (page: Page) =>
-  page.waitForResponse(
-    (res) => res.request().method() === 'POST' && Boolean(res.request().headers()['next-action']),
-  );
 
 async function fixReasonOf(card: SeededCard): Promise<string | null> {
   const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
@@ -225,7 +222,7 @@ test.describe('A stuck work item looks stuck wherever it is listed', () => {
     healthy = seed.zh;
     writeFileSync(JOURNAL_PATH, '');
     // The merge seam answers for the web repository; the CONFLICT card's pull request reads
-    // `dirty` at its head, so the press stores the conflict and asks nothing.
+    // `dirty` at its head, so its green promotion stores the conflict and asks nothing.
     const control: GithubMergeControl = {
       repositories: [WEB],
       pullRequests: {
@@ -261,31 +258,12 @@ test.describe('A stuck work item looks stuck wherever it is listed', () => {
     await checks(page, queue, 'queue', null);
     await queueFails(page, 'queue');
 
-    // The conflicted card went GREEN, which raised an approve-to-merge question. Pressing
-    // Approve and merge reads the host first, finds it `dirty`, and withdraws the question.
+    // The conflicted card went GREEN at In Progress. CI's promotion reads the host before
+    // it asks anybody (MOTIR-12094), finds the pull request `dirty`, stores the conflict and
+    // holds the card at Implemented — no approve-to-merge question is raised.
     await openPr(page, conflict, 'conflict');
     await checks(page, conflict, 'conflict', 'success');
-    await openItem(page, conflict);
-    const pressDialog = await openDevelopmentOverlay(page);
-    await pressDialog
-      .getByRole('button', {
-        name: en.approvalGate.pullRequestApproval.verb.approveAndMerge,
-        exact: true,
-      })
-      .click();
-    const press = serverAction(page);
-    await pressDialog
-      .getByRole('button', {
-        name: en.approvalGate.confirm.proceed.replace(
-          '{verb}',
-          en.approvalGate.pullRequestApproval.verb.approveAndMerge,
-        ),
-        exact: true,
-      })
-      .click();
-    expect((await press).status()).toBe(200);
     await expect.poll(() => fixReasonOf(conflict), { timeout: 60_000 }).toBe('conflicted');
-    await closeOverlay(page);
 
     // The server's own answer, before the camera is asked to show any of it.
     expect(await fixReasonOf(queue)).toBe('queue_failed');

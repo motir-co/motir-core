@@ -50,6 +50,42 @@ export interface FakeHostingSlice {
   sequence: number;
   /** Whether the organisation's AWS tenant account is ready. */
   accountReady: boolean;
+  /** Each app's log lines, in the order they were appended (MOTIR-12099). */
+  logs: Record<string, FakeLogLine[]>;
+  /** The reason each app's logs cannot be read, for the apps a test made so. */
+  logsUnavailable: Record<string, string>;
+  /** A runtime state a test set on an app — an exit or a memory kill — that
+   *  `wake`, `deploy` and `rollback` clear. */
+  runtimeStates: Record<string, FakeRuntimeState>;
+  /** The exit each app's running release was last restarted from. */
+  restartedExits: Record<string, FakeRestartedExit>;
+  /** When each app's release began deploying: a held AWS release, or a health
+   *  a test set to `deploying`. Epoch milliseconds. */
+  deployingSince: Record<string, number>;
+  /** The last log line number handed out, so lines at one instant keep their
+   *  order across pages. */
+  logSequence: number;
+}
+
+/** One stored log line. Instants are epoch milliseconds, so JSON round-trips
+ *  them with no revival. */
+export interface FakeLogLine {
+  readonly seq: number;
+  readonly at: number;
+  readonly stream: 'app' | 'platform';
+  readonly message: string;
+}
+
+/** A runtime state a test set, and when it began (epoch milliseconds). */
+export type FakeRuntimeState =
+  | { readonly state: 'exited'; readonly exitCode: number | null; readonly since: number }
+  | { readonly state: 'oom_killed'; readonly since: number };
+
+/** A restarted exit as stored (epoch milliseconds). */
+export interface FakeRestartedExit {
+  readonly exitCode: number | null;
+  readonly oomKilled: boolean;
+  readonly at: number;
 }
 
 /** The key a fake's slice is stored under — the composition root's cache key. */
@@ -74,6 +110,12 @@ export function emptyFakeHostingSlice(start = new Date('2026-01-01T00:00:00Z')):
     clock: start.getTime(),
     sequence: 0,
     accountReady: true,
+    logs: {},
+    logsUnavailable: {},
+    runtimeStates: {},
+    restartedExits: {},
+    deployingSince: {},
+    logSequence: 0,
   };
 }
 
@@ -97,6 +139,14 @@ function revive(slice: FakeHostingSlice): FakeHostingSlice {
   for (const app of Object.values(slice.apps)) {
     app.transitions = app.transitions.map((t) => ({ ...t, at: new Date(t.at) }));
   }
+  // A store written before the runtime reads (MOTIR-12099) holds none of their
+  // fields; read it as holding nothing for them.
+  slice.logs ??= {};
+  slice.logsUnavailable ??= {};
+  slice.runtimeStates ??= {};
+  slice.restartedExits ??= {};
+  slice.deployingSince ??= {};
+  slice.logSequence ??= 0;
   return slice;
 }
 

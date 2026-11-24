@@ -73,6 +73,30 @@ const MEASURED = [
   'lib/services/releaseDeploymentStatusService.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/route.ts',
   'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/rollback/route.ts',
+  // Story MOTIR-9799 — MOTIR-12107's idle policy per application.
+  'lib/hosting/idlePolicy.ts',
+  'lib/services/hostedIdlePolicyService.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/idle-policy/route.ts',
+  // Story MOTIR-9799 — MOTIR-12105's masked production logs read.
+  'lib/hosting/logMasking.ts',
+  'lib/hosting/productionLogQuery.ts',
+  'lib/services/productionLogsService.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/logs/route.ts',
+  // Story MOTIR-9799 — MOTIR-12106's health prober and crash events.
+  'lib/hosting/healthState.ts',
+  'lib/hosting/healthProbe.ts',
+  'lib/repositories/hostedApplicationHealthRepository.ts',
+  'lib/services/productionHealthService.ts',
+  'lib/jobs/definitions/productionHealthProbe.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/health/route.ts',
+  // Story MOTIR-9799 — MOTIR-12108's production usage meter and Usage read.
+  'lib/hosting/productionRates.ts',
+  'lib/hosting/productionUsage.ts',
+  'lib/repositories/productionUsageSliceRepository.ts',
+  'lib/services/productionUsageMeterService.ts',
+  'lib/services/productionUsageService.ts',
+  'lib/jobs/definitions/productionUsageAccrual.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/usage/route.ts',
 ];
 
 /**
@@ -110,6 +134,10 @@ export const SHARED_NOT_FLOORED = [
   // Types only — nothing executes, so nothing to floor.
   'lib/dto/hostedApplications.ts',
   'lib/dto/productionPanel.ts',
+  'lib/dto/idlePolicy.ts',
+  'lib/dto/productionLogs.ts',
+  'lib/dto/productionHealth.ts',
+  'lib/dto/productionUsage.ts',
   // Argv and console around `productionEnablementService`, which IS floored.
   'scripts/backfill-production-enablement.ts',
 ];
@@ -165,6 +193,20 @@ export default defineConfig({
       'tests/github/repoDeployments.test.ts',
       // MOTIR-11981 — the hosted-repository delete's teardown read and delete.
       'tests/hosting/hostedApplicationTeardown.test.ts',
+      // MOTIR-12107 — the idle policy's service, and its errors in errors.ts.
+      'tests/hosting/hostedIdlePolicyService.test.ts',
+      // MOTIR-12105 — the masked production logs read and its route.
+      'tests/hosting/logMasking.test.ts',
+      'tests/hosting/productionLogsService.test.ts',
+      'tests/api/productionLogsRoute.test.ts',
+      // MOTIR-12106 — the health prober, its rule and its route.
+      'tests/hosting/healthState.test.ts',
+      'tests/services/productionHealthService.test.ts',
+      'tests/api/production-health-route.test.ts',
+      // MOTIR-12108 — the production usage meter, its read and its route.
+      'tests/hosting/productionRates.test.ts',
+      'tests/hosting/productionUsageMeter.test.ts',
+      'tests/hosting/productionUsageRead.test.ts',
     ],
     coverage: {
       provider: 'v8',

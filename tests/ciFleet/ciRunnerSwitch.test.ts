@@ -112,20 +112,19 @@ describe('the lane fixture answers first', () => {
 });
 
 describe('only ci_runner follows it', () => {
-  it('leaves the indexer, the agent runner and the agent hoster where they are', async () => {
+  it('leaves the agent runner and the agent hoster where they are', async () => {
     // Pin the env-switched kinds to Fly; the agent hoster reads its stored
     // switch, which no test row sets, so it reads Fly too. The only thing that
     // can move between the two reads below is the CI runner's env var.
-    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'fly');
     vi.stubEnv('MOTIR_FLEET_AGENT_RUNNER_PROVIDER', 'fly');
     await adminDb.platformFleetKindSwitch.deleteMany({});
-    const others = ['code_graph_index', 'hosted_agent', 'agent_instance'] as const;
+    const others = ['hosted_agent', 'agent_instance'] as const;
     vi.stubEnv(CI_RUNNER_PROVIDER_ENV_VAR, 'fly');
     const before = await Promise.all(others.map((kind) => fleetKindOnPool(kind)));
     vi.stubEnv(CI_RUNNER_PROVIDER_ENV_VAR, 'aws');
     expect(await fleetKindOnPool('ci_runner')).toBe(true);
     const after = await Promise.all(others.map((kind) => fleetKindOnPool(kind)));
-    expect(before).toEqual([false, false, false]);
+    expect(before).toEqual([false, false]);
     expect(after).toEqual(before);
   });
 });

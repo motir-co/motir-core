@@ -1,11 +1,14 @@
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
+import type { IdlePolicyDto } from '@/lib/dto/idlePolicy';
 import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
 import { CustomerRepositoryNotDeployableError } from '@/lib/hosting/errors';
 import { decodeReleaseCursor, encodeReleaseCursor } from '@/lib/hosting/releaseCursor';
 import { ProjectRepoNotFoundError } from '@/lib/projectRepos/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
+import type { HostedIdlePolicy } from '@/lib/hosting/idlePolicy';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
+import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
 import { productionRollbackService } from '@/lib/services/productionRollbackService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -13,15 +16,16 @@ import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The PRODUCTION PANEL's server side (Story MOTIR-9797 · MOTIR-10036): the read
-// behind `GET …/repositories/[rowId]/production`, and the rollback behind its
-// `POST …/rollback`, each resolving the repository the same way.
+// behind `GET …/repositories/[rowId]/production`, the rollback behind its
+// `POST …/rollback`, and the idle policy behind `GET`/`PUT …/idle-policy`
+// (MOTIR-12107), each resolving the repository the same way.
 //
 // ⚠️ NOT FOUND, NEVER FORBIDDEN, FOR WHAT THE VIEWER CANNOT HAVE. A project the
 // viewer cannot browse, a repository id that is not in the path's project, and a
 // customer repository all fail as not found, so one repository's id can never be
 // used through another project's path and no response confirms a repository
-// exists. Only the rollback itself answers forbidden, to an administrator check
-// the rollback service owns.
+// exists. Only the rollback and the idle-policy change answer forbidden, to the
+// administrator checks their own services own.
 
 /** The release history's page size — the five rows a page of the approved design
  *  draws before Show more (MOTIR-10024) — and its ceiling. The rollback answers
@@ -37,8 +41,10 @@ export interface ProductionPanelInput {
   limit?: number | null;
 }
 
-/** The repository named by the path, if the actor may see it and Motir hosts it. */
-async function resolveRepository(
+/** The repository named by the path, if the actor may see it and Motir hosts it.
+ *  The one resolution every production route shares — the logs read
+ *  (MOTIR-12105) included — so not found means the same thing on each. */
+export async function resolveRepository(
   projectKey: string,
   projectRepositoryId: string,
   actor: ServiceContext,
@@ -139,4 +145,42 @@ async function rollback(
   return panelFor(projectId, input);
 }
 
-export const productionPanelService = { getProductionPanel, rollback };
+/** The application's idle policy (MOTIR-12107), for anyone who can browse the
+ *  project; `editable` says whether the viewer is an administrator. */
+async function getIdlePolicy(
+  input: Pick<ProductionPanelInput, 'projectKey' | 'projectRepositoryId' | 'actor'>,
+): Promise<IdlePolicyDto> {
+  const { projectId } = await resolveRepository(
+    input.projectKey,
+    input.projectRepositoryId,
+    input.actor,
+  );
+  const permissions = await projectAccessService.getPermissions(projectId, input.actor);
+  if (!permissions.has('project:browse')) throw new ProjectNotFoundError(projectId);
+  return hostedIdlePolicyService.readIdlePolicy({
+    projectRepositoryId: input.projectRepositoryId,
+    isAdministrator: permissions.has('project:administer'),
+  });
+}
+
+/** Change the application's idle policy and apply it to the serving release.
+ *  Who may change it is the idle-policy service's. */
+async function setIdlePolicy(
+  input: Pick<ProductionPanelInput, 'projectKey' | 'projectRepositoryId' | 'actor'> & {
+    policy: HostedIdlePolicy;
+  },
+): Promise<IdlePolicyDto> {
+  await resolveRepository(input.projectKey, input.projectRepositoryId, input.actor);
+  return hostedIdlePolicyService.setIdlePolicy({
+    projectRepositoryId: input.projectRepositoryId,
+    policy: input.policy,
+    actor: input.actor,
+  });
+}
+
+export const productionPanelService = {
+  getProductionPanel,
+  rollback,
+  getIdlePolicy,
+  setIdlePolicy,
+};

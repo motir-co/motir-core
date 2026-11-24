@@ -72,8 +72,6 @@ const { fleetShardAdmissionService, OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND } =
   await import('@/lib/services/fleetShardAdmissionService');
 const { fleetCeilingService } = await import('@/lib/services/fleetCeilingService');
 const { ciRunnerAdmissionService } = await import('@/lib/services/ciRunnerAdmissionService');
-const { codeGraphIndexAdmissionService } =
-  await import('@/lib/services/codeGraphIndexAdmissionService');
 const { fleetShardOrchestratorService } =
   await import('@/lib/services/fleetShardOrchestratorService');
 const { fleetShardService } = await import('@/lib/services/fleetShardService');
@@ -87,12 +85,7 @@ const { agentInstanceLifecycleService: lifecycle } =
 type Ec2Fake = Ec2Api;
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
@@ -109,7 +102,6 @@ const SESSION: AwsSessionCredentials = {
 };
 const T0 = new Date('2026-10-26T12:00:00.000Z');
 const MINUTE = 60_000;
-const INDEX_TIMEOUT_MS = 30 * MINUTE;
 
 let github: GithubWorld;
 let organization: FakeOrganization;
@@ -322,32 +314,6 @@ async function ciJob(tenant: Tenant) {
   return { intentId: intent.id, landed };
 }
 
-/** An index run of one repository, through the index gate. */
-async function indexRun(tenant: Tenant) {
-  seq += 1;
-  const request = {
-    projectId: tenant.projectId,
-    repoRef: `acme/repo-${seq}`,
-    dispatchId: `dispatch-${seq}`,
-    workspaceId: tenant.workspaceId,
-    organizationId: tenant.organizationId,
-    containerTimeoutMs: INDEX_TIMEOUT_MS,
-  };
-  const verdict = await codeGraphIndexAdmissionService.admit(request, now);
-  const landed: Landed =
-    verdict.outcome === 'admitted'
-      ? { shardId: verdict.admission.shardId ?? null }
-      : verdict.outcome === 'deferred'
-        ? { deferred: verdict.reason, detail: verdict.detail }
-        : { deferred: verdict.outcome, detail: '' };
-  await check('code_graph_index', tenant.organizationId, landed);
-  const slotRef = verdict.outcome === 'admitted' ? verdict.admission.slotRef : null;
-  return {
-    landed,
-    release: () => slotRef && codeGraphIndexAdmissionService.release(slotRef, request.dispatchId),
-  };
-}
-
 /** An agent instance's placement; a landed one counts as running there. */
 async function agentInstance(tenant: Tenant): Promise<Landed> {
   const placement = await withSystemContext((tx) =>
@@ -453,7 +419,6 @@ beforeAll(async () => {
   const ids: Record<FleetWorkloadKind, string> = {
     ci_runner: '111122224441',
     hosted_agent: '111122224442',
-    code_graph_index: '111122224443',
     agent_instance: '111122224444',
   };
   for (const kind of KINDS) {
@@ -516,9 +481,6 @@ async function foreignJobs() {
   const job = await ciJob(other);
   expect(job.landed).toEqual(on(shared.ci_runner!));
   await finishCi([job.intentId]);
-  const index = await indexRun(other);
-  expect(index.landed).toEqual(on(shared.code_graph_index!));
-  await index.release();
   expect(await agentInstance(other)).toEqual(on(shared.agent_instance!));
   agents.clear();
 }
@@ -530,25 +492,25 @@ describe('the larger-pool recipe, steps 5–8, for one pool_600k org', () => {
   });
   afterEach(foreignJobs);
 
-  it('recipe 5 — the plan reads pool_600k: three accounts as four rows asking the derived raises, none in pool-status; a second pass makes nothing', async () => {
+  it('recipe 5 — the plan reads pool_600k: three accounts as three rows asking the derived raises, none in pool-status; a second pass makes nothing', async () => {
     expect(largerPoolPlans().map((p) => p.key)).toContain(RUNG);
     await setPlan(rung.organizationId, RUNG);
     await reconcile();
     await statePass();
 
     const rows = await ownRows(rung.organizationId);
-    expect(rows.map((r) => r.fleetKind).sort()).toEqual([...KINDS].sort());
+    // The merged account is its one agent_instance row (MOTIR-12038).
+    expect(rows.map((r) => r.fleetKind).sort()).toEqual(
+      ['agent_instance', 'ci_runner', 'hosted_agent'].sort(),
+    );
     expect(rows.every((r) => r.role === 'org_owned')).toBe(true);
     expect(new Set(rows.map((r) => r.awsAccountId)).size).toBe(3);
-    const index = rows.find((r) => r.fleetKind === 'code_graph_index')!;
-    const hoster = rows.find((r) => r.fleetKind === 'agent_instance')!;
-    expect(index.awsAccountId).toBe(hoster.awsAccountId);
 
     const pool = ownAccountPoolCredits(RUNG)!;
     expect(pool).toBe(RUNG_ENTRY.allotment!.credits);
     const expected: [FleetWorkloadKind, number, null][] = [
+      ['agent_instance', ownAccountRaiseTargetVcpu('merged', pool), null],
       ['ci_runner', ownAccountRaiseTargetVcpu('ci_runner', pool), null],
-      ['code_graph_index', ownAccountRaiseTargetVcpu('merged', pool), null],
       ['hosted_agent', ownAccountRaiseTargetVcpu('agent_runner', pool), null],
     ];
     const requests = await ownRequests(rung.organizationId);
@@ -556,10 +518,10 @@ describe('the larger-pool recipe, steps 5–8, for one pool_600k org', () => {
       expected.sort(),
     );
     // Once, so a reader sees the recipe's figures.
-    expect(expected.map(([, v]) => v)).toEqual([400, 120, 64]);
+    expect(expected.map(([, v]) => v)).toEqual([120, 400, 64]);
 
     const listing = await fleetAdmin('org-accounts', '--org', rung.organizationId);
-    expect(listing).toHaveLength(4);
+    expect(listing).toHaveLength(3);
     expect(listing.every((l) => l.includes(' quota_requested '))).toBe(true);
     for (const kind of KINDS) {
       const status = (await fleetAdmin('pool-status', '--kind', kind)).join('\n');

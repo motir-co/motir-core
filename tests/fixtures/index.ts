@@ -26,6 +26,7 @@ export type { CreateTestProjectOptions } from './projectFixtures';
 export {
   makeWorkItemFixture,
   createTestWorkItem,
+  createTestWorkItems,
   createTestLink,
   nextTestPosition,
 } from './workItemFixtures';
@@ -33,5 +34,6 @@ export type {
   WorkItemFixture,
   MakeWorkItemFixtureOptions,
   CreateTestWorkItemInput,
+  CreateTestWorkItemsInput,
   CreateTestLinkInput,
 } from './workItemFixtures';

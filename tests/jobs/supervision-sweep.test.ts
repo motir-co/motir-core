@@ -12,7 +12,6 @@ import {
   SUPERVISION_STALL_GRACE_MS,
   WORST_LEGITIMATE_GAP_MS,
 } from '@/lib/services/supervisionSweepService';
-import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { ciRunnerBootService, FLEET_TIME_BUDGETS } from '@/lib/services/ciRunnerBootService';
 import { engineJob } from '@/lib/jobs/engine/registry';
 import { jobServices } from '@/lib/jobs/services';
@@ -175,9 +174,6 @@ function readRow(runId: string, subject: string) {
 /** Stub both terminal transitions so the sweep's DISPATCH is what is observed. */
 function stubTerminals() {
   return {
-    index: vi
-      .spyOn(codeGraphIndexDispatchService, 'settleIndexContainer')
-      .mockResolvedValue({ outcome: 'teardown_failed', detail: 'stub' } as never),
     runner: vi
       .spyOn(ciRunnerBootService, 'settleSupervision')
       .mockResolvedValue({ outcome: 'unknown_intent' } as never),
@@ -201,25 +197,21 @@ describe('the grace window', () => {
 });
 
 describe('a chain that stopped', () => {
-  it('settles an INDEX supervision through the index fleet’s own terminal transition', async () => {
+  it('leaves a leftover INDEX supervision watching: its kind has no settler since MOTIR-12036', async () => {
     const run = await makeRun('failed');
     await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
     const terminals = stubTerminals();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const result = await supervisionSweepService.sweepAbandoned();
 
-    expect(result).toEqual({ scanned: 1, settled: 1, skipped: 0 });
-    expect(terminals.index).toHaveBeenCalledTimes(1);
+    // The index-container supervisor is gone, so nothing can tear the row's
+    // container down here; the fleet reaper is its backstop. The row is left and
+    // said so, never handed to another fleet's teardown.
+    expect(result).toEqual({ scanned: 1, settled: 0, skipped: 1 });
     expect(terminals.runner).not.toHaveBeenCalled();
-    // The session came out of the BOOT MEMO — the sweep reconstructs it the way
-    // a resumed pass does, without invoking the handler at all.
-    expect(terminals.index.mock.calls[0]![0]).toMatchObject({ slotRef: 'slot-proj-a' });
-    expect(terminals.index.mock.calls[0]![1]).toMatchObject({
-      done: true,
-      reason: 'job_timed_out',
-      failureDetail: expect.stringContaining('abandoned'),
-    });
-    expect((await readRow(run.id, 'proj-a'))!.state).toBe('settled');
+    expect(error).toHaveBeenCalled();
+    expect((await readRow(run.id, 'proj-a'))!.state).toBe('watching');
   });
 
   it('settles a CI-RUNNER supervision through the CI fleet’s own terminal transition', async () => {
@@ -233,13 +225,12 @@ describe('a chain that stopped', () => {
       skipped: 0,
     });
     expect(terminals.runner).toHaveBeenCalledTimes(1);
-    expect(terminals.index).not.toHaveBeenCalled();
     expect(terminals.runner.mock.calls[0]![0]).toMatchObject({ intentId: 'intent-1' });
   });
 
   it('sweeps a run whose queue row is GONE — the chain cannot come back at all', async () => {
     const run = await makeRun('failed');
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 40 });
     const terminals = stubTerminals();
     // Detach the row from the run first, so deleting the run does not cascade
     // the supervision away — the state under test is "the row outlived its run".
@@ -253,7 +244,7 @@ describe('a chain that stopped', () => {
       settled: 0,
       skipped: 0,
     });
-    expect(terminals.index).not.toHaveBeenCalled();
+    expect(terminals.runner).not.toHaveBeenCalled();
   });
 });
 
@@ -261,7 +252,7 @@ describe('a LIVE supervision is never swept', () => {
   it('leaves a row whose next poll is inside the grace window', async () => {
     const run = await makeRun('pending');
     // Deferred to the far end of the backoff, well inside the window.
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 1 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 1 });
     const terminals = stubTerminals();
 
     expect(await supervisionSweepService.sweepAbandoned()).toEqual({
@@ -269,13 +260,13 @@ describe('a LIVE supervision is never swept', () => {
       settled: 0,
       skipped: 0,
     });
-    expect(terminals.index).not.toHaveBeenCalled();
-    expect((await readRow(run.id, 'proj-a'))!.state).toBe('watching');
+    expect(terminals.runner).not.toHaveBeenCalled();
+    expect((await readRow(run.id, 'intent-a'))!.state).toBe('watching');
   });
 
   it('leaves a row whose owning run is RUNNING — a pass is in flight right now', async () => {
     const run = await makeRun('running');
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 40 });
     const terminals = stubTerminals();
 
     // The candidate is FOUND — its last poll instant is long past — and then
@@ -286,8 +277,8 @@ describe('a LIVE supervision is never swept', () => {
       settled: 0,
       skipped: 1,
     });
-    expect(terminals.index).not.toHaveBeenCalled();
-    expect((await readRow(run.id, 'proj-a'))!.state).toBe('watching');
+    expect(terminals.runner).not.toHaveBeenCalled();
+    expect((await readRow(run.id, 'intent-a'))!.state).toBe('watching');
   });
 
   it('leaves a row whose owning run is PENDING and due in the future', async () => {
@@ -296,21 +287,21 @@ describe('a LIVE supervision is never swept', () => {
       where: { id: run.id },
       data: { runAt: new Date(Date.now() + 60_000) },
     });
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 40 });
     const terminals = stubTerminals();
 
     expect(await supervisionSweepService.sweepAbandoned()).toMatchObject({
       settled: 0,
       skipped: 1,
     });
-    expect(terminals.index).not.toHaveBeenCalled();
+    expect(terminals.runner).not.toHaveBeenCalled();
   });
 
   it('leaves a row already SETTLING — a live pass is mid-teardown', async () => {
     const run = await makeRun('failed');
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 40 });
     await withSystemContext((tx) =>
-      jobSupervisionRepository.markState(run.id, 'proj-a', 'settling', tx),
+      jobSupervisionRepository.markState(run.id, 'intent-a', 'settling', tx),
     );
     const terminals = stubTerminals();
 
@@ -321,14 +312,14 @@ describe('a LIVE supervision is never swept', () => {
       settled: 0,
       skipped: 0,
     });
-    expect(terminals.index).not.toHaveBeenCalled();
+    expect(terminals.runner).not.toHaveBeenCalled();
   });
 });
 
 describe('idempotence and concurrency', () => {
   it('two overlapping ticks settle each stalled supervision ONCE, not twice', async () => {
     const run = await makeRun('failed');
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 40 });
     const terminals = stubTerminals();
 
     const [a, b] = await Promise.all([
@@ -339,13 +330,13 @@ describe('idempotence and concurrency', () => {
     // ⚠️ `teardown`'s own idempotence is NOT what is relied on. An idempotent
     // destroy does not make a second USAGE row disappear, so the claim is a
     // locked compare-and-set and exactly one tick wins it.
-    expect(terminals.index).toHaveBeenCalledTimes(1);
+    expect(terminals.runner).toHaveBeenCalledTimes(1);
     expect([a.settled, b.settled].sort()).toEqual([0, 1]);
   });
 
   it('a second tick after a settled one finds nothing', async () => {
     const run = await makeRun('failed');
-    await seedSupervision(run, { kind: 'index', subject: 'proj-a', dueMinutesAgo: 40 });
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-a', dueMinutesAgo: 40 });
     stubTerminals();
 
     expect((await supervisionSweepService.sweepAbandoned()).settled).toBe(1);
@@ -359,8 +350,8 @@ describe('idempotence and concurrency', () => {
   it('drops a row with NO boot memo rather than inventing a teardown', async () => {
     const run = await makeRun('failed');
     await seedSupervision(run, {
-      kind: 'index',
-      subject: 'proj-a',
+      kind: 'ci-runner',
+      subject: 'intent-a',
       dueMinutesAgo: 40,
       withMemo: false,
     });
@@ -371,9 +362,9 @@ describe('idempotence and concurrency', () => {
 
     // Nothing was ever provisioned under this row, so there is no container to
     // tear down. Stop tracking it; do not fabricate a settle.
-    expect(terminals.index).not.toHaveBeenCalled();
+    expect(terminals.runner).not.toHaveBeenCalled();
     expect(result).toMatchObject({ scanned: 1, settled: 0, skipped: 1 });
-    expect((await readRow(run.id, 'proj-a'))!.state).toBe('settled');
+    expect((await readRow(run.id, 'intent-a'))!.state).toBe('settled');
     expect(warn).toHaveBeenCalled();
   });
 });
@@ -383,7 +374,7 @@ describe('reading the session back out of the boot memo', () => {
   // than hand the terminal transition a half-shaped object. The sweep is the one
   // caller that reconstructs a session WITHOUT the handler having run, so a
   // memo it cannot make sense of has no second source to fall back on.
-  const rowFor = (runId: string, kind: 'index' | 'ci-runner', subject: string) =>
+  const rowFor = (runId: string, kind: 'ci-runner', subject: string) =>
     ({ runId, kind, subject }) as never;
 
   it('answers null for a SLEEP checkpoint — a sleep memo carries no result at all', async () => {
@@ -392,7 +383,7 @@ describe('reading the session back out of the boot memo', () => {
       jobStepRepository.create(
         {
           runId: run.id,
-          stepId: 'index-boot:p1',
+          stepId: 'boot-runner',
           kind: 'sleep',
           sleepUntil: new Date(),
           workspaceId: run.workspaceId,
@@ -400,7 +391,9 @@ describe('reading the session back out of the boot memo', () => {
         tx,
       ),
     );
-    expect(await supervisionSweepService.readSession(rowFor(run.id, 'index', 'p1'))).toBeNull();
+    expect(
+      await supervisionSweepService.readSession(rowFor(run.id, 'ci-runner', 'i-1')),
+    ).toBeNull();
   });
 
   it('answers null for a TERMINAL boot — nothing was provisioned to tear down', async () => {
@@ -409,7 +402,7 @@ describe('reading the session back out of the boot memo', () => {
       jobStepRepository.create(
         {
           runId: run.id,
-          stepId: 'index-boot:p1',
+          stepId: 'boot-runner',
           kind: 'run',
           result: { phase: 'terminal', outcome: { outcome: 'provision_failed', detail: 'x' } },
           workspaceId: run.workspaceId,
@@ -417,12 +410,16 @@ describe('reading the session back out of the boot memo', () => {
         tx,
       ),
     );
-    expect(await supervisionSweepService.readSession(rowFor(run.id, 'index', 'p1'))).toBeNull();
+    expect(
+      await supervisionSweepService.readSession(rowFor(run.id, 'ci-runner', 'i-1')),
+    ).toBeNull();
   });
 
   it('answers null when the memo is absent, and when its result is null', async () => {
     const run = await makeRun('failed');
-    expect(await supervisionSweepService.readSession(rowFor(run.id, 'index', 'p1'))).toBeNull();
+    expect(
+      await supervisionSweepService.readSession(rowFor(run.id, 'ci-runner', 'i-1')),
+    ).toBeNull();
     await withSystemContext((tx) =>
       jobStepRepository.create(
         { runId: run.id, stepId: 'boot-runner', kind: 'run', workspaceId: run.workspaceId },
@@ -446,35 +443,25 @@ describe('reading the session back out of the boot memo', () => {
     ).toBe(false);
   });
 
-  it('carries the OBSERVED start through to both terminal transitions', async () => {
+  it('carries the OBSERVED start through to the terminal transition', async () => {
     // The other side of the `startedAt` branch: a container the provider DID
     // report running before the chain stopped. The observation is the row's, so
     // the settle carries it — and the CI arm re-derives `bootLatencyMs` from it
     // and the memoized `queuedAt`, which is why neither is a column (§16.2).
     const observed = new Date(Date.now() - 39 * 60_000);
-    const indexRun = await makeRun('failed');
-    await seedSupervision(indexRun, { kind: 'index', subject: 'proj-s', dueMinutesAgo: 40 });
     const ciRun = await makeRun('failed');
     await seedSupervision(ciRun, { kind: 'ci-runner', subject: 'intent-s', dueMinutesAgo: 40 });
-    for (const [run, subject] of [
-      [indexRun, 'proj-s'],
-      [ciRun, 'intent-s'],
-    ] as const) {
-      await withSystemContext((tx) =>
-        jobSupervisionRepository.advance(
-          run.id,
-          subject,
-          { startedAt: observed, consecutiveReadFailures: 0, nextPollAt: run.runAt },
-          tx,
-        ),
-      );
-    }
+    await withSystemContext((tx) =>
+      jobSupervisionRepository.advance(
+        ciRun.id,
+        'intent-s',
+        { startedAt: observed, consecutiveReadFailures: 0, nextPollAt: ciRun.runAt },
+        tx,
+      ),
+    );
     const terminals = stubTerminals();
 
-    expect((await supervisionSweepService.sweepAbandoned()).settled).toBe(2);
-    expect(terminals.index.mock.calls[0]![1]).toMatchObject({
-      startedAt: observed.toISOString(),
-    });
+    expect((await supervisionSweepService.sweepAbandoned()).settled).toBe(1);
     const runnerVerdict = terminals.runner.mock.calls[0]![1] as {
       startedAt: string | null;
       bootLatencyMs: number | null;
@@ -508,7 +495,6 @@ describe('a quiet tick is free', () => {
       settled: 0,
       skipped: 0,
     });
-    expect(terminals.index).not.toHaveBeenCalled();
     expect(terminals.runner).not.toHaveBeenCalled();
   });
 });
@@ -521,7 +507,7 @@ describe('the shape of the thing', () => {
     // terminal transitions, which already destroy, meter and release.
     const source = readFileSync('lib/services/supervisionSweepService.ts', 'utf8');
     expect(source).not.toMatch(/\bteardown\(/);
-    expect(source).toMatch(/settleIndexContainer\(/);
+    expect(source).not.toMatch(/settleIndexContainer\(/);
     expect(source).toMatch(/settleSupervision\(/);
   });
 

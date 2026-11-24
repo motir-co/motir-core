@@ -1926,7 +1926,7 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
 describe('the install’s own org runs its CI on the install fleet (MOTIR-11232)', () => {
   beforeEach(() => {
     vi.stubEnv('MOTIR_CLOUD', 'true');
-    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'ci_runner,code_graph_index');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'ci_runner,hosted_agent');
     vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', 'subnet-a,subnet-b');
     vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
     vi.stubEnv(

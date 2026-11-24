@@ -63,7 +63,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     name: 'Acme Corp',
     isMeta: false,
     internalBilling: false,
-    byWorkload: { ci_runner: 42, hosted_agent: 6, code_graph_index: 2, agent_instance: 3 },
+    byWorkload: { ci_runner: 42, hosted_agent: 6, agent_instance: 3 },
     agentsLive: 3,
     plan: MAX,
     accruedMinutesInWindow: 386,
@@ -199,7 +199,7 @@ describe('organisations card', () => {
           row({
             organizationId: 'org_globex',
             name: 'Globex',
-            byWorkload: { ci_runner: 3, hosted_agent: 0, code_graph_index: 0, agent_instance: 2 },
+            byWorkload: { ci_runner: 3, hosted_agent: 0, agent_instance: 2 },
             accruedMinutesInWindow: 0,
             latestAccrualTickAt: minAgo(22),
             confirmedCreditsThisMonth: 4_018,
@@ -245,7 +245,9 @@ describe('organisations card', () => {
     expect(c.textContent).toContain('1,284');
     expect(c.textContent).toContain('96');
     expect(c.textContent).toContain(fleet.orgs.group.plan);
-    expect(c.textContent).toContain(fleet.orgs.group.uncapped);
+    // No index column and no "No plan figure" group: they retired with the indexer (MOTIR-12040).
+    expect(c.querySelectorAll('thead tr')[1]!.querySelectorAll('th')).toHaveLength(8);
+    expect(c.textContent).not.toContain('Index containers');
     expect(c.textContent).toContain('CI minutes · last 10 min');
 
     const rows = [...c.querySelectorAll('tbody tr')] as HTMLElement[];
@@ -296,7 +298,7 @@ describe('organisations card', () => {
           organizationId: 'org_std',
           name: 'Halcyon',
           plan: STANDARD,
-          byWorkload: { ci_runner: 4, hosted_agent: 1, code_graph_index: 2, agent_instance: 0 },
+          byWorkload: { ci_runner: 4, hosted_agent: 1, agent_instance: 0 },
           agentsLive: 0,
         }),
         row({
@@ -304,7 +306,7 @@ describe('organisations card', () => {
           name: 'Initech',
           plan: PRO,
           // 4 running, 7 live: the agent-instance cell reads the LIVE count (MOTIR-9954).
-          byWorkload: { ci_runner: 2, hosted_agent: 2, code_graph_index: 0, agent_instance: 4 },
+          byWorkload: { ci_runner: 2, hosted_agent: 2, agent_instance: 4 },
           agentsLive: 7,
         }),
       ]),
@@ -315,27 +317,19 @@ describe('organisations card', () => {
     expect(c.textContent).not.toMatch(/pool/i);
     const [std, pro] = [...c.querySelectorAll('tbody tr')] as HTMLElement[];
     const cells = (r: HTMLElement) => [...r.querySelectorAll('td')].map((td) => td.textContent);
-    // Organisation · Plan · CI · hosted · agent instances · index · …
-    expect(cells(std!).slice(1, 6)).toEqual([
+    // Organisation · Plan · CI · hosted · agent instances · … — no index column (MOTIR-12040).
+    expect(cells(std!).slice(1, 5)).toEqual([
       'Standard · 1 per person',
       '4 of 5',
       '1 of 1',
       '0 of 5',
-      '2',
     ]);
-    expect(cells(pro!).slice(1, 6)).toEqual([
-      'Pro · 5 per person',
-      '2 of 10',
-      '2 of 3',
-      '7 of 30',
-      '0',
-    ]);
+    expect(cells(pro!).slice(1, 5)).toEqual(['Pro · 5 per person', '2 of 10', '2 of 3', '7 of 30']);
+    expect(cells(std!)).toHaveLength(8);
     // At the figure the bar is full and takes the warning fill; under it, the accent.
     const hostedBar = std!.querySelectorAll('td')[3]!.querySelector('[data-at-figure]');
     expect(hostedBar!.className).toContain('bg-(--el-warning)');
     expect(std!.querySelectorAll('td')[2]!.querySelector('[data-at-figure]')).toBeNull();
-    // The index cell is a bare count, always.
-    expect(std!.querySelectorAll('td')[5]!.querySelector('[aria-hidden]')).toBeNull();
   });
 
   it('an exempt org reads No plan limit, an unknown plan names its key, and an override is marked', async () => {
@@ -346,7 +340,11 @@ describe('organisations card', () => {
           organizationId: 'org_legacy',
           plan: { kind: 'plan_unknown', planKey: 'legacy_tier' },
         }),
-        row({ organizationId: 'org_unread', plan: { kind: 'plan_unknown', planKey: null } }),
+        row({
+          organizationId: 'org_unread',
+          plan: { kind: 'plan_unknown', planKey: null },
+          byWorkload: { ci_runner: 42, hosted_agent: 0, agent_instance: 3 },
+        }),
         row({ organizationId: 'org_over', plan: capped('max', 'Max', [5, 10, 50, 7], 'override') }),
       ]),
       kills: kills([]),
@@ -356,15 +354,21 @@ describe('organisations card', () => {
     ] as HTMLElement[];
     const cells = (r: HTMLElement) => [...r.querySelectorAll('td')].map((td) => td.textContent);
 
-    expect(cells(meta!).slice(1, 6)).toEqual([fleet.orgs.plan.exempt, '42', '6', '3', '2']);
+    expect(cells(meta!).slice(1, 5)).toEqual([fleet.orgs.plan.exempt, '42', '6', '3']);
     expect(meta!.textContent).not.toContain(' of ');
-    for (const td of [...meta!.querySelectorAll('td')].slice(2, 6)) {
+    for (const td of [...meta!.querySelectorAll('td')].slice(2, 5)) {
       expect(td.querySelector('[aria-hidden]')).toBeNull();
     }
 
     expect(cells(legacy!)[1]).toBe(`Plan unknown · legacy_tier${fleet.orgs.plan.unknownNote}`);
-    expect(cells(legacy!).slice(2, 6)).toEqual(['42', '6', '3', '2']);
+    expect(cells(legacy!).slice(2, 5)).toEqual(['42', '6', '3']);
     expect(cells(unread!)[1]).toBe(`Plan unknown${fleet.orgs.plan.unknownNote}`);
+    // A bare count with no figure: a zero recedes to the secondary ink, a count does not.
+    const ink = (r: HTMLElement, i: number) =>
+      r.querySelectorAll('td')[i]!.querySelector('span')!.className;
+    expect(cells(unread!)[3]).toBe('0');
+    expect(ink(unread!, 3)).toBe('text-(--el-text-secondary)');
+    expect(ink(unread!, 2)).toBe('text-(--el-text)');
 
     expect(cells(over!)[2]).toBe(`42 of 7${fleet.orgs.override}`);
     expect(cells(over!)[3]).toBe('6 of 5');
@@ -490,6 +494,17 @@ describe('reconciler kills card', () => {
     expect(rows[1]!.textContent).toContain('Stop failed');
     expect(rows[2]!.getAttribute('data-failed')).toBeNull();
     expect(rows[2]!.querySelector('td')!.getAttribute('data-rail')).toBeNull();
+  });
+
+  it('an action the card has no words for is shown as it was recorded, in a neutral pill', async () => {
+    const root = await render({
+      orgs: orgs([row()]),
+      kills: kills([kill({ id: 'kd', action: 'drained' })]),
+    });
+    const r = card(root, 'fleet-kills')!.querySelector('tbody tr') as HTMLElement;
+    expect(r.textContent).toContain('drained');
+    expect(r.textContent).not.toContain(fleet.kills.action.destroyed);
+    expect(r.getAttribute('data-failed')).toBeNull();
   });
 
   it('read failed: the kills card alone shows its error; the organisations render', async () => {

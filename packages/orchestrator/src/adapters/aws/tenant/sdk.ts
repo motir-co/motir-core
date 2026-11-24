@@ -16,6 +16,11 @@ import {
   type MetricDataResult,
 } from '@aws-sdk/client-cloudwatch';
 import {
+  CloudWatchLogsClient,
+  FilterLogEventsCommand,
+  type FilteredLogEvent,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
   DescribeManagedPrefixListsCommand,
   EC2Client,
   type ManagedPrefixList,
@@ -67,6 +72,7 @@ import {
 import {
   GetAliasCommand,
   GetFunctionConfigurationCommand,
+  GetProvisionedConcurrencyConfigCommand,
   LambdaClient,
   ListVersionsByFunctionCommand,
   UpdateAliasCommand,
@@ -93,6 +99,7 @@ import type {
   TenantIamPolicyRef,
   TenantIamRole,
   TenantPolicyDocument,
+  TenantLogs,
   TenantRdsData,
   TenantSecretsManager,
   TenantSqlValue,
@@ -102,6 +109,7 @@ import type {
 } from './clients';
 import type {
   TenantEcs,
+  TenantEcsContainerExit,
   TenantEcsDeployment,
   TenantEcsTask,
   TenantElb,
@@ -109,7 +117,12 @@ import type {
   TenantTargetHealth,
 } from './container/ecsClient';
 import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
-import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './function/lambdaClient';
+import type {
+  TenantCloudWatch,
+  TenantFunctionState,
+  TenantFunctionVersion,
+  TenantLambda,
+} from './function/lambdaClient';
 
 // The SDK-backed tenant clients (MOTIR-10004). The only file of the seam that
 // imports an AWS SDK package; what it exports speaks only `clients.ts`'s types.
@@ -140,6 +153,10 @@ import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './func
 //   API_RemoveRoleFromInstanceProfile.html, API_DeleteInstanceProfile.html, API_DeleteRole.html,
 //   API_ListRoles.html, API_ListPolicies.html, API_ListPolicyVersions.html,
 //   API_DeletePolicyVersion.html, API_DeletePolicy.html (read 2026-11-23)
+//   https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_FilterLogEvents.html,
+//   https://docs.aws.amazon.com/lambda/latest/api/API_GetProvisionedConcurrencyConfig.html,
+//   https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_Container.html (stop facts)
+//   (read 2026-11-23)
 
 /** The services a tenant client bundle builds. Later cards add theirs. */
 export type TenantSdkService =
@@ -152,7 +169,8 @@ export type TenantSdkService =
   | 'elasticloadbalancing'
   | 'ssm'
   | 'ec2'
-  | 'iam';
+  | 'iam'
+  | 'logs';
 
 /** Temporary credentials, as the SDK's credential provider answers them. */
 export interface TenantSdkCredentials {
@@ -192,6 +210,8 @@ export const createTenantSdkClient: TenantSdkClientFactory = (service, config) =
       return new EC2Client(config);
     case 'iam':
       return new IAMClient(config);
+    case 'logs':
+      return new CloudWatchLogsClient(config);
   }
 };
 
@@ -407,6 +427,14 @@ export function sdkTenantSecretsManager(client: AwsSdkClient): TenantSecretsMana
 
 const notFound = (err: unknown) => shapeOf(err).name === 'ResourceNotFoundException';
 
+/** Lambda's `LastModified` (`2026-11-23T10:00:00.000+0000`, an offset with no
+ *  colon) as a date; null when absent or unreadable. */
+function lambdaInstant(value: string | undefined): Date | null {
+  if (!value) return null;
+  const at = new Date(value.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
 /** `TenantLambda` over an SDK client. */
 export function sdkTenantLambda(client: AwsSdkClient): TenantLambda {
   async function send<T>(command: unknown): Promise<T> {
@@ -456,6 +484,42 @@ export function sdkTenantLambda(client: AwsSdkClient): TenantLambda {
         marker = page.NextMarker;
       } while (marker);
       return versions;
+    },
+
+    async getFunctionVersion(functionName, version) {
+      try {
+        const config = (await client.send(
+          new GetFunctionConfigurationCommand({ FunctionName: functionName, Qualifier: version }),
+        )) as Pick<FunctionConfiguration, 'State' | 'LastUpdateStatus' | 'LastModified'>;
+        return {
+          state: (config.State?.toLowerCase() ?? 'pending') as TenantFunctionState,
+          lastUpdateStatus: config.LastUpdateStatus?.toLowerCase() ?? null,
+          lastModified: lambdaInstant(config.LastModified),
+        } satisfies TenantFunctionVersion;
+      } catch (err) {
+        if (notFound(err)) return null;
+        throw tenantApiError('lambda', err);
+      }
+    },
+
+    async getProvisionedConcurrency(functionName, alias) {
+      try {
+        const { Status } = (await client.send(
+          new GetProvisionedConcurrencyConfigCommand({
+            FunctionName: functionName,
+            Qualifier: alias,
+          }),
+        )) as { Status?: string };
+        return Status ?? 'IN_PROGRESS';
+      } catch (err) {
+        if (
+          notFound(err) ||
+          shapeOf(err).name === 'ProvisionedConcurrencyConfigNotFoundException'
+        ) {
+          return null;
+        }
+        throw tenantApiError('lambda', err);
+      }
     },
 
     async getFunctionState(functionName, version) {
@@ -544,7 +608,18 @@ function deploymentOf(d: NonNullable<Service['deployments']>[number]): TenantEcs
     taskDefinition: d.taskDefinition ?? '',
     status: d.status ?? '',
     rolloutState: (d.rolloutState ?? 'IN_PROGRESS') as TenantEcsDeployment['rolloutState'],
+    createdAt: d.createdAt ?? null,
+    updatedAt: d.updatedAt ?? null,
   };
+}
+
+/** The release's container, `app` (the release template names it), else the
+ *  only one: how it exited, or null while it has not. */
+function containerExitOf(t: Task): TenantEcsContainerExit | null {
+  const containers = t.containers ?? [];
+  const app = containers.find((c) => c.name === 'app') ?? containers[0];
+  if (!app || (app.exitCode === undefined && !app.reason)) return null;
+  return { exitCode: app.exitCode ?? null, reason: app.reason ?? null };
 }
 
 function taskOf(t: Task): TenantEcsTask {
@@ -556,6 +631,9 @@ function taskOf(t: Task): TenantEcsTask {
     stoppedAt: t.stoppedAt ?? null,
     cpu: Number(t.cpu ?? 0),
     memory: Number(t.memory ?? 0),
+    stopCode: t.stopCode ?? null,
+    stoppedReason: t.stoppedReason ?? null,
+    container: containerExitOf(t),
   };
 }
 
@@ -730,6 +808,46 @@ export function sdkTenantEc2(client: AwsSdkClient): TenantEc2 {
         }),
       );
       return PrefixLists.find((list) => list.PrefixListName === name)?.PrefixListId ?? null;
+    },
+  };
+}
+
+/** `TenantLogs` over an SDK client: FilterLogEvents, a group that does not
+ *  exist answered as null rather than as a failure. */
+export function sdkTenantLogs(client: AwsSdkClient): TenantLogs {
+  return {
+    async filterLogEvents(group, input) {
+      let page: { events?: FilteredLogEvent[]; nextToken?: string };
+      try {
+        page = (await client.send(
+          new FilterLogEventsCommand({
+            logGroupName: group,
+            startTime: input.startMs,
+            endTime: input.endMs,
+            ...(input.filterPattern ? { filterPattern: input.filterPattern } : {}),
+            ...(input.nextToken ? { nextToken: input.nextToken } : {}),
+          }),
+        )) as typeof page;
+      } catch (err) {
+        if (notFound(err)) return null;
+        throw tenantApiError('logs', err);
+      }
+      return {
+        events: (page.events ?? []).flatMap((e) =>
+          typeof e.timestamp === 'number' && Number.isFinite(e.timestamp)
+            ? [
+                {
+                  // An event with no id is keyed by its stream, instant and text.
+                  eventId:
+                    e.eventId ?? `${e.logStreamName ?? ''}:${e.timestamp}:${e.message ?? ''}`,
+                  timestamp: e.timestamp,
+                  message: e.message ?? '',
+                },
+              ]
+            : [],
+        ),
+        nextToken: page.nextToken ? page.nextToken : null,
+      };
     },
   };
 }

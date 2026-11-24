@@ -11,6 +11,9 @@ export interface TenantEcsDeployment {
   /** `PRIMARY` (the one being rolled out) or `ACTIVE` (the one it replaces). */
   readonly status: string;
   readonly rolloutState: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  /** When the deployment was created and last changed (MOTIR-12104). */
+  readonly createdAt: Date | null;
+  readonly updatedAt: Date | null;
 }
 
 export interface TenantEcsService {
@@ -32,6 +35,21 @@ export interface TenantEcsTask {
   /** Fargate CPU units (1024 is one vCPU) and memory in MiB. */
   readonly cpu: number;
   readonly memory: number;
+  /** Why a stopped task stopped (MOTIR-12104): ECS's stop code
+   *  (`EssentialContainerExited`, `ServiceSchedulerInitiated`, …) and its
+   *  reason, both null while it runs. */
+  readonly stopCode: string | null;
+  readonly stoppedReason: string | null;
+  /** The release's one container, `app` (essential): its exit code and the
+   *  reason ECS gives (`OutOfMemoryError: …` at the memory limit); null while
+   *  it has not exited. */
+  readonly container: TenantEcsContainerExit | null;
+}
+
+/** How the task's essential container exited. */
+export interface TenantEcsContainerExit {
+  readonly exitCode: number | null;
+  readonly reason: string | null;
 }
 
 export interface TenantEcs {

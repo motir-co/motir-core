@@ -11,14 +11,7 @@ import { engineJob, engineJobs } from '@/lib/jobs/engine/registry';
 import { manifestSubscribers } from '@/lib/jobs/engine/manifest';
 import { parseEventExpression, resolveEventExpression } from '@/lib/jobs/engine/eventExpression';
 import { parseIdempotencyTemplate } from '@/lib/jobs/engine/idempotency';
-import {
-  INDEX_ADMISSION_BUDGETS,
-  INDEX_FLEET_TIME_BUDGETS,
-  indexAdmissionWaitMs,
-  indexPollWaitMs,
-} from '@/lib/services/codeGraphIndexDispatchService';
 import { FLEET_TIME_BUDGETS, pollWaitMs } from '@/lib/services/ciRunnerBootService';
-import { indexInFlightCap, orgIndexInFlightCap } from '@/lib/ciFleet/limits';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // The REAL registry, for its side effect — every definition module evaluated, so
@@ -53,12 +46,10 @@ import { jobDefinitions } from '@/lib/jobs/registry';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
-/** The three jobs this story moves. Named once — every guard below reads it. */
-const SUPERVISORS = [
-  'system.code-graph-index',
-  'system.code-graph-refresh',
-  'system.ci-runner-boot',
-] as const;
+/** The jobs this story moved that still supervise a container. Named once — every
+ *  guard below reads it. The two code-graph jobs were the other two; they hand the
+ *  index off to motir-codegraph and supervise nothing since MOTIR-12036. */
+const SUPERVISORS = ['system.ci-runner-boot'] as const;
 
 /**
  * ⚠️ EVERY `defineJob` BELOW REGISTERS A SYNTHETIC ID, NEVER A REAL ONE.
@@ -96,7 +87,7 @@ describe('§1 the arms of the story’s own code nothing else reaches', () => {
   // ⚠️ SORTED FIRST, as the card requires. The story's surface measured
   // 100/100/100 on `debounce.ts`, `manifest.ts`, `registry.ts`,
   // `jobQueueRepository.ts` and `ciRunnerFleet.ts`; 99+ on the two services;
-  // 91.66 branches on `indexFleetSteps.ts`. The two files BELOW the floor were
+  // 91.66 branches on `indexFleetSteps.ts` (deleted since, MOTIR-12036). The two files BELOW the floor were
   // `eventExpression.ts` (85 branches) and `idempotency.ts` (75) — and for each
   // uncovered arm the question asked was what would have to be TRUE for it to
   // fire, read off the code that BUILDS the value rather than off the arm. Every
@@ -265,7 +256,7 @@ describe('§2b collapse → ledger: the row a supervised run leaves behind', () 
   it('a run that indexed writes ONE succeeded row carrying ONE repoRef', async () => {
     // The ledger contract MOTIR-3417 refuses to let this story change, driven
     // through the REAL worker rather than through `the in-process JobTestEngine`. The shape is
-    // `runIndexFleetSteps`'s return value, which `executeWithLedger` serializes
+    // the index jobs' return value (`runIndexHandoffSteps` since MOTIR-12036), which `executeWithLedger` serializes
     // into `job_run.output` exactly as `defineJob` does on the other lane.
     const jobId = gateJobId();
     defineJob({ id: jobId as never, trigger: 'work-item/embedding.requested' }, () => ({
@@ -429,19 +420,7 @@ describe('§3 the guards', () => {
     // ⚠️ READ FROM THE SHIPPED CONSTANTS, so a collapse that quietly changed a
     // cadence fails here. MOTIR-3417 forbids any behaviour change, and a poll
     // interval is the easiest thing to "tidy" while rewriting a loop.
-    expect(INDEX_FLEET_TIME_BUDGETS).toEqual({
-      bootDeadlineMs: 120_000,
-      indexTimeoutMs: 1_800_000,
-      pollIntervalMs: 3_000,
-      maxPollIntervalMs: 15_000,
-      maxPollIterations: 500,
-      maxConsecutiveReadFailures: 3,
-    });
-    expect(INDEX_ADMISSION_BUDGETS).toEqual({
-      maxAttempts: 60,
-      baseWaitMs: 5_000,
-      maxWaitMs: 60_000,
-    });
+    // The index fleet's budgets left with it (MOTIR-12036).
     expect(FLEET_TIME_BUDGETS.jobTimeoutMs).toBe(3_600_000);
     expect(FLEET_TIME_BUDGETS.pollIntervalMs).toBe(3_000);
     expect(FLEET_TIME_BUDGETS.maxPollIntervalMs).toBe(30_000);
@@ -449,27 +428,11 @@ describe('§3 the guards', () => {
     expect(FLEET_TIME_BUDGETS.bootDeadlineMs).toBe(120_000);
     expect(FLEET_TIME_BUDGETS.reapAfterMs).toBe(4_200_000);
 
-    // And the two backoff FUNCTIONS, which is where a cadence actually lives —
-    // a constant can be right while the curve that reads it is not.
-    expect([1, 2, 3, 4, 5].map((n) => indexPollWaitMs(n))).toEqual([
-      3_000, 6_000, 12_000, 15_000, 15_000,
-    ]);
+    // And the backoff FUNCTION, which is where a cadence actually lives — a
+    // constant can be right while the curve that reads it is not.
     expect([1, 2, 3, 4, 5].map((n) => pollWaitMs(n))).toEqual([
       3_000, 6_000, 12_000, 24_000, 30_000,
     ]);
-    expect([1, 2, 3, 4].map((n) => indexAdmissionWaitMs(n))).toEqual([
-      5_000, 10_000, 20_000, 40_000,
-    ]);
-  });
-
-  it('the ADMISSION CAP and the fleet limits are untouched', () => {
-    // MOTIR-3417 names these as forbidden ground because a regression there costs
-    // money — a cap that silently doubled would double the fleet's invoice with
-    // every signal green. Asserted by VALUE, and by the derivation that keeps the
-    // per-org bound from drifting from the global one.
-    expect(indexInFlightCap()).toBe(6);
-    expect(orgIndexInFlightCap(indexInFlightCap())).toBe(3);
-    expect(orgIndexInFlightCap(10)).toBe(5);
   });
 
   it('the debounce key resolver is TOTAL — no arm silently merges unrelated events', () => {
@@ -493,7 +456,7 @@ describe('§3 the guards', () => {
     expect(engineJob('system.code-graph-refresh')?.debounce).toBeUndefined();
   });
 
-  it('the three supervisors are REGISTERED and reachable from the emit path', () => {
+  it('the supervisors are REGISTERED and reachable from the emit path', () => {
     // ⚠️ THIS ASSERTED A SWITCH (MOTIR-3418 removed that half). It checked the
     // default-to-the-old-lane safety property on the three ids this story moved,
     // then flipped the routing set and checked they moved. There is one lane now,
@@ -547,14 +510,14 @@ describe('§3 the guards', () => {
     const loops = (paths: string[]) => linesMatching(paths, /for \(let iteration/);
     const drivers = (paths: string[]) => linesMatching(paths, /\badvanceSupervision[(<]/);
 
+    // The index fleet's half left with it (MOTIR-12036): its jobs hand off and
+    // drive no supervision at all, so they hold neither a loop nor the driver.
     const INDEX_FILES = [
-      'lib/services/codeGraphIndexDispatchService.ts',
-      'lib/jobs/indexFleetSteps.ts',
       'lib/jobs/definitions/codeGraphIndex.ts',
       'lib/jobs/definitions/codeGraphRefresh.ts',
     ];
     expect(loops(INDEX_FILES)).toHaveLength(0);
-    expect(drivers(INDEX_FILES)).toHaveLength(1);
+    expect(drivers(INDEX_FILES)).toHaveLength(0);
     const CI_FILES = [
       'lib/services/ciRunnerBootService.ts',
       'lib/jobs/definitions/ciRunnerFleet.ts',
@@ -565,7 +528,6 @@ describe('§3 the guards', () => {
     // And neither JOB file sleeps any more — the wait moved into the service, so
     // a `step.sleep` reappearing in a handler is the stepped shape returning.
     for (const p of [
-      'lib/jobs/indexFleetSteps.ts',
       'lib/jobs/definitions/ciRunnerFleet.ts',
       'lib/jobs/definitions/codeGraphIndex.ts',
       'lib/jobs/definitions/codeGraphRefresh.ts',
