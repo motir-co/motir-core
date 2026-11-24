@@ -706,6 +706,20 @@ jobs:
         if: steps.cache-node-modules-acceptance-build.outputs.cache-hit != 'true'
       - run: pnpm prisma generate
         if: steps.cache-prisma-acceptance-build.outputs.cache-hit != 'true'
+      # The hosted runner's memory no longer holds `next build` (MOTIR-9799):
+      # every build lane of that story's branch died about a minute after the
+      # compile with "The runner has received a shutdown signal" and no error,
+      # with the type check skipped and with one page-data worker alike. Swap
+      # lets the post-compile steps page instead of the box killing the runner.
+      # A fleet runner sizes its own machine, so this is hosted-only.
+      - name: Add swap for next build
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then exit 0; fi
+          sudo fallocate -l 8G /mnt/next-build.swap
+          sudo chmod 600 /mnt/next-build.swap
+          sudo mkswap /mnt/next-build.swap
+          sudo swapon /mnt/next-build.swap
+          free -m
       - run: pnpm build
       - name: Upload .next/ build artifact
         uses: actions/upload-artifact@v7
@@ -1067,6 +1081,20 @@ jobs:
         if: steps.cache-node-modules-regression-build.outputs.cache-hit != 'true'
       - run: pnpm prisma generate
         if: steps.cache-prisma-regression-build.outputs.cache-hit != 'true'
+      # The hosted runner's memory no longer holds `next build` (MOTIR-9799):
+      # every build lane of that story's branch died about a minute after the
+      # compile with "The runner has received a shutdown signal" and no error,
+      # with the type check skipped and with one page-data worker alike. Swap
+      # lets the post-compile steps page instead of the box killing the runner.
+      # A fleet runner sizes its own machine, so this is hosted-only.
+      - name: Add swap for next build
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then exit 0; fi
+          sudo fallocate -l 8G /mnt/next-build.swap
+          sudo chmod 600 /mnt/next-build.swap
+          sudo mkswap /mnt/next-build.swap
+          sudo swapon /mnt/next-build.swap
+          free -m
       - run: pnpm build
       - name: Upload .next/ build artifact
         uses: actions/upload-artifact@v7
