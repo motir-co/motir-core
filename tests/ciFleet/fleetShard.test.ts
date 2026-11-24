@@ -64,7 +64,7 @@ describe('the database holds the invariants on its own', () => {
     await expect(insert({})).resolves.toMatchObject({ state: 'provisioning', role: 'primary' });
   });
 
-  it('refuses a row without a fleet kind, or with a kind outside the four', async () => {
+  it('refuses a row without a fleet kind, or with a kind outside the three', async () => {
     await expect(
       adminDb.$executeRawUnsafe(
         `INSERT INTO fleet_shard (id, name, provider, github_org, github_installation_id, fly_org, fly_app, fly_region, credential_ref, machine_limit, updated_at)
@@ -174,8 +174,8 @@ describe('listShards answers one kind, role and state', () => {
     await fleetShardService.setState(disabled.id, 'disabled');
     await fleetShardService.createShard({
       ...INPUT,
-      name: 'index-iad-1',
-      fleetKind: 'code_graph_index',
+      name: 'hosted-agent-iad-1',
+      fleetKind: 'hosted_agent',
       flyApp: 'd',
       state: 'active',
     });
@@ -187,7 +187,7 @@ describe('listShards answers one kind, role and state', () => {
     });
 
     expect(listed.map((s) => s.id)).toEqual([active.id]);
-    expect(await fleetShardService.listShards({ fleetKind: 'code_graph_index' })).toHaveLength(1);
+    expect(await fleetShardService.listShards({ fleetKind: 'hosted_agent' })).toHaveLength(1);
     expect(await fleetShardService.listShards()).toHaveLength(4);
   });
 });

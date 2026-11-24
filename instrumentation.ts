@@ -63,9 +63,10 @@
 //     write-back call itself when a session ends (MOTIR-8180).
 //
 //   - E2E_TEST_CODE_GRAPH=1 → lib/test-code-graph-mock intercepts the INDEX
-//     WRITER's two boundaries: motir-ai's POST /v1/code-graph/run-credential and
-//     api.github.com's installation-token mint + `/tarball/` 302. Crossed only by
-//     the index SUPERVISOR, which is a job — so the LANE sets this flag on the
+//     HANDOFF's boundaries: api.github.com's installation-token mint + `/tarball/`
+//     302, the head read and motir-ai's handoff and status routes (the container
+//     run-credential mint left with MOTIR-12036). Crossed only by the index
+//     job — so the LANE sets this flag on the
 //     WORKER only, never on a webServer. See that module's header for why the
 //     app server must not get MOTIR_AI_URL.
 //

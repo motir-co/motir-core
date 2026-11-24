@@ -5,7 +5,6 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
-import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import { planCapsService } from '@/lib/services/planCapsService';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
@@ -135,7 +134,7 @@ async function inFlight(fx: Fixture, count: number): Promise<CiRunnerProvisionin
 
 let slotSeq = 0;
 /** A live fleet slot of another workload, held by the org. */
-async function otherSlot(fx: Fixture, workload: 'hosted_agent' | 'code_graph_index') {
+async function otherSlot(fx: Fixture, workload: 'hosted_agent' | 'agent_instance') {
   slotSeq += 1;
   await adminDb.fleetInFlightSlot.create({
     data: {
@@ -227,11 +226,11 @@ describe('each plan’s CI burst cap, over CI runners alone', () => {
     expect((await ciRunnerAdmissionService.admit(again)).outcome).toBe('admitted');
   });
 
-  it('hosted runs and index containers far above the figure take none of CI’s room', async () => {
+  it('hosted runs and agent instances far above the figure take none of CI’s room', async () => {
     stubPaidAiPlan('standard');
     const fx = await seedTenant();
     for (let i = 0; i < 5; i++) await otherSlot(fx, 'hosted_agent');
-    for (let i = 0; i < 3; i++) await otherSlot(fx, 'code_graph_index');
+    for (let i = 0; i < 3; i++) await otherSlot(fx, 'agent_instance');
 
     expect(await admit(fx)).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 2 });
   });
@@ -304,38 +303,10 @@ describe('the staff override, and the plans that have no figure', () => {
     },
   );
 
-  it('no pool remains to hold CI or indexing: a Pro org admits both (MOTIR-9377 deleted the pool)', async () => {
+  it('no pool remains to hold CI: a Pro org admits (MOTIR-9377 deleted the pool)', async () => {
     stubPaidAiPlan('pro');
     const fx = await seedTenant();
 
     expect((await admit(fx)).outcome).toBe('admitted');
-    const index = await codeGraphIndexAdmissionService.admit({
-      organizationId: fx.organizationId,
-      workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
-      repoRef: 'acme/web',
-      dispatchId: 'dispatch-1',
-      containerTimeoutMs: 60_000,
-    });
-    expect(index.outcome).toBe('admitted');
-  });
-});
-
-describe('indexing counts against no plan figure', () => {
-  it('CI runners and hosted runs far above any figure leave an index container admitted', async () => {
-    stubPaidAiPlan('standard');
-    const fx = await seedTenant();
-    await inFlight(fx, 60);
-    for (let i = 0; i < 10; i++) await otherSlot(fx, 'hosted_agent');
-
-    const verdict = await codeGraphIndexAdmissionService.admit({
-      organizationId: fx.organizationId,
-      workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
-      repoRef: 'acme/web',
-      dispatchId: 'dispatch-2',
-      containerTimeoutMs: 60_000,
-    });
-    expect(verdict.outcome).toBe('admitted');
   });
 });

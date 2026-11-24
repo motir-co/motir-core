@@ -88,6 +88,22 @@ export const reviewVerdictRecordRepository = {
     });
   },
 
+  /**
+   * The newest GATE-OFF answer on the card — a `recorded` verdict, pass or send-back,
+   * whatever its version — or null. The gate set reads it as the review at its version, so
+   * a review gate is never raised over a version already answered (Bug MOTIR-12147).
+   */
+  async findLatestRecordedAnswer(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<ReviewVerdictRecord, 'subjectVersion' | 'verdict'> | null> {
+    return tx.reviewVerdictRecord.findFirst({
+      where: { workItemId, outcome: 'recorded' },
+      orderBy: { createdAt: 'desc' },
+      select: { subjectVersion: true, verdict: true },
+    });
+  },
+
   /** The newest GATE-OFF send-back on the card, whatever its version, or null. */
   async findLatestRecordedSendBack(
     workItemId: string,

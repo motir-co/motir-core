@@ -123,9 +123,8 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_CLOUD', 'true');
   host = await makeOrg();
   const ci = await ownAccount(host.organizationId, 'ci_runner', CI_ACCOUNT);
-  const index = await ownAccount(host.organizationId, 'code_graph_index', MERGED_ACCOUNT, 120);
   const hoster = await ownAccount(host.organizationId, 'agent_instance', MERGED_ACCOUNT, 120);
-  shardIds = [ci.id, index.id, hoster.id];
+  shardIds = [ci.id, hoster.id];
 });
 
 afterEach(() => {
@@ -188,10 +187,10 @@ describe('an owner or admin of a Host org', () => {
     },
   );
 
-  it('the merged account answers both its kinds with one request; another figure is 409', async () => {
+  it('a repeated ask on the agent hoster’s account returns the open request; another figure is 409', async () => {
     signInAs(host.owner);
     const first = await send(host.organizationId, {
-      fleetKind: 'code_graph_index',
+      fleetKind: 'agent_instance',
       desiredVcpu: 240,
       reason: REASON,
     });

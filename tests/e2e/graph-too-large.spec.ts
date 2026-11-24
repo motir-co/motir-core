@@ -20,7 +20,7 @@
 // clear (`_helpers/migrate-index-seed.ts`). So recovery here makes BOTH
 // writes an indexed run makes — the ledger row through that helper, and the
 // repository settle + refusal clear through the SHIPPED repository methods
-// `indexFleetSteps.settleIndexingRepo` calls (`markIndexSettled`,
+// `indexRepoRow.settleIndexingRepo` calls (`markIndexSettled`,
 // `clearIndexRefusal`). The job path itself is proven by MOTIR-7133's suite.
 
 import { expect, test, type Page } from '@playwright/test';
@@ -251,7 +251,7 @@ test('6 · recovered: after an indexed run the row reads Indexed and the refusal
 
   // The two writes an INDEXED run makes: the succeeded ledger row, and the
   // repository settle that releases the claim, stamps the head, and clears the
-  // refusal (`indexFleetSteps.settleIndexingRepo`, MOTIR-7130).
+  // refusal (`indexRepoRow.settleIndexingRepo`, MOTIR-7130).
   await recordIndexSucceeded(t.workspaceId, REPO_REF);
   const { organizationId } = await adminDb.githubRepo.findFirstOrThrow({
     where: { workspaceId: t.workspaceId, owner: REPO.owner, name: REPO.name },

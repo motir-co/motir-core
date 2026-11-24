@@ -483,7 +483,7 @@ describe('the monitor’s edges (coverage top-up)', () => {
     const gone = 'org_does_not_exist';
     await adminDb.fleetInFlightSlot.create({
       data: {
-        workload: 'code_graph_index',
+        workload: 'hosted_agent',
         ref: 'gate-orphan',
         organizationId: gone,
         claimedAt: ago(MIN),

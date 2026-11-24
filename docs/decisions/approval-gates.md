@@ -6803,6 +6803,34 @@ same commits, and a person could approve work no review had looked at (seen on M
   before the review was owed and every one raised before this amendment, on the next reconcile
   (the 30-minute sweep included). A decided primary is history and stays.
 
+#### 12.21 A verdict before the review is asked answers nothing, and a gate-off answer is the review — AMENDED 2026-11-23 (Bug MOTIR-12147)
+
+§12.12's two branches were told apart by whether an `agent_review` gate was AWAITING, not by the
+switch. With the gate on and the review owed but not raised yet — the set not green and in
+review, a lost check webhook, a stuck gate set (MOTIR-12091), anything the 30-minute sweep
+repairs — the door took the gate-off branch and stored the verdict as a review record. That
+record answered the version (§12.13's SECOND), so the gate the sweep raised later at the same
+version refused every verdict and no agent could decide it (seen on MOTIR-12063, 2026-11-23:
+`recorded` at 16:38, the gate raised at about 16:45, `REVIEW_VERDICT_SECOND` at 16:48).
+
+- **Refused, and nothing stored.** With the gate on, a verdict at the current version where
+  `agentReviewStanding` is `owed` and no gate is awaiting is refused `REVIEW_NOT_YET_ASKED`
+  (409). Nothing is stored, so the version stays unanswered and the same verdict decides the
+  gate once it is asked. A late or second verdict is judged first, as before (§12.13).
+- **Not `owed` is gate-off, unchanged.** `not_required` with the switch on — an `auto` project,
+  or a merge question already asked at this version (§12.5's switching ON) — still stores the
+  review record, because no review gate will ever be raised at that version.
+- **A gate-off answer IS the review at its version.** A review record stored while no review
+  was owed (the switch off then, then turned on) answers its version, so `agentReviewStanding`
+  reads it as the decided gate would: a pass is `passed`, a send-back `refused` until a Dismiss
+  at that version (§12.15) — and the review is never raised over it. This is §12.14's _a review
+  switched on since is not asked of commits already reviewed_, extended to a pass and to a
+  dismissed send-back.
+- **A gate already raised over a record stays as it was.** An `agent_review` awaiting at a
+  version a record answered (raised before this amendment) keeps the standing `owed`, so the
+  merge question is not asked beside it; its way out is a person's _Continue without the
+  review_ (§12.3) or a push.
+
 #### 12.9 What this section does NOT decide
 
 - **The review RUN** — its command, mode, attribution, billing, credential,

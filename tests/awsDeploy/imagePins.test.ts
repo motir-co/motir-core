@@ -6,15 +6,11 @@ import { main } from '@/scripts/aws-deploy/awsDeploy';
 import {
   IMAGE_PINS_DIR,
   IMAGE_REF_PATTERN,
-  INDEXER_IMAGE_REF_PATTERN,
   ImagePinError,
-  PINNED_PARAMETERS,
   PINNED_SECRETS,
   PIN_NAMES,
   applyPins,
-  checkPinTargets,
   parseImagePins,
-  pinParameterName,
   pinSecretId,
   pinTarget,
   readImagePins,
@@ -54,11 +50,9 @@ const PINS_FIXTURE: Record<string, string> = {
   'motir-runner-image': `${V026}\n`,
 };
 const SECRET = pinSecretId(PREFIX, 'motir-runner-image');
-/** The indexer's pin (MOTIR-10986): this account's ECR, by digest. */
-const INDEXER_REPO = `${REGISTRY}/${PREFIX}/indexer`;
-const INDEXER_050 = `${INDEXER_REPO}@sha256:${'2f'.repeat(32)}`;
-const INDEXER_051 = `${INDEXER_REPO}@sha256:${'e0'.repeat(32)}`;
-const PARAMETER = pinParameterName(PREFIX, 'motir-indexer-image');
+/** The retired indexer pin's last shape (MOTIR-10986): this account's ECR, by
+ *  digest. Kept only to prove the deploy now refuses that file (MOTIR-12044). */
+const INDEXER_051 = `${REGISTRY}/${PREFIX}/indexer@sha256:${'e0'.repeat(32)}`;
 const log = () => {};
 
 function pinsDir(files: Record<string, string>): string {
@@ -96,18 +90,10 @@ describe('the checked-in pin', () => {
   // reference per pin, each naming its own image.
   it('pins each target to its own image, by digest', () => {
     const pins = readImagePins(IMAGE_PINS_DIR);
-    expect(pins.map((p) => p.name)).toEqual([
-      'motir-hosted-agent-image',
-      'motir-indexer-image',
-      'motir-runner-image',
-    ]);
-    const [hostedAgent, indexer, runner] = pins;
+    expect(pins.map((p) => p.name)).toEqual(['motir-hosted-agent-image', 'motir-runner-image']);
+    const [hostedAgent, runner] = pins;
     expect(hostedAgent!.value).toMatch(
       /^ghcr\.io\/motir-co\/motir-hosted-agent@sha256:[a-f0-9]{64}$/,
-    );
-    // Production's indexer repository: the services account's ECR (motir-infra).
-    expect(indexer!.value).toMatch(
-      /^944842271421\.dkr\.ecr\.us-east-1\.amazonaws\.com\/motir\/indexer@sha256:[a-f0-9]{64}$/,
     );
     expect(runner!.value).toMatch(/^ghcr\.io\/motir-co\/motir-ci-runner@sha256:[a-f0-9]{64}$/);
   });
@@ -117,17 +103,12 @@ describe('the checked-in pin', () => {
     expect(files.sort()).toEqual([...PIN_NAMES]);
     const readme = readFileSync(join(IMAGE_PINS_DIR, 'README.md'), 'utf8');
     for (const name of PIN_NAMES) expect(readme).toContain(`\`${name}\``);
-    expect(readme).toContain('`/motir/core/indexer-image`');
+    expect(readme).not.toContain('indexer');
   });
 
   it("holds the list to the secrets motir-infra's deploy role may write (DEPLOY_PINNED_SECRETS)", () => {
     expect([...PINNED_SECRETS]).toEqual(['motir-hosted-agent-image', 'motir-runner-image']);
-  });
-
-  it("holds the parameter to the one motir-infra's deploy role may write (deployPinnedIndexerParameterName)", () => {
-    expect(PINNED_PARAMETERS).toEqual({ 'motir-indexer-image': 'indexer-image' });
-    expect(pinParameterName('motir', 'motir-indexer-image')).toBe('/motir/core/indexer-image');
-    expect(pinTarget('motir', 'motir-indexer-image')).toBe('/motir/core/indexer-image');
+    expect([...PIN_NAMES]).toEqual(['motir-hosted-agent-image', 'motir-runner-image']);
     expect(pinTarget('motir', 'motir-runner-image')).toBe('motir/core/motir-runner-image');
   });
 });
@@ -155,27 +136,16 @@ describe('parseImagePins', () => {
 
   it('refuses a file whose name the deploy role may not write', () => {
     expect(() => parseImagePins([{ name: 'better-auth-secret', content: V026 }])).toThrow(
-      /not a pinned secret or parameter/,
+      /not a pinned secret/,
     );
   });
 
-  it("accepts the indexer's ECR reference by digest, and only that shape", () => {
-    expect(parseImagePins([{ name: 'motir-indexer-image', content: `${INDEXER_051}\n` }])).toEqual([
-      { name: 'motir-indexer-image', value: INDEXER_051 },
-    ]);
-    expect(INDEXER_IMAGE_REF_PATTERN.test(INDEXER_051)).toBe(true);
-  });
-
-  it.each([
-    ['a GHCR reference', `ghcr.io/motir-co/motir-indexer@${DIGEST}`],
-    ['a tag', `${INDEXER_REPO}:indexer-0.5.1`],
-    ['another repository', `${REGISTRY}/${PREFIX}/motir-core@${DIGEST}`],
-    ['a short digest', `${INDEXER_REPO}@sha256:e0e0e0`],
-    ['two lines', `${INDEXER_051}\n${INDEXER_050}`],
-  ])("refuses %s as the indexer's pin", (_, content) => {
-    expect(() => parseImagePins([{ name: 'motir-indexer-image', content }])).toThrow(
-      /motir-indexer-image must hold one pull-by-digest reference, <account>\.dkr\.ecr/,
-    );
+  it('refuses the retired indexer pin as an unknown pin (MOTIR-12044)', () => {
+    // The parameter pin kind left with the container-based indexer: a
+    // `motir-indexer-image` file is no longer a pin the deploy role may write.
+    expect(() =>
+      parseImagePins([{ name: 'motir-indexer-image', content: `${INDEXER_051}\n` }]),
+    ).toThrow(/motir-indexer-image is not a pinned secret/);
   });
 
   it("refuses a GHCR pin's reference in the indexer's ECR shape", () => {
@@ -185,29 +155,7 @@ describe('parseImagePins', () => {
   });
 });
 
-describe('checkPinTargets', () => {
-  const indexer = (value: string) => [{ name: 'motir-indexer-image' as const, value }];
-
-  it("accepts the indexer of the deployed image's own account and prefix", () => {
-    expect(() => checkPinTargets(PREFIX, CORE_REPO, indexer(INDEXER_051))).not.toThrow();
-  });
-
-  it.each([
-    ['another account', `999988887777.dkr.ecr.us-east-1.amazonaws.com/${PREFIX}/indexer@${DIGEST}`],
-    ['another region', `111122223333.dkr.ecr.eu-west-1.amazonaws.com/${PREFIX}/indexer@${DIGEST}`],
-    ['another prefix', `${REGISTRY}/motir-staging/indexer@${DIGEST}`],
-  ])('refuses an indexer in %s', (_, value) => {
-    expect(() => checkPinTargets(PREFIX, CORE_REPO, indexer(value))).toThrow(
-      `motir-indexer-image must name ${INDEXER_REPO} by digest`,
-    );
-  });
-
-  it('leaves the GHCR pins alone', () => {
-    expect(() =>
-      checkPinTargets(PREFIX, CORE_REPO, [{ name: 'motir-runner-image', value: V026 }]),
-    ).not.toThrow();
-  });
-
+describe('the reference shape', () => {
   it('matches the reference shape the release lane writes', () => {
     expect(IMAGE_REF_PATTERN.test(V026)).toBe(true);
   });
@@ -284,68 +232,6 @@ describe('applyPins and restorePins', () => {
     expect(applied[0]!.state).toBe('not_granted');
     expect(aws.secrets.get(SECRET)).toBe(V024);
     expect(lines.join('\n')).toContain('is not granted to the deploy role');
-  });
-});
-
-describe("applyPins and restorePins on the indexer's parameter (MOTIR-10986)", () => {
-  const pins = [{ name: 'motir-indexer-image' as const, value: INDEXER_051 }];
-
-  it('writes the SSM parameter, never a secret, and restores the value it replaced', async () => {
-    const aws = coreFleet();
-    aws.params.set(PARAMETER, INDEXER_050);
-    const { applied, previous } = await applyPins(aws, PREFIX, pins, log);
-    expect(applied).toEqual([
-      { name: 'motir-indexer-image', value: INDEXER_051, state: 'written' },
-    ]);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_051);
-    expect(aws.calls).toEqual([
-      ['readParameter', PARAMETER],
-      ['putParameter', PARAMETER, INDEXER_051],
-    ]);
-    await restorePins(aws, PREFIX, applied, previous, log);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_050);
-    expect(applied[0]!.state).toBe('restored');
-    expect(aws.methods()).not.toContain('putSecretValue');
-  });
-
-  it('writes nothing when the parameter already holds the pin', async () => {
-    const aws = coreFleet();
-    aws.params.set(PARAMETER, INDEXER_051);
-    const { applied } = await applyPins(aws, PREFIX, pins, log);
-    expect(applied[0]!.state).toBe('unchanged');
-    expect(aws.methods()).not.toContain('putParameter');
-  });
-
-  it('reads the parameter as not granted, and writes nothing, before MOTIR-10988 grants it', async () => {
-    const aws = coreFleet();
-    aws.params.set(PARAMETER, INDEXER_050);
-    aws.pinParameterGranted = false;
-    const lines: string[] = [];
-    const { applied } = await applyPins(aws, PREFIX, pins, (l) => lines.push(l));
-    expect(applied[0]!.state).toBe('not_granted');
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_050);
-    expect(lines.join('\n')).toContain(`${PARAMETER} is not granted to the deploy role`);
-  });
-
-  it('puts the pins already written back when a later write is refused', async () => {
-    const aws = coreFleet();
-    aws.params.set(PARAMETER, INDEXER_050);
-    aws.failPutSecretOf = SECRET;
-    await expect(
-      applyPins(aws, PREFIX, [...pins, { name: 'motir-runner-image', value: V026 }], log),
-    ).rejects.toThrow(`put ${SECRET} refused`);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_050);
-  });
-
-  it('reports a parameter restore it could not make and carries on', async () => {
-    const aws = coreFleet();
-    aws.params.set(PARAMETER, INDEXER_050);
-    const { applied, previous } = await applyPins(aws, PREFIX, pins, log);
-    aws.failPutParameterOf = PARAMETER;
-    const lines: string[] = [];
-    await restorePins(aws, PREFIX, applied, previous, (l) => lines.push(l));
-    expect(lines.join('\n')).toContain(`restoring ${PARAMETER} failed`);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_051);
   });
 });
 
@@ -438,66 +324,5 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     const { code } = await deploy(aws, dir);
     expect(code).toBe(0);
     expect(aws.methods().filter((m) => m === 'putSecretValue')).toHaveLength(1);
-  });
-});
-
-describe('the deploy writes the indexer pin, then rolls web and worker (MOTIR-10986)', () => {
-  const files = { ...PINS_FIXTURE, 'motir-indexer-image': `${INDEXER_051}\n` };
-
-  function indexerFleet() {
-    const aws = coreFleet();
-    aws.params.set(PARAMETER, INDEXER_050);
-    return aws;
-  }
-
-  it('writes /<prefix>/core/indexer-image after the migrate task and before the roll', async () => {
-    const aws = indexerFleet();
-    const { code, result } = await deploy(aws, pinsDir(files));
-    expect(code).toBe(0);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_051);
-    expect(result?.['pins']).toContainEqual({
-      name: 'motir-indexer-image',
-      value: INDEXER_051,
-      state: 'written',
-    });
-    const write = aws.calls.findIndex(([m, name]) => m === 'putParameter' && name === PARAMETER);
-    const methods = aws.methods();
-    expect(write).toBeGreaterThan(methods.lastIndexOf('describeTask'));
-    expect(write).toBeLessThan(methods.indexOf('updateService'));
-  });
-
-  it('puts the previous indexer back when the roll fails', async () => {
-    const aws = indexerFleet();
-    aws.rollouts.set('web', (_, rolledTo) => ({ primary: rolledTo, state: 'FAILED' }));
-    const { code, result } = await deploy(aws, pinsDir(files));
-    expect(code).toBe(1);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_050);
-    expect(result?.['pins']).toContainEqual({
-      name: 'motir-indexer-image',
-      value: INDEXER_051,
-      state: 'restored',
-    });
-  });
-
-  it('fails a malformed indexer pin before it reads AWS at all', async () => {
-    const aws = indexerFleet();
-    const dir = pinsDir({ 'motir-indexer-image': `${INDEXER_REPO}:indexer-0.5.1\n` });
-    const { code, err } = await deploy(aws, dir);
-    expect(code).toBe(1);
-    expect(err.join('\n')).toContain(`--pins ${dir}: motir-indexer-image must hold`);
-    expect(aws.calls).toEqual([]);
-  });
-
-  it("fails another account's indexer before anything is written or migrated", async () => {
-    const aws = indexerFleet();
-    const other = `999988887777.dkr.ecr.us-east-1.amazonaws.com/${PREFIX}/indexer@${DIGEST}`;
-    const { code, err, result } = await deploy(aws, pinsDir({ 'motir-indexer-image': other }));
-    expect(code).toBe(1);
-    expect(err.join('\n')).toContain(`motir-indexer-image must name ${INDEXER_REPO} by digest`);
-    expect(aws.methods()).not.toContain('runTask');
-    expect(aws.methods()).not.toContain('putParameter');
-    expect(aws.methods()).not.toContain('putSecretValue');
-    expect(result?.['pins']).toEqual([]);
-    expect(aws.params.get(PARAMETER)).toBe(INDEXER_050);
   });
 });

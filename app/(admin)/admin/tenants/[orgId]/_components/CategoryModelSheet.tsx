@@ -12,10 +12,11 @@ export const ORG_LEVEL_CATEGORIES: ReadonlySet<SpendCategory> = new Set([
   'agent_instance',
   'agent_storage',
   'search',
+  'hosting_production',
 ]);
 
 /**
- * BY CATEGORY AND MODEL (MOTIR-7288, design D8/D11): the eight categories with usage
+ * BY CATEGORY AND MODEL (MOTIR-7288, design D8/D11): the nine categories with usage
  * in their own unit, credits and Motir cost; the two token categories EXPAND to one
  * row per model; Charged total and Total incl. indexing. Below the org, the
  * org-level categories say so rather than showing a zero.

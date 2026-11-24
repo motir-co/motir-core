@@ -494,35 +494,6 @@ describe('pathCommitsBetween', () => {
   });
 });
 
-describe('mergedFromBranchAt', () => {
-  it('reads the newest merge among the branch’s closed pull requests', async () => {
-    routes.push([
-      /\/pulls\?state=closed&head=motir-co%3Achore%2Findexer-image-pin&sort=updated&direction=desc&per_page=10$/,
-      {
-        status: 200,
-        body: [
-          { merged_at: null },
-          { merged_at: '2026-11-10T10:00:00Z' },
-          { merged_at: '2026-11-11T10:00:00Z' },
-          {},
-        ],
-      },
-    ]);
-    expect(
-      await publishWorkflowsClient.mergedFromBranchAt(REPO, 'chore/indexer-image-pin', 'tok'),
-    ).toBe('2026-11-11T10:00:00Z');
-  });
-
-  it('null when none merged; a list that is not a list is refused', async () => {
-    routes.push([/\/pulls\?/, { status: 200, body: [{ merged_at: null }] }]);
-    expect(await publishWorkflowsClient.mergedFromBranchAt(REPO, 'b', null)).toBeNull();
-    routes = [[/\/pulls\?/, { status: 200, body: {} }]];
-    await expect(publishWorkflowsClient.mergedFromBranchAt(REPO, 'b', null)).rejects.toMatchObject({
-      detail: 'pull list was not a list',
-    });
-  });
-});
-
 describe('tags, peel, commitDate and pathExists', () => {
   it('tagsWithPrefix names each tag, marking an annotated one for peel', async () => {
     routes.push([

@@ -16,7 +16,6 @@ import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopR
 import { userRepository } from '@/lib/repositories/userRepository';
 import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifecycleService';
 import { billingService, type OrgActorInput } from '@/lib/services/billingService';
-import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { fleetStopService } from '@/lib/services/fleetStopService';
 import { orgFleetNotificationService } from '@/lib/services/orgFleetNotificationService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
@@ -196,12 +195,6 @@ export const orgFleetStopService = {
           agentInstanceRepository.listLiveForOrganization(organizationId, tx),
         );
         return rows.filter((row) => row.state === 'running').length;
-      }),
-      indexContainers: await counted('index containers', organizationId, async () => {
-        const census = await withSystemContext((tx) =>
-          fleetCeilingService.orgCensus(organizationId, now, tx),
-        );
-        return census.byWorkload.code_graph_index;
       }),
     };
   },

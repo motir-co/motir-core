@@ -66,6 +66,8 @@ export const USAGE: RawPlatformUsage = {
     category('agent_storage', { usageQuantity: 7_776_000, credits: 90, costMicroUsd: 690_000 }),
     category('ci', { usageQuantity: 20_400, credits: 68, costMicroUsd: 645_000 }),
     category('search', { usageQuantity: 410, credits: 410, costMicroUsd: 2_050_000 }),
+    // MOTIR-12167 — production hosting: credits only (none in this recorded month).
+    category('hosting_production'),
     category('indexing', { usageQuantity: 57_600, costMicroUsd: 6_200_000 }),
   ],
   models: {
@@ -126,6 +128,8 @@ const row = (entityId: string, scale: number): RawSpendRow => ({
     agent_storage: 1 * scale,
     ci: 2 * scale,
     search: 4 * scale,
+    // MOTIR-12167 — production hosting: credits only, no Motir cost on the rollup.
+    hosting_production: 0,
   },
   indexingSeconds: 600 * scale,
   chargedCredits: 165 * scale,
@@ -138,6 +142,7 @@ const row = (entityId: string, scale: number): RawSpendRow => ({
     agent_storage: 20_000 * scale,
     ci: 30_000 * scale,
     search: 100_000 * scale,
+    hosting_production: 0,
     indexing: 100_000 * scale,
   },
 });
@@ -195,6 +200,11 @@ const month = (period: string, scale: number): RawPlatformUsageMonths['items'][n
       },
       ci: { credits: r.credits.ci, usageQuantity: 120 * scale, costMicroUsd: r.cost.ci },
       search: { credits: r.credits.search, usageQuantity: 4 * scale, costMicroUsd: r.cost.search },
+      hosting_production: {
+        credits: r.credits.hosting_production,
+        usageQuantity: 0,
+        costMicroUsd: r.cost.hosting_production,
+      },
       indexing: { credits: 0, usageQuantity: r.indexingSeconds, costMicroUsd: r.cost.indexing },
     },
     spend: {

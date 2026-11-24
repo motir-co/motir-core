@@ -172,7 +172,7 @@ describe('ProjectRoadmapCanvas', () => {
     expect(el('E1')!.querySelector('[data-highlighted]')).toBeNull();
   });
 
-  it('draws a cross-parent edge flag from the level deps', async () => {
+  it('draws a cross-parent edge from the level deps — one warning path, no midpoint chip (MOTIR-12158)', async () => {
     const crossLevel: RoadmapLevel = {
       nodes: [
         { ...node('A', 'a'), parentId: 'P1' },
@@ -182,7 +182,43 @@ describe('ProjectRoadmapCanvas', () => {
     };
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(crossLevel)} />);
     await screen.findByText('a');
-    expect(screen.getAllByTestId('cross-flag')).toHaveLength(1);
+    const paths = screen.getByTestId('canvas-edges').querySelectorAll('path');
+    expect(paths).toHaveLength(1);
+    expect(paths[0]!.getAttribute('class')).toContain('stroke-(--el-warning)');
+    // The blocked card owns the fact on its own tab; the edge carries no chip.
+    expect(screen.queryByTestId('cross-flag')).toBeNull();
+  });
+
+  it('fans the top entries of a TABBED card right of its tab, not only the here card (MOTIR-12158)', async () => {
+    // A card wearing the blocked tab (or a decided outcome tab) is flagged
+    // `topTab` by its level builder; the canvas must honour it exactly as it
+    // honours `here`, so no arrowhead lands under the tab.
+    const fanIn = (topTab: boolean): RoadmapLevel => ({
+      // Explicit positions (the auto-layout would lay them in a row): two blockers
+      // stacked above the dependent, so both arrows enter its TOP side.
+      nodes: [
+        { ...node('A', 'a'), x: 0, y: 0 },
+        { ...node('B', 'b'), x: 100, y: 0 },
+        { ...node('C', 'c'), x: 0, y: 400, ...(topTab ? { topTab } : {}) },
+      ],
+      deps: [
+        { from: 'A', to: 'C', variant: 'firm' },
+        { from: 'B', to: 'C', variant: 'firm' },
+      ],
+    });
+    const ds = () =>
+      [...screen.getByTestId('canvas-edges').querySelectorAll('path')].map((p) =>
+        p.getAttribute('d'),
+      );
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(fanIn(false))} />);
+    await screen.findByText('c');
+    const plain = ds();
+    cleanup();
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(fanIn(true))} />);
+    await screen.findByText('c');
+    const tabbed = ds();
+    expect(tabbed).toHaveLength(2);
+    expect(tabbed).not.toEqual(plain);
   });
 
   it('shows the edge legend when the level has dependency edges', async () => {
@@ -197,6 +233,15 @@ describe('ProjectRoadmapCanvas', () => {
     expect(within(legend).getByText('blocks')).toBeTruthy();
     expect(within(legend).getByText('pending')).toBeTruthy();
     expect(within(legend).getByText('blocked elsewhere')).toBeTruthy();
+    // The row carries a static specimen of the blocked TAB (MOTIR-12158), so the
+    // red tab on a card and the orange edge read as one fact. Decorative only.
+    const specimen = within(legend).getByTestId('legend-blocked-tab');
+    expect(specimen.getAttribute('aria-hidden')).toBe('true');
+    expect(specimen.textContent).toBe('blocked');
+    expect(specimen.className).toContain('bg-(--el-danger)');
+    expect(specimen.className).toContain('text-(--el-danger-text)');
+    // One specimen, on the warning row only.
+    expect(within(legend).getAllByTestId('legend-blocked-tab')).toHaveLength(1);
   });
 
   it('hides the legend when there are no edges', async () => {

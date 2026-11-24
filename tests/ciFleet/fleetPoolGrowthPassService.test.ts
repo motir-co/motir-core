@@ -251,7 +251,7 @@ describe('one pass', () => {
   });
 
   it('a kind that throws is counted failed and the other kinds still run', async () => {
-    awsKinds = new Set(['ci_runner', 'hosted_agent', 'code_graph_index']);
+    awsKinds = new Set(['ci_runner', 'hosted_agent', 'agent_instance']);
     const grow = vi.spyOn(fleetPoolGrowthService, 'growKind');
     grow.mockImplementation(async (kind) => {
       if (kind === 'hosted_agent') throw new Error('boom');
@@ -264,11 +264,11 @@ describe('one pass', () => {
     expect(summary.kinds).toMatchObject({
       ci_runner: 'below_threshold',
       hosted_agent: 'failed',
-      code_graph_index: 'below_threshold',
+      agent_instance: 'below_threshold',
     });
     expect(grow.mock.calls.map(([kind]) => kind).sort()).toEqual([
+      'agent_instance',
       'ci_runner',
-      'code_graph_index',
       'hosted_agent',
     ]);
   });

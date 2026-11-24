@@ -147,6 +147,18 @@ function allowanceVerdict(outcome: string): unknown {
   };
 }
 
+/**
+ * Every motir-ai path the handoff world answers; any other path throws
+ * `unexpected motir-ai request`. A suite asserting that a run touched nothing
+ * else asserts its `aiPaths` are all in this list.
+ */
+export const HANDOFF_AI_PATHS: readonly string[] = [
+  '/v1/credits/index-check',
+  '/v1/code-graph/index-handoff',
+  '/v1/code-graph/index-status',
+  '/v1/code-audit',
+];
+
 /** Install the world. Call in `beforeEach`; `vi.unstubAllGlobals` removes it. */
 export function stubIndexHandoff(): void {
   handoffWorld.allowanceOutcome = 'ok';

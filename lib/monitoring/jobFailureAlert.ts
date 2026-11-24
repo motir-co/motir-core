@@ -104,8 +104,9 @@ export function alertTerminalJobFailure(alert: TerminalJobFailureAlert): void {
 
 /** The error's CLASS, which is what distinguishes two faults on one job.
  *
- *  `IndexFleetImageUnpullableError` and `ScheduledJobsOverdueError` both come out
- *  of `system.daily-health-check` and are unrelated problems; folding them into
+ *  `HostedAgentImageUnpullableError` and `ScheduledJobsOverdueError` both come out
+ *  of `system.daily-health-check` and are unrelated problems (as the retired
+ *  `IndexFleetImageUnpullableError` the tests still model was); folding them into
  *  one issue because they share a job id would hide the second behind the first
  *  for as long as the first took to fix — which is precisely what happened for 23
  *  days on the ROW, and would be a poor thing to reproduce in the alert. */

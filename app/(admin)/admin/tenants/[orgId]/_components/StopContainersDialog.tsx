@@ -251,12 +251,12 @@ export function StopContainersDialog({
   );
 }
 
-/** The four effect lines — count first, zeros kept in secondary ink (S3 e). */
+/** The three effect lines — count first, zeros kept in secondary ink (S3 e). */
 function EffectList({ preview }: { preview: FleetStopPreviewDTO }) {
   const t = useTranslations('platformAdmin.tenant.fleet.confirm');
   const format = useFormatter();
   const strong = (chunks: ReactNode) => <strong className="font-semibold">{chunks}</strong>;
-  const lines: { key: string; count: number | null; text: ReactNode; kept?: boolean }[] = [
+  const lines: { key: string; count: number | null; text: ReactNode }[] = [
     {
       key: 'ci',
       count: preview.ciRuns,
@@ -271,32 +271,23 @@ function EffectList({ preview }: { preview: FleetStopPreviewDTO }) {
       count: preview.agentInstances,
       text: t('instances', { count: preview.agentInstances }),
     },
-    {
-      key: 'index',
-      count: preview.indexContainers,
-      text: t('index', { count: preview.indexContainers }),
-      kept: true,
-    },
   ];
   return (
     <ul className="flex flex-col gap-1" data-testid="stop-effects">
       {lines.map((line) => {
         // A zero line is present but not an effect — CI counts BOTH numbers.
         const quiet =
-          line.kept ||
-          (line.key === 'ci'
+          line.key === 'ci'
             ? (line.count ?? 0) === 0 && preview.ciContainers === 0
-            : line.count === 0);
+            : line.count === 0;
         return (
           <li
             key={line.key}
             data-testid={`stop-effect-${line.key}`}
             className={
-              line.kept
-                ? 'flex items-baseline gap-2 rounded-(--radius-control) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-sm text-(--el-text-secondary)'
-                : quiet
-                  ? 'flex items-baseline gap-2 font-sans text-sm text-(--el-text-secondary)'
-                  : 'flex items-baseline gap-2 font-sans text-sm text-(--el-text)'
+              quiet
+                ? 'flex items-baseline gap-2 font-sans text-sm text-(--el-text-secondary)'
+                : 'flex items-baseline gap-2 font-sans text-sm text-(--el-text)'
             }
           >
             <span className="min-w-6 text-right font-semibold tabular-nums">

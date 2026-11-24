@@ -27,7 +27,6 @@ import { SHELL_PASSWORD } from './shell-session';
  *    and the instance stays `hibernating` — which is exactly what an agent whose
  *    provider did not confirm the stop looks like, and what the walk's partial
  *    failure is;
- *  - an index job is the `code_graph_index` slot the indexer claims;
  *  - a Motir stop is the `fleet_machine_kill` row the attribution reconciler
  *    writes when it destroys a machine.
  *
@@ -187,27 +186,6 @@ export async function seedRunningAgent(
   return row.id;
 }
 
-/** One index job: the `code_graph_index` slot the indexer claims. */
-export async function seedIndexJob(org: {
-  organizationId: string;
-  workspaceId: string;
-}): Promise<string> {
-  seq += 1;
-  const ref = `e2e-org-fleet-index-${seq}`;
-  await adminDb.fleetInFlightSlot.create({
-    data: {
-      workload: 'code_graph_index',
-      ref,
-      organizationId: org.organizationId,
-      workspaceId: org.workspaceId,
-      containerProvider: 'fake',
-      containerId: `fake-e2e-org-fleet-index-${seq}`,
-      expiresAt: new Date(Date.now() + 60 * MIN),
-    },
-  });
-  return ref;
-}
-
 /** One machine Motir stopped for the org: the reconciler's kill row. */
 export async function seedMotirStop(organizationId: string, decidedAt: Date): Promise<void> {
   seq += 1;
@@ -263,7 +241,6 @@ export async function seedOtherOrg(
   await seedLiveHostedRun(org, owner.id);
   await seedCiJob(org, 'running');
   await seedRunningAgent(org, owner.id, agentName);
-  await seedIndexJob(org);
   return { agentName, owner: { id: owner.id, email: owner.email, name: 'Otto Other' } };
 }
 

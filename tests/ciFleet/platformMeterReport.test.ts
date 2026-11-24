@@ -144,7 +144,6 @@ function usageFor(fx: Fixture, overrides: Partial<ContainerUsage> = {}): Contain
 /** The expected receiver workload for each fleet kind — the instance line renamed. */
 const EXPECTED: Record<FleetWorkloadKind, string> = {
   ci_runner: 'ci',
-  code_graph_index: 'index',
   hosted_agent: 'agent',
   agent_instance: 'agent_instance',
 };
@@ -207,7 +206,7 @@ describe('a settled container is reported to the platform rollup', () => {
 
   it('a project-less container reports its workspace and org only', async () => {
     const fx = await seedTenant();
-    const usage = usageFor(fx, { projectId: undefined, workload: 'code_graph_index' });
+    const usage = usageFor(fx, { projectId: undefined, workload: 'agent_instance' });
     await settle(usage);
     await platformMeterReportService.reportContainer('fake', usage.handleId);
     expect(JSON.parse(posted[0]!.body)).toMatchObject({
@@ -279,7 +278,7 @@ describe('the report never touches the settle, and is exactly-once at the receiv
     } = usage;
     await ciFleetCostMeterService.recordContainerAccrual({
       ...rest,
-      workload: 'code_graph_index',
+      workload: 'agent_instance',
       startedAt: usage.startedAt ?? STOPPED_AT,
       observedAt: STOPPED_AT,
       accruedSeconds: billableSeconds,
@@ -437,12 +436,12 @@ describe('the backfill reports history exactly once, in bounded batches (MOTIR-7
       );
     }
     // A container still running is not history yet.
-    const live = usageFor(fx, { workload: 'code_graph_index' });
+    const live = usageFor(fx, { workload: 'agent_instance' });
     const { stoppedAt: _s, terminalState: _t, teardownReason: _r, billableSeconds, ...rest } = live;
     await ciFleetCostMeterService.recordContainerAccrual({
       ...rest,
       startedAt: live.startedAt ?? STOPPED_AT,
-      workload: 'code_graph_index',
+      workload: 'agent_instance',
       observedAt: STOPPED_AT,
       accruedSeconds: billableSeconds,
     });

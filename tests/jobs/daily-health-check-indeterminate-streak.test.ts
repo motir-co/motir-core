@@ -278,7 +278,7 @@ describe('indeterminateStreakService.check', () => {
       [
         { probe: 'fleet', step: 'fleet-boot-preflight', indeterminate: reading.indeterminate },
         reading,
-        { probe: 'indexFleet', step: 'index-fleet-boot-preflight', indeterminate: null },
+        { probe: 'hostedAgentImage', step: 'hosted-agent-image-preflight', indeterminate: null },
       ],
       now,
     );
@@ -341,7 +341,6 @@ describe('every probe of the daily check is in the streak table', () => {
     const readings = indeterminateReadings({
       schedules: { checkedAt: '', entries: [], overdue: [] },
       fleet: { verdict: 'indeterminate', reference: 'ghcr.io/a', detail: 'timeout' },
-      indexFleet: { verdict: 'indeterminate', reference: 'registry.fly.io/b', detail: '503' },
       hostedAgentImage: { verdict: 'bootable', reference: 'ghcr.io/c', digest: null },
       hostedAgentImageLag: {
         verdict: 'indeterminate',
@@ -350,9 +349,7 @@ describe('every probe of the daily check is in the streak table', () => {
         reference: 'ghcr.io/c:main',
         detail: 'unreachable: 503',
       },
-      indexContainerAi: { verdict: 'indeterminate', address: 'https://ai', detail: 'ECONNRESET' },
       fleetOrigins: { verdict: 'indeterminate', readings: [], detail: 'MOTIR_BASE_URL: 503' },
-      indexRebuildStreak: { verdict: 'not_applicable', detail: '', checkedAt: '', blindSpot: '' },
       monitorConfig: { verdict: 'not_applicable', detail: '', providers: [], blindSpot: '' },
       credentialExpiry: { verdict: 'ok', checkedAt: '', entries: [], skipped: [] },
       hostedRuns: {
@@ -388,10 +385,8 @@ describe('every probe of the daily check is in the streak table', () => {
 
     expect(readings.map((r) => [r.probe, r.indeterminate])).toEqual([
       ['fleet', { phase: 'registry', detail: 'ghcr.io/a: timeout' }],
-      ['indexFleet', { phase: 'registry', detail: 'registry.fly.io/b: 503' }],
       ['hostedAgentImage', null],
       ['hostedAgentImageLag', { phase: 'registry', detail: 'ghcr.io/c:main: unreachable: 503' }],
-      ['indexContainerAi', { phase: 'address', detail: 'https://ai: ECONNRESET' }],
       ['fleetOrigins', { phase: 'address', detail: 'MOTIR_BASE_URL: 503' }],
       ['fleetImageCoverage', { phase: 'pairs', detail: 'MOTIR on motir-co: no read' }],
       [

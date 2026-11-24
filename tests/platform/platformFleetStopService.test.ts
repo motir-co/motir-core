@@ -201,7 +201,7 @@ async function census(t: WorkItemFixture) {
   );
 }
 
-/** The story's fixture: 2 runs, 3 CI containers, 1 hosted run, 2 agents, 1 index. */
+/** The story's fixture: 2 runs, 3 CI containers, 1 hosted run, 2 agents. */
 async function seedBusyOrg(t: WorkItemFixture) {
   await seedHostedRepo(t, 'alpha-web');
   await seedHostedRepo(t, 'alpha-api');
@@ -209,7 +209,6 @@ async function seedBusyOrg(t: WorkItemFixture) {
   liveRuns.set(`${MOTIR_ORG}/alpha-api`, [202]);
   const intents = [await seedCiContainer(t), await seedCiContainer(t), await seedCiContainer(t)];
   await seedSlot(t, 'hosted_agent', hostedRunDispatchId(`run-${t.workspaceId}`));
-  await seedSlot(t, 'code_graph_index', `index-${t.workspaceId}`);
   const instances = [await runningInstance(t, 'yue-a'), await runningInstance(t, 'yue-b')];
   return { intents, instances, hostedRun: `run-${t.workspaceId}` };
 }
@@ -268,7 +267,6 @@ describe('stop', () => {
       ciContainers: 3,
       hostedRuns: 1,
       agentInstances: 2,
-      indexContainers: 1,
     });
 
     const result = await platformFleetStopService.stop(
@@ -309,8 +307,6 @@ describe('stop', () => {
       ci_runner: 0,
       hosted_agent: 0,
       agent_instance: 0,
-      // Index containers are counted and never stopped.
-      code_graph_index: 1,
     });
   });
 
@@ -488,7 +484,6 @@ describe('preview', () => {
       ciContainers: 0,
       hostedRuns: 0,
       agentInstances: 0,
-      indexContainers: 0,
     });
     const rows = await adminDb.platformAuditLog.findMany({ orderBy: { createdAt: 'asc' } });
     expect(rows).toHaveLength(before + 1);

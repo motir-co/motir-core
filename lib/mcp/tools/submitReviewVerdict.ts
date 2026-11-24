@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
+  ReviewNotYetAskedError,
   ReviewNothingToReviewError,
   ReviewTargetNotRunTargetError,
   ReviewVerdictInvalidError,
@@ -177,6 +178,7 @@ export async function runSubmitReviewVerdict(
     }
     if (
       err instanceof ReviewVerdictLateError ||
+      err instanceof ReviewNotYetAskedError ||
       err instanceof ReviewTargetNotRunTargetError ||
       err instanceof ReviewNothingToReviewError ||
       err instanceof ReviewVerdictInvalidError
@@ -209,7 +211,8 @@ export function registerSubmitReviewVerdict(
         'card has a newer version — review that) and `REVIEW_VERDICT_SECOND` (already ' +
         'reviewed — stop; to overrule a standing send-back at that version, its routed person ' +
         'calls `dismiss_review`) are each RECORDED and decide nothing; ' +
-        '`REVIEW_TARGET_NOT_RUN_TARGET` ' +
+        '`REVIEW_NOT_YET_ASKED` (the gate is ON and no review is waiting at this version yet ' +
+        '— nothing stored; submit again once it is); `REVIEW_TARGET_NOT_RUN_TARGET` ' +
         'names the card to review instead; `REVIEW_NOTHING_TO_REVIEW` — it delivers no pull ' +
         'request.',
       inputSchema,

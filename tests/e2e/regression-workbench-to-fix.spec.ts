@@ -41,9 +41,10 @@ import zh from '@/messages/zh.json';
 //   CI failed            a signed FAILED `check_suite` on the card's pull request
 //   Failed in the queue  a signed `pull_request` `dequeued` with reason `CI_FAILURE`, at
 //                        the pull request's head (the captured MOTIR-5627 body)
-//   Conflicts with main  the approve-and-merge PRESS, which reads the host's mergeability
-//                        (the merge seam, answering `dirty`), stores it, and withdraws
-//                        the question — the card is held at Implemented (MOTIR-5913)
+//   Conflicts with main  the green `check_suite` itself: CI's promotion reads the host's
+//                        mergeability first (the merge seam, answering `dirty`), stores it
+//                        and asks nothing — the card is held at Implemented (MOTIR-12094;
+//                        before it the approve-and-merge PRESS was the read, MOTIR-5913)
 //   Changes requested    a person pressing Request changes on the approve-to-merge gate
 //                        raised when the card's checks went green
 //
@@ -113,11 +114,6 @@ async function badgeCount(page: Page, tab: string): Promise<number> {
   const digits = text.replace(/[^0-9]/g, '');
   return digits === '' ? 0 : Number(digits);
 }
-
-const serverAction = (page: Page) =>
-  page.waitForResponse(
-    (res) => res.request().method() === 'POST' && Boolean(res.request().headers()['next-action']),
-  );
 
 /** The check the stored detail names — what the red row must say, read from the column the
  *  recompute wrote rather than guessed from the payload builder. */
@@ -262,7 +258,7 @@ test.describe('To fix on the Workbench', () => {
     sentBack = seed.zh;
     writeFileSync(JOURNAL_PATH, '');
     // The merge seam answers for the web repository; the CONFLICT card's pull request
-    // reads `dirty` at its head, so the press stores the conflict and asks nothing.
+    // reads `dirty` at its head, so its green promotion stores the conflict and asks nothing.
     const control: GithubMergeControl = {
       repositories: [WEB],
       pullRequests: {
@@ -301,36 +297,15 @@ test.describe('To fix on the Workbench', () => {
     await checks(page, queue, 'queue', null);
     await queueFails(page, 'queue');
 
-    // The conflicted and sent-back cards went green, which raised an approve-to-merge
-    // question on each (a `manual` project).
+    // The conflicted and sent-back cards went green. CI's promotion reads the host before it
+    // asks anybody (MOTIR-12094): the conflicted card's pull request is `dirty`, so the
+    // conflict is stored and the card held at Implemented with no question; the sent-back
+    // card's is landable, so it is asked to approve the merge (a `manual` project).
     await openPr(page, conflict, 'conflict');
     await checks(page, conflict, 'conflict', 'success');
+    await expect.poll(() => fixReasonOf(conflict), { timeout: 60_000 }).toBe('conflicted');
     await openPr(page, sentBack, 'sentBack');
     await checks(page, sentBack, 'sentBack', 'success');
-
-    // Pressing Approve and merge on the conflicted card: the press reads the host first,
-    // finds it `dirty`, and withdraws the question — the card is held at Implemented.
-    await openItem(page, conflict);
-    const pressDialog = await openDevelopmentOverlay(page);
-    await pressDialog
-      .getByRole('button', {
-        name: en.approvalGate.pullRequestApproval.verb.approveAndMerge,
-        exact: true,
-      })
-      .click();
-    const press = serverAction(page);
-    await pressDialog
-      .getByRole('button', {
-        name: en.approvalGate.confirm.proceed.replace(
-          '{verb}',
-          en.approvalGate.pullRequestApproval.verb.approveAndMerge,
-        ),
-        exact: true,
-      })
-      .click();
-    expect((await press).status()).toBe(200);
-    await expect.poll(() => fixReasonOf(conflict), { timeout: 60_000 }).toBe('conflicted');
-    await closeOverlay(page);
 
     // A reviewer sends the other one back.
     await openItem(page, sentBack);

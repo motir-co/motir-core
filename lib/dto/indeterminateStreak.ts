@@ -1,7 +1,7 @@
 // DTO for the daily health check's INDETERMINATE-STREAK read (MOTIR-10429) —
 // what `system.daily-health-check` resolves to under `indeterminateStreak`, and
 // therefore what lands on its `job_run.output`. Dates cross the boundary as ISO
-// strings, matching `lib/dto/indexRebuildStreak.ts`.
+// strings, as every daily-check verdict's do.
 //
 // Every probe with an `indeterminate` arm is quiet on ONE such verdict, and
 // deliberately: a single GHCR or GitHub blip must not page anyone (the
@@ -28,9 +28,8 @@ export interface IndeterminateStreakEntryDTO {
 }
 
 /**
- * What this read CANNOT see, carried on every verdict for the reason
- * `INDEX_REBUILD_STREAK_BLIND_SPOT` gives: a reader who takes a green verdict
- * for more than it measured will be wrong.
+ * What this read CANNOT see, carried on every verdict: a reader who takes a
+ * green verdict for more than it measured will be wrong.
  */
 export const INDETERMINATE_STREAK_BLIND_SPOT =
   'A run that FAILED on anything but this streak records no probe verdicts, so it is skipped: ' +

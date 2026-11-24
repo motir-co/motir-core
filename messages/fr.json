@@ -4276,8 +4276,6 @@
           "agentsNote": "En cours et en veille",
           "ciJobs": "Jobs CI en cours",
           "ciWaiting": "{count, plural, =0 {Aucun en attente} other {# en attente}}",
-          "index": "Jobs d’indexation",
-          "indexNote": "Non facturé",
           "of": " sur {figure}",
           "notRead": "Lecture impossible",
           "failedTitle": "Impossible de lire les chiffres de la flotte",
@@ -4347,12 +4345,6 @@
             "other": "autre"
           }
         },
-        "index": {
-          "title": "Jobs d’indexation",
-          "running": "<n>{count}</n> en cours",
-          "note": "L’indexation garde la recherche de code à jour. Elle n’est pas facturée et n’est pas arrêtée ici.",
-          "failed": "Impossible de lire les jobs d’indexation"
-        },
         "motirStops": {
           "title": "Arrêté par Motir · 7 derniers jours",
           "lead": "Les machines que Motir a arrêtées lui-même pour cette organisation, et pourquoi.",
@@ -4363,7 +4355,6 @@
             "ci_runner": "Conteneur de job CI",
             "hosted_agent": "Exécution d’agent",
             "agent_instance": "Instance d’agent",
-            "code_graph_index": "Job d’indexation",
             "other": "Machine"
           },
           "reason": {
@@ -4411,7 +4402,6 @@
           "ciUnknownRuns": "Jobs CI annulés",
           "hosted": "{count, plural, one {exécution d’agent terminée} other {exécutions d’agent terminées}}",
           "agents": "{count, plural, one {agent en cours mis en veille} other {agents en cours mis en veille}}",
-          "index": "{count, plural, one {job d’indexation continue} other {jobs d’indexation continuent}} — l’indexation n’est pas arrêtée ici",
           "afterwards": "Rien n’est bloqué ensuite : les membres peuvent lancer de nouveaux travaux tout de suite. Les propriétaires des agents mis en veille sont avertis.",
           "countedAt": "Compté à {time}.",
           "unreadableTitle": "Impossible de compter ce qui est en cours",
@@ -4433,7 +4423,6 @@
           "ciFailed": "{count, plural, one {# dépôt ou conteneur CI ne s’est pas arrêté.} other {# dépôts ou conteneurs CI ne se sont pas arrêtés.}} Actualisez et relancez Tout arrêter.",
           "hostedFailed": "{count, plural, one {# exécution d’agent ne s’est pas terminée.} other {# exécutions d’agent ne se sont pas terminées.}} Essayez Annuler sur sa ligne.",
           "agentsFailed": "{count, plural, one {# agent ne s’est pas arrêté : l’arrêt n’a pas été confirmé. Essayez Mettre en veille sur sa ligne.} other {# agents ne se sont pas arrêtés : l’arrêt n’a pas été confirmé. Essayez Mettre en veille sur leurs lignes.}}",
-          "index": "Les jobs d’indexation ont continué.",
           "byYou": "Arrêté par vous, {when}.",
           "dismiss": "Fermer",
           "dismissAria": "Fermer le résultat de l’arrêt"
@@ -7797,12 +7786,9 @@
         },
         "other": "Pour une autre raison"
       },
-      "indexing": "Indexation du graphe de code : {count} en cours · ne compte dans aucune limite de plan",
-      "indexingNotRead": "Indexation du graphe de code : non lu · ne compte dans aucune limite de plan",
       "whereItRuns": "Où cela s’exécute",
       "kind": {
         "ci_runner": "Runner CI",
-        "code_graph_index": "Indexeur",
         "hosted_agent": "Runner d’agents",
         "agent_instance": "Hébergement d’agents"
       },
@@ -7821,12 +7807,12 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner d’agents",
-          "indexer_and_hoster": "Indexeur + hébergement d’agents"
+          "agent_hoster": "Hébergement d’agents"
         },
         "role": {
           "ci_runner": "Exécute vos tâches CI",
           "hosted_agent": "Exécute vos exécutions de l’agent Motir",
-          "indexer_and_hoster": "Indexe votre code et héberge vos agents"
+          "agent_hoster": "Héberge vos agents"
         },
         "state": {
           "created": "Créé",
@@ -7842,11 +7828,10 @@
         "sharedFloor": {
           "ci_runner": "Encore sur le plancher partagé : CI {figure} runners.",
           "hosted_agent": "Encore sur le plancher partagé, aux limites de Max : {figure} exécutions d’agent en même temps.",
-          "indexer_and_hoster": "L’indexation et l’hébergement d’agents sont encore sur le plancher partagé : agents hébergés {perPerson} par personne, {perOrg} par organisation."
+          "agent_hoster": "L’hébergement d’agents est encore sur le plancher partagé : agents hébergés {perPerson} par personne, {perOrg} par organisation."
         },
         "liveOnceNetwork": "En service dès que le réseau du compte est construit.",
-        "deniedNote": "Le compte reste à « {state} » jusqu’à ce qu’AWS accorde une augmentation.",
-        "keptSpots": "{count} emplacements de machine sont toujours réservés à l’indexation ; les instances d’agent utilisent le reste."
+        "deniedNote": "Le compte reste à « {state} » jusqu’à ce qu’AWS accorde une augmentation."
       },
       "quotaOutcome": {
         "pending": "En traitement chez AWS",
@@ -11871,15 +11856,13 @@
             "mismatched": "incohérentes · exécution et débit ne concordent pas"
           },
           "group": {
-            "plan": "Limité par le forfait",
-            "uncapped": "Aucun chiffre du forfait"
+            "plan": "Limité par le forfait"
           },
           "col": {
             "org": "Organisation",
             "plan": "Forfait",
             "ciRunner": "Runners de CI",
             "hostedAgent": "Exécutions de l'agent Motir",
-            "index": "Conteneurs d'indexation",
             "agentInstance": "Instances d'agent",
             "accrued": "Minutes de CI · {minutes} dernières min",
             "credits": "Crédits ce mois-ci · confirmés",
@@ -11911,7 +11894,7 @@
           "foot": "{from}–{to} sur {total} · incohérences en premier, puis le plus de conteneurs · seule la CI est évaluée — c'est la seule charge débitée pendant son exécution",
           "empty": {
             "title": "Aucune organisation n'exécute de conteneur de la flotte",
-            "body": "Aucune organisation ne détient actuellement de runner de CI, d'exécution de l'agent Motir, d'instance d'agent ni de conteneur d'indexation ; il n'y a donc rien à comparer au débit. C'est un état sain, pas une anomalie."
+            "body": "Aucune organisation ne détient actuellement de runner de CI, d'exécution de l'agent Motir ni d'instance d'agent ; il n'y a donc rien à comparer au débit. C'est un état sain, pas une anomalie."
           },
           "error": {
             "title": "Impossible de lire la flotte",
@@ -12005,7 +11988,6 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner d’agents",
-          "code_graph_index": "Indexeur",
           "agent_instance": "Hébergeur d’agents"
         },
         "block": {
@@ -12975,6 +12957,7 @@
         "agent_storage": "Stockage des agents",
         "ci": "CI",
         "search": "Recherche web",
+        "hosting_production": "Hébergement de production",
         "indexing": "Indexation"
       },
       "models": {
@@ -13744,14 +13727,12 @@
         "workload": {
           "ciRunner": "Runners CI",
           "hostedAgent": "Exécutions de l'agent Motir",
-          "agentInstance": "Instances d'agent",
-          "index": "Conteneurs d'indexation"
+          "agentInstance": "Instances d'agent"
         },
         "charge": {
           "ciRunner": "Facturé pendant l'exécution",
           "hostedAgent": "Facturé à la fin de l'exécution",
-          "agentInstance": "Facturé par intervalle d'exécution",
-          "index": "Coût à la charge de Motir — jamais facturé"
+          "agentInstance": "Facturé par intervalle d'exécution"
         },
         "tile": {
           "of": " sur {figure}",
@@ -13781,7 +13762,6 @@
           "ciUnknown": "Exécutions CI non comptées — GitHub n'a pas pu être lu ; l'arrêt les annule tout de même — et <strong>{containers}</strong> {containers, plural, one {conteneur CI détruit} other {conteneurs CI détruits}}",
           "hosted": "{count, plural, one {exécution de l'agent Motir terminée} other {exécutions de l'agent Motir terminées}}",
           "instances": "{count, plural, one {instance d'agent mise en veille} other {instances d'agent mises en veille}}",
-          "index": "{count, plural, one {conteneur d'indexation laissé} other {conteneurs d'indexation laissés}} jusqu'à la fin — l'indexation est un coût propre à Motir et n'est jamais facturée à l'organisation",
           "notSuspension": "<strong>Ce n'est pas une suspension.</strong> Rien n'est bloqué : la prochaine exécution CI, exécution d'agent ou démarrage d'agent de {org} passe par l'admission normale.",
           "asOf": "Compté à {time}. L'arrêt s'applique à tout ce qui s'exécute au moment où vous confirmez.",
           "loading": "Comptage de ce qui s'exécute…",
@@ -15192,10 +15172,6 @@
           "title": "Image du runner CI",
           "subtitle": "Ce dans quoi s’exécute chaque job CI de la flotte. Épinglée par MOTIR_RUNNER_IMAGE ; la plus récente est la dernière release runner-v*."
         },
-        "indexer": {
-          "title": "Image de l’indexeur",
-          "subtitle": "Ce que démarre chaque exécution d’indexation du graphe de code. Épinglée par MOTIR_INDEXER_IMAGE ; la plus récente est la dernière release indexer-v*."
-        },
         "sandbox": {
           "title": "Images des instances d’agent",
           "subtitle": "Le bac à sable où tournent les agents, un tag par profil sur ghcr.io/motir-co/motir-sandbox. Complète quand chaque profil a son tag à la dernière release cli-v*."
@@ -15204,7 +15180,6 @@
       "imageName": {
         "hosted": "image de l’agent Motir",
         "runner": "image du runner CI",
-        "indexer": "image de l’indexeur",
         "sandbox": "images des instances d’agent"
       },
       "source": {
@@ -15235,17 +15210,13 @@
         "hosted": "{count, plural, one {# commit} other {# commits}} sur packages/cli entre le build épinglé et le plus récent.",
         "runner": "({tags}) · {days, plural, one {# jour} other {# jours}} · {commits, plural, one {# commit} other {# commits}} sur infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# jour} other {# jours}} · {commits, plural, one {# commit} other {# commits}} sur infra/ci-runner.",
-        "indexer": "({tags}) · {days, plural, one {# jour} other {# jours}} · {commits, plural, one {# commit} other {# commits}} sur l’indexeur.",
-        "indexerNoTags": "{days, plural, one {# jour} other {# jours}} · {commits, plural, one {# commit} other {# commits}} sur l’indexeur.",
         "link": "Voir les commits"
       },
       "unreleased": {
         "title": "Fusionnés depuis {release}, dans aucune release",
-        "count": "{count, plural, one {# modification} other {# modifications}} sur infra/ci-runner",
-        "indexerCount": "{count, plural, one {# modification fusionnée sur l’indexeur est arrivée après} other {# modifications fusionnées sur l’indexeur sont arrivées après}}"
+        "count": "{count, plural, one {# modification} other {# modifications}} sur infra/ci-runner"
       },
       "releaseNeeded": "<strong>Une release est nécessaire.</strong> Ces modifications n’atteignent la flotte que dans une nouvelle release du runner, et cette page n’en crée pas. Poussez le tag <mono>{tag}</mono> ; la chaîne de release la publie alors et la ligne propose Publier la dernière.",
-      "releaseNeededIndexer": "<strong>Une release est nécessaire.</strong> Ces modifications n’atteignent les exécutions d’indexation que dans une nouvelle release de l’indexeur, et cette page n’en crée pas. Poussez le tag <mono>{tag}</mono> dans motir-ai ; sa chaîne de release la publie alors et la ligne propose Publier la dernière.",
       "ami": {
         "title": "AMI du runner · lecture seule",
         "current": "À jour",
@@ -15278,14 +15249,10 @@
         "note": {
           "hosted": "Épingle le dernier build main via le workflow d’épinglage de l’agent Motir. Le web et le worker basculent dessus.",
           "runner": "Épingle {release} via le workflow d’épinglage du runner. Le web et le worker basculent dessus.",
-          "indexer": "Épingle {release} via la pull request d’épinglage de l’indexeur. Le web et le worker basculent dessus.",
           "sandbox": "Republie {release}. Seuls les {count} tags manquants sont poussés ; rien ne bascule en production.",
           "hostedCurrent": "Rien de plus récent à publier. La production épingle le dernier build main.",
           "runnerCurrent": "Rien de plus récent à publier. La production épingle la dernière release du runner.",
           "runnerReleaseNeeded": "Rien de plus récent à publier : la production épingle la dernière release. Les modifications fusionnées ci-dessus ont d’abord besoin d’une release.",
-          "indexerCurrent": "Rien de plus récent à publier. La production épingle la dernière release de l’indexeur.",
-          "indexerReleaseNeeded": "Rien de plus récent à publier : la production épingle la dernière release de l’indexeur. Les modifications fusionnées ci-dessus ont d’abord besoin d’une release.",
-          "indexerNotRead": "Publier la dernière reste désactivé tant que l’épinglage et la release la plus récente ne sont pas tous deux lus.",
           "sandboxCurrent": "Rien de plus récent à publier. Chaque profil a son tag à la dernière release.",
           "sandboxOld": "{release} a été créée avant qu’une réexécution puisse ne pousser que les tags manquants, donc la réexécuter repousserait chaque tag. Créez plutôt une nouvelle release cli-v*.",
           "running": "Une exécution du workflow de publication de cette image est déjà en cours. Publier la dernière est désactivé jusqu’à sa fin.",
@@ -15303,21 +15270,12 @@
         "sandboxFrom": "{published} tags sur {total} à {version}",
         "hostedBody": "Ceci démarre le workflow d’épinglage de l’agent Motir. Il déplace MOTIR_HOSTED_AGENT_IMAGE vers le dernier build et déploie : <strong>le web et le worker basculent</strong> sur le nouvel épinglage, et les exécutions de l'agent Motir démarrées après la bascule démarrent la nouvelle image.",
         "runnerBody": "Ceci démarre le workflow d’épinglage du runner. Il déplace MOTIR_RUNNER_IMAGE vers {release} et déploie : <strong>le web et le worker basculent</strong> sur le nouvel épinglage. L’AMI du runner n’est pas modifiée.",
-        "indexerBody": "Ceci ouvre la pull request d’épinglage de l’indexeur, qui déplace MOTIR_INDEXER_IMAGE vers {release} et est mise en file pour fusion. Son déploiement <strong>fait ensuite basculer le web et le worker</strong>, et les exécutions d’indexation lancées après la bascule démarrent la nouvelle image. Celles déjà en cours se terminent sur celle qu’elles ont démarrée.",
         "sandboxBody": "Ceci réexécute la release du bac à sable pour {release} et ne pousse que les tags manquants : {missing}. {published} sont déjà publiés et ne sont pas repoussés. <strong>Rien ne bascule en production.</strong>",
         "sandboxBodyNonePublished": "Ceci réexécute la release du bac à sable pour {release} et ne pousse que les tags manquants : {missing}. <strong>Rien ne bascule en production.</strong>"
       },
       "progress": {
         "title": "Publication en cours.",
         "body": "Le workflow de publication s’exécute ; cette ligne se met à jour quand il se termine.",
-        "indexerQueued": {
-          "title": "Pull request d’épinglage en file.",
-          "body": "Elle fusionne via la file de fusion, puis son déploiement fait basculer le web et le worker ; cette ligne se met à jour au fil de l’avancement."
-        },
-        "indexerRolling": {
-          "title": "Bascule du web et du worker.",
-          "body": "La pull request d’épinglage a fusionné et son déploiement fait passer le web et le worker sur {release}. Les nouvelles exécutions d’indexation la démarrent une fois la bascule terminée."
-        },
         "started": "· démarré {age} par {email}",
         "startedNoActor": "· démarré {age}",
         "button": "Publication…"
@@ -15336,7 +15294,6 @@
       "workflow": {
         "hosted": "Épinglage de l’agent Motir",
         "runner": "Épinglage du runner",
-        "indexer": "Épinglage de l’indexeur",
         "sandbox": "Release du bac à sable {tag}",
         "run": "{workflow} · exécution n° {number}",
         "runNoNumber": "{workflow} · exécution"
@@ -15353,26 +15310,7 @@
       },
       "unset": {
         "title": "Non configuré ici",
-        "body": "{variable} n’est pas défini sur ce déploiement, il n’y a donc aucun épinglage à comparer.",
-        "indexerBody": "MOTIR_INDEXER_IMAGE n’est pas défini sur ce déploiement, cette installation n’indexe donc pas : aucune exécution d’indexation du graphe de code ne démarre, et il n’y a aucun épinglage à comparer."
-      },
-      "notRead": {
-        "pin": {
-          "title": "Impossible de lire l’épinglage.",
-          "body": "ECR n’a pas répondu pour le digest que nomme MOTIR_INDEXER_IMAGE ; il n’est donc pas comparé et rien ici ne signifie à jour."
-        },
-        "newest": {
-          "title": "Impossible de lire les releases.",
-          "body": "GitHub n’a pas répondu pour les releases indexer-v* de motir-ai ; l’épinglage n’est donc comparé à rien."
-        },
-        "newestEcr": {
-          "title": "Impossible de lire les releases.",
-          "body": "ECR n’a pas répondu pour les tags de release indexer-* du dépôt de l’indexeur ; l’épinglage n’est donc comparé à rien."
-        },
-        "history": {
-          "title": "Impossible de lire les modifications fusionnées",
-          "body": "GitHub n’a pas répondu pour l’historique des commits de motir-ai ; les modifications absentes de toute release ne sont donc pas listées. L’épinglage et la release la plus récente ci-dessus restent comparés."
-        }
+        "body": "{variable} n’est pas défini sur ce déploiement, il n’y a donc aucun épinglage à comparer."
       },
       "loading": "Chargement : {image}",
       "publishError": {

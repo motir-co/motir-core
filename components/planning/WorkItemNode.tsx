@@ -45,6 +45,11 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import { FolderPathLabel } from '@/components/planning/FolderPlacement';
 import {
+  BLOCKED_TAB_TONE,
+  CARD_EDGE_TAB_PLACEMENT,
+  CARD_EDGE_TAB_SHAPE,
+} from '@/components/planning/cardEdgeTab';
+import {
   BlockedTag,
   WorkItemBlockedTag,
   WorkItemStateTags,
@@ -359,12 +364,19 @@ export function WorkItemNode({
   // sprint" tag itself still shows alongside `here` (only the red cross-blocked
   // flag suppresses it, to avoid a double tag).
   const notInSprintChrome = notInSprint && !crossBlocked && !here;
-  const showNotInSprintTag = notInSprint && !crossBlocked;
+  // BLOCKED ELSEWHERE rides the card's top-edge TAB (MOTIR-12158; design
+  // MOTIR-12157 § "One tab per edge"), unless the card is also "You are here":
+  // that identity tab keeps the edge, and the blocked card renders as it did
+  // before, with the short `blocked` tag in the tag row. So the row carries the
+  // blocked tag — and the old suppressions keyed on it — only on a here card.
+  const blockedInRow = crossBlocked && here;
+  const showNotInSprintTag = notInSprint && !blockedInRow;
   // THE GIVE-WAY RULE (MOTIR-10508 § "When the tag row overflows"): a right-hand
-  // TEXT tag (Not public, not in sprint, the blocked flag) drops the status slot and
-  // the Manual chip to their glyphs. A fixed rule, not a measurement: with a
-  // five-digit key, any status label plus any right-hand tag does not fit 254px.
-  const glyphOnly = notPublic || showNotInSprintTag || crossBlocked || showHeldFlag;
+  // TEXT tag (Not public, not in sprint, the blocked flag in the row) drops the
+  // status slot and the Manual chip to their glyphs. A fixed rule, not a
+  // measurement: with a five-digit key, any status label plus any right-hand tag
+  // does not fit 254px. Blocked on the TAB frees the row, so it no longer triggers it.
+  const glyphOnly = notPublic || showNotInSprintTag || blockedInRow || showHeldFlag;
   const nodeState = crossBlocked
     ? 'cross-blocked'
     : here
@@ -462,14 +474,15 @@ export function WorkItemNode({
               {runLeg.label}
             </RunTonePill>
           ) : null}
-          {notPublic || showNotInSprintTag || crossBlocked || showHeldFlag || drillable ? (
+          {notPublic || showNotInSprintTag || blockedInRow || showHeldFlag || drillable ? (
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
               {notPublic ? <EpicNotPublicPill /> : null}
               {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
                   NOT the red cross-blocked flag: this node is simply outside the
-                  committed sprint, not a broken dependency. Suppressed when the card is
-                  cross-blocked (its own flag already reads "not in sprint" in sprint
-                  scope), so the card never carries two tags. */}
+                  committed sprint, not a broken dependency. Suppressed only when the
+                  blocked flag sits in the ROW (a here card): its flag already reads
+                  "not in sprint" in sprint scope, so the row never carries two tags.
+                  With blocked on the tab, both facts show (MOTIR-12157). */}
               {showNotInSprintTag ? (
                 <span
                   data-testid="not-in-sprint-tag"
@@ -483,7 +496,7 @@ export function WorkItemNode({
                   {t('node.notInSprint')}
                 </span>
               ) : null}
-              {crossBlocked ? (
+              {blockedInRow ? (
                 <CrossBlockedFlag sprint={crossBlockedSprint} short />
               ) : showHeldFlag ? (
                 <WorkItemBlockedTag />
@@ -547,7 +560,7 @@ export function WorkItemNode({
           </span>
         ) : null
       }
-      tab={here ? <HereTab /> : null}
+      tab={here ? <HereTab /> : crossBlocked ? <BlockedTab sprint={crossBlockedSprint} /> : null}
       action={
         action === null ? null : action.kind === 'plan' ? (
           <PlanNextAction itemKey={item.identifier} />
@@ -706,8 +719,10 @@ export function WorkItemCardShell({
 /**
  * A TAB hung on a canvas card's top edge — the frame the "You are here" cue
  * (MOTIR-10630; design MOTIR-10629 § "The tab") introduced, shared since
- * MOTIR-11545 with a decided plan card's outcome (`PlanItemNode`), so the two
- * tabs are one shape and a style swap reshapes both. Rendered into
+ * MOTIR-11545 with a decided plan card's outcome (`PlanItemNode`) and since
+ * MOTIR-12158 with the blocked tab (`BlockedTab`), so the tabs are one shape and a
+ * style swap reshapes all of them. A card wears at most ONE: the here / outcome tab
+ * keeps the edge over the blocked one (design MOTIR-12157 § "One tab per edge"). Rendered into
  * `WorkItemCardShell`'s `tab` slot; it sits LEFT, in the 72px row gap, so it
  * frees the tag row and changes neither `NODE_H` nor the layout.
  *
@@ -719,8 +734,9 @@ export function WorkItemCardShell({
  *   shape tokens (`--radius-badge` on the top corners, `chip-x-6`), so a style
  *   swap reshapes it; the bottom corners stay square because they join the frame.
  *   No shadow: under neo-brutalism the hard offset shadow belongs to the frame.
- * - Its words are always shown (never truncated, never cut to the glyph) and not
- *   `aria-hidden`, so they are read out before the frame's content.
+ * - Its words are always shown (never truncated, never cut to the glyph) and read
+ *   out before the frame's content — as themselves, or, when the caller passes a
+ *   `label` (the blocked tab's short word), as that fuller sentence.
  *
  * The caller supplies only the TONE — a fill / ink pair of `--el-*` tokens that
  * clears AA in every palette — and the contents.
@@ -728,17 +744,27 @@ export function WorkItemCardShell({
 export function CardEdgeTab({
   toneClassName,
   testId,
+  label,
   children,
 }: {
   /** The tab's fill + ink, e.g. `bg-(--el-accent) text-(--el-accent-text)`. */
   toneClassName: string;
   testId: string;
+  /**
+   * The tab's FULL accessible name, when its visible words are a short form of it
+   * (the blocked tab, MOTIR-12158: `blocked` on the tab, the sentence here). The
+   * tab is then a labelled image — `role="img"`, `aria-label` and `title` carry the
+   * sentence, and the caller marks its visible words `aria-hidden`. Absent → the
+   * visible words are the name, as on the here and outcome tabs.
+   */
+  label?: string;
   children: ReactNode;
 }) {
   return (
     <span
       data-testid={testId}
-      className={`absolute bottom-[calc(100%-1px)] left-3 z-10 inline-flex h-5 items-center gap-1 rounded-t-(--radius-badge) px-(--spacing-chip-x-6) text-[11px] leading-none font-semibold whitespace-nowrap ${toneClassName}`}
+      {...(label ? { role: 'img', 'aria-label': label, title: label } : {})}
+      className={`${CARD_EDGE_TAB_PLACEMENT} ${CARD_EDGE_TAB_SHAPE} ${toneClassName}`}
     >
       {children}
     </span>
@@ -756,6 +782,32 @@ function HereTab() {
     <CardEdgeTab testId="here-tab" toneClassName="bg-(--el-accent) text-(--el-accent-text)">
       <MapPin className="size-3 shrink-0" aria-hidden="true" />
       {t('here')}
+    </CardEdgeTab>
+  );
+}
+
+/**
+ * The "blocked elsewhere" TAB (MOTIR-12158; design MOTIR-12157 § "The tab") — the
+ * blocked card's own flag, hung on its top-left edge where the here tab hangs, in
+ * place of the chip `PlanningCanvas` used to draw at a `cross` edge's midpoint
+ * (which landed on whatever card the route passed under). On the danger fill /
+ * ink pair, so it and the danger frame read as one red shape. The visible word is
+ * the short `blocked`; the full sentence — *blocked elsewhere*, or in sprint scope
+ * *blocker not in sprint* — is its accessible name and tooltip.
+ *
+ * EXPORTED because a proposal carries the same signal on the plan-review canvas
+ * (`PlanItemNode`), so the two canvases keep one language.
+ */
+export function BlockedTab({ sprint = false }: { sprint?: boolean }) {
+  const t = useTranslations('roadmap.canvas.node');
+  return (
+    <CardEdgeTab
+      testId="blocked-tab"
+      toneClassName={BLOCKED_TAB_TONE}
+      label={t(sprint ? 'blockerNotInSprint' : 'blockedElsewhere')}
+    >
+      <Flag className="size-3 shrink-0" aria-hidden="true" />
+      <span aria-hidden="true">{t('blockedShort')}</span>
     </CardEdgeTab>
   );
 }

@@ -10,7 +10,6 @@ import {
 } from '@/lib/services/fleetAttributionService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
-import { indexSlotRef } from '@/lib/services/codeGraphIndexAdmissionService';
 import { AWS_RUNNER_AMI_ENV_VAR } from '@/lib/orchestrator';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { UnattributedMachineDestroyedError } from '@/lib/ciFleet/attributionErrors';
@@ -100,7 +99,7 @@ async function seedTenant(): Promise<Fixture> {
   };
 }
 
-type Kind = 'ci_runner' | 'hosted_agent' | 'code_graph_index' | 'agent_instance';
+type Kind = 'ci_runner' | 'hosted_agent' | 'agent_instance';
 
 interface OwnAccount {
   /** The row's id per fleet kind — two for the merged account. */
@@ -232,21 +231,6 @@ async function seedHostedRun(fx: Fixture, shardId: string, instanceId: string) {
   });
 }
 
-/** A live index container: checkpoint and unexpired slot. */
-async function seedIndex(fx: Fixture, instanceId: string) {
-  const repo = `motir-projects/repo-${randomToken(4).toLowerCase()}`;
-  await seedUsage(fx, instanceId, 'index', repo, null);
-  await adminDb.fleetInFlightSlot.create({
-    data: {
-      workload: 'code_graph_index',
-      ref: indexSlotRef(fx.projectId, repo),
-      organizationId: fx.organizationId,
-      workspaceId: fx.workspaceId,
-      expiresAt: new Date(Date.now() + 60 * MINUTE),
-    },
-  });
-}
-
 let instanceSeq = 0;
 async function seedInstance(fx: Fixture, shardId: string, name: string, machineId: string) {
   instanceSeq += 1;
@@ -367,7 +351,7 @@ describe('a machine nothing names on an own account (MOTIR-9584)', () => {
     // The tenant has no plan at all here, so it does not read `host`: the account
     // stays open and the pass keeps walking it.
     const owner = await seedTenant();
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
+    const merged = await ownAccount(owner, ['agent_instance']);
     const stray = plant(merged);
     const kept = plant(merged, OLD(), [{ key: 'Name', value: 'agent-instance' }]);
     await seedInstance(owner, merged.rows.agent_instance!, merged.names.agent_instance!, kept);
@@ -381,26 +365,26 @@ describe('a machine nothing names on an own account (MOTIR-9584)', () => {
 });
 
 describe('the owner match (MOTIR-9584)', () => {
-  it("leaves the owner's own live record running, for each of the four fleet kinds", async () => {
+  // The index container has no live record to keep it since MOTIR-12036: the
+  // index admission that wrote its slot left with the container-based indexer.
+  it("leaves the owner's own live record running, for each of the three fleet kinds that boot", async () => {
     const owner = await seedTenant();
     const ci = await ownAccount(owner, ['ci_runner']);
     const runner = await ownAccount(owner, ['hosted_agent']);
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
+    const merged = await ownAccount(owner, ['agent_instance']);
     const job = plant(ci);
     await seedIntent(owner, ci.rows.ci_runner!, job);
     const run = plant(runner);
     await seedHostedRun(owner, runner.rows.hosted_agent!, run);
-    const index = plant(merged);
-    await seedIndex(owner, index);
     const instance = plant(merged);
     await seedInstance(owner, merged.rows.agent_instance!, merged.names.agent_instance!, instance);
 
     const result = await reconcile();
 
-    expect(result).toMatchObject({ outcome: 'reconciled', accounts: 3, matched: 4, killed: [] });
+    expect(result).toMatchObject({ outcome: 'reconciled', accounts: 3, matched: 3, killed: [] });
     expect(ci.ec2.liveInstanceIds()).toEqual([job]);
     expect(runner.ec2.liveInstanceIds()).toEqual([run]);
-    expect(merged.ec2.liveInstanceIds().sort()).toEqual([index, instance].sort());
+    expect(merged.ec2.liveInstanceIds()).toEqual([instance]);
     expect(destroyedAlerts()).toEqual([]);
   });
 
@@ -408,24 +392,18 @@ describe('the owner match (MOTIR-9584)', () => {
     const owner = await seedTenant();
     const other = await seedTenant();
     const ci = await ownAccount(owner, ['ci_runner']);
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
     const foreignJob = plant(ci);
     await seedIntent(other, ci.rows.ci_runner!, foreignJob);
-    const foreignIndex = plant(merged);
-    await seedIndex(other, foreignIndex);
 
     const result = await reconcile();
 
     expect(result).toMatchObject({ outcome: 'reconciled', matched: 0 });
     expect(result.outcome === 'reconciled' && result.killed.map((k) => k.reason)).toEqual([
       'foreign_org',
-      'foreign_org',
     ]);
     expect(ci.ec2.liveInstanceIds()).toEqual([]);
-    expect(merged.ec2.liveInstanceIds()).toEqual([]);
     const kills = await adminDb.fleetMachineKill.findMany();
     expect(kills.map((k) => [k.reason, k.organizationId])).toEqual([
-      ['foreign_org', owner.organizationId],
       ['foreign_org', owner.organizationId],
     ]);
     for (const alert of destroyedAlerts()) {
@@ -434,7 +412,7 @@ describe('the owner match (MOTIR-9584)', () => {
       expect(alert.message).toContain(owner.organizationId);
       expect(alert.message).toContain(`record names organization ${other.organizationId}`);
     }
-    expect(destroyedAlerts()).toHaveLength(2);
+    expect(destroyedAlerts()).toHaveLength(1);
   });
 
   it("spares another organisation's machine inside the grace", async () => {
@@ -454,7 +432,7 @@ describe('the owner match (MOTIR-9584)', () => {
 describe('the merged account and listing failures (MOTIR-9584)', () => {
   it('lists and judges the merged account once: one stray, one kill row, one alert, one listing', async () => {
     const owner = await seedTenant();
-    const merged = await ownAccount(owner, ['code_graph_index', 'agent_instance']);
+    const merged = await ownAccount(owner, ['agent_instance']);
     const stray = plant(merged);
 
     const result = await reconcile();

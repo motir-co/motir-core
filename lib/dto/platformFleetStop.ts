@@ -12,8 +12,6 @@ export interface FleetStopPreviewDTO {
   hostedRuns: number;
   /** Agent instances running now. */
   agentInstances: number;
-  /** Index containers — counted, and NOT stopped: indexing is never charged. */
-  indexContainers: number;
 }
 
 /** What one stop achieved. A partial stop is a result, never a throw. */

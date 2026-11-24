@@ -169,7 +169,6 @@ describe('the actions', () => {
       ciContainers: 1,
       hostedRuns: 0,
       runningAgents: 0,
-      indexContainers: 0,
     };
     stop.previewStopEverything.mockResolvedValue(preview);
     const previewed = await actions.previewStopEverythingAction('org_1');

@@ -11,7 +11,6 @@ import { PLAN_CACHE_TTL_MS } from '@/lib/services/orgPlanReader';
 import { _resetPlanCapsCache, planCapsService } from '@/lib/services/planCapsService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
-import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { agentInstanceLifecycleService as lifecycle } from '@/lib/services/agentInstanceLifecycleService';
 import { platformFleetMonitorService } from '@/lib/services/platformFleetMonitorService';
@@ -40,7 +39,8 @@ import {
 // Every code card proved its own gate with its neighbour's seam stubbed. This
 // file runs the ASSEMBLED surface: the REAL `planCapsService.capsFor` (and the
 // paid-plan gate it shares one read with) over the motir-ai subscription answered
-// at `fetch`, feeding the REAL hosted-run, agent-instance, CI and index gates,
+// at `fetch`, feeding the REAL hosted-run, agent-instance and CI gates (the index
+// gate left with the indexer fleet, MOTIR-12036),
 // over real Postgres and the real `fleet` admission lock, with the platform
 // monitor reading the same org. Faked: motir-ai, the gateway and GitHub at
 // `fetch`, and the provider (the fake ephemeral and persistent orchestrators).
@@ -262,7 +262,7 @@ const releaseSlotOf = (dispatchRunId: string) =>
 const hostedSlots = () =>
   adminDb.fleetInFlightSlot.count({ where: { workload: 'hosted_agent', organizationId: orgId() } });
 
-// ── CI and index ────────────────────────────────────────────────────────────
+// ── CI ────────────────────────────────────────────────────────────────
 
 let jobSeq = 0;
 
@@ -309,19 +309,6 @@ const census = () =>
 
 /** The org's CI runners in flight, as the CI gate counts them. */
 const ciRunning = async () => (await census()).byWorkload.ci_runner;
-
-let indexSeq = 0;
-const admitIndex = () => {
-  indexSeq += 1;
-  return codeGraphIndexAdmissionService.admit({
-    organizationId: orgId(),
-    workspaceId: fx.workspaceId,
-    projectId: fx.projectId,
-    repoRef: `acme/repo-${indexSeq}`,
-    dispatchId: `dispatch-${indexSeq}`,
-    containerTimeoutMs: 60_000,
-  });
-};
 
 // ── agent instances ─────────────────────────────────────────────────────────
 
@@ -474,7 +461,7 @@ describe('each workload fills its own figure while the others still admit', () =
     expect(await ciRunning()).toBe(10);
   });
 
-  it('Standard with its hosted run and two agents running: CI still admits its own two, and indexing answers only to the index caps', async () => {
+  it('Standard with its hosted run and two agents running: CI still admits its own two', async () => {
     onPlan(TIERS.standard);
     await startHostedRun();
     await agentsRunning(2);
@@ -485,11 +472,6 @@ describe('each workload fills its own figure while the others still admit', () =
       expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 2 });
     }
     expect(await admitCi()).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
-
-    // Index containers: no plan figure. Global 2 ⇒ the org's share is 1.
-    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '2');
-    expect((await admitIndex()).outcome).toBe('admitted');
-    expect(await admitIndex()).toMatchObject({ outcome: 'deferred', reason: 'org_index_cap' });
   });
 
   // ⚠️ MUTATION-CHECK: delete the `lockScope` call in `ciRunnerAdmissionService.admit`
@@ -738,7 +720,6 @@ describe('the kill switch stops every workload; the retired variables decide not
     expect(await hostedSlots()).toBe(0);
 
     expect(await admitCi()).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
-    expect(await admitIndex()).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
     await expect(create('two')).rejects.toMatchObject({ reason: 'fleet_busy' });
     await expect(wake(sleeping)).rejects.toMatchObject({ reason: 'fleet_busy' });
   });

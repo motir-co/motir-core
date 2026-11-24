@@ -55,7 +55,7 @@ import { readRepoAuditState } from '@/lib/services/auditCoverageService';
 // OUT OF SCOPE, deliberately (decision record §4): re-firing when a repo is
 // RE-indexed after new commits is a genuinely recurring-spend question the record
 // does not answer, which is why this hangs off `system.code-graph-index` and not
-// off the shared `runIndexFleetSteps` that `system.code-graph-refresh` also drives.
+// off the shared `runIndexHandoffSteps` that `system.code-graph-refresh` also drives.
 // And there is no project setting: §6 records what would reopen that.
 
 /** Why a whole run derived nothing, before any project was considered. */

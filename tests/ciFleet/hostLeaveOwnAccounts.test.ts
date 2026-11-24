@@ -29,12 +29,7 @@ import { randomInt, randomToken } from '../helpers/random';
 
 const MOTIR_ORG = 'motir-projects';
 const NOW = new Date('2026-10-26T12:00:00.000Z');
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 const HOST: PlanCapsAnswer = {
   kind: 'capped',
@@ -100,13 +95,9 @@ async function shared(fleetKind: FleetWorkloadKind): Promise<FleetShard> {
   });
 }
 
-/** The org's three own AWS accounts as four live rows, each granted 200 vCPU. */
+/** The org's three own AWS accounts as three live rows, each granted 200 vCPU. */
 async function ownAccounts(owner: Fixture): Promise<Record<FleetWorkloadKind, FleetShard>> {
-  const accounts: FleetWorkloadKind[][] = [
-    ['ci_runner'],
-    ['hosted_agent'],
-    ['code_graph_index', 'agent_instance'],
-  ];
+  const accounts: FleetWorkloadKind[][] = [['ci_runner'], ['hosted_agent'], ['agent_instance']];
   const rows = {} as Record<FleetWorkloadKind, FleetShard>;
   for (const kinds of accounts) {
     const awsAccountId = String(randomInt(100_000_000_000, 999_999_999_999));

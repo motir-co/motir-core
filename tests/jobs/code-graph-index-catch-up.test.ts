@@ -4,11 +4,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import type { IndexAllowanceVerdict } from '@/lib/ciFleet/indexAllowance';
-import { fleetCodeGraphRefresh as codeGraphRefresh } from '../helpers/fleetIndexJobs';
 import {
   CODE_GRAPH_INDEX_CATCH_UP_CRON,
   codeGraphIndexCatchUp,
 } from '@/lib/jobs/definitions/codeGraphIndexCatchUp';
+import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
 import { jobServices } from '@/lib/jobs/services';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import '@/lib/jobs/registry';
@@ -18,20 +18,13 @@ import {
   codeGraphIndexCatchUpService,
   type IndexCatchUpDeps,
 } from '@/lib/services/codeGraphIndexCatchUpService';
-import { fakeOrchestrator } from '@motir/orchestrator';
 import * as indexEnqueue from '@/lib/github/indexEnqueue';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
+import { RETIRED_CAPACITY_PAUSES } from '../helpers/retiredFleetKind';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
-import {
-  containerExitsWith,
-  driveIndexFleetFast,
-  indexAllowanceWorld,
-  refreshEventFor,
-  resetTarballBodyTrap,
-  seedIndexWorkspace,
-  stubIndexFleet,
-} from '../helpers/indexFleet';
+import { refreshEventFor, seedIndexWorkspace } from '../helpers/indexFleet';
+import { handoffWorld, stubIndexHandoff } from '../helpers/indexHandoff';
 
 // THE INDEX CATCH-UP SWEEP (MOTIR-5290 · Story MOTIR-4335), against a REAL
 // Postgres. motir-ai's verdict and the queue are the injected leaves; the pause
@@ -45,18 +38,13 @@ const MOVED_SHA = 'b'.repeat(40);
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  await adminDb.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
-  fakeOrchestrator.reset();
-  resetTarballBodyTrap();
-  driveIndexFleetFast();
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
 afterAll(async () => {
@@ -75,14 +63,9 @@ function verdict(outcome: string): IndexAllowanceVerdict {
 }
 
 /** Injected leaves that record what the sweep did. `answers` maps an organisation
- *  to its verdict outcome, or `null` for an ask that failed; `room` answers the
- *  indexer pool's headroom read (MOTIR-9451), a throw being a read that failed. */
-function fakeDeps(
-  answer: (organizationId: string) => string | null,
-  room: (organizationId: string) => boolean = () => true,
-) {
+ *  to its verdict outcome, or `null` for an ask that failed. */
+function fakeDeps(answer: (organizationId: string) => string | null) {
   const checks: string[] = [];
-  const poolReads: string[] = [];
   const refreshes: CodeGraphIndexData[] = [];
   const indexes: CodeGraphIndexData[] = [];
   const deps: IndexCatchUpDeps = {
@@ -93,12 +76,8 @@ function fakeDeps(
     },
     enqueueRefresh: async (data) => void refreshes.push(data),
     enqueueIndex: async (data) => void indexes.push(data),
-    poolHasRoom: async (organizationId) => {
-      poolReads.push(organizationId);
-      return room(organizationId);
-    },
   };
-  return { deps, checks, poolReads, refreshes, indexes };
+  return { deps, checks, refreshes, indexes };
 }
 
 /** A workspace with `repos` connected, and the organisation that owns it. */
@@ -368,139 +347,94 @@ describe('asked ONCE per organisation; a failed ask changes nothing (AC 6, 7)', 
   });
 });
 
-describe('a FULL INDEXER POOL is re-asked of the pool, never of the allowance (MOTIR-9451)', () => {
-  const POOL_FULL = 'paused_index_pool_full';
+// The two capacity reasons belonged to the retired indexer fleet (MOTIR-9451,
+// MOTIR-10600). With no pool left to wait on, a row still recording either is
+// re-asked of the allowance and handed off like any other pause (MOTIR-12036).
+const CAPACITY_PAUSES = RETIRED_CAPACITY_PAUSES;
 
-  it('while the pool is still full: the pause stays, nothing is enqueued, and no allowance is asked', async () => {
-    const org = await seedOrg('cu-pool-full', ['waiting']);
-    await setRepo('waiting', {
-      paused: POOL_FULL,
+describe('a row still paused for the retired indexer’s capacity is re-asked like any other (MOTIR-12036)', () => {
+  it('allowed: each row gets the index or refresh the drift rule names, for ONE ask per organisation', async () => {
+    const org = await seedOrg('cu-capacity-ok', ['pooled', 'unplaced']);
+    await setRepo('pooled', {
+      paused: CAPACITY_PAUSES[0],
       indexedHeadSha: GRAPH_SHA,
       defaultBranchHeadSha: MOVED_SHA,
     });
-    const { deps, checks, poolReads, refreshes, indexes } = fakeDeps(
-      () => 'ok',
-      () => false,
-    );
+    await setRepo('unplaced', { paused: CAPACITY_PAUSES[1], indexedHeadSha: null });
+    const { deps, checks, refreshes, indexes } = fakeDeps(() => 'ok');
 
     const summary = await codeGraphIndexCatchUpService.catchUp({ deps });
 
-    expect(summary.outcomes.map((o) => o.outcome)).toEqual(['pool_still_full']);
-    expect(checks).toEqual([]);
-    expect(summary.organizationsAsked).toBe(0);
-    expect(poolReads).toEqual([org.organizationId]);
-    expect(refreshes).toEqual([]);
-    expect(indexes).toEqual([]);
-    expect(await pauseOf('waiting')).toBe(POOL_FULL);
+    expect(checks).toEqual([org.organizationId]);
+    expect(summary.organizationsAsked).toBe(1);
+    expect(Object.fromEntries(summary.outcomes.map((o) => [o.repoRef, o.outcome]))).toEqual({
+      'moooon/pooled': 'refresh_enqueued',
+      'moooon/unplaced': 'index_enqueued',
+    });
+    expect(refreshes.map((r) => r.repoName)).toEqual(['pooled']);
+    expect(indexes.map((r) => r.repoName)).toEqual(['unplaced']);
+    // Enqueued, not lifted: the handed-off run lifts the pause when its gates pass.
+    expect(await pauseOf('pooled')).toBe(CAPACITY_PAUSES[0]);
+    expect(await pauseOf('unplaced')).toBe(CAPACITY_PAUSES[1]);
   });
 
-  it('once the pool has room it acts on the drift rule: refresh a moved head, first-index a new repo, clear a current graph', async () => {
-    await seedOrg('cu-pool-room', ['moved', 'fresh', 'still']);
-    await setRepo('moved', {
-      paused: POOL_FULL,
-      indexedHeadSha: GRAPH_SHA,
-      defaultBranchHeadSha: MOVED_SHA,
-    });
-    await setRepo('fresh', { paused: POOL_FULL, indexedHeadSha: null });
-    await setRepo('still', {
-      paused: POOL_FULL,
-      indexedHeadSha: GRAPH_SHA,
-      defaultBranchHeadSha: GRAPH_SHA,
-    });
-    const { deps, checks, poolReads, refreshes, indexes } = fakeDeps(() => 'hard_stop_no_credit');
-
-    await codeGraphIndexCatchUpService.catchUp({ deps });
-
-    // A hard-stop verdict would have held these; it was never asked.
-    expect(checks).toEqual([]);
-    // One pool read for the organisation, not one per repository.
-    expect(poolReads).toHaveLength(1);
-    expect(refreshes.map((r) => r.repoName)).toEqual(['moved']);
-    expect(indexes.map((r) => r.repoName)).toEqual(['fresh']);
-    expect(await pauseOf('still')).toBeNull();
-    // Enqueued, not lifted: the dispatched run lifts it when it boots.
-    expect(await pauseOf('moved')).toBe(POOL_FULL);
-  });
-
-  it('an organisation with both kinds of pause: each row answers to its own question', async () => {
-    await seedOrg('cu-pool-mixed', ['pooled', 'stopped']);
+  it('at a hard stop: both rows stay paused as still_stopped and nothing is enqueued', async () => {
+    await seedOrg('cu-capacity-stop', ['pooled', 'unplaced']);
     await setRepo('pooled', {
-      paused: POOL_FULL,
+      paused: CAPACITY_PAUSES[0],
       indexedHeadSha: GRAPH_SHA,
       defaultBranchHeadSha: MOVED_SHA,
     });
-    await setRepo('stopped', {
-      paused: 'paused_index_no_credit',
-      indexedHeadSha: GRAPH_SHA,
-      defaultBranchHeadSha: MOVED_SHA,
-    });
-    const { deps, checks, poolReads, refreshes } = fakeDeps(() => 'hard_stop_no_credit');
+    await setRepo('unplaced', { paused: CAPACITY_PAUSES[1], indexedHeadSha: null });
+    const { deps, checks, refreshes, indexes } = fakeDeps(() => 'hard_stop_no_credit');
 
     const summary = await codeGraphIndexCatchUpService.catchUp({ deps });
 
     expect(checks).toHaveLength(1);
-    expect(poolReads).toHaveLength(1);
-    expect(summary.organizationsAsked).toBe(1);
-    expect(refreshes.map((r) => r.repoName)).toEqual(['pooled']);
-    expect(Object.fromEntries(summary.outcomes.map((o) => [o.repoRef, o.outcome]))).toEqual({
-      'moooon/pooled': 'refresh_enqueued',
-      'moooon/stopped': 'still_stopped',
-    });
-    expect(await pauseOf('stopped')).toBe('paused_index_no_credit');
-  });
-
-  it('a pool read that throws is not room: the pause stays and the next sweep reads again', async () => {
-    await seedOrg('cu-pool-throws', ['waiting']);
-    await setRepo('waiting', { paused: POOL_FULL, indexedHeadSha: null });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { deps, indexes } = fakeDeps(
-      () => 'ok',
-      () => {
-        throw new Error('database unavailable');
-      },
-    );
-
-    const summary = await codeGraphIndexCatchUpService.catchUp({ deps });
-
-    expect(summary.outcomes.map((o) => o.outcome)).toEqual(['pool_still_full']);
+    expect(summary.outcomes.map((o) => o.outcome)).toEqual(['still_stopped', 'still_stopped']);
+    expect(refreshes).toEqual([]);
     expect(indexes).toEqual([]);
-    expect(await pauseOf('waiting')).toBe(POOL_FULL);
+    expect(await pauseOf('pooled')).toBe(CAPACITY_PAUSES[0]);
+    expect(await pauseOf('unplaced')).toBe(CAPACITY_PAUSES[1]);
   });
 });
 
 describe('no manual intervention re-arms indexing (AC 5)', () => {
-  it('paused → the sweep enqueues → the refresh it enqueued indexes and LIFTS the pause', async () => {
-    const org = await seedOrg('cu-e2e', ['motir-core']);
-    await setRepo('motir-core', {
-      paused: 'paused_index_no_credit',
-      indexedHeadSha: GRAPH_SHA,
-      defaultBranchHeadSha: MOVED_SHA,
-    });
-    const { deps, refreshes } = fakeDeps(() => 'ok');
+  it.each(['paused_index_no_credit', ...CAPACITY_PAUSES])(
+    'paused %s → the sweep enqueues → the refresh it enqueued hands off and LIFTS the pause',
+    async (reason) => {
+      const org = await seedOrg(`cu-e2e-${reason}`, ['motir-core']);
+      await setRepo('motir-core', {
+        paused: reason,
+        indexedHeadSha: GRAPH_SHA,
+        defaultBranchHeadSha: MOVED_SHA,
+      });
+      const { deps, refreshes } = fakeDeps(() => 'ok');
 
-    await codeGraphIndexCatchUpService.catchUp({ deps });
-    expect(refreshes).toHaveLength(1);
+      await codeGraphIndexCatchUpService.catchUp({ deps });
+      expect(refreshes).toHaveLength(1);
 
-    stubIndexFleet();
-    indexAllowanceWorld.checkOutcome = 'ok';
-    containerExitsWith(0);
-    const refresh = refreshes[0]!;
-    const { result } = await new JobTestEngine({ function: codeGraphRefresh }).execute({
-      events: [
-        refreshEventFor({
-          installationId: refresh.installationId,
-          workspaceId: refresh.workspaceId,
-          repoOwner: refresh.repoOwner,
-          repoName: refresh.repoName,
-          eventId: 'evt-cu-e2e',
-        }),
-      ],
-    });
+      stubIndexHandoff();
+      const refresh = refreshes[0]!;
+      const { result } = await new JobTestEngine({ function: codeGraphRefresh }).execute({
+        events: [
+          refreshEventFor({
+            installationId: refresh.installationId,
+            workspaceId: refresh.workspaceId,
+            repoOwner: refresh.repoOwner,
+            repoName: refresh.repoName,
+            eventId: `evt-cu-e2e-${reason}`,
+          }),
+        ],
+      });
 
-    expect(org.installationId).toBe(refresh.installationId);
-    expect(result).toMatchObject({ indexed: true, repoRef: 'moooon/motir-core' });
-    expect(await pauseOf('motir-core')).toBeNull();
-  }, 30_000);
+      expect(org.installationId).toBe(refresh.installationId);
+      expect(result).toMatchObject({ indexed: true, repoRef: 'moooon/motir-core' });
+      expect(handoffWorld.handoffs).toHaveLength(1);
+      expect(await pauseOf('motir-core')).toBeNull();
+    },
+    30_000,
+  );
 });
 
 describe('the job', () => {
@@ -525,7 +459,7 @@ describe('the job', () => {
       (ctx as { step: { run: { mock: { calls: unknown[][] } } } }).step.run.mock.calls.map(
         (c) => c[0],
       ),
-    ).toEqual(expect.arrayContaining(['catch-up-paused-indexes-v2', 'retry-failed-indexes']));
+    ).toEqual(expect.arrayContaining(['catch-up-paused-indexes-v3', 'retry-failed-indexes']));
   });
 });
 
@@ -564,31 +498,28 @@ describe('the sweep’s own seams (MOTIR-4544 top-up)', () => {
       defaultBranchHeadSha: MOVED_SHA,
     });
     await setRepo('fresh', { paused: 'paused_index_no_credit', indexedHeadSha: null });
-    stubIndexFleet();
-    indexAllowanceWorld.checkOutcome = 'ok';
+    stubIndexHandoff();
     const refresh = vi.spyOn(indexEnqueue, 'enqueueCodeGraphRefresh').mockResolvedValue();
     const index = vi.spyOn(indexEnqueue, 'enqueueCodeGraphIndex').mockResolvedValue();
 
     await codeGraphIndexCatchUpService.catchUp();
 
-    expect(indexAllowanceWorld.checks).toHaveLength(1);
+    expect(handoffWorld.aiPaths.filter((p) => p === '/v1/credits/index-check')).toHaveLength(1);
     expect(refresh.mock.calls.map(([data]) => data.repoName)).toEqual(['moved']);
     expect(index.mock.calls.map(([data]) => data.repoName)).toEqual(['fresh']);
   });
 
-  it('with NO injected deps a pool-full row is read against the real pool, and no allowance is asked (MOTIR-9452)', async () => {
+  it('with NO injected deps a pool-full row is asked of the real allowance and handed its index (MOTIR-12036)', async () => {
     await seedOrg('cu-defaults-pool', ['waiting']);
-    await setRepo('waiting', { paused: 'paused_index_pool_full', indexedHeadSha: null });
-    stubIndexFleet();
-    // The indexer switch is off: the process-wide fleet takes it, which is room.
-    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'fly');
+    await setRepo('waiting', { paused: RETIRED_CAPACITY_PAUSES[0], indexedHeadSha: null });
+    stubIndexHandoff();
     const index = vi.spyOn(indexEnqueue, 'enqueueCodeGraphIndex').mockResolvedValue();
 
     const summary = await codeGraphIndexCatchUpService.catchUp();
 
     expect(summary.outcomes.map((o) => o.outcome)).toEqual(['index_enqueued']);
     expect(index.mock.calls.map(([data]) => data.repoName)).toEqual(['waiting']);
-    expect(indexAllowanceWorld.checks).toEqual([]);
+    expect(handoffWorld.aiPaths).toEqual(['/v1/credits/index-check']);
   });
 
   it('one repository whose action throws is reported and keeps its pause; the rest proceed', async () => {

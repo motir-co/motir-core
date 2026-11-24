@@ -124,37 +124,6 @@ export class MotirAiJobFailedError extends MotirAiError {
   }
 }
 
-// ⚠️ THE TWO DEADLINES DISAGREED (Bug MOTIR-4923). A run credential motir-ai
-// minted for LESS time than the container it authorizes is allowed to run is a
-// contract mismatch, not a transport failure and not a scope refusal — and the
-// only moment it is cheaply visible is at the mint, before a machine is billed.
-// Left undetected it is invisible for the whole run and then arrives as the
-// container's exit `50`, which reads as `credential_refused` and cannot be told
-// apart from a genuine scope refusal without a forensic dig: on 2026-09-08 a
-// container built `moooon-B-V/motir-core`'s graph for 20 min 41 s against a
-// 15-minute credential and was refused at the upload, twice, for a total of
-// 2 388 billable seconds that produced nothing.
-//
-// It is a CONFIG-class failure — the two numbers are set in two repositories and
-// nothing but this check makes them one decision — so it fails LOUDLY rather
-// than degrading: there is no shorter run to fall back to, and booting anyway is
-// exactly what produced the fixture above.
-export class CodeGraphRunCredentialTooShortError extends MotirAiError {
-  readonly code = 'CODE_GRAPH_CREDENTIAL_TOO_SHORT' as const;
-  constructor(
-    readonly credentialExpiresAt: string,
-    readonly requiredUntil: string,
-  ) {
-    super(
-      `motir-ai minted a code-graph run credential expiring at ${credentialExpiresAt}, ` +
-        `which is BEFORE this run's container deadline of ${requiredUntil} — the container ` +
-        'would build its graph and then be refused at the upload. Check that motir-ai honours ' +
-        "the requested `ttlSeconds` and that its ceiling covers motir-core's index timeout.",
-    );
-    this.name = 'CodeGraphRunCredentialTooShortError';
-  }
-}
-
 // A planner-model write named a model motir-ai does not OFFER for planning
 // (`PUT /v1/planner-model-settings` → `validation_error`; MOTIR-7227). Offered
 // means a servable catalogue row plus a `planning`-lane rate in force, read by

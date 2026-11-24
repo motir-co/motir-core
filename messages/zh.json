@@ -4276,8 +4276,6 @@
           "agentsNote": "运行中和休眠中",
           "ciJobs": "进行中的 CI 作业",
           "ciWaiting": "{count, plural, =0 {无等待} other {# 个等待中}}",
-          "index": "索引作业",
-          "indexNote": "不计费",
           "of": " / {figure}",
           "notRead": "无法读取",
           "failedTitle": "无法读取集群数据",
@@ -4347,12 +4345,6 @@
             "other": "其他"
           }
         },
-        "index": {
-          "title": "索引作业",
-          "running": "<n>{count}</n> 个运行中",
-          "note": "索引让代码搜索保持最新。它不计费，也不会在此停止。",
-          "failed": "无法读取索引作业"
-        },
         "motirStops": {
           "title": "Motir 停止的工作 · 最近 7 天",
           "lead": "Motir 自身为此组织停止的机器及原因。",
@@ -4363,7 +4355,6 @@
             "ci_runner": "CI 作业容器",
             "hosted_agent": "智能体运行",
             "agent_instance": "智能体实例",
-            "code_graph_index": "索引作业",
             "other": "机器"
           },
           "reason": {
@@ -4411,7 +4402,6 @@
           "ciUnknownRuns": "CI 作业被取消",
           "hosted": "{count, plural, other {个智能体运行被结束}}",
           "agents": "{count, plural, other {个运行中的智能体被休眠}}",
-          "index": "{count, plural, other {个索引作业继续运行}} — 索引不会在此停止",
           "afterwards": "之后不会有任何阻止：成员可以立即开始新的工作。被休眠智能体的所有者会收到通知。",
           "countedAt": "统计于 {time}。",
           "unreadableTitle": "无法统计运行中的内容",
@@ -4433,7 +4423,6 @@
           "ciFailed": "{count, plural, other {# 个 CI 仓库或容器未能停止。}}请刷新后再次尝试全部停止。",
           "hostedFailed": "{count, plural, other {# 个智能体运行未能结束。}}请在其所在行使用取消。",
           "agentsFailed": "{count, plural, other {# 个智能体未能停止：停止未得到确认。请在其所在行使用休眠。}}",
-          "index": "索引作业保持运行。",
           "byYou": "由你停止，{when}。",
           "dismiss": "关闭",
           "dismissAria": "关闭停止结果"
@@ -7788,12 +7777,9 @@
         },
         "other": "其他原因"
       },
-      "indexing": "代码图索引：{count} 个运行中 · 不计入任何计划上限",
-      "indexingNotRead": "代码图索引：未能读取 · 不计入任何计划上限",
       "whereItRuns": "运行位置",
       "kind": {
         "ci_runner": "CI 运行器",
-        "code_graph_index": "索引器",
         "hosted_agent": "智能体运行器",
         "agent_instance": "智能体托管"
       },
@@ -7812,12 +7798,12 @@
         "kind": {
           "ci_runner": "CI 运行器",
           "hosted_agent": "智能体运行器",
-          "indexer_and_hoster": "索引器 + 智能体托管"
+          "agent_hoster": "智能体托管"
         },
         "role": {
           "ci_runner": "运行你的 CI 任务",
           "hosted_agent": "运行你的 Motir 智能体任务",
-          "indexer_and_hoster": "为你的代码建索引并托管你的智能体"
+          "agent_hoster": "托管你的智能体"
         },
         "state": {
           "created": "已创建",
@@ -7833,11 +7819,10 @@
         "sharedFloor": {
           "ci_runner": "仍在共享底线上：CI {figure} 个运行器。",
           "hosted_agent": "仍在共享底线上，按 Max 上限：同时 {figure} 个智能体运行。",
-          "indexer_and_hoster": "索引和智能体托管仍在共享底线上：托管智能体每人 {perPerson} 个、每个组织 {perOrg} 个。"
+          "agent_hoster": "智能体托管仍在共享底线上：托管智能体每人 {perPerson} 个、每个组织 {perOrg} 个。"
         },
         "liveOnceNetwork": "账户网络建好后即上线。",
-        "deniedNote": "在 AWS 批准提额之前，账户保持在“{state}”。",
-        "keptSpots": "始终为索引保留 {count} 个机器位；智能体实例使用其余部分。"
+        "deniedNote": "在 AWS 批准提额之前，账户保持在“{state}”。"
       },
       "quotaOutcome": {
         "pending": "AWS 处理中",
@@ -11862,15 +11847,13 @@
             "mismatched": "不一致 · 运行与扣费不符"
           },
           "group": {
-            "plan": "受套餐约束",
-            "uncapped": "无套餐上限"
+            "plan": "受套餐约束"
           },
           "col": {
             "org": "组织",
             "plan": "套餐",
             "ciRunner": "CI 运行器",
             "hostedAgent": "Motir 智能体运行",
-            "index": "索引容器",
             "agentInstance": "智能体实例",
             "accrued": "CI 分钟 · 最近 {minutes} 分钟",
             "credits": "本月额度 · 已确认",
@@ -11902,7 +11885,7 @@
           "foot": "显示第 {from}–{to} 个，共 {total} 个 · 不一致的在前，其次是容器最多的 · 只判定 CI——它是唯一在运行时扣费的工作负载",
           "empty": {
             "title": "没有组织在运行容器集群中的容器",
-            "body": "当前没有组织持有 CI 运行器、Motir 智能体运行、智能体实例或索引容器，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
+            "body": "当前没有组织持有 CI 运行器、Motir 智能体运行或智能体实例，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
           },
           "error": {
             "title": "无法读取容器集群",
@@ -11996,7 +11979,6 @@
         "kind": {
           "ci_runner": "CI 运行器",
           "hosted_agent": "智能体运行器",
-          "code_graph_index": "索引器",
           "agent_instance": "智能体托管"
         },
         "block": {
@@ -12966,6 +12948,7 @@
         "agent_storage": "智能体存储",
         "ci": "CI",
         "search": "网页搜索",
+        "hosting_production": "生产环境托管",
         "indexing": "索引"
       },
       "models": {
@@ -13735,14 +13718,12 @@
         "workload": {
           "ciRunner": "CI 运行器",
           "hostedAgent": "Motir 智能体运行",
-          "agentInstance": "智能体实例",
-          "index": "索引容器"
+          "agentInstance": "智能体实例"
         },
         "charge": {
           "ciRunner": "运行期间计费",
           "hostedAgent": "运行结束时计费",
-          "agentInstance": "按运行区间计费",
-          "index": "Motir 自行承担——从不计费"
+          "agentInstance": "按运行区间计费"
         },
         "tile": {
           "of": " / {figure}",
@@ -13772,7 +13753,6 @@
           "ciUnknown": "CI 运行数未知——无法读取 GitHub，停止操作仍会取消它们——<strong>{containers}</strong> {containers, plural, other {个 CI 容器被销毁}}",
           "hosted": "{count, plural, other {个 Motir 智能体运行被结束}}",
           "instances": "{count, plural, other {个智能体实例被休眠}}",
-          "index": "{count, plural, other {个索引容器}}保留至完成——索引是 Motir 自身的成本，从不向组织计费",
           "notSuspension": "<strong>这不是暂停。</strong>不会阻止任何操作：{org} 的下一次 CI 运行、智能体运行或智能体启动都会照常准入。",
           "asOf": "统计于 {time}。停止操作作用于你确认时正在运行的内容。",
           "loading": "正在统计运行中的内容…",
@@ -15183,10 +15163,6 @@
           "title": "CI 运行器镜像",
           "subtitle": "集群每个 CI 作业的运行环境。由 MOTIR_RUNNER_IMAGE 固定;最新的是最新的 runner-v* 版本。"
         },
-        "indexer": {
-          "title": "索引器镜像",
-          "subtitle": "每次代码图索引运行启动的镜像。由 MOTIR_INDEXER_IMAGE 固定;最新的是最新的 indexer-v* 版本。"
-        },
         "sandbox": {
           "title": "智能体实例镜像",
           "subtitle": "智能体运行所在的沙箱,在 ghcr.io/motir-co/motir-sandbox 上每个配置一个标签。每个配置都有最新 cli-v* 版本的标签时即为完整。"
@@ -15195,7 +15171,6 @@
       "imageName": {
         "hosted": "Motir 智能体镜像",
         "runner": "CI 运行器镜像",
-        "indexer": "索引器镜像",
         "sandbox": "智能体实例镜像"
       },
       "source": {
@@ -15226,17 +15201,13 @@
         "hosted": "已固定构建与最新构建之间有 {count, plural, other {# 个}}对 packages/cli 的提交。",
         "runner": "({tags}) · {days, plural, other {# 天}} · {commits, plural, other {# 个}}对 infra/ci-runner 的提交。",
         "runnerNoTags": "{days, plural, other {# 天}} · {commits, plural, other {# 个}}对 infra/ci-runner 的提交。",
-        "indexer": "({tags}) · {days, plural, other {# 天}} · {commits, plural, other {# 个}}对索引器的提交。",
-        "indexerNoTags": "{days, plural, other {# 天}} · {commits, plural, other {# 个}}对索引器的提交。",
         "link": "查看提交"
       },
       "unreleased": {
         "title": "自 {release} 起合并,未进入任何版本",
-        "count": "{count, plural, other {# 项}}对 infra/ci-runner 的更改",
-        "indexerCount": "{count, plural, other {之后又有 # 项对索引器的已合并更改}}"
+        "count": "{count, plural, other {# 项}}对 infra/ci-runner 的更改"
       },
       "releaseNeeded": "<strong>需要发布新版本。</strong>这些更改只有在新的运行器版本中才会到达集群,而本页面不会创建版本。推送标签 <mono>{tag}</mono>;发布流水线随后会发布它,该行会提供“发布最新”。",
-      "releaseNeededIndexer": "<strong>需要发布新版本。</strong>这些更改只有在新的索引器版本中才会到达索引运行,而本页面不会创建版本。在 motir-ai 中推送标签 <mono>{tag}</mono>;它的发布流水线随后会发布它,该行会提供“发布最新”。",
       "ami": {
         "title": "运行器 AMI · 只读",
         "current": "已是最新",
@@ -15269,14 +15240,10 @@
         "note": {
           "hosted": "通过 Motir 智能体固定工作流固定最新 main 构建。Web 和 worker 会切换到它。",
           "runner": "通过运行器固定工作流固定 {release}。Web 和 worker 会切换到它。",
-          "indexer": "通过索引器固定拉取请求固定 {release}。Web 和 worker 会切换到它。",
           "sandbox": "重新发布 {release}。只推送缺失的 {count} 个标签;生产环境不会切换。",
           "hostedCurrent": "没有更新的内容可发布。生产环境已固定最新 main 构建。",
           "runnerCurrent": "没有更新的内容可发布。生产环境已固定最新的运行器版本。",
           "runnerReleaseNeeded": "没有更新的内容可发布:生产环境已固定最新版本。上面已合并的更改需要先发布版本。",
-          "indexerCurrent": "没有更新的内容可发布。生产环境已固定最新的索引器版本。",
-          "indexerReleaseNeeded": "没有更新的内容可发布:生产环境已固定最新的索引器版本。上面已合并的更改需要先发布版本。",
-          "indexerNotRead": "在固定和最新版本都读取到之前,“发布最新”保持关闭。",
           "sandboxCurrent": "没有更新的内容可发布。每个配置都有最新版本的标签。",
           "sandboxOld": "{release} 创建于重新运行只推送缺失标签之前,因此重新运行会再次推送每个标签。请改为创建新的 cli-v* 版本。",
           "running": "该镜像的发布工作流已有一次运行在进行中。结束前“发布最新”不可用。",
@@ -15294,21 +15261,12 @@
         "sandboxFrom": "{version} 的 {total} 个标签中有 {published} 个",
         "hostedBody": "这将启动 Motir 智能体固定工作流。它会把 MOTIR_HOSTED_AGENT_IMAGE 移到最新构建并部署:<strong>web 和 worker 会切换</strong>到新的固定,切换后启动的 Motir 智能体运行会使用新镜像。",
         "runnerBody": "这将启动运行器固定工作流。它会把 MOTIR_RUNNER_IMAGE 移到 {release} 并部署:<strong>web 和 worker 会切换</strong>到新的固定。运行器 AMI 不会改变。",
-        "indexerBody": "这将打开索引器固定拉取请求,它把 MOTIR_INDEXER_IMAGE 移到 {release} 并排队等待合并。随后它的部署会<strong>切换 web 和 worker</strong>,切换之后开始的索引运行会启动新镜像。已在进行的索引运行会以它们启动时的镜像结束。",
         "sandboxBody": "这将重新运行 {release} 的沙箱发布,只推送缺失的标签:{missing}。{published} 已发布,不会再次推送。<strong>生产环境不会切换。</strong>",
         "sandboxBodyNonePublished": "这将重新运行 {release} 的沙箱发布,只推送缺失的标签:{missing}。<strong>生产环境不会切换。</strong>"
       },
       "progress": {
         "title": "正在发布。",
         "body": "发布工作流正在运行;结束后此行会更新。",
-        "indexerQueued": {
-          "title": "固定拉取请求已排队。",
-          "body": "它会通过合并队列合并,然后它的部署会切换 web 和 worker;此行会随进度更新。"
-        },
-        "indexerRolling": {
-          "title": "正在切换 web 和 worker。",
-          "body": "固定拉取请求已合并,它的部署正在把 web 和 worker 切换到 {release}。切换结束后,新的索引运行会启动它。"
-        },
         "started": "· 由 {email} 于{age}启动",
         "startedNoActor": "· 于{age}启动",
         "button": "正在发布…"
@@ -15327,7 +15285,6 @@
       "workflow": {
         "hosted": "Motir 智能体固定",
         "runner": "运行器固定",
-        "indexer": "索引器固定",
         "sandbox": "沙箱发布 {tag}",
         "run": "{workflow} · 运行 #{number}",
         "runNoNumber": "{workflow} · 运行"
@@ -15344,26 +15301,7 @@
       },
       "unset": {
         "title": "此处未配置",
-        "body": "此部署未设置 {variable},因此没有可比较的固定。",
-        "indexerBody": "此部署未设置 MOTIR_INDEXER_IMAGE,因此本安装不做索引:不会启动代码图索引运行,也没有可比较的固定。"
-      },
-      "notRead": {
-        "pin": {
-          "title": "无法读取固定。",
-          "body": "ECR 没有就 MOTIR_INDEXER_IMAGE 指定的摘要作出响应,因此不做比较,这里的任何内容都不表示已是最新。"
-        },
-        "newest": {
-          "title": "无法读取版本。",
-          "body": "GitHub 没有就 motir-ai 的 indexer-v* 版本作出响应,因此固定不与任何内容比较。"
-        },
-        "newestEcr": {
-          "title": "无法读取版本。",
-          "body": "ECR 没有就索引器仓库的 indexer-* 版本标签作出响应,因此固定不与任何内容比较。"
-        },
-        "history": {
-          "title": "无法读取已合并的更改",
-          "body": "GitHub 没有就 motir-ai 的提交历史作出响应,因此不列出不在任何版本中的更改。上面的固定和最新版本仍会比较。"
-        }
+        "body": "此部署未设置 {variable},因此没有可比较的固定。"
       },
       "loading": "正在加载{image}",
       "publishError": {

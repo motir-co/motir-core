@@ -25,10 +25,10 @@ import enMessages from '@/messages/en.json';
  * A superadmin opens `/admin/monitoring` over a SEEDED estate (the rows, and why
  * the growth pass is held off while they are read, are in
  * `_helpers/fleet-pools-seed.ts`). The CI runner is put on AWS through the lane's
- * switch fixture; the other three kinds stay on Fly.
+ * switch fixture; the other two kinds stay on Fly.
  *
- *  1. The Pools section: four blocks in order, the CI runner on AWS, the indexer
- *     on Fly in words with no figure.
+ *  1. The Pools section: three blocks in order (no indexer pool since MOTIR-12041),
+ *     the CI runner on AWS, the agent hoster on Fly in words with no figure.
  *  2. The CI pool: two shared accounts, one past 70% in words, the pool's
  *     capacity, use and percent, and the Motir spare waiting for quota.
  *  3. Two more accounts whose quota is not read (one never, one failed after an
@@ -147,35 +147,31 @@ test('a platform admin reads every pool: the CI pool past 70%, an unread quota, 
   const main = page.getByRole('main');
   const section = main.getByTestId('pools-section');
   const ci = section.getByTestId('pool-ci_runner');
-  const indexer = section.getByTestId('pool-code_graph_index');
+  const hoster = section.getByTestId('pool-agent_instance');
   const rowOf = (name: string) => ci.locator(`tr[data-account="${POOL_ACCOUNT_PREFIX}${name}"]`);
   const total = ci.locator('[data-element="pool-total"]');
 
-  await chapter('Monitoring · Pools: four fleet kinds, the CI runner on AWS', async () => {
+  await chapter('Monitoring · Pools: three fleet kinds, the CI runner on AWS', async () => {
     expect((await page.goto('/admin/monitoring'))?.status()).toBe(200);
     await expect(section.getByRole('heading', { level: 2, name: pm.title })).toBeVisible();
     await section.scrollIntoViewIfNeeded();
-    await expect(section.locator('[data-testid^="pool-"]')).toHaveCount(4);
+    await expect(section.locator('[data-testid^="pool-"]')).toHaveCount(3);
     const order = await section
       .locator('[data-testid^="pool-"]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
-    expect(order).toEqual([
-      'pool-ci_runner',
-      'pool-hosted_agent',
-      'pool-code_graph_index',
-      'pool-agent_instance',
-    ]);
+    expect(order).toEqual(['pool-ci_runner', 'pool-hosted_agent', 'pool-agent_instance']);
+    // No indexer pool: the kind is retired (MOTIR-12041), and the order above is exact.
     await expect(ci).toHaveAttribute('data-state', 'aws');
     await expect(ci.getByText(pm.provider.aws)).toBeVisible();
 
-    // The indexer is on Fly: said in words, with nothing to count.
-    await expect(indexer).toHaveAttribute('data-state', 'fly');
-    await expect(indexer.getByText('Indexer runs on Fly')).toBeVisible();
-    await expect(indexer.locator('[data-element="pool-total"]')).toHaveCount(0);
-    await expect(indexer.locator('tr[data-account]')).toHaveCount(0);
-    await expect(indexer.locator('[data-element="quota-request-list"]')).toHaveCount(0);
-    await expect(indexer.locator('[data-element="growth-event-list"]')).toHaveCount(0);
-    expect(await indexer.innerText()).not.toMatch(/\d/);
+    // The agent hoster is on Fly: said in words, with nothing to count.
+    await expect(hoster).toHaveAttribute('data-state', 'fly');
+    await expect(hoster.getByText('Agent hoster runs on Fly')).toBeVisible();
+    await expect(hoster.locator('[data-element="pool-total"]')).toHaveCount(0);
+    await expect(hoster.locator('tr[data-account]')).toHaveCount(0);
+    await expect(hoster.locator('[data-element="quota-request-list"]')).toHaveCount(0);
+    await expect(hoster.locator('[data-element="growth-event-list"]')).toHaveCount(0);
+    expect(await hoster.innerText()).not.toMatch(/\d/);
     await beat();
   });
 

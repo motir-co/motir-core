@@ -159,7 +159,6 @@ const NETWORK_CREATES = [
 const REGION = 'us-east-1';
 const KINDS = [
   { fleetKind: 'ci_runner', name: 'ci-runner-use1-7', policy: 'runner', reap: 'false' },
-  { fleetKind: 'code_graph_index', name: 'indexer-use1-7', policy: 'runner', reap: 'true' },
   { fleetKind: 'hosted_agent', name: 'hosted-agent-use1-7', policy: 'runner', reap: 'false' },
   { fleetKind: 'agent_instance', name: 'agent-host-use1-7', policy: 'hoster', reap: 'false' },
 ] as const;
@@ -616,7 +615,6 @@ describe('with the management credential as the role ARN on the default chain', 
     it('the Host-account reconcile', async () => {
       await primary('ci-runner-use1-1', 'ci_runner', '111122223331');
       await primary('hosted-agent-use1-1', 'hosted_agent', '111122223332');
-      await primary('indexer-use1-1', 'code_graph_index', '111122223333');
       await primary('agent-host-use1-1', 'agent_instance', '111122223334');
       const org = await adminDb.organization.create({
         data: { name: 'Host org', slug: `host-seam-${Date.now()}`, aiIncludedSeat: true },
@@ -637,7 +635,8 @@ describe('with the management credential as the role ARN on the default chain', 
         },
       });
 
-      expect(await adminDb.fleetShard.count({ where: { ownerOrganizationId: org.id } })).toBe(4);
+      // One row per own account: CI, agent runner and the merged agent hoster.
+      expect(await adminDb.fleetShard.count({ where: { ownerOrganizationId: org.id } })).toBe(3);
       expectStackBuilt();
     });
   });

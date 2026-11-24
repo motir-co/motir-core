@@ -17,9 +17,8 @@ import {
 // token, a revoked App installation, anonymous GitHub reads rate-limited on a
 // shared egress IP — hid the fault its probe exists to find, indefinitely.
 //
-// This walks the job's own recent succeeded rows, the way
-// `indexRebuildStreakService` walks the code-graph runs, ONCE and generically:
-// it knows nothing about any probe. The handler names the probes
+// This walks the job's own recent succeeded rows ONCE and generically: it knows
+// nothing about any probe. The handler names the probes
 // (`DAILY_HEALTH_CHECK_PROBES` in `lib/jobs/definitions/dailyHealthCheck.ts`),
 // and a probe added later is covered by being in that table — the type and
 // `tests/jobs/daily-health-check-indeterminate-streak.test.ts` both refuse one
