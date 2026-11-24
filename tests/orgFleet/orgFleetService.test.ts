@@ -44,12 +44,7 @@ const { truncateAuthTables } = await import('../helpers/db');
 const NOW = new Date('2026-11-04T12:00:00.000Z');
 const LATER = new Date(NOW.getTime() + 60 * 60_000);
 const DAY = 24 * 60 * 60_000;
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'code_graph_index',
-  'hosted_agent',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 
 type Fixture = Awaited<ReturnType<typeof makeWorkItemFixture>>;
 
@@ -147,20 +142,6 @@ async function hostedRun(org: Org, options: { scoped: boolean; startedAt: Date }
   });
   org.marks.runIds.push(run.id);
   return { run, scope };
-}
-
-async function indexSlot(org: Org) {
-  seq += 1;
-  await adminDb.fleetInFlightSlot.create({
-    data: {
-      workload: 'code_graph_index',
-      ref: `index-${seq}`,
-      ownerRef: `index-${seq}`,
-      organizationId: org.organizationId,
-      workspaceId: org.workspaceId,
-      expiresAt: LATER,
-    },
-  });
 }
 
 async function instance(org: Org, state: 'running' | 'hibernated', stateChangedAt: Date) {
@@ -271,7 +252,6 @@ async function seed(org: Org) {
     queuedAt: new Date(NOW.getTime() - 60_000),
   });
   await intent(org, 'completed');
-  await indexSlot(org);
   await kill(org, { decidedAt: new Date(NOW.getTime() - DAY), reason: 'no_record' });
   await kill(org, {
     decidedAt: new Date(NOW.getTime() - 2 * DAY),
@@ -464,7 +444,9 @@ describe('an owner or admin reads every part of their own org', () => {
       ),
     });
 
-    expect(answer.indexJobs).toEqual({ kind: 'read', running: 1 });
+    expect(Object.keys(answer).sort()).toEqual(
+      ['agentInstances', 'ciJobs', 'hostedRuns', 'lastStop', 'motirStops', 'tiles'].sort(),
+    );
   });
 });
 
@@ -504,7 +486,6 @@ describe('two organisations: each read holds its own org only', () => {
     if (answer.ciJobs.kind !== 'read') throw new Error('CI jobs not read');
     expect(answer.ciJobs.rows.map((row) => row.id)).toEqual(mine.marks.intentIds);
     expect(answer.ciJobs.inFlight).toBe(1);
-    expect(answer.indexJobs).toEqual({ kind: 'read', running: 1 });
     if (answer.motirStops.kind !== 'read') throw new Error('stops not read');
     expect(answer.motirStops.entries).toHaveLength(2);
   });
@@ -593,21 +574,12 @@ describe('Motir’s stops', () => {
       waiting: { planLimit: 0, poolFull: 0, other: 0 },
       rows: [],
     });
-    expect(answer.indexJobs).toEqual({ kind: 'read', running: 0 });
     expect(answer.motirStops).toMatchObject({ kind: 'read', entries: [] });
   });
 });
 
 describe('each part fails alone', () => {
-  const PARTS = [
-    'tiles',
-    'hostedRuns',
-    'agentInstances',
-    'ciJobs',
-    'indexJobs',
-    'motirStops',
-    'lastStop',
-  ];
+  const PARTS = ['tiles', 'hostedRuns', 'agentInstances', 'ciJobs', 'motirStops', 'lastStop'];
 
   it.each([
     ['tiles', () => vi.spyOn(fleetUseService, 'readForOrganization')],
@@ -631,11 +603,10 @@ describe('each part fails alone', () => {
     );
   });
 
-  it('the index count not read is not_read — never 0 — and the tiles report counts not read', async () => {
+  it('the census not read leaves the tiles reporting counts not read — never 0', async () => {
     await seed(a);
     vi.spyOn(fleetCeilingService, 'orgCensus').mockRejectedValue(new Error('down'));
     const answer = await read(a);
-    expect(answer.indexJobs).toEqual({ kind: 'not_read' });
     if (answer.tiles.kind !== 'read') throw new Error('tiles not read');
     expect(answer.tiles.countsRead).toBe(false);
     expect(answer.tiles.figures.agentRunsInParallel.inUse).toBeNull();

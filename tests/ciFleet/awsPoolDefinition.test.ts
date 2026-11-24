@@ -113,7 +113,6 @@ describe('awsPoolStackOverrides', () => {
   it.each([
     ['ci_runner', 'runner', 'false'],
     ['hosted_agent', 'runner', 'false'],
-    ['code_graph_index', 'runner', 'true'],
     ['agent_instance', 'hoster', 'false'],
   ])('%s takes the %s policy, ReapUntagged %s', (kind, policy, reap) => {
     expect(overrides(kind)).toEqual({

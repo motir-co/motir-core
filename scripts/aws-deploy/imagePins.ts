@@ -1,27 +1,22 @@
 /**
- * The IMAGE PINS core's deploy writes (MOTIR-10883, MOTIR-10986).
+ * The IMAGE PINS core's deploy writes (MOTIR-10883).
  *
  * A pin is a file in `infra/image-pins/` whose one line is a pull-by-digest
  * image reference. The file is the only place the production value is written:
  * a release lane (or Publish latest on /admin/fleet-status) opens the pull
  * request that changes it, merging that pull request is the deliberate pin, and
- * the AWS deploy of the merge commit copies it into its TARGET before it rolls
- * the services (ECS reads a secret or a parameter only when a task starts, so
+ * the AWS deploy of the merge commit copies it into its secret before it rolls
+ * the services (ECS reads a secret only when a task starts, so
  * the roll that follows is what makes the new tasks read it). Rolling a pin back
  * is reverting its pull request.
  *
- * A pin has one of two kinds of target:
+ * A pin's target is a Secrets Manager SECRET, `<prefix>/core/<file name>` — the
+ * two GHCR image pins (`PINNED_SECRETS`). The indexer's SSM parameter pin
+ * (MOTIR-10986) left with the container-based indexer (MOTIR-12044).
  *
- *   - a Secrets Manager SECRET, `<prefix>/core/<file name>` — the two GHCR
- *     image pins (`PINNED_SECRETS`);
- *   - an SSM PARAMETER, `/<prefix>/core/<parameter>` — the code-graph indexer's
- *     ECR reference (`PINNED_PARAMETERS`, MOTIR-10986), which holds no secret and
- *     which motir-infra creates as a `String` parameter that web and worker read
- *     as `MOTIR_INDEXER_IMAGE`.
- *
- * ⚠️ ONLY THE NAMES IN `PINNED_SECRETS` AND `PINNED_PARAMETERS` MAY BE WRITTEN.
- * The deploy role in motir-infra (`coreDeployStatements`: `DEPLOY_PINNED_SECRETS`
- * and `deployPinnedIndexerParameterName`) is granted exactly these targets, and
+ * ⚠️ ONLY THE NAMES IN `PINNED_SECRETS` MAY BE WRITTEN. The deploy role in
+ * motir-infra (`coreDeployStatements`: `DEPLOY_PINNED_SECRETS`) is granted
+ * exactly these secrets, and
  * `tests/awsDeploy/imagePins.test.ts` holds the lists equal. A file with any
  * other name is refused before anything changes.
  *
@@ -44,22 +39,8 @@ export const PINNED_SECRETS = ['motir-hosted-agent-image', 'motir-runner-image']
 
 export type PinnedSecret = (typeof PINNED_SECRETS)[number];
 
-/**
- * Every SSM parameter a pin may write: the pin file's name → the parameter's
- * name under `/<prefix>/core/` (motir-infra's `indexerImageParameterName`).
- */
-export const PINNED_PARAMETERS = { 'motir-indexer-image': 'indexer-image' } as const;
-
-export type PinnedParameter = keyof typeof PINNED_PARAMETERS;
-
-/** A pin file's name: a pinned secret or a pinned parameter. */
-export type PinName = PinnedSecret | PinnedParameter;
-
 /** Every pin file the deploy accepts, in name order. */
-export const PIN_NAMES: readonly PinName[] = [
-  ...PINNED_SECRETS,
-  ...(Object.keys(PINNED_PARAMETERS) as PinnedParameter[]),
-].sort();
+export const PIN_NAMES: readonly PinnedSecret[] = [...PINNED_SECRETS].sort();
 
 /**
  * A GHCR reference by digest, never a tag: the fleet runs agent-authored code,
@@ -69,18 +50,8 @@ export const PIN_NAMES: readonly PinName[] = [
 export const IMAGE_REF_PATTERN =
   /^ghcr\.io(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*){2,}@sha256:[a-f0-9]{64}$/;
 
-/**
- * The indexer's pin: an `indexer` repository in an account's ECR, by digest —
- * the shape motir-ai's release lane mirrors every `indexer-v*` release into
- * (`mirror-ecr`). The parameter itself holds motir-infra's stricter
- * `indexerImagePattern` (this account, this region, `<prefix>/indexer`), which
- * `checkPinTargets` applies before the deploy changes anything.
- */
-export const INDEXER_IMAGE_REF_PATTERN =
-  /^\d{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?\/(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*indexer@sha256:[a-f0-9]{64}$/;
-
 /** The reference shape each pin file must hold. */
-const PATTERN_OF: Record<PinName, { pattern: RegExp; shape: string }> = {
+const PATTERN_OF: Record<PinnedSecret, { pattern: RegExp; shape: string }> = {
   'motir-hosted-agent-image': {
     pattern: IMAGE_REF_PATTERN,
     shape: 'ghcr.io/<owner>/<name>@sha256:<64 hex>',
@@ -89,20 +60,16 @@ const PATTERN_OF: Record<PinName, { pattern: RegExp; shape: string }> = {
     pattern: IMAGE_REF_PATTERN,
     shape: 'ghcr.io/<owner>/<name>@sha256:<64 hex>',
   },
-  'motir-indexer-image': {
-    pattern: INDEXER_IMAGE_REF_PATTERN,
-    shape: '<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/indexer@sha256:<64 hex>',
-  },
 };
 
 export interface ImagePin {
-  readonly name: PinName;
+  readonly name: PinnedSecret;
   readonly value: string;
 }
 
 /** What the deploy did with one pin; it rides on the deploy's result line. */
 export interface AppliedPin {
-  readonly name: PinName;
+  readonly name: PinnedSecret;
   readonly value: string;
   /** `restored`: written, then put back after the roll failed. */
   state: 'written' | 'unchanged' | 'not_granted' | 'restored';
@@ -119,30 +86,21 @@ export class ImagePinError extends Error {
 /** The secret a pin writes: motir-infra's `coreSecretName`. */
 export const pinSecretId = (prefix: string, name: PinnedSecret) => `${prefix}/core/${name}`;
 
-/** The parameter a pin writes: motir-infra's `indexerImageParameterName`. */
-export const pinParameterName = (prefix: string, name: PinnedParameter) =>
-  `/${prefix}/core/${PINNED_PARAMETERS[name]}`;
-
-function isPinName(name: string): name is PinName {
+function isPinnedSecret(name: string): name is PinnedSecret {
   return (PIN_NAMES as readonly string[]).includes(name);
 }
 
-function isPinnedParameter(name: PinName): name is PinnedParameter {
-  return Object.hasOwn(PINNED_PARAMETERS, name);
-}
-
-/** Where a pin is written: its secret id or its parameter name. */
-export const pinTarget = (prefix: string, name: PinName) =>
-  isPinnedParameter(name) ? pinParameterName(prefix, name) : pinSecretId(prefix, name);
+/** Where a pin is written: its secret id. */
+export const pinTarget = (prefix: string, name: PinnedSecret) => pinSecretId(prefix, name);
 
 /** Check the pin files' names and contents. Pure; `*.md` files are notes, not pins. */
 export function parseImagePins(files: readonly { name: string; content: string }[]): ImagePin[] {
   const pins: ImagePin[] = [];
   for (const file of files) {
     if (file.name.endsWith('.md')) continue;
-    if (!isPinName(file.name)) {
+    if (!isPinnedSecret(file.name)) {
       throw new ImagePinError(
-        `${file.name} is not a pinned secret or parameter (${PIN_NAMES.join(', ')}); ` +
+        `${file.name} is not a pinned secret (${PIN_NAMES.join(', ')}); ` +
           'the deploy role may write only those',
       );
     }
@@ -169,45 +127,14 @@ export function readImagePins(dir: string): ImagePin[] {
   );
 }
 
-/**
- * Check each pin against the account the deploy runs in, before anything is
- * written: the indexer's reference must name `<prefix>/indexer` in the same ECR
- * registry as the core image being deployed — motir-infra's `indexerImagePattern`,
- * which the parameter would otherwise refuse only at `put-parameter`, after the
- * migrate task and the other pins. `coreRepository` is the core image's ECR
- * repository URI (`<account>.dkr.ecr.<region>.<suffix>/<prefix>/<name>`).
- */
-export function checkPinTargets(
-  prefix: string,
-  coreRepository: string,
-  pins: readonly ImagePin[],
-): void {
-  const registry = coreRepository.split('/')[0] ?? '';
-  for (const pin of pins) {
-    if (!isPinnedParameter(pin.name)) continue;
-    const repository = `${registry}/${prefix}/indexer`;
-    const at = pin.value.lastIndexOf('@');
-    if (pin.value.slice(0, at) !== repository) {
-      throw new ImagePinError(
-        `${pin.name} must name ${repository} by digest, the indexer repository of the ` +
-          `account this deploy runs in, not "${pin.value.slice(0, 160)}"`,
-      );
-    }
-  }
-}
-
-/** A pin target's current value: its secret's, or its parameter's. */
-function readTarget(aws: DeployAws, prefix: string, name: PinName) {
-  return isPinnedParameter(name)
-    ? aws.readParameter(pinParameterName(prefix, name))
-    : aws.getSecretValue(pinSecretId(prefix, name));
+/** A pin target's current value: its secret's. */
+function readTarget(aws: DeployAws, prefix: string, name: PinnedSecret) {
+  return aws.getSecretValue(pinSecretId(prefix, name));
 }
 
 /** Make `value` a pin target's current value. */
-function writeTarget(aws: DeployAws, prefix: string, name: PinName, value: string) {
-  return isPinnedParameter(name)
-    ? aws.putParameter(pinParameterName(prefix, name), value)
-    : aws.putSecretValue(pinSecretId(prefix, name), value);
+function writeTarget(aws: DeployAws, prefix: string, name: PinnedSecret, value: string) {
+  return aws.putSecretValue(pinSecretId(prefix, name), value);
 }
 
 /**
@@ -219,9 +146,9 @@ export async function applyPins(
   prefix: string,
   pins: readonly ImagePin[],
   log: DeployLog,
-): Promise<{ applied: AppliedPin[]; previous: Map<PinName, string> }> {
+): Promise<{ applied: AppliedPin[]; previous: Map<PinnedSecret, string> }> {
   const applied: AppliedPin[] = [];
-  const previous = new Map<PinName, string>();
+  const previous = new Map<PinnedSecret, string>();
   try {
     await writeEach(aws, prefix, pins, log, applied, previous);
   } catch (err) {
@@ -239,7 +166,7 @@ async function writeEach(
   pins: readonly ImagePin[],
   log: DeployLog,
   applied: AppliedPin[],
-  previous: Map<PinName, string>,
+  previous: Map<PinnedSecret, string>,
 ): Promise<void> {
   for (const pin of pins) {
     const id = pinTarget(prefix, pin.name);
@@ -270,7 +197,7 @@ export async function restorePins(
   aws: DeployAws,
   prefix: string,
   applied: AppliedPin[],
-  previous: ReadonlyMap<PinName, string>,
+  previous: ReadonlyMap<PinnedSecret, string>,
   log: DeployLog,
 ): Promise<void> {
   for (const pin of applied) {

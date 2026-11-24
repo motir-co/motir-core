@@ -4272,8 +4272,6 @@
           "agentsNote": "Działające i uśpione",
           "ciJobs": "Trwające zadania CI",
           "ciWaiting": "{count, plural, =0 {Brak oczekujących} one {# oczekuje} few {# oczekują} many {# oczekuje} other {# oczekuje}}",
-          "index": "Zadania indeksowania",
-          "indexNote": "Bezpłatne",
           "of": " z {figure}",
           "notRead": "Nie odczytano",
           "failedTitle": "Nie udało się odczytać wartości floty",
@@ -4343,12 +4341,6 @@
             "other": "inne"
           }
         },
-        "index": {
-          "title": "Zadania indeksowania",
-          "running": "Działające: <n>{count}</n>",
-          "note": "Indeksowanie utrzymuje aktualność wyszukiwania kodu. Jest bezpłatne i nie jest tu zatrzymywane.",
-          "failed": "Nie udało się odczytać zadań indeksowania"
-        },
         "motirStops": {
           "title": "Zatrzymane przez Motir · ostatnie 7 dni",
           "lead": "Maszyny, które Motir sam zatrzymał dla tej organizacji, i dlaczego.",
@@ -4359,7 +4351,6 @@
             "ci_runner": "Kontener zadania CI",
             "hosted_agent": "Uruchomienie agenta",
             "agent_instance": "Instancja agenta",
-            "code_graph_index": "Zadanie indeksowania",
             "other": "Maszyna"
           },
           "reason": {
@@ -4407,7 +4398,6 @@
           "ciUnknownRuns": "Zadania CI anulowane",
           "hosted": "{count, plural, one {uruchomienie agenta zakończone} few {uruchomienia agenta zakończone} many {uruchomień agenta zakończonych} other {uruchomienia agenta zakończone}}",
           "agents": "{count, plural, one {działający agent uśpiony} few {działający agenci uśpieni} many {działających agentów uśpionych} other {działającego agenta uśpione}}",
-          "index": "{count, plural, one {zadanie indeksowania nadal działa} few {zadania indeksowania nadal działają} many {zadań indeksowania nadal działa} other {zadania indeksowania nadal działa}} — indeksowanie nie jest tu zatrzymywane",
           "afterwards": "Potem nic nie jest zablokowane: członkowie mogą od razu rozpocząć nową pracę. Właściciele uśpionych agentów są powiadamiani.",
           "countedAt": "Policzono o {time}.",
           "unreadableTitle": "Nie udało się policzyć, co działa",
@@ -4429,7 +4419,6 @@
           "ciFailed": "{count, plural, one {# repozytorium lub kontener CI nie zatrzymał się.} few {# repozytoria lub kontenery CI nie zatrzymały się.} many {# repozytoriów lub kontenerów CI nie zatrzymało się.} other {# repozytorium lub kontenera CI nie zatrzymało się.}} Odśwież i ponów Zatrzymaj wszystko.",
           "hostedFailed": "{count, plural, one {# uruchomienie agenta nie zakończyło się.} few {# uruchomienia agenta nie zakończyły się.} many {# uruchomień agenta nie zakończyło się.} other {# uruchomienia agenta nie zakończyło się.}} Użyj Anuluj w jego wierszu.",
           "agentsFailed": "{count, plural, one {# agent nie zatrzymał się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w jego wierszu.} few {# agenci nie zatrzymali się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w ich wierszach.} many {# agentów nie zatrzymało się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w ich wierszach.} other {# agenta nie zatrzymało się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w ich wierszach.}}",
-          "index": "Zadania indeksowania nadal działały.",
           "byYou": "Zatrzymane przez Ciebie, {when}.",
           "dismiss": "Zamknij",
           "dismissAria": "Zamknij wynik zatrzymania"
@@ -7634,12 +7623,9 @@
         },
         "other": "Z innego powodu"
       },
-      "indexing": "Indeksowanie grafu kodu: działa {count} · nie wlicza się do żadnego limitu planu",
-      "indexingNotRead": "Indeksowanie grafu kodu: nie odczytano · nie wlicza się do żadnego limitu planu",
       "whereItRuns": "Gdzie to działa",
       "kind": {
         "ci_runner": "Runner CI",
-        "code_graph_index": "Indekser",
         "hosted_agent": "Runner agentów",
         "agent_instance": "Hosting agentów"
       },
@@ -7658,12 +7644,12 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner agentów",
-          "indexer_and_hoster": "Indekser + hosting agentów"
+          "agent_hoster": "Hosting agentów"
         },
         "role": {
           "ci_runner": "Uruchamia zadania CI",
           "hosted_agent": "Wykonuje Twoje uruchomienia agenta Motir",
-          "indexer_and_hoster": "Indeksuje kod i hostuje agenty"
+          "agent_hoster": "Hostuje Twoje agenty"
         },
         "state": {
           "created": "Utworzone",
@@ -7679,11 +7665,10 @@
         "sharedFloor": {
           "ci_runner": "Wciąż na wspólnym minimum: runnery CI: {figure}.",
           "hosted_agent": "Wciąż na wspólnym minimum, z limitami planu Max: uruchomienia agentów naraz: {figure}.",
-          "indexer_and_hoster": "Indeksowanie i hosting agentów są wciąż na wspólnym minimum: hostowane agenty {perPerson} na osobę, {perOrg} na organizację."
+          "agent_hoster": "Hosting agentów jest wciąż na wspólnym minimum: hostowane agenty {perPerson} na osobę, {perOrg} na organizację."
         },
         "liveOnceNetwork": "Zacznie działać, gdy sieć konta zostanie zbudowana.",
-        "deniedNote": "Konto pozostaje w stanie „{state}”, dopóki AWS nie przyzna zwiększenia.",
-        "keptSpots": "Miejsca na maszyny zawsze zarezerwowane na indeksowanie: {count}; instancje agentów korzystają z reszty."
+        "deniedNote": "Konto pozostaje w stanie „{state}”, dopóki AWS nie przyzna zwiększenia."
       },
       "quotaOutcome": {
         "pending": "W toku po stronie AWS",
@@ -11708,15 +11693,13 @@
             "mismatched": "niezgodne · działanie i obciążenie się nie zgadzają"
           },
           "group": {
-            "plan": "Ograniczone planem",
-            "uncapped": "Brak wartości planu"
+            "plan": "Ograniczone planem"
           },
           "col": {
             "org": "Organizacja",
             "plan": "Plan",
             "ciRunner": "Runnery CI",
             "hostedAgent": "Uruchomienia agenta Motir",
-            "index": "Kontenery indeksu",
             "agentInstance": "Instancje agentów",
             "accrued": "Minuty CI · ostatnie {minutes} min",
             "credits": "Kredyty w tym miesiącu · potwierdzone",
@@ -11748,7 +11731,7 @@
           "foot": "Wyświetlanie {from}–{to} z {total} · najpierw niezgodne, potem z największą liczbą kontenerów · oceniane jest tylko CI — to jedyne obciążenie naliczane w trakcie działania",
           "empty": {
             "title": "Żadna organizacja nie uruchamia kontenera floty",
-            "body": "Żadna organizacja nie ma teraz runnera CI, uruchomienia agenta Motir, instancji agenta ani kontenera indeksu, więc nie ma czego porównywać z obciążeniem. To prawidłowy odczyt, a nie błąd."
+            "body": "Żadna organizacja nie ma teraz runnera CI, uruchomienia agenta Motir ani instancji agenta, więc nie ma czego porównywać z obciążeniem. To prawidłowy odczyt, a nie błąd."
           },
           "error": {
             "title": "Nie udało się odczytać floty",
@@ -11842,7 +11825,6 @@
         "kind": {
           "ci_runner": "Runner CI",
           "hosted_agent": "Runner agentów",
-          "code_graph_index": "Indekser",
           "agent_instance": "Host agentów"
         },
         "block": {
@@ -12812,6 +12794,7 @@
         "agent_storage": "Miejsce na dane agentów",
         "ci": "CI",
         "search": "Wyszukiwanie w sieci",
+        "hosting_production": "Hosting produkcyjny",
         "indexing": "Indeksowanie"
       },
       "models": {
@@ -13581,14 +13564,12 @@
         "workload": {
           "ciRunner": "Runnery CI",
           "hostedAgent": "Uruchomienia agenta Motir",
-          "agentInstance": "Instancje agentów",
-          "index": "Kontenery indeksowania"
+          "agentInstance": "Instancje agentów"
         },
         "charge": {
           "ciRunner": "Naliczane w trakcie działania",
           "hostedAgent": "Naliczane po zakończeniu uruchomienia",
-          "agentInstance": "Naliczane za każdy interwał działania",
-          "index": "Koszt Motir — nigdy nie naliczany"
+          "agentInstance": "Naliczane za każdy interwał działania"
         },
         "tile": {
           "of": " z {figure}",
@@ -13618,7 +13599,6 @@
           "ciUnknown": "Uruchomienia CI nie zostały policzone — nie udało się odczytać GitHuba; zatrzymanie i tak je anuluje — oraz <strong>{containers}</strong> {containers, plural, one {usunięty kontener CI} few {usunięte kontenery CI} many {usuniętych kontenerów CI} other {usuniętego kontenera CI}}",
           "hosted": "{count, plural, one {zakończone uruchomienie agenta Motir} few {zakończone uruchomienia agenta Motir} many {zakończonych uruchomień agenta Motir} other {zakończonego uruchomienia agenta Motir}}",
           "instances": "{count, plural, one {uśpiona instancja agenta} few {uśpione instancje agentów} many {uśpionych instancji agentów} other {uśpionej instancji agenta}}",
-          "index": "{count, plural, one {kontener indeksowania} few {kontenery indeksowania} many {kontenerów indeksowania} other {kontenera indeksowania}} pozostawiono do dokończenia — indeksowanie to własny koszt Motir i nigdy nie jest naliczane organizacji",
           "notSuspension": "<strong>To nie jest zawieszenie.</strong> Nic nie jest blokowane: kolejne uruchomienie CI, uruchomienie agenta lub start agenta organizacji {org} przejdzie zwykłą procedurę dopuszczenia.",
           "asOf": "Policzono o {time}. Zatrzymanie obejmie to, co będzie działać w chwili potwierdzenia.",
           "loading": "Liczenie, co jest uruchomione…",
@@ -15029,10 +15009,6 @@
           "title": "Obraz runnera CI",
           "subtitle": "W czym działa każde zadanie CI floty. Przypięty przez MOTIR_RUNNER_IMAGE; najnowszy to ostatnie wydanie runner-v*."
         },
-        "indexer": {
-          "title": "Obraz indeksera",
-          "subtitle": "To, co uruchamia każde uruchomienie indeksowania grafu kodu. Przypięty przez MOTIR_INDEXER_IMAGE; najnowszy to ostatnie wydanie indexer-v*."
-        },
         "sandbox": {
           "title": "Obrazy instancji agentów",
           "subtitle": "Piaskownica, w której działają agenty, jeden tag na profil w ghcr.io/motir-co/motir-sandbox. Kompletne, gdy każdy profil ma swój tag w najnowszym wydaniu cli-v*."
@@ -15041,7 +15017,6 @@
       "imageName": {
         "hosted": "obraz agenta Motir",
         "runner": "obraz runnera CI",
-        "indexer": "obraz indeksera",
         "sandbox": "obrazy instancji agentów"
       },
       "source": {
@@ -15072,17 +15047,13 @@
         "hosted": "{count, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w packages/cli między przypiętym a najnowszym buildem.",
         "runner": "({tags}) · {days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w infra/ci-runner.",
         "runnerNoTags": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w infra/ci-runner.",
-        "indexer": "({tags}) · {days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w indekserze.",
-        "indexerNoTags": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w indekserze.",
         "link": "Zobacz commity"
       },
       "unreleased": {
         "title": "Scalone od {release}, w żadnym wydaniu",
-        "count": "{count, plural, one {# zmiana} few {# zmiany} many {# zmian} other {# zmiany}} w infra/ci-runner",
-        "indexerCount": "{count, plural, one {# scalona zmiana w indekserze pojawiła się później} few {# scalone zmiany w indekserze pojawiły się później} many {# scalonych zmian w indekserze pojawiło się później} other {# scalonej zmiany w indekserze pojawiło się później}}"
+        "count": "{count, plural, one {# zmiana} few {# zmiany} many {# zmian} other {# zmiany}} w infra/ci-runner"
       },
       "releaseNeeded": "<strong>Potrzebne jest wydanie.</strong> Te zmiany trafiają do floty tylko w nowym wydaniu runnera, a ta strona go nie tworzy. Wypchnij tag <mono>{tag}</mono>; potok wydań go opublikuje, a wiersz zaproponuje Opublikuj najnowszy.",
-      "releaseNeededIndexer": "<strong>Potrzebne jest wydanie.</strong> Te zmiany trafiają do uruchomień indeksowania tylko w nowym wydaniu indeksera, a ta strona go nie tworzy. Wypchnij tag <mono>{tag}</mono> w motir-ai; jego potok wydań go opublikuje, a wiersz zaproponuje Opublikuj najnowszy.",
       "ami": {
         "title": "AMI runnera · tylko odczyt",
         "current": "Aktualne",
@@ -15115,14 +15086,10 @@
         "note": {
           "hosted": "Przypina najnowszy build main przez workflow przypinania agenta Motir. Web i worker przechodzą na niego.",
           "runner": "Przypina {release} przez workflow przypinania runnera. Web i worker przechodzą na nie.",
-          "indexer": "Przypina {release} przez pull request przypięcia indeksera. Web i worker przechodzą na nie.",
           "sandbox": "Publikuje ponownie {release}. Wypychane są tylko brakujące tagi ({count}); w produkcji nic się nie zmienia.",
           "hostedCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowszy build main.",
           "runnerCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowsze wydanie runnera.",
           "runnerReleaseNeeded": "Nie ma nic nowszego do opublikowania: produkcja przypina najnowsze wydanie. Scalone zmiany powyżej najpierw potrzebują wydania.",
-          "indexerCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowsze wydanie indeksera.",
-          "indexerReleaseNeeded": "Nie ma nic nowszego do opublikowania: produkcja przypina najnowsze wydanie indeksera. Scalone zmiany powyżej najpierw potrzebują wydania.",
-          "indexerNotRead": "Opublikuj najnowszy pozostaje wyłączone, dopóki nie zostaną odczytane zarówno przypięcie, jak i najnowsze wydanie.",
           "sandboxCurrent": "Nie ma nic nowszego do opublikowania. Każdy profil ma swój tag w najnowszym wydaniu.",
           "sandboxOld": "{release} utworzono, zanim ponowne uruchomienie mogło wypchnąć tylko brakujące tagi, więc ponowne uruchomienie wypchnęłoby każdy tag od nowa. Zamiast tego utwórz nowe wydanie cli-v*.",
           "running": "Uruchomienie workflow publikacji tego obrazu już trwa. Opublikuj najnowszy jest wyłączone do jego zakończenia.",
@@ -15140,21 +15107,12 @@
         "sandboxFrom": "{published} z {total} tagów w {version}",
         "hostedBody": "To uruchamia workflow przypinania agenta Motir. Przestawia MOTIR_HOSTED_AGENT_IMAGE na najnowszy build i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie, a uruchomienia agenta Motir rozpoczęte po przejściu startują nowy obraz.",
         "runnerBody": "To uruchamia workflow przypinania runnera. Przestawia MOTIR_RUNNER_IMAGE na {release} i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie. AMI runnera się nie zmienia.",
-        "indexerBody": "To otwiera pull request przypięcia indeksera, który przestawia MOTIR_INDEXER_IMAGE na {release} i trafia do kolejki scalania. Jego wdrożenie <strong>przełącza następnie web i worker</strong>, a uruchomienia indeksowania rozpoczęte po przełączeniu uruchamiają nowy obraz. Uruchomienia już trwające kończą się na obrazie, z którym wystartowały.",
         "sandboxBody": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. {published} są już opublikowane i nie są wypychane ponownie. <strong>W produkcji nic się nie zmienia.</strong>",
         "sandboxBodyNonePublished": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. <strong>W produkcji nic się nie zmienia.</strong>"
       },
       "progress": {
         "title": "Publikowanie.",
         "body": "Workflow publikacji działa; ten wiersz zaktualizuje się, gdy się zakończy.",
-        "indexerQueued": {
-          "title": "Pull request przypięcia w kolejce.",
-          "body": "Zostaje scalony przez kolejkę scalania, potem jego wdrożenie przełącza web i worker; ten wiersz aktualizuje się na bieżąco."
-        },
-        "indexerRolling": {
-          "title": "Przełączanie web i worker.",
-          "body": "Pull request przypięcia został scalony, a jego wdrożenie przenosi web i worker na {release}. Nowe uruchomienia indeksowania uruchomią go po zakończeniu przełączania."
-        },
         "started": "· uruchomione {age} przez {email}",
         "startedNoActor": "· uruchomione {age}",
         "button": "Publikowanie…"
@@ -15173,7 +15131,6 @@
       "workflow": {
         "hosted": "Przypięcie agenta Motir",
         "runner": "Przypięcie runnera",
-        "indexer": "Przypięcie indeksera",
         "sandbox": "Wydanie piaskownicy {tag}",
         "run": "{workflow} · uruchomienie #{number}",
         "runNoNumber": "{workflow} · uruchomienie"
@@ -15190,26 +15147,7 @@
       },
       "unset": {
         "title": "Nieskonfigurowane tutaj",
-        "body": "{variable} nie jest ustawione w tym wdrożeniu, więc nie ma przypięcia do porównania.",
-        "indexerBody": "MOTIR_INDEXER_IMAGE nie jest ustawione w tym wdrożeniu, więc ta instalacja nie indeksuje: żadne uruchomienie indeksowania grafu kodu się nie zaczyna i nie ma przypięcia do porównania."
-      },
-      "notRead": {
-        "pin": {
-          "title": "Nie udało się odczytać przypięcia.",
-          "body": "ECR nie odpowiedział dla skrótu wskazanego przez MOTIR_INDEXER_IMAGE, więc nie jest on porównywany i nic tutaj nie oznacza aktualności."
-        },
-        "newest": {
-          "title": "Nie udało się odczytać wydań.",
-          "body": "GitHub nie odpowiedział dla wydań indexer-v* motir-ai, więc przypięcie nie jest z niczym porównywane."
-        },
-        "newestEcr": {
-          "title": "Nie udało się odczytać wydań.",
-          "body": "ECR nie odpowiedział dla tagów wydań indexer-* repozytorium indeksera, więc przypięcie nie jest z niczym porównywane."
-        },
-        "history": {
-          "title": "Nie udało się odczytać scalonych zmian",
-          "body": "GitHub nie odpowiedział dla historii commitów motir-ai, więc zmiany, których nie ma w żadnym wydaniu, nie są wymienione. Przypięcie i najnowsze wydanie powyżej nadal są porównywane."
-        }
+        "body": "{variable} nie jest ustawione w tym wdrożeniu, więc nie ma przypięcia do porównania."
       },
       "loading": "Ładowanie: {image}",
       "publishError": {

@@ -25,8 +25,8 @@ import { fakeAwsInstances, plantUntaggedInstance } from '../e2e/_helpers/fake-aw
 
 // THE INSTALL FLEET THROUGH THE FAKE AWS (Story MOTIR-10792 · MOTIR-10794): the
 // REAL AWS adapter over the lane's file-backed EC2, in the install fleet's own
-// account — no fleet account row, no management credential, no pool role. An
-// index VM is booted into the configured subnets with the install fleet's tag,
+// account — no fleet account row, no management credential, no pool role. A
+// hosted-agent VM is booted into the configured subnets with the install fleet's tag,
 // described and torn down; the reconciler lists only the install fleet's tagged
 // machines in that account and judges them; and off the fake, the orchestrator is
 // built on core's own credentials with no management credential set.
@@ -34,21 +34,22 @@ import { fakeAwsInstances, plantUntaggedInstance } from '../e2e/_helpers/fake-aw
 const REGION = 'us-east-1';
 // The fake EC2 names an account's subnets `subnet-<last 8 of its id><zone letter>`.
 const FAKE_SUBNETS = ['subnet-ll-fleeta', 'subnet-ll-fleetb'];
-const INDEX_IMAGE = `123456789012.dkr.ecr.${REGION}.amazonaws.com/indexer@sha256:${'b'.repeat(64)}`;
+// A hosted-agent VM since MOTIR-12037 retired the index VM this file booted.
+const HOSTED_IMAGE = `ghcr.io/motir-co/motir-hosted-agent@sha256:${'b'.repeat(64)}`;
 
 let dir: string;
 
-function indexSpec(): ContainerSpec {
+function hostedSpec(): ContainerSpec {
   return {
     orgId: 'org-meta',
     workspaceId: 'ws-meta',
     projectId: 'project-meta',
     repoFullName: 'motir-co/motir-core',
-    workload: 'code_graph_index',
+    workload: 'hosted_agent',
     workflowJobId: null,
-    image: INDEX_IMAGE,
+    image: HOSTED_IMAGE,
     size: { cpuKind: 'performance', cpus: 2, memoryMb: 8192 },
-    env: { MOTIR_INDEX_RUN_ID: 'run-1' },
+    env: { MOTIR_DISPATCH_RUN_ID: 'run-1' },
     timeoutSeconds: 1800,
     region: REGION,
   };
@@ -59,14 +60,14 @@ const attribution: UsageAttribution = {
   workspaceId: 'ws-meta',
   projectId: 'project-meta',
   repoFullName: 'motir-co/motir-core',
-  workload: 'code_graph_index',
+  workload: 'hosted_agent',
   workflowJobId: null,
   size: { cpuKind: 'performance', cpus: 2, memoryMb: 8192 },
   observedStartedAt: null,
 };
 
 function stubInstallEnv(): void {
-  vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'code_graph_index,agent_instance,hosted_agent');
+  vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'agent_instance,hosted_agent');
   vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', FAKE_SUBNETS.join(','));
   vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
   vi.stubEnv(
@@ -74,8 +75,6 @@ function stubInstallEnv(): void {
     'arn:aws:iam::944842271421:instance-profile/motir-install-fleet-vm',
   );
   vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', REGION);
-  // The per-kind AMI pin every pool account boots an index VM from.
-  vi.stubEnv('MOTIR_AWS_INDEXER_AMI_ID', 'ami-indexer');
 }
 
 /** No management credential at all: the pool path could not assume anything. */
@@ -113,12 +112,12 @@ async function seamOn(): Promise<void> {
 }
 
 describe('through the fake AWS, in core’s own account', () => {
-  it('boots, describes and tears down an index VM with the install fleet’s tag, network and no account row', async () => {
+  it('boots, describes and tears down a hosted-agent VM with the install fleet’s tag, network and no account row', async () => {
     await seamOn();
     const orchestrator = await fleetShardOrchestratorService.forShard(INSTALL_FLEET_SHARD_ID);
     expect(orchestrator.provider).toBe('aws');
 
-    const handle = await orchestrator.provision(indexSpec());
+    const handle = await orchestrator.provision(hostedSpec());
     expect(handle).toMatchObject({ provider: 'aws', region: REGION });
 
     const [instance] = fakeAwsInstances(INSTALL_FLEET_SHARD_ID);
@@ -144,7 +143,7 @@ describe('through the fake AWS, in core’s own account', () => {
   it('lists only the install fleet’s tagged machines, and the reconciler judges them', async () => {
     await seamOn();
     const orchestrator = installFleetOrchestrator();
-    const handle = await orchestrator.provision(indexSpec());
+    const handle = await orchestrator.provision(hostedSpec());
     // A machine of core's own account that is not the fleet's: never listed.
     const stranger = plantUntaggedInstance(
       { id: INSTALL_FLEET_SHARD_ID, name: INSTALL_FLEET_TAG },
@@ -157,7 +156,7 @@ describe('through the fake AWS, in core’s own account', () => {
     const listed = (await inventory!.listMachines(INSTALL_FLEET_TAG)).map((m) => m.machineId);
     expect(listed).toEqual([handle.id]);
 
-    // Past the grace, an index VM no record holds is killed in that account,
+    // Past the grace, a VM no record holds is killed in that account,
     // and the stranger is never reached.
     const later = new Date(Date.now() + 24 * 3_600_000);
     const result = await fleetAttributionService.reconcile({

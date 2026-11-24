@@ -28,6 +28,7 @@ function row(entityId: string, chargedCredits: number): RawSpendRow {
     agent_storage: 0,
     ci: 0,
     search: 0,
+    hosting_production: 0,
   };
   return {
     entityId,

@@ -7,7 +7,6 @@ import {
   parseSseFrame,
   createCheckoutSession,
   createPortalSession,
-  mintCodeGraphRunCredential,
   streamJob,
   MOTIR_AI_REQUEST_TIMEOUT_MS,
   MOTIR_AI_SUBMIT_BUDGET_MS,
@@ -737,26 +736,6 @@ describe('request deadlines', () => {
     vi.stubGlobal('fetch', hangingFetch());
 
     const pending = getJob('job_1', 'pj_1');
-    const assertion = expect(pending).rejects.toThrow(
-      `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
-    );
-    await vi.advanceTimersByTimeAsync(MOTIR_AI_REQUEST_TIMEOUT_MS);
-    await assertion;
-  });
-
-  it('gives the CODE-GRAPH call the same ordinary deadline — there is no long lane left', async () => {
-    // The long lane existed for the tarball upload, which is deleted (MOTIR-2138).
-    // The one code-graph call that survives is a small JSON mint, and pinning it
-    // here is what stops a future slow call from quietly re-opening a second,
-    // multi-minute deadline on a boundary a read surface waits behind.
-    vi.stubGlobal('fetch', hangingFetch());
-    const pending = mintCodeGraphRunCredential({
-      coreOrganizationId: 'org_1',
-      coreWorkspaceId: 'ws_1',
-      coreProjectId: 'pj_1',
-      repoRef: 'moooon/acme',
-      runId: 'run_1',
-    });
     const assertion = expect(pending).rejects.toThrow(
       `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
     );

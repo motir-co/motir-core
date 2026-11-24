@@ -15,7 +15,7 @@
 // and memoizes nothing, correctly, for a caller that runs a step once — every
 // pass re-executed the admission and the boot. Measured before this module
 // existed: a supervision that polled 500 times called
-// `codeGraphIndexAdmissionService.admit` **502 times**, and would have
+// the index admission (deleted with its fleet, MOTIR-12036) **502 times**, and would have
 // provisioned a container per poll had the fake not been a fake.
 //
 // So the wrapper wraps whatever seam it was given in this memo. The relationship

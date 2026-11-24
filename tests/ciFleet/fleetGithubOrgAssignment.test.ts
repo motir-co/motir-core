@@ -155,7 +155,7 @@ describe('the choice', () => {
   it('rows of several fleet kinds naming one org count as ONE org, its headroom once', async () => {
     // Counted per row, A would read 10 and beat B's 6.
     await account('motir-host-a', registrationsFor(5), { fleetKind: 'ci_runner' });
-    await account('Motir-Host-A', registrationsFor(5), { fleetKind: 'code_graph_index' });
+    await account('Motir-Host-A', registrationsFor(5), { fleetKind: 'hosted_agent' });
     await account('motir-host-b', registrationsFor(6));
     const organizationId = await seedOrganization();
 

@@ -205,10 +205,10 @@ describe('the reader placement calls', () => {
     expect(await fleetKindOnPool('agent_instance')).toBe(false);
   });
 
-  it('touches no other kind: the switch on leaves the CI runner and indexer on Fly', async () => {
+  it('touches no other kind: the switch on leaves the CI runner and agent runner on Fly', async () => {
     await service.setOnPool(superadmin, true, 'on');
     expect(await fleetKindOnPool('ci_runner')).toBe(false);
-    expect(await fleetKindOnPool('code_graph_index')).toBe(false);
+    expect(await fleetKindOnPool('hosted_agent')).toBe(false);
   });
 });
 

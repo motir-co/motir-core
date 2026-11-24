@@ -57,6 +57,24 @@ interface Seen {
 let seen: Seen[] = [];
 let ids: { org: string; ws: string; project: string };
 let down = false;
+/** Answer as a motir-ai release older than MOTIR-12167: no `hosting_production` anywhere. */
+let beforeHosting = false;
+
+function withoutHosting(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .filter((v) => (v as { category?: string } | null)?.category !== 'hosting_production')
+      .map(withoutHosting);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([k]) => k !== 'hosting_production')
+        .map(([k, v]) => [k, withoutHosting(v)]),
+    );
+  }
+  return value;
+}
 
 function recorded(path: string): unknown {
   switch (path) {
@@ -128,6 +146,7 @@ beforeEach(async () => {
 
   seen = [];
   down = false;
+  beforeHosting = false;
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc');
@@ -141,7 +160,8 @@ beforeEach(async () => {
         query: url.searchParams,
         body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null,
       });
-      const body = recorded(url.pathname);
+      const answer = recorded(url.pathname);
+      const body = beforeHosting ? withoutHosting(answer) : answer;
       return body === null ? new Response('{}', { status: 404 }) : Response.json(body);
     }),
   );
@@ -158,14 +178,15 @@ afterAll(async () => {
 });
 
 describe('1 · client seams: recorded motir-ai reads into their DTOs', () => {
-  it('/v1/platform/usage → the Usage & cost sheet: all eight categories, indexing out of the charged total', async () => {
+  it('/v1/platform/usage → the Usage & cost sheet: all nine categories, indexing out of the charged total', async () => {
     const { usage } = await platformReadService.getEstateUsage(principal, '2026-09');
     // The view also reads the reconciliation, in parallel, so find the usage call by path.
     const call = seen.find((s) => s.path === '/v1/platform/usage')!;
     expect(call.query.get('level')).toBe('platform');
     expect(call.query.get('period')).toBe('2026-09');
     const sheet = buildSpendSheet(usage!.categories);
-    expect(sheet.rows).toHaveLength(8);
+    expect(sheet.rows).toHaveLength(9);
+    expect(usage!.categories.map((c) => c.category)).toContain('hosting_production');
     expect(sheet.chargedCredits).toBe(USAGE.spend.chargedCredits);
     expect(sheet.chargedCostMicroUsd).toBe(USAGE.spend.chargedCostMicroUsd);
     expect(sheet.costMicroUsdInclIndexing).toBe(USAGE.spend.costMicroUsdInclIndexing);
@@ -232,6 +253,38 @@ describe('1 · client seams: recorded motir-ai reads into their DTOs', () => {
     expect(o.jobs.nextCursor).toBe(RUNS.nextCursor);
   });
 
+  it('a motir-ai older than the hosting category: every list, remainder and month still carries it, as 0', async () => {
+    beforeHosting = true;
+    const list = await platformUsageService.listTenants(principal, {
+      period: '2026-09',
+      sort: 'charged',
+    });
+    expect(list.unavailable).toBe(false);
+    expect(list.estate!.credits.hosting_production).toBe(0);
+    expect(list.rows[0]!.credits.hosting_production).toBe(0);
+    expect(list.estate!.chargedCredits).toBe(1_650);
+
+    const tab = await platformOrgPageService.getUsageTab(principal, ids.org, { period: '2026-09' });
+    expect(tab.children!.rows[0]!.credits.hosting_production).toBe(0);
+    expect(tab.children!.rows[0]!.cost.hosting_production).toBe(0);
+    expect(tab.children!.remainder!.orgLevel.credits.hosting_production).toBe(0);
+    expect(tab.children!.remainder!.noProject.cost.hosting_production).toBe(0);
+    for (const m of [...tab.months!.items, tab.months!.allTime]) {
+      expect(m.categories.hosting_production).toEqual({
+        credits: 0,
+        usageQuantity: 0,
+        costMicroUsd: 0,
+      });
+      expect(m.categories.planning_tokens.credits).toBeGreaterThan(0);
+    }
+    // The category sheet zero-fills the row itself.
+    const { usage } = await platformReadService.getEstateUsage(principal, '2026-09');
+    expect(usage!.categories.map((c) => c.category)).not.toContain('hosting_production');
+    expect(buildSpendSheet(usage!.categories).rows.map((r) => r.category)).toContain(
+      'hosting_production',
+    );
+  });
+
   it('motir-ai unreachable: every read answers its unavailable state — never a throw', async () => {
     down = true;
     expect((await platformReadService.getEstateUsage(principal, 'all')).usage).toBeNull();
@@ -270,7 +323,6 @@ describe('2 · outgoing bodies match motir-ai’s contract', () => {
   it('a settled container’s meter report — each workload — costUsd a decimal string', async () => {
     const workloads = [
       ['ci_runner', 'ci'],
-      ['code_graph_index', 'index'],
       ['hosted_agent', 'agent'],
       ['agent_instance', 'agent_instance'],
     ] as const;

@@ -588,3 +588,13 @@ this story was open: every workload is now held to its own plan figure (`lib/bil
 and `Organization.fleetPoolCap` overrides the plan's CI burst cap alone. So `DEFAULT_ORG_POOL_CAP`,
 `META_ORG_POOL_CAP` and `resolveOrgPool` were dropped when `main` was merged into this story; the
 rest of AMENDMENT 1 (the accounts, the switch, `shard_capacity`, the headroom alert) stands.
+
+## AMENDMENT 2 — the indexer's kind is retired (MOTIR-12041, 2026-11-23)
+
+A1.3 lists four fleet kinds. The indexer's kind left motir-core with Story MOTIR-11026: indexing runs
+through motir-ai and motir-codegraph, and motir-core has **three** fleet kinds — the CI runner
+(`ci_runner`), the agent runner (`hosted_agent`) and the agent hoster (`agent_instance`) — each with its
+own Fly↔AWS switch as A1.3 decides. The indexer's switch, its pool's shards and its operational records
+were deleted by migration `20261123180000_retire_code_graph_index_fleet_kind`, which also tightened the
+`fleet_kind` CHECK constraints to the three kinds. A Host organisation's merged account is one
+`agent_instance` row (MOTIR-12038). The rest of AMENDMENT 1 stands for the three kinds.

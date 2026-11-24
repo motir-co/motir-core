@@ -9,7 +9,7 @@ import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { runnerVersionSupportProbeService } from '@/lib/services/runnerVersionSupportProbeService';
 import { hostedAgentImageLagProbeService } from '@/lib/services/hostedAgentImageLagProbeService';
 
-// THE THREE FLEET ORIGINS RIDE THE DAILY HEALTH CHECK (Story MOTIR-9714 ·
+// THE FLEET ORIGINS RIDE THE DAILY HEALTH CHECK (Story MOTIR-9714 ·
 // MOTIR-10750). A definite failure of any origin fails the run, and the message
 // sends the operator to motir-core's own variable and the motir-infra stack
 // output it must equal — never to a Fly secret, which is where the old message
@@ -58,11 +58,6 @@ async function runCheck(): Promise<Outcome> {
 
 const base = {
   core: { origin: 'core', variable: 'MOTIR_BASE_URL', output: 'CoreOrigin' },
-  aiContainer: {
-    origin: 'aiContainer',
-    variable: 'MOTIR_AI_CONTAINER_URL',
-    output: 'AiContainerOrigin',
-  },
   gatewayRun: {
     origin: 'gatewayRun',
     variable: 'MOTIR_GATEWAY_RUN_URL',
@@ -146,8 +141,10 @@ describe('the fleet origins preflight on the daily health check', () => {
     }
     expect(message).toContain('motir-gateway.fly.dev');
     expect(message).not.toMatch(/fly secrets?|Fly secret/i);
-    // The origin that is fine is not named as a fault.
-    expect(message).not.toContain('AiContainerOrigin');
+    // The machines handed these addresses, and no longer the retired indexer
+    // (MOTIR-12037).
+    expect(message).toContain('The agent runner and the agent hoster are handed these addresses');
+    expect(message).not.toMatch(/indexer/i);
   });
 
   it('FAILS a deployment running agent instances whose core origin is private, through the real chain', async () => {
@@ -158,7 +155,6 @@ describe('the fleet origins preflight on the daily health check', () => {
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
     vi.stubEnv('MOTIR_HOSTED_AGENT_IMAGE', '');
     vi.stubEnv('FLY_INSTANCES_API_TOKEN', 'fly_instances_token');
     vi.stubEnv('MOTIR_BASE_URL', 'http://motir-core.internal:3000');
@@ -175,8 +171,7 @@ describe('the fleet origins preflight on the daily health check', () => {
     expect(error).toBeInstanceOf(FleetOriginsError);
     expect(error?.message).toContain('MOTIR_BASE_URL: motir-core.internal');
     expect(error?.message).toContain('services stack output CoreOrigin');
-    // An agent instance is handed neither of the other two origins.
-    expect(error?.message).not.toContain('MOTIR_AI_CONTAINER_URL');
+    // An agent instance is not handed the run lane's origin.
     expect(error?.message).not.toContain('MOTIR_GATEWAY_RUN_URL');
   });
 });

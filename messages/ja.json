@@ -4272,8 +4272,6 @@
           "agentsNote": "稼働中と休止中",
           "ciJobs": "実行中の CI ジョブ",
           "ciWaiting": "{count, plural, =0 {待機なし} other {# 件待機中}}",
-          "index": "インデックスジョブ",
-          "indexNote": "課金対象外",
           "of": " / {figure}",
           "notRead": "読み取れません",
           "failedTitle": "フリートの数値を読み取れませんでした",
@@ -4343,12 +4341,6 @@
             "other": "その他"
           }
         },
-        "index": {
-          "title": "インデックスジョブ",
-          "running": "<n>{count}</n> 件実行中",
-          "note": "インデックス作成によりコード検索が最新に保たれます。課金対象外で、ここでは停止されません。",
-          "failed": "インデックスジョブを読み取れませんでした"
-        },
         "motirStops": {
           "title": "Motir による停止 · 過去 7 日間",
           "lead": "Motir 自身がこの組織のために停止したマシンとその理由です。",
@@ -4359,7 +4351,6 @@
             "ci_runner": "CI ジョブのコンテナ",
             "hosted_agent": "エージェントの実行",
             "agent_instance": "エージェントインスタンス",
-            "code_graph_index": "インデックスジョブ",
             "other": "マシン"
           },
           "reason": {
@@ -4407,7 +4398,6 @@
           "ciUnknownRuns": "CI ジョブをキャンセル",
           "hosted": "{count, plural, other {件のエージェントの実行を終了}}",
           "agents": "{count, plural, other {件の稼働中エージェントを休止}}",
-          "index": "{count, plural, other {件のインデックスジョブは実行を継続}} — ここではインデックス作成を停止しません",
           "afterwards": "停止後に何かがブロックされることはありません。メンバーはすぐに新しい作業を開始できます。休止したエージェントの所有者には通知されます。",
           "countedAt": "{time} 時点の数です。",
           "unreadableTitle": "実行中のものを数えられませんでした",
@@ -4429,7 +4419,6 @@
           "ciFailed": "{count, plural, other {# 件の CI リポジトリまたはコンテナが停止しませんでした。}}更新して、もう一度「すべて停止」をお試しください。",
           "hostedFailed": "{count, plural, other {# 件のエージェントの実行が終了しませんでした。}}その行の「キャンセル」をお試しください。",
           "agentsFailed": "{count, plural, other {# 件のエージェントが停止しませんでした。停止が確認されませんでした。その行の「休止」をお試しください。}}",
-          "index": "インデックスジョブは実行を継続しました。",
           "byYou": "あなたが停止しました（{when}）。",
           "dismiss": "閉じる",
           "dismissAria": "停止結果を閉じる"
@@ -7631,12 +7620,9 @@
         },
         "other": "その他の理由"
       },
-      "indexing": "コードグラフのインデックス作成：{count} 件実行中 · どのプランの上限にも含まれません",
-      "indexingNotRead": "コードグラフのインデックス作成：読み取れませんでした · どのプランの上限にも含まれません",
       "whereItRuns": "実行場所",
       "kind": {
         "ci_runner": "CI ランナー",
-        "code_graph_index": "インデクサー",
         "hosted_agent": "エージェントランナー",
         "agent_instance": "エージェントのホスト"
       },
@@ -7655,12 +7641,12 @@
         "kind": {
           "ci_runner": "CI ランナー",
           "hosted_agent": "エージェントランナー",
-          "indexer_and_hoster": "インデクサー + エージェントのホスト"
+          "agent_hoster": "エージェントのホスト"
         },
         "role": {
           "ci_runner": "CI ジョブを実行します",
           "hosted_agent": "Motir エージェントのジョブを実行します",
-          "indexer_and_hoster": "コードのインデックスを作成し、エージェントをホストします"
+          "agent_hoster": "エージェントをホストします"
         },
         "state": {
           "created": "作成済み",
@@ -7676,11 +7662,10 @@
         "sharedFloor": {
           "ci_runner": "まだ共有の下限にあります：CI は {figure} 台のランナー。",
           "hosted_agent": "まだ共有の下限にあり、Max の上限で動いています：同時に {figure} 件のエージェント実行。",
-          "indexer_and_hoster": "インデックス作成とエージェントのホストはまだ共有の下限にあります：ホスト型エージェントは 1 人あたり {perPerson}、組織あたり {perOrg}。"
+          "agent_hoster": "エージェントのホストはまだ共有の下限にあります：ホスト型エージェントは 1 人あたり {perPerson}、組織あたり {perOrg}。"
         },
         "liveOnceNetwork": "アカウントのネットワークが構築されると稼働します。",
-        "deniedNote": "AWS が引き上げを承認するまで、アカウントは「{state}」のままです。",
-        "keptSpots": "インデックス作成のために常に {count} 台分のマシン枠を確保します。エージェントのインスタンスは残りを使います。"
+        "deniedNote": "AWS が引き上げを承認するまで、アカウントは「{state}」のままです。"
       },
       "quotaOutcome": {
         "pending": "AWS で処理中",
@@ -11705,15 +11690,13 @@
             "mismatched": "不一致 · 実行状況と引き落としが一致しません"
           },
           "group": {
-            "plan": "プランの上限",
-            "uncapped": "プランの上限なし"
+            "plan": "プランの上限"
           },
           "col": {
             "org": "組織",
             "plan": "プラン",
             "ciRunner": "CI ランナー",
             "hostedAgent": "Motir エージェントの実行",
-            "index": "インデックスのコンテナー",
             "agentInstance": "エージェントインスタンス",
             "accrued": "CI の分数 · 直近 {minutes} 分",
             "credits": "今月のクレジット · 確定分",
@@ -11745,7 +11728,7 @@
           "foot": "{total} 件中 {from}–{to} 件を表示 · 不一致が先頭、次にコンテナー数の多い順 · 判定対象は CI のみです(実行中に引き落とされる唯一のワークロードのため)",
           "empty": {
             "title": "フリートのコンテナーを実行中の組織はありません",
-            "body": "現在、CI ランナー、Motir エージェントの実行、エージェントインスタンス、インデックスのコンテナーを保持している組織はないため、引き落としと比較するものはありません。これは正常な状態であり、障害ではありません。"
+            "body": "現在、CI ランナー、Motir エージェントの実行、エージェントインスタンスを保持している組織はないため、引き落としと比較するものはありません。これは正常な状態であり、障害ではありません。"
           },
           "error": {
             "title": "フリートを読み取れませんでした",
@@ -11839,7 +11822,6 @@
         "kind": {
           "ci_runner": "CI ランナー",
           "hosted_agent": "エージェントランナー",
-          "code_graph_index": "インデクサー",
           "agent_instance": "エージェントホスト"
         },
         "block": {
@@ -12809,6 +12791,7 @@
         "agent_storage": "エージェントのストレージ",
         "ci": "CI",
         "search": "ウェブ検索",
+        "hosting_production": "本番ホスティング",
         "indexing": "インデックス作成"
       },
       "models": {
@@ -13578,14 +13561,12 @@
         "workload": {
           "ciRunner": "CI ランナー",
           "hostedAgent": "Motir エージェントの実行",
-          "agentInstance": "エージェントインスタンス",
-          "index": "インデックスのコンテナー"
+          "agentInstance": "エージェントインスタンス"
         },
         "charge": {
           "ciRunner": "実行中に請求",
           "hostedAgent": "実行終了時に請求",
-          "agentInstance": "稼働期間ごとに請求",
-          "index": "Motir のコスト — 請求なし"
+          "agentInstance": "稼働期間ごとに請求"
         },
         "tile": {
           "of": " / {figure}",
@@ -13615,7 +13596,6 @@
           "ciUnknown": "CI の実行数は未集計(GitHub を読み取れませんでしたが、停止によってキャンセルされます)、<strong>{containers}</strong> {containers, plural, other {個の CI コンテナーを破棄}}",
           "hosted": "{count, plural, other {Motir エージェントの実行を終了}}",
           "instances": "{count, plural, other {エージェントインスタンスを休止}}",
-          "index": "{count, plural, other {インデックスのコンテナー}}は完了するまで残ります — インデックス作成は Motir 自身のコストであり、組織に請求されることはありません",
           "notSuspension": "<strong>これは停止措置ではありません。</strong>ブロックされるものはなく、{org} の次の CI の実行、エージェントの実行、エージェントの起動は通常の受け付けを通ります。",
           "asOf": "{time} 時点の件数です。停止は確定した時点で実行中のものに対して行われます。",
           "loading": "実行中のものを数えています…",
@@ -15026,10 +15006,6 @@
           "title": "CI ランナーイメージ",
           "subtitle": "フリートのすべての CI ジョブが動く環境。MOTIR_RUNNER_IMAGE で固定。最新は最新の runner-v* リリースです。"
         },
-        "indexer": {
-          "title": "インデクサーイメージ",
-          "subtitle": "コードグラフのすべてのインデックス実行が起動するもの。MOTIR_INDEXER_IMAGE で固定。最新は最新の indexer-v* リリースです。"
-        },
         "sandbox": {
           "title": "エージェントインスタンスイメージ",
           "subtitle": "エージェントが動くサンドボックス。ghcr.io/motir-co/motir-sandbox にプロファイルごとに 1 つのタグ。最新の cli-v* リリースですべてのプロファイルにタグがあれば完了です。"
@@ -15038,7 +15014,6 @@
       "imageName": {
         "hosted": "Motir エージェントイメージ",
         "runner": "CI ランナーイメージ",
-        "indexer": "インデクサーイメージ",
         "sandbox": "エージェントインスタンスイメージ"
       },
       "source": {
@@ -15069,17 +15044,13 @@
         "hosted": "固定中のビルドと最新ビルドの間に packages/cli へのコミットが {count, plural, other {# 件}}。",
         "runner": "({tags}) · {days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
         "runnerNoTags": "{days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
-        "indexer": "({tags}) · {days, plural, other {# 日}} · インデクサーへのコミット {commits, plural, other {# 件}}。",
-        "indexerNoTags": "{days, plural, other {# 日}} · インデクサーへのコミット {commits, plural, other {# 件}}。",
         "link": "コミットを見る"
       },
       "unreleased": {
         "title": "{release} 以降にマージ、どのリリースにも未収録",
-        "count": "infra/ci-runner への変更 {count, plural, other {# 件}}",
-        "indexerCount": "{count, plural, other {インデクサーへのマージ済み変更 # 件がその後に入りました}}"
+        "count": "infra/ci-runner への変更 {count, plural, other {# 件}}"
       },
       "releaseNeeded": "<strong>リリースが必要です。</strong>これらの変更は新しいランナーリリースでしかフリートに届かず、このページはリリースを作成しません。タグ <mono>{tag}</mono> をプッシュしてください。リリースレーンが公開し、この行に「最新を公開」が表示されます。",
-      "releaseNeededIndexer": "<strong>リリースが必要です。</strong>これらの変更は新しいインデクサーリリースでしかインデックス実行に届かず、このページはリリースを作成しません。motir-ai でタグ <mono>{tag}</mono> をプッシュしてください。そのリリースレーンが公開し、この行に「最新を公開」が表示されます。",
       "ami": {
         "title": "ランナー AMI · 読み取り専用",
         "current": "最新",
@@ -15112,14 +15083,10 @@
         "note": {
           "hosted": "Motir エージェントの固定ワークフローで最新の main ビルドを固定します。Web とワーカーがそれに切り替わります。",
           "runner": "ランナーの固定ワークフローで {release} を固定します。Web とワーカーがそれに切り替わります。",
-          "indexer": "インデクサー固定のプルリクエストで {release} を固定します。Web とワーカーがそれに切り替わります。",
           "sandbox": "{release} を再公開します。欠落している {count} 個のタグだけをプッシュし、本番環境では何も切り替わりません。",
           "hostedCurrent": "公開する新しいものはありません。本番環境は最新の main ビルドを固定しています。",
           "runnerCurrent": "公開する新しいものはありません。本番環境は最新のランナーリリースを固定しています。",
           "runnerReleaseNeeded": "公開する新しいものはありません。本番環境は最新リリースを固定しています。上のマージ済み変更には先にリリースが必要です。",
-          "indexerCurrent": "公開する新しいものはありません。本番環境は最新のインデクサーリリースを固定しています。",
-          "indexerReleaseNeeded": "公開する新しいものはありません。本番環境は最新のインデクサーリリースを固定しています。上のマージ済み変更には先にリリースが必要です。",
-          "indexerNotRead": "固定と最新リリースの両方が読み取れるまで、「最新を公開」はオフのままです。",
           "sandboxCurrent": "公開する新しいものはありません。すべてのプロファイルに最新リリースのタグがあります。",
           "sandboxOld": "{release} は欠落タグだけを再プッシュできるようになる前に作成されたため、再実行するとすべてのタグを再プッシュしてしまいます。代わりに新しい cli-v* リリースを作成してください。",
           "running": "このイメージの公開ワークフローがすでに実行中です。終了するまで「最新を公開」は無効です。",
@@ -15137,21 +15104,12 @@
         "sandboxFrom": "{version} のタグ {total} 個中 {published} 個",
         "hostedBody": "Motir エージェントの固定ワークフローを開始します。MOTIR_HOSTED_AGENT_IMAGE を最新ビルドに移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わり</strong>、切り替え後に開始した Motir エージェントの実行は新しいイメージで起動します。",
         "runnerBody": "ランナーの固定ワークフローを開始します。MOTIR_RUNNER_IMAGE を {release} に移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わります</strong>。ランナー AMI は変更しません。",
-        "indexerBody": "インデクサー固定のプルリクエストを開きます。これは MOTIR_INDEXER_IMAGE を {release} に移し、マージ待ちのキューに入ります。そのデプロイが<strong>Web とワーカーを切り替え</strong>、切り替え後に始まるインデックス実行は新しいイメージを起動します。すでに実行中のものは起動したイメージのまま終了します。",
         "sandboxBody": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。{published} はすでに公開済みのため再プッシュしません。<strong>本番環境では何も切り替わりません。</strong>",
         "sandboxBodyNonePublished": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。<strong>本番環境では何も切り替わりません。</strong>"
       },
       "progress": {
         "title": "公開中です。",
         "body": "公開ワークフローが実行中です。終了するとこの行が更新されます。",
-        "indexerQueued": {
-          "title": "固定のプルリクエストをキューに入れました。",
-          "body": "マージキューでマージされ、そのデプロイが Web とワーカーを切り替えます。進行に合わせてこの行が更新されます。"
-        },
-        "indexerRolling": {
-          "title": "Web とワーカーを切り替え中です。",
-          "body": "固定のプルリクエストがマージされ、そのデプロイが Web とワーカーを {release} に移しています。切り替えが終わると、新しいインデックス実行がそれを起動します。"
-        },
         "started": "· {age}に {email} が開始",
         "startedNoActor": "· {age}に開始",
         "button": "公開中…"
@@ -15170,7 +15128,6 @@
       "workflow": {
         "hosted": "Motir エージェントの固定",
         "runner": "ランナーの固定",
-        "indexer": "インデクサーの固定",
         "sandbox": "サンドボックスリリース {tag}",
         "run": "{workflow} · 実行 #{number}",
         "runNoNumber": "{workflow} · 実行"
@@ -15187,26 +15144,7 @@
       },
       "unset": {
         "title": "ここでは未設定",
-        "body": "このデプロイでは {variable} が設定されていないため、比較する固定がありません。",
-        "indexerBody": "このデプロイでは MOTIR_INDEXER_IMAGE が設定されていないため、このインストールはインデックスを作成しません。コードグラフのインデックス実行は始まらず、比較する固定もありません。"
-      },
-      "notRead": {
-        "pin": {
-          "title": "固定を読み取れませんでした。",
-          "body": "MOTIR_INDEXER_IMAGE が示すダイジェストについて ECR が応答しなかったため、比較されず、ここにあるものは最新を意味しません。"
-        },
-        "newest": {
-          "title": "リリースを読み取れませんでした。",
-          "body": "motir-ai の indexer-v* リリースについて GitHub が応答しなかったため、固定は何とも比較されません。"
-        },
-        "newestEcr": {
-          "title": "リリースを読み取れませんでした。",
-          "body": "インデクサーリポジトリの indexer-* リリースタグについて ECR が応答しなかったため、固定は何とも比較されません。"
-        },
-        "history": {
-          "title": "マージ済みの変更を読み取れませんでした",
-          "body": "motir-ai のコミット履歴について GitHub が応答しなかったため、どのリリースにも含まれない変更は一覧表示されません。上の固定と最新リリースは引き続き比較されます。"
-        }
+        "body": "このデプロイでは {variable} が設定されていないため、比較する固定がありません。"
       },
       "loading": "{image}を読み込み中",
       "publishError": {

@@ -76,6 +76,7 @@ const CHARGED = [
   'agent_storage',
   'ci',
   'search',
+  'hosting_production',
 ] as const;
 const ALL = [...CHARGED, 'indexing'] as const;
 /** Credits per unit of scale, per charged category. */
@@ -87,6 +88,7 @@ const RATE: Record<(typeof CHARGED)[number], number> = {
   agent_storage: 1,
   ci: 2,
   search: 4,
+  hosting_production: 3,
 };
 /** What a credit cost Motir, in micro-dollars, and indexing's seconds and cost per scale. */
 const COST_PER_CREDIT = 4_350;
@@ -140,7 +142,9 @@ function categories(scale: number) {
     usageQuantity:
       category === 'indexing'
         ? INDEXING_SECONDS * scale
-        : category === 'planning_tokens' || category === 'agent_tokens'
+        : category === 'planning_tokens' ||
+            category === 'agent_tokens' ||
+            category === 'hosting_production'
           ? 0
           : RATE[category] * scale * 60,
     inputTokens:

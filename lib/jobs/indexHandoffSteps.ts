@@ -27,7 +27,7 @@ import {
   pauseIndexingRepo,
   settleIndexingRepo,
   type IndexFleetJobId,
-} from './indexFleetSteps';
+} from './indexRepoRow';
 import type { JobServices } from './services';
 
 // THE INDEX HANDOFF — `system.code-graph-index` and `system.code-graph-refresh`
@@ -218,7 +218,7 @@ export async function runIndexHandoffSteps(
   // ⚠️ BOTH GATES BEFORE ANYTHING IS CLAIMED OR SENT. A stop is a recorded pause and
   // a succeeded no-op with no `repoRef`, which the catch-up sweep re-asks.
   const allowance = await ctx.step.run('index-allowance', () =>
-    services.codeGraphIndexDispatch.askIndexAllowance(target.organizationId),
+    services.codeGraphIndexAllowance.askIndexAllowance(target.organizationId),
   );
   if (!allowance.proceed) {
     await pauseIndexingRepo(target.repoRef, target.organizationId, allowance.reason);

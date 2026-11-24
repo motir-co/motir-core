@@ -381,7 +381,7 @@ export const fleetInFlightSlotRepository = {
    * filter `expiresAt > now` — and it was written when counting was the only
    * thing this table decided. MOTIR-2160 then added a read that decides on a
    * row's mere EXISTENCE ({@link findByRef}, in
-   * `codeGraphIndexAdmissionService.admit`), and from that commit an expired row
+   * the index admission's `admit`, deleted with MOTIR-12036), and from that commit an expired row
    * refused every future admission for its `(workload, ref)` — permanently,
    * because nothing called this method. Measured: one repository's code-graph
    * refresh at a 100% failure rate for a day behind a row that had expired 19

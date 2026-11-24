@@ -35,7 +35,7 @@ import {
 // STORY MOTIR-9366's INTEGRATION GATE, SEAMS HALF (MOTIR-9656). The reconcile →
 // state pass → admission → caps chain the Host gate (MOTIR-9591,
 // `hostOwnAccountsIntegration.test.ts`) proves for a `host` org, walked for a 600k
-// and a 2,400k org: three AWS accounts as four rows, raises at targets DERIVED from
+// and a 2,400k org: three AWS accounts as three rows (MOTIR-12038), raises at targets DERIVED from
 // the Host bases and the rung's pool (`ownAccountRaiseTargetVcpu`), unchanged
 // across repeated passes; the floor until a grant, granted ÷ 2 after; no
 // non-owner job ever on a rung org's account; an upgrade from Host reusing the
@@ -67,8 +67,6 @@ const { fleetShardAdmissionService, OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND } =
   await import('@/lib/services/fleetShardAdmissionService');
 const { fleetCeilingService } = await import('@/lib/services/fleetCeilingService');
 const { ciRunnerAdmissionService } = await import('@/lib/services/ciRunnerAdmissionService');
-const { codeGraphIndexAdmissionService } =
-  await import('@/lib/services/codeGraphIndexAdmissionService');
 const { fleetShardOrchestratorService } =
   await import('@/lib/services/fleetShardOrchestratorService');
 const { fleetShardService } = await import('@/lib/services/fleetShardService');
@@ -79,12 +77,7 @@ const { projectsService } = await import('@/lib/services/projectsService');
 type Ec2Fake = Ec2Api;
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 
-const KINDS: FleetWorkloadKind[] = [
-  'ci_runner',
-  'hosted_agent',
-  'code_graph_index',
-  'agent_instance',
-];
+const KINDS: FleetWorkloadKind[] = ['ci_runner', 'hosted_agent', 'agent_instance'];
 const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
@@ -101,7 +94,6 @@ const SESSION: AwsSessionCredentials = {
 };
 const T0 = new Date('2026-10-26T12:00:00.000Z');
 const MINUTE = 60_000;
-const INDEX_TIMEOUT_MS = 30 * MINUTE;
 
 let github: GithubWorld;
 let organization: FakeOrganization;
@@ -314,32 +306,6 @@ async function ciJob(tenant: Tenant) {
   return { intentId: intent.id, landed };
 }
 
-/** An index run of one repository, through the index gate. */
-async function indexRun(tenant: Tenant) {
-  seq += 1;
-  const request = {
-    projectId: tenant.projectId,
-    repoRef: `acme/repo-${seq}`,
-    dispatchId: `dispatch-${seq}`,
-    workspaceId: tenant.workspaceId,
-    organizationId: tenant.organizationId,
-    containerTimeoutMs: INDEX_TIMEOUT_MS,
-  };
-  const verdict = await codeGraphIndexAdmissionService.admit(request, now);
-  const landed: Landed =
-    verdict.outcome === 'admitted'
-      ? { shardId: verdict.admission.shardId ?? null }
-      : verdict.outcome === 'deferred'
-        ? { deferred: verdict.reason, detail: verdict.detail }
-        : { deferred: verdict.outcome, detail: '' };
-  await check('code_graph_index', tenant.organizationId, landed);
-  const slotRef = verdict.outcome === 'admitted' ? verdict.admission.slotRef : null;
-  return {
-    landed,
-    release: () => slotRef && codeGraphIndexAdmissionService.release(slotRef, request.dispatchId),
-  };
-}
-
 /** An agent instance's placement; a landed one counts as running there. */
 async function agentInstance(tenant: Tenant): Promise<Landed> {
   const placement = await withSystemContext((tx) =>
@@ -441,7 +407,6 @@ beforeAll(async () => {
   const ids: Record<FleetWorkloadKind, string> = {
     ci_runner: '111122224441',
     hosted_agent: '111122224442',
-    code_graph_index: '111122224443',
     agent_instance: '111122224444',
   };
   for (const kind of KINDS) {
@@ -494,7 +459,7 @@ const REMOVED = 'pool_250k';
 const SLOT_OF: Partial<Record<FleetWorkloadKind, HostAccountSlot>> = {
   ci_runner: 'ci_runner',
   hosted_agent: 'agent_runner',
-  code_graph_index: 'merged',
+  agent_instance: 'merged',
 };
 /** The three raises a plan's accounts file, derived from the Host bases and its pool. */
 function targetsFor(planKey: string): [FleetWorkloadKind, number][] {
@@ -526,11 +491,12 @@ describe('a 600k and a 2,400k org buy their rung', () => {
   it('the targets are the Host bases scaled by the pool — once, the story’s figures', () => {
     expect(largerPoolPlans().map((p) => p.key)).toEqual(expect.arrayContaining([RUNG, TOP]));
     expect(ownAccountPoolCredits(HOST_PLAN_KEY)).toBe(hostMonthlyPlanCredits());
-    expect(targetsFor(RUNG).map(([, v]) => v)).toEqual([400, 120, 64]);
-    expect(targetsFor(TOP).map(([, v]) => v)).toEqual([1600, 120, 256]);
+    // Sorted by kind: agent_instance (the merged account), ci_runner, hosted_agent.
+    expect(targetsFor(RUNG).map(([, v]) => v)).toEqual([120, 400, 64]);
+    expect(targetsFor(TOP).map(([, v]) => v)).toEqual([120, 1600, 256]);
   });
 
-  it('the reconcile and state pass make three AWS accounts as four rows, three raises at the derived targets', async () => {
+  it('the reconcile and state pass make three AWS accounts as three rows, three raises at the derived targets', async () => {
     top = await seedTenant();
     await setPlan(rung.organizationId, RUNG);
     await setPlan(top.organizationId, TOP);
@@ -543,13 +509,12 @@ describe('a 600k and a 2,400k org buy their rung', () => {
       [top, TOP],
     ] as const) {
       const rows = await ownRows(tenant.organizationId);
-      expect(rows.map((r) => r.fleetKind).sort(), key).toEqual([...KINDS].sort());
+      // The merged account is its one agent_instance row (MOTIR-12038).
+      expect(rows.map((r) => r.fleetKind).sort(), key).toEqual(
+        ['agent_instance', 'ci_runner', 'hosted_agent'].sort(),
+      );
       expect(rows.every((r) => r.role === 'org_owned')).toBe(true);
       expect(await awsAccounts(tenant.organizationId), key).toBe(3);
-      const merged = rows.filter(
-        (r) => r.fleetKind === 'code_graph_index' || r.fleetKind === 'agent_instance',
-      );
-      expect(new Set(merged.map((r) => r.awsAccountId)).size, key).toBe(1);
       expect(await raisesOf(tenant.organizationId), key).toEqual(targetsFor(key));
       expect(
         rows.every((r) => r.quotaRequestedAt !== null),
@@ -582,9 +547,6 @@ describe('a 600k and a 2,400k org buy their rung', () => {
       const job = await ciJob(tenant);
       expect(job.landed).toEqual(on(shared.ci_runner!));
       await finishCi([job.intentId]);
-      const index = await indexRun(tenant);
-      expect(index.landed).toEqual(on(shared.code_graph_index!));
-      await index.release();
       expect(await agentInstance(tenant)).toEqual(on(shared.agent_instance!));
     }
     agents.clear();
@@ -648,13 +610,11 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
     await finishCi([job.intentId]);
   });
 
-  it('the 600k merged account granted: both rows live together, 10 index spots kept beside the org’s agents', async () => {
-    await answer(rung.organizationId, 'code_graph_index', 'APPROVED', 120);
+  it('the 600k merged account granted: its row goes live, the org’s agents fill it', async () => {
+    await answer(rung.organizationId, 'agent_instance', 'APPROVED', 120);
     await statePass();
-    const index = await row(rung.organizationId, 'code_graph_index');
     const hoster = await row(rung.organizationId, 'agent_instance');
-    expect([index.state, index.liveAt]).toEqual([hoster.state, hoster.liveAt]);
-    expect(index.liveAt).not.toBeNull();
+    expect(hoster.liveAt).not.toBeNull();
 
     const perOrg = (await caps(rung.organizationId)).agentsPerOrg;
     const placed: Landed[] = [];
@@ -664,15 +624,6 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
       deferred: 'shard_capacity',
       detail: ownWait('agent_instance'),
     });
-
-    const runs = [];
-    for (let i = 0; i < 11; i++) runs.push(await indexRun(rung));
-    expect(runs.slice(0, 10).map((r) => r.landed)).toEqual(Array(10).fill(on(index)));
-    expect(runs[10]!.landed).toEqual({
-      deferred: 'pool_full',
-      detail: ownWait('code_graph_index'),
-    });
-    for (const r of runs) await r.release();
     agents.set(hoster.id, 0);
   });
 });
@@ -803,9 +754,6 @@ describe('a 600k org downgraded to max_x2 and back', () => {
     const job = await ciJob(rung);
     expect(job.landed).toEqual(on(shared.ci_runner!));
     await finishCi([job.intentId]);
-    const index = await indexRun(rung);
-    expect(index.landed).toEqual(on(shared.code_graph_index!));
-    await index.release();
     expect(await agentInstance(rung)).toEqual(on(shared.agent_instance!));
     await reconcile();
     await statePass();

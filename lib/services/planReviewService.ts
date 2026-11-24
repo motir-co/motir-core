@@ -688,7 +688,9 @@ async function countArrivalLevel(
  * ⚠️ A FOLDER IS A LEVEL (Bug MOTIR-12144; Bug MOTIR-5782), and so the ROOT is a
  * level WITH folders (Bug MOTIR-12148):
  * - `folder:<id>` — the cards FILED in that folder (always roots, since the CHECK
- *   keeps `parentId` and `folderId` apart). Its child folders are not counted yet
+ *   keeps `parentId` and `folderId` apart) plus one node per CHILD folder: the
+ *   canvas's folder-level read returns that folder's child folders as nodes beside
+ *   its cards, so a folder holding many sub-folders draws more than its cards
  *   (Bug MOTIR-12161).
  * - the root (`null`) — see {@link countRootLevelNodes}.
  * - a work item's id — its children. A work item's children are never folders,
@@ -703,18 +705,25 @@ async function countCommittedLevelNodes(
 ): Promise<CommittedLevelNodes> {
   if (levelKey === null) return countRootLevelNodes(projectId, workspaceId, tx, items);
   const folderId = folderIdFromNodeId(levelKey);
-  const workItems =
-    folderId !== null
-      ? await workItemRepository.countProjectTreeLevel(
-          projectId,
-          workspaceId,
-          null,
-          null,
-          tx,
-          undefined,
-          { kind: 'folder', folderId },
-        )
-      : await workItemRepository.countSiblingsInWorkspace(projectId, levelKey, workspaceId, tx);
+  if (folderId !== null) {
+    const workItems = await workItemRepository.countProjectTreeLevel(
+      projectId,
+      workspaceId,
+      null,
+      null,
+      tx,
+      undefined,
+      { kind: 'folder', folderId },
+    );
+    const folders = await folderRepository.countLevel(projectId, workspaceId, folderId, tx);
+    return { workItems, folders, grouped: 0 };
+  }
+  const workItems = await workItemRepository.countSiblingsInWorkspace(
+    projectId,
+    levelKey,
+    workspaceId,
+    tx,
+  );
   return { workItems, folders: 0, grouped: 0 };
 }
 

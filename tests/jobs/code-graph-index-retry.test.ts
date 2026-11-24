@@ -3,12 +3,12 @@
 // and an attempt cap. Against a REAL Postgres: the repository rows, the claimed
 // `job_run` rows, the live `job_queue` rows and the conditional claim are real;
 // only the enqueue is an injected leaf, except in the end-to-end case, which
-// drives the shipped `system.code-graph-index` job on the fake orchestrator.
+// drives the shipped `system.code-graph-index` job's handoff.
 
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { fleetCodeGraphIndex as codeGraphIndex } from '../helpers/fleetIndexJobs';
+import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import {
   codeGraphIndexCatchUpService,
@@ -22,19 +22,11 @@ import { deriveRefreshFailing } from '@/lib/codeGraph/refreshReason';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import * as indexEnqueue from '@/lib/github/indexEnqueue';
-import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
-import {
-  containerExitsWith,
-  driveIndexFleetFast,
-  indexAllowanceWorld,
-  indexEventFor,
-  resetTarballBodyTrap,
-  seedIndexWorkspace,
-  stubIndexFleet,
-} from '../helpers/indexFleet';
+import { indexEventFor, seedIndexWorkspace } from '../helpers/indexFleet';
+import { handoffWorld, publishedAt, stubIndexHandoff } from '../helpers/indexHandoff';
 
 const GRAPH_SHA = 'a'.repeat(40);
 const MOVED_SHA = 'b'.repeat(40);
@@ -45,18 +37,13 @@ beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
   await adminDb.jobQueueRun.deleteMany({});
-  await adminDb.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
-  fakeOrchestrator.reset();
-  resetTarballBodyTrap();
-  driveIndexFleetFast();
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
 afterAll(async () => {
@@ -142,7 +129,6 @@ describe('the reproduction — the paused pass alone never sees a terminally fai
       check: async () => null,
       enqueueRefresh: async () => {},
       enqueueIndex: async () => {},
-      poolHasRoom: async () => true,
     };
     const paused = await codeGraphIndexCatchUpService.catchUp({ deps: pausedDeps });
     expect(paused.scanned).toBe(0);
@@ -227,9 +213,10 @@ describe('AC 1 — a first index after the backoff, and indexed on success', () 
     await codeGraphIndexCatchUpService.retryFailed({ deps, now: NOW });
     expect(indexes).toHaveLength(1);
 
-    stubIndexFleet();
-    indexAllowanceWorld.checkOutcome = 'ok';
-    containerExitsWith(0);
+    stubIndexHandoff();
+    // The handoff indexes at the live head, which moved past the graph.
+    handoffWorld.head = MOVED_SHA;
+    handoffWorld.statuses = [publishedAt(MOVED_SHA)];
     const sent = indexes[0]!;
     const { result } = await new JobTestEngine({ function: codeGraphIndex }).execute({
       events: [
@@ -526,7 +513,7 @@ describe('a re-dispatch nobody ever claimed is LOST, and re-sent after its grace
     await adminDb.githubRepo.update({
       where: { id: seeded.repoId },
       data: {
-        indexPausedReason: 'paused_index_pool_full',
+        indexPausedReason: 'paused_index_no_credit',
         indexPausedAt: longAgo(600),
         indexRetryAttempts: 1,
         indexRetryDispatchedAt: longAgo(24 * 60),

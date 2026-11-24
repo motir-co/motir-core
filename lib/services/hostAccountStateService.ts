@@ -98,10 +98,11 @@ async function providerNetwork(account: FleetShardDTO): Promise<void> {
   });
 }
 
-/** The row an account's network was built for: the one it was created for — the
- *  merged account's indexer row, which the reconcile creates first. */
+/** The row an account's network was built for. Since the merged account became
+ *  one `agent_instance` row (MOTIR-12038) and its indexer row left with the kind
+ *  (MOTIR-12041), an account has the one row it was created for. */
 function accountRow(rows: readonly FleetShard[]): FleetShard {
-  return rows.find((row) => row.fleetKind === 'code_graph_index') ?? rows[0]!;
+  return rows[0]!;
 }
 
 /** The earliest time any row of the account already holds for `column`. */

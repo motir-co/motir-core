@@ -1,5 +1,5 @@
 import { useFormatter, useTranslations } from 'next-intl';
-import { Folder, Layers, Server, Sparkles, type LucideIcon } from 'lucide-react';
+import { Layers, Server, Sparkles, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/Card';
 import type { PlatformRole } from '@/generated/prisma/client';
@@ -23,8 +23,7 @@ import { StopContainersDialog } from './StopContainersDialog';
  *
  * ⚠️ THE SERVER DECIDES WHETHER THE BUTTON IS LIVE; the island only collects the
  * reason and shows the result. `canStop` = `superadmin` AND something chargeable
- * is running (CI runners + hosted agent runs + agent instances — index containers
- * are never stopped, so they never make the control live). The role is enforced
+ * is running (CI runners + hosted agent runs + agent instances). The role is enforced
  * again by `stopContainersAction` and by the service, so the disabled control is
  * presentation, never the gate.
  *
@@ -49,14 +48,13 @@ export interface OrgFleetCardProps {
 }
 
 const TILES: {
-  key: 'ciRunner' | 'hostedAgent' | 'agentInstance' | 'index';
+  key: 'ciRunner' | 'hostedAgent' | 'agentInstance';
   workload: keyof FleetOrgRowDTO['byWorkload'];
   icon: LucideIcon;
 }[] = [
   { key: 'ciRunner', workload: 'ci_runner', icon: Layers },
   { key: 'hostedAgent', workload: 'hosted_agent', icon: Sparkles },
   { key: 'agentInstance', workload: 'agent_instance', icon: Server },
-  { key: 'index', workload: 'code_graph_index', icon: Folder },
 ];
 
 /**
@@ -64,15 +62,14 @@ const TILES: {
  * cap (the plan's, or a staff override), hosted runs to the parallel-run figure.
  * Agent instances have none here: the tile counts RUNNING machines, and the plan's
  * org figure counts LIVE agents, running or asleep (MOTIR-9954), so pairing the two
- * would misread — the plan line names that figure instead. Indexing, an exempt org
- * and an unknown plan have none either, so the tile shows a bare count — never a
- * default.
+ * would misread — the plan line names that figure instead. An exempt org and an
+ * unknown plan have none either, so the tile shows a bare count — never a default.
  */
 export function tileFigure(
   plan: FleetOrgPlanDTO,
   key: (typeof TILES)[number]['key'],
 ): { figure: number; override: boolean } | null {
-  if (key === 'index' || key === 'agentInstance' || plan.kind === 'plan_unknown') return null;
+  if (key === 'agentInstance' || plan.kind === 'plan_unknown') return null;
   if (plan.kind === 'exempt') {
     return key === 'ciRunner' && plan.ciBurstOverride !== null
       ? { figure: plan.ciBurstOverride, override: true }
@@ -88,7 +85,7 @@ export function tileFigure(
   }
 }
 
-/** What a stop would act on — index containers are deliberately left out. */
+/** What a stop would act on: everything the card counts. */
 export function stoppableCount(row: FleetOrgRowDTO): number {
   return row.byWorkload.ci_runner + row.byWorkload.hosted_agent + row.byWorkload.agent_instance;
 }
@@ -106,7 +103,7 @@ export function OrgFleetCard({
 }: OrgFleetCardProps) {
   const t = useTranslations('platformAdmin.tenant.fleet');
   const format = useFormatter();
-  const running = stoppableCount(row) + row.byWorkload.code_graph_index;
+  const running = stoppableCount(row);
   const isSuperadmin = role === 'superadmin';
   const canStop = isSuperadmin && stoppableCount(row) > 0;
   const footNoteId = `org-fleet-foot-${orgId}`;
@@ -164,16 +161,12 @@ export function OrgFleetCard({
         </div>
       }
     >
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {TILES.map(({ key, workload, icon: Icon }) => (
           <div
             key={key}
             data-testid={`org-fleet-tile-${key}`}
-            className={
-              key === 'index'
-                ? 'flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding)'
-                : 'flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)'
-            }
+            className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
           >
             <span className="flex items-center gap-1 font-sans text-xs font-medium text-(--el-text-secondary)">
               <Icon aria-hidden className="h-3.5 w-3.5" />

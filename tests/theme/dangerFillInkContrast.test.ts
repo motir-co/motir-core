@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PALETTE_IDS } from '@/lib/theme/palettes';
 import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
 import { contrast, flattenColorMix } from './colorMetrics';
+import { BLOCKED_TAB_TONE } from '@/components/planning/cardEdgeTab';
 
 // MOTIR-3664 — the danger BUTTON's own pairing, measured over the whole matrix.
 //
@@ -91,6 +92,17 @@ describe('the danger fill carries its own ink at AA, in every palette and theme'
       under,
       `\`--el-danger-text\` on \`--el-danger\` is the danger button's OWN pairing and must clear ${AA_TEXT}:1 everywhere.\n${table}\n`,
     ).toEqual([]);
+  });
+
+  it('the canvas BLOCKED TAB wears exactly the pairing measured above (MOTIR-12158)', () => {
+    // The "blocked elsewhere" tab (design MOTIR-12157 § "Colour") is the second
+    // carrier of this pairing, at 11px bold — normal-size text, so the same 4.5:1
+    // bar — and its floor is thin (amethyst light, 4.51:1 in the design's own
+    // table). Pinning its tone to the pair the matrix above measures means a
+    // palette edit that drops the pairing under AA fails here for the tab too,
+    // and a tab re-toned onto some other pair has to come and add its own arm.
+    const classes = BLOCKED_TAB_TONE.split(/\s+/).sort();
+    expect(classes).toEqual(['bg-(--el-danger)', 'text-(--el-danger-text)']);
   });
 
   it('`--el-danger` still clears the 3:1 graphics bar on every surface it borders', () => {
