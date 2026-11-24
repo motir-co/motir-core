@@ -4,7 +4,7 @@ import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { notificationFanInService } from '@/lib/services/notificationFanInService';
-import { EXHAUSTED_SUSPEND_AFTER_MS } from '@/lib/services/productionUsageService';
+import { EXHAUSTED_SUSPEND_AFTER_MS } from '@/lib/services/productionCreditBalanceService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
 // THE ADMINISTRATORS ARE TOLD WHEN THE CREDITS RUN OUT (MOTIR-12166 · Decision

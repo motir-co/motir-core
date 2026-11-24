@@ -100,9 +100,9 @@ export function databaseUnitQuantities(
   window: { start: Date; end: Date },
 ): UnitQuantity[] {
   const hours = Math.max(0, window.end.getTime() - window.start.getTime()) / 3_600_000;
-  // `DatabaseUsage.provider` names Neon only today; the AWS tenant database has
-  // no usage read yet (Decision MOTIR-12100, Consequences).
-  const aurora = (usage.provider as string) === 'aws';
+  // `aws` is the AWS target's Aurora cluster, read in its tenant account
+  // (MOTIR-12191); every other provider is the database port's Neon.
+  const aurora = usage.provider === 'aws';
   return used([
     {
       unit: aurora ? 'aurora_compute_hours' : 'neon_compute_hours',

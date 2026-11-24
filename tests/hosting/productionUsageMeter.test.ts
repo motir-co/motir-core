@@ -20,6 +20,7 @@ import { HOSTED_IDLE_SECONDS_DEFAULT } from '@/lib/hosting/idlePolicy';
 import type { HostingManifest } from '@/lib/hosting/manifest';
 import { linuxMinutesPerUnit, PRODUCTION_USAGE_RATES } from '@/lib/hosting/productionRates';
 import type { HostingTarget } from '@/lib/hosting/vocabulary';
+import { getAwsDatabaseUsageReader } from '@/lib/orchestrator/awsHosting';
 import { getDatabasePort, resetDatabaseFakes } from '@/lib/orchestrator/database';
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
@@ -143,6 +144,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -396,9 +398,112 @@ describe('the stop rules', () => {
     const live = await liveApp();
     await adminDb.hostedApplication.update({ where: { id: live.appId }, data: { target: 'aws' } });
     const usageSince = vi.spyOn(port('aws'), 'usageSince');
+    const auroraUsage = vi.spyOn(getAwsDatabaseUsageReader(), 'usageSince');
 
     expect((await meter.accrue()).slices).toBe(0);
     expect(usageSince).not.toHaveBeenCalled();
+    expect(auroraUsage).not.toHaveBeenCalled();
+  });
+
+  /** An AWS application whose organisation's tenant account is ready, and an
+   *  Aurora read answering `computeSeconds` ACU-seconds and `storageBytes` up
+   *  to `until` for every window (MOTIR-12191). */
+  async function awsAppWithAurora(computeSeconds: number, storageBytes: number, until: Date) {
+    const live = await liveApp();
+    await adminDb.hostedApplication.update({ where: { id: live.appId }, data: { target: 'aws' } });
+    await adminDb.hostingTenantAccount.create({
+      data: {
+        organizationId: live.organizationId,
+        awsAccountId: '210987654321',
+        state: 'ready',
+        region: 'us-east-1',
+      },
+    });
+    // The release's own units are pinned elsewhere; here it reports none.
+    vi.spyOn(port('aws'), 'usageSince').mockImplementation(async (handle, since) => ({
+      target: handle.target,
+      appRef: handle.appRef,
+      releaseId: handle.releaseId,
+      since,
+      until: since,
+      runningSeconds: 0,
+    }));
+    const aurora = vi
+      .spyOn(getAwsDatabaseUsageReader(), 'usageSince')
+      .mockImplementation(async ({ repositoryId }, since) => ({
+        provider: 'aws',
+        applicationRef: repositoryId,
+        since,
+        until,
+        computeSeconds,
+        storageBytes,
+      }));
+    return { live, aurora };
+  }
+
+  it('slices an AWS application’s Aurora compute and storage at the decision’s factors', async () => {
+    const liveAt = new Date();
+    const until = new Date(liveAt.getTime() + HOUR);
+    // 2 ACU for the hour, and 3 GiB stored.
+    const { live, aurora } = await awsAppWithAurora(2 * 3600, 3 * 2 ** 30, until);
+
+    const result = await meter.accrue({ now: () => until });
+
+    expect(result).toMatchObject({ slices: 2, failed: 0 });
+    expect(aurora).toHaveBeenCalledWith({ repositoryId: live.rowId }, live.liveAt);
+    const written = await slices(live.appId);
+    expect(written.map((s) => s.unit)).toEqual(['aurora_compute_hours', 'aurora_storage_gb_hours']);
+    const [compute, storage] = written;
+    expect(compute).toMatchObject({
+      sliceStart: live.liveAt,
+      sliceEnd: until,
+      releaseId: live.releaseId,
+    });
+    expect(compute!.quantity.toNumber()).toBeCloseTo(2, 9);
+    expect(compute!.credits.toNumber()).toBeCloseTo(
+      2 * linuxMinutesPerUnit('aurora_compute_hours'),
+      6,
+    );
+    expect(compute!.motirCostUsd.toNumber()).toBeCloseTo(
+      2 * PRODUCTION_USAGE_RATES.aurora_compute_hours.usdPerUnit,
+      9,
+    );
+    const storedHours = (until.getTime() - live.liveAt.getTime()) / HOUR;
+    expect(storage!.quantity.toNumber()).toBeCloseTo(3 * storedHours, 6);
+    expect(storage!.credits.toNumber()).toBeCloseTo(
+      3 * storedHours * linuxMinutesPerUnit('aurora_storage_gb_hours'),
+      6,
+    );
+  });
+
+  it('writes no Aurora slice for a replayed window, and reads on from the last one', async () => {
+    const liveAt = new Date();
+    const until = new Date(liveAt.getTime() + HOUR);
+    const { live, aurora } = await awsAppWithAurora(3600, 2 ** 30, until);
+    await meter.accrue({ now: () => until });
+
+    // The read has nothing newer than the window already sliced.
+    expect((await meter.accrue({ now: () => until })).slices).toBe(0);
+
+    expect(await slices(live.appId)).toHaveLength(2);
+    expect(aurora.mock.calls.at(-1)?.[1]).toEqual(until);
+  });
+
+  it('writes no Aurora slice while the cluster has nothing to report', async () => {
+    const live = await liveApp();
+    await adminDb.hostedApplication.update({ where: { id: live.appId }, data: { target: 'aws' } });
+    await adminDb.hostingTenantAccount.create({
+      data: {
+        organizationId: live.organizationId,
+        awsAccountId: '210987654321',
+        state: 'ready',
+        region: 'us-east-1',
+      },
+    });
+
+    // The fake reader measures nothing: its window ends where it starts.
+    expect((await meter.accrue()).slices).toBe(0);
+    expect(await slices(live.appId)).toEqual([]);
   });
 
   it('counts one application’s failure and moves on', async () => {
@@ -448,6 +553,30 @@ describe('the daily charge', () => {
       { id: live.appId, workspaceId: live.fx.workspaceId, organizationId: live.organizationId },
       now,
     );
+    expect(debits).toHaveLength(1);
+  });
+
+  // MOTIR-12172 — the cases above read the real clock, so the last UTC hour
+  // (where a window ending an hour ahead is tomorrow) and the first one (where
+  // a day back is barely yesterday) were only ever exercised by whoever ran the
+  // suite then. Pin the clock to each edge and charge the fixture's day there.
+  it.each([
+    ['in the last UTC hour', '2026-11-23T23:30:00.000Z'],
+    ['in the first UTC hour', '2026-11-24T00:30:00.000Z'],
+  ])('charges the fixture’s ended day when the pass runs %s', async (_edge, at) => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(at) });
+    const live = await slicedYesterday();
+    const now = new Date();
+
+    const charged = await meter.chargeEndedDays(
+      { id: live.appId, workspaceId: live.fx.workspaceId, organizationId: live.organizationId },
+      now,
+    );
+
+    const [slice] = await slices(live.appId);
+    expect(slice!.chargeDay.getTime()).toBeLessThan(Date.parse(at.slice(0, 10)));
+    expect(charged).toBe(1);
+    expect(slice!.chargeState).toBe('charged');
     expect(debits).toHaveLength(1);
   });
 

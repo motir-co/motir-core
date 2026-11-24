@@ -39,7 +39,24 @@ export interface TenantMetricSum {
   readonly end: Date;
 }
 
+/** A metric read as one statistic per fixed period (MOTIR-12191). */
+export interface TenantMetricSeriesQuery extends TenantMetricSum {
+  readonly stat: 'Average' | 'Maximum';
+  /** A multiple of 60, at least the resolution CloudWatch still keeps for
+   *  `start`'s age (1 minute up to 15 days, 5 minutes up to 63, then 1 hour). */
+  readonly periodSeconds: number;
+}
+
+/** One period's statistic, stamped with the period's start. */
+export interface TenantMetricPoint {
+  readonly at: Date;
+  readonly value: number;
+}
+
 export interface TenantCloudWatch {
   /** The metric's sum over `[start, end)`; zero when nothing was recorded. */
   sumMetric(query: TenantMetricSum): Promise<number>;
+  /** The periods of `[start, end)` that hold data, OLDEST FIRST; a period
+   *  nothing was recorded in is absent, not zero. */
+  metricPoints(query: TenantMetricSeriesQuery): Promise<TenantMetricPoint[]>;
 }
