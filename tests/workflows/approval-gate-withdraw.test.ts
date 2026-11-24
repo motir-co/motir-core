@@ -151,7 +151,7 @@ describe('`withdrawsPendingQuestion` — the predicate, on its own', () => {
     { key: 'done', category: 'done' as const },
     { key: 'cancelled', category: 'done' as const },
   ];
-  const keys = { reviewKey: 'in_review', implementedKey: null, approvedKey: null };
+  const keys = { reviewKey: 'in_review', implementedKey: null, approvedKey: null, toPlanKey: null };
   const w = (fromKey: string, toKey: string, system = false) =>
     withdrawsPendingQuestion({ fromKey, toKey, statuses, keys, system });
 

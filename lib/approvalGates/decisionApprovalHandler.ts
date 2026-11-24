@@ -23,6 +23,7 @@ import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository'
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { pageStoreFor } from '@/lib/pages';
 import { routingTargetId } from '@/lib/approvalGates/routing';
+import { decisionCorrectionAfterCommit } from './decisionCorrectionHook';
 import { applyGateTransition } from './gateTransition';
 import {
   workItemDeliveryRepository,
@@ -229,8 +230,10 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
     const identity = await this.resolveSubject(args);
     if (!identity) throw new ApprovalGateDecisionUnresolvableError('none');
     if (!identity.resolvable) throw new ApprovalGateDecisionUnresolvableError(identity.reason);
+    // THE CORRECTION MARK (MOTIR-12175) — after the decision commits, on both arms.
+    const afterCommit = decisionCorrectionAfterCommit(args.gate.id, args.ctx);
     if (identity.source !== 'page') {
-      return { statusWritten: null, statusDeferredReason: 'merge_writes_done' };
+      return { statusWritten: null, statusDeferredReason: 'merge_writes_done', afterCommit };
     }
 
     // THE PAGE ARM. Lock the card, then the page — the publish's order after the
@@ -244,15 +247,19 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
 
     if ((await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0) {
       // The merge writes `done`; `approved` is the companion merge gate's (clause 5).
-      return { statusWritten: null, statusDeferredReason: 'merge_writes_done' };
+      return { statusWritten: null, statusDeferredReason: 'merge_writes_done', afterCommit };
     }
     if (resolvedStatusKey === null) {
-      return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
+      return {
+        statusWritten: null,
+        statusDeferredReason: 'no_status_in_target_category',
+        afterCommit,
+      };
     }
     // `decidingGateId` exempts THIS gate from the approval-gate guard: it is still
     // `awaiting` here, the door writing the decision after the effect.
     await applyGateTransition(args, workItemId, resolvedStatusKey, { decidingGateId: gate.id });
-    return { statusWritten: resolvedStatusKey };
+    return { statusWritten: resolvedStatusKey, afterCommit };
   },
 
   /**

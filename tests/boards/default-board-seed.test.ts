@@ -26,6 +26,8 @@ const WORKFLOW_ORDER = [
   // because slot 4 is the last board column a laptop shows in full.
   'Implemented',
   'Planning',
+  // MOTIR-10139 — planned, but a decision it rests on was corrected since.
+  'To plan',
   'In Review',
   // MOTIR-5139 — a person's YES, between review and the merge.
   'Approved',

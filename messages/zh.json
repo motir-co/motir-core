@@ -738,6 +738,7 @@
       "in_progress": "进行中",
       "implemented": "已实现",
       "planning": "规划中",
+      "to_plan": "待规划",
       "in_review": "评审中",
       "approved": "已批准",
       "done": "已完成",

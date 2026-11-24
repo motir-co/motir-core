@@ -6,6 +6,7 @@ import {
   CircleDot,
   CircleDotDashed,
   CircleEllipsis,
+  CirclePause,
   Eye,
   XCircle,
   type LucideIcon,
@@ -132,6 +133,12 @@ const META_BY_KEY: Record<string, CanvasStatusMeta> = {
   // bare `Check` is the same distinction the item-page chip draws, so the two
   // surfaces tell the same story about the same pair.
   approved: { icon: CircleCheck, tint: 'bg-(--el-tint-sage)', text: 'text-(--el-text-strong)' },
+  // STOPPED FOR RE-PLANNING. The seven tints are each held, and falling back
+  // to the category would draw sky — In Progress's tag — on a card nobody is
+  // working. So it takes an EIGHTH, `--el-tint-clay`, the To plan hue quietened
+  // to a fill (base token block, no palette block), with `CirclePause`: the same
+  // glyph `StatusPill` gives it, so both chips tell the same story.
+  to_plan: { icon: CirclePause, tint: 'bg-(--el-tint-clay)', text: 'text-(--el-text-strong)' },
   done: { icon: Check, tint: 'bg-(--el-tint-mint)', text: 'text-(--el-text-strong)' },
   cancelled: { ...NEUTRAL, icon: XCircle },
 };

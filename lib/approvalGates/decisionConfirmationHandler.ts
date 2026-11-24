@@ -12,6 +12,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { pageStoreFor } from '@/lib/pages';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { decisionCorrectionAfterCommit } from './decisionCorrectionHook';
 import { applyGateTransition } from './gateTransition';
 
 // THE `decision_confirmation` HANDLER (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
@@ -99,11 +100,15 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
       await pageStoreFor(tx).lockPage(confirmedRecord.pageId);
       await pageVersionRepository.freezeVersion(confirmedRecord.versionId, gate.id, new Date(), tx);
     }
+    // THE CORRECTION MARK (MOTIR-12175) — after the confirmation commits. Confirm
+    // only: an overturn cancels the decision, and nothing was decided to mark against.
+    const afterCommit = decisionCorrectionAfterCommit(gate.id, args.ctx);
     if (resolvedStatusKey === null) {
       return {
         statusWritten: null,
         statusDeferredReason: 'no_status_in_target_category',
         confirmedRecord,
+        afterCommit,
       };
     }
     // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
@@ -114,7 +119,7 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
       resolvedStatusKey,
       { decidingGateId: gate.id },
     );
-    return { statusWritten: resolvedStatusKey, confirmedRecord };
+    return { statusWritten: resolvedStatusKey, confirmedRecord, afterCommit };
   },
 
   /**

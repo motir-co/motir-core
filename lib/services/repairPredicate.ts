@@ -102,6 +102,7 @@ function ladderKeysOf(statuses: readonly WorkflowStatusDto[]) {
     reviewKey: keyOf('in_review'),
     implementedKey: keyOf('implemented'),
     approvedKey: keyOf('approved'),
+    toPlanKey: keyOf('to_plan'),
   };
 }
 

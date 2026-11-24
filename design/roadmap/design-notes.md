@@ -823,6 +823,12 @@ and is deliberately distinct from each existing signal by **hue + shape**:
 >
 > A status with no row of its own still falls back to its CATEGORY, and an unrecognised one
 > to the neutral chip — an honest unknown rather than an impersonation of To Do.
+>
+> **And an EIGHTH (2026-11-24): `to_plan` takes `CirclePause` on `--el-tint-clay`**, a
+> `color-mix` of the To plan status hue into the surface, because the seven above were
+> spent. Measured in `design/boards/design-notes.md` § _To plan_: worst ΔE2000 9.9 against
+> the other seven plus `--el-muted` across all twenty-eight palette × theme contexts. Same
+> caveat: no suite re-runs it.
 
 An in-progress or done node is NOT ready (already started/finished); a to-do with an
 open blocker is NOT ready (the dim "To do" pill stays). The mock's panel 1 shows the

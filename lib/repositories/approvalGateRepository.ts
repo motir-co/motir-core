@@ -375,6 +375,25 @@ export const approvalGateRepository = {
       ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
   },
 
+  /**
+   * EVERY gate of one kind on one work item, OLDEST first (MOTIR-12175) — the gate
+   * history `decisionCorrectionMarkService` reads to tell a CORRECTED decision (an
+   * earlier gate sent back, or withdrawn because the document was republished)
+   * from one decided on its first ask. {@link findLatestByWorkItem} reads the same
+   * set and keeps one row; this keeps them all.
+   */
+  async listByWorkItemAndKind(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate[]> {
+    const client = tx ?? dbRead;
+    return client.approvalGate.findMany({
+      where: { workItemId, kind },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   async findLatestByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,

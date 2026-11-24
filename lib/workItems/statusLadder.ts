@@ -52,6 +52,15 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // Same defect, same file, same remedy as MOTIR-3229: a named key pulled out as
 // its own rung. `docs/decisions/status-derivation.md` §3 carries the amendment.
 
+// ⚠️ AND ONE KEY PULLED DOWN, NOT UP (MOTIR-12174). `to_plan` lives in the
+// `in_progress` category — that is what takes it out of both claim doors — but
+// it means PLANNED, NOT STARTED: its description went stale before anyone built
+// it. Ranked by its category it would sit at the IN PROGRESS rung, and an epic
+// over a story the mark moved would derive to In Progress, a false "started".
+// So it is pulled out the other way, to the `todo` rung. No new rung: it shares
+// To Do's, because for every reader of this scale (the upward recompute, the
+// container-claim gate, the pending-question withdrawal) it is the same fact.
+
 /** The rungs, in ascending order of "how far along". */
 export type LadderRung = 'todo' | 'in_progress' | 'implemented' | 'in_review' | 'approved' | 'done';
 
@@ -86,7 +95,7 @@ export const LADDER: ReadonlyArray<{
   { rung: 'todo', target: { key: 'todo', category: 'todo' } },
 ]);
 
-/** The THREE lifecycle keys the ladder pulls OUT of the `in_progress` category,
+/** The FOUR lifecycle keys the ladder pulls OUT of the `in_progress` category,
  *  because all of them live in it and none means what the others do. A project
  *  may have renamed any, so every reader resolves them rather than assuming. */
 export interface LadderKeys {
@@ -98,6 +107,10 @@ export interface LadderKeys {
    *  A project that never got the `approved` backfill passes `null` here and
    *  ranks exactly as it did before this rung existed. */
   readonly approvedKey: string | null;
+  /** The project's To plan status key, or null when it has none — MOTIR-12174.
+   *  Pulled DOWN to the `todo` rung rather than up; a project without the
+   *  backfill passes `null` and ranks exactly as before. */
+  readonly toPlanKey: string | null;
 }
 
 /** A project's {@link LadderKeys}, resolved from its status list by literal key. */
@@ -107,6 +120,7 @@ export function ladderKeysFrom(statuses: ReadonlyArray<{ key: string }>): Ladder
     reviewKey: keyOf('in_review'),
     implementedKey: keyOf('implemented'),
     approvedKey: keyOf('approved'),
+    toPlanKey: keyOf('to_plan'),
   };
 }
 
@@ -137,6 +151,8 @@ export function rankOfStatus(
   if (keys.approvedKey && statusKey === keys.approvedKey) return RUNG_RANK.approved;
   if (keys.reviewKey && statusKey === keys.reviewKey) return RUNG_RANK.in_review;
   if (keys.implementedKey && statusKey === keys.implementedKey) return RUNG_RANK.implemented;
+  // MOTIR-12174 — planned, not started, whatever its category says.
+  if (keys.toPlanKey && statusKey === keys.toPlanKey) return RUNG_RANK.todo;
   const status = statuses.find((s) => s.key === statusKey);
   if (!status) return RUNG_RANK.todo;
   if (status.category === 'done') return RUNG_RANK.done;
