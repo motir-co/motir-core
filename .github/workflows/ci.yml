@@ -1188,6 +1188,20 @@ jobs:
       # Vercel — which runs that script too — gets it as well; package.json
       # cannot carry a comment, which is why the reasoning lives at this call
       # site.
+      # The hosted runner's memory no longer holds `next build` (MOTIR-9799):
+      # every build lane of that story's branch died about a minute after the
+      # compile with "The runner has received a shutdown signal" and no error,
+      # with the type check skipped and with one page-data worker alike. Swap
+      # lets the post-compile steps page instead of the box killing the runner.
+      # A fleet runner sizes its own machine, so this is hosted-only.
+      - name: Add swap for next build
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then exit 0; fi
+          sudo fallocate -l 8G /mnt/next-build.swap
+          sudo chmod 600 /mnt/next-build.swap
+          sudo mkswap /mnt/next-build.swap
+          sudo swapon /mnt/next-build.swap
+          free -m
       - run: pnpm build
       # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
       # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly
