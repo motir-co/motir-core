@@ -637,6 +637,7 @@ async function persistEvidence(
   // the system approval's (Bug MOTIR-9415) — announced once it commits: both run in
   // this transaction and cannot.
   const appliedTransitions: AppliedGateTransition[] = [];
+  const systemAfterCommits: Array<() => Promise<void>> = [];
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
     // ⚠️ THE AUTHORITATIVE "DOES WORK WAIT ON THIS?" READ — INSIDE the write's own
     // transaction (MOTIR-5491; AMENDMENT 4 Q2). The callers pre-check the same
@@ -889,7 +890,13 @@ async function persistEvidence(
     // this service for the pin.
     if (systemApproves) {
       const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
-      await approvalGatesService.approveBySystem(raised.id, ctx, tx, appliedTransitions);
+      await approvalGatesService.approveBySystem(
+        raised.id,
+        ctx,
+        tx,
+        appliedTransitions,
+        systemAfterCommits,
+      );
     }
 
     // Re-read so the caller gets the evidence WITH its just-inserted assets.
@@ -897,6 +904,8 @@ async function persistEvidence(
     // statements above, and nothing between can remove it.
     return (await designEvidenceRepository.findById(evidence.id, tx))!;
   }).then(async (persisted) => {
+    // The system approval's post-commit work, after this commit (MOTIR-12175).
+    for (const afterCommit of systemAfterCommits) await afterCommit();
     await emitAppliedGateTransitions(appliedTransitions, ctx);
     // TO RESUME (MOTIR-7707): with design approval switched off the gate above was
     // approved by the system, which releases a parent run that stopped at this
