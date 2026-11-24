@@ -653,7 +653,9 @@ jobs:
     # Observed 4.1–4.6 min → 15 (~3.3x). `next build` grows with the app, so
     # this gets a multiple rather than the floor — the same reading `ci.yml`'s
     # own `build` job took, arrived at from THIS lane's runs.
-    timeout-minutes: 15
+    # MOTIR-9799: with the swap step the build pages instead of dying, and
+    # reached the artifact upload at ~11 min, which then ran into 15 → 25.
+    timeout-minutes: 25
     needs: membership
     # ⚠️ THE GATE LIVES HERE, ON `build`, AND NOT ON `acceptance` — deliberately.
     # `acceptance` already `needs: build`, so a skipped build skips the shards
@@ -1046,7 +1048,9 @@ jobs:
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 5.5–6.5 min on its first runs (PR #3776) → 15, the same ceiling
     # as the acceptance `build` it mirrors: one `pnpm build`, nothing else.
-    timeout-minutes: 15
+    # MOTIR-9799: with the swap step the build pages instead of dying, and
+    # reached the artifact upload at ~11 min, which then ran into 15 → 25.
+    timeout-minutes: 25
     needs: membership
     if: needs.membership.outputs.regression_run == 'true'
     env:
