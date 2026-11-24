@@ -236,9 +236,13 @@ test('a live app is looked after from its Production panel: logs, health and a c
     const read = await openRoom(page, seed.web);
     expect(read?.status()).toBe(200);
     expect(((await read!.json()) as { state: string }).state).toBe('unavailable');
-    await expect(logs(page).getByTestId('production-logs-unavailable')).toHaveText(
+    // The state box carries the message AND its own Try again button, so the message is
+    // read from its paragraph and the button is checked on its own.
+    const unavailable = logs(page).getByTestId('production-logs-unavailable');
+    await expect(unavailable.locator('p')).toHaveText(
       t.logs.unavailable.replaceAll('{target}', 'Fly'),
     );
+    await expect(unavailable.getByRole('button', { name: t.logs.retry })).toBeVisible();
     await beat();
     await setLogsUnavailable(seed.web, null);
   });
