@@ -30,10 +30,9 @@
 //
 // DETERMINISM (the coding convention § E2E): every merge awaits the webhook's 200 and its release
 // rows; every state the prober makes is awaited with `expect.poll` over the health, event and
-// notification rows before the page is loaded to show it; the secret's config redeploy is awaited
-// to its end before the first merge; every page load awaits its document; the
-// logs filter, the rollback and each idle switch arm `page.waitForResponse` before the action and
-// await its answer. `beat()` / `chapter()` are pacing only. No `waitForTimeout`, no resize.
+// notification rows before the page is loaded to show it; the config redeploy the secret's save
+// queues is withdrawn before it is due; every page load awaits its document; the logs filter, the
+// rollback and each idle switch arm `page.waitForResponse` before the action and await its answer. `beat()` / `chapter()` are pacing only. No `waitForTimeout`, no resize.
 import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, db } from './_helpers/db-reset';
@@ -52,7 +51,7 @@ import {
   accrueUsage,
   alignHostingClock,
   appendLogLines,
-  configRedeploySettled,
+  cancelConfigRedeploy,
   crashApp,
   crashEventsOf,
   crashNotificationsFor,
@@ -164,12 +163,9 @@ test('a live app is looked after from its Production panel: logs, health and a c
 }) => {
   acceptanceStory('MOTIR-9799');
   await setProductionSecret(seed, seed.web, 'STRIPE_SECRET_KEY', SECRET);
-  // The save queues a config redeploy that runs once 30 s pass quietly. Let it
-  // finish now, with nothing live, so it cannot redeploy the release the merges
-  // below put live and leave an extra release for Roll back to land on.
-  await expect
-    .poll(() => configRedeploySettled(seed.web), { timeout: 150_000, intervals: [2_000] })
-    .toBe(true);
+  // The save queues a config redeploy, due 30 s later, of whatever is live by
+  // then. Withdraw it, so the walk's releases are its own merges and rollback.
+  expect(await cancelConfigRedeploy(seed.web)).toBe(1);
   await signIn(page, seed.adminEmail, seed.password);
 
   await chapter(

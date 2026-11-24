@@ -114,24 +114,38 @@ export async function setProductionSecret(
 }
 
 /** The job that turns a saved production variable or secret into a redeploy
- *  (`lib/jobs/definitions/productionConfigRedeploy.ts`), and its debounce key. */
+ *  (`lib/jobs/definitions/productionConfigRedeploy.ts`). */
 const CONFIG_REDEPLOY_JOB = 'hosting/production-config-redeploy';
-const FINISHED_RUN_STATES = new Set(['succeeded', 'failed', 'cancelled']);
 
 /**
- * Whether every config-redeploy run a production save queued for `repo` has
- * finished. A save emits `environment.config.changed`, which the job worker
- * debounces for 30 s and then turns into a redeploy of whatever is live by then
- * (MOTIR-10032). A walk that saves a secret before its first merge waits for this
- * so the run ends `skipped_no_live_release` instead of redeploying a release the
- * walk made meanwhile (MOTIR-12182). False until the run has been queued.
+ * Cancel the config redeploy a production save queued for `repo`, before it is
+ * due, and answer how many runs were cancelled.
+ *
+ * A save emits `environment.config.changed`, and the job worker turns it, 30 s
+ * after the last save, into a redeploy of whatever is live by then (MOTIR-10032).
+ * A walk that saves a secret before its first merge would get that redeploy in
+ * the middle of its own release history, at a moment it does not control
+ * (MOTIR-12189). The value is stored either way; only the redeploy is withdrawn.
+ * The run is found through its event's repository, so a coalesced burst (whose
+ * row carries the latest event) is found too.
  */
-export async function configRedeploySettled(repo: ProductionRepo): Promise<boolean> {
-  const runs = await adminDb.jobQueueRun.findMany({
-    where: { jobId: CONFIG_REDEPLOY_JOB, debounceKey: `${repo.id}/production` },
-    select: { state: true },
+export async function cancelConfigRedeploy(repo: ProductionRepo): Promise<number> {
+  const events = await adminDb.jobEvent.findMany({
+    where: {
+      name: 'environment.config.changed',
+      data: { path: ['projectRepositoryId'], equals: repo.id },
+    },
+    select: { id: true },
   });
-  return runs.length > 0 && runs.every((r) => FINISHED_RUN_STATES.has(r.state));
+  const { count } = await adminDb.jobQueueRun.updateMany({
+    where: {
+      jobId: CONFIG_REDEPLOY_JOB,
+      eventId: { in: events.map((e) => e.id) },
+      state: 'pending',
+    },
+    data: { state: 'cancelled' },
+  });
+  return count;
 }
 
 /** One accrual pass, as the hourly job runs it. */
