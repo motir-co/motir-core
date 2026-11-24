@@ -5055,6 +5055,10 @@
      --color-destructive, the hue of the To fix tag the send-back puts on the card: the row
      says the card was refused and is now theirs to repair. Its own slot, as above. */
   --el-notif-review-sent-back: var(--color-destructive);
+  /* A PRODUCTION APP CRASHED or failed its health check (Story MOTIR-9799 · MOTIR-12113,
+     design/hosting/design-notes.md § Amendment 2026-11-23): --color-destructive, the hue
+     of the Crashed health pill and the crash event's glyph — a live app went down. */
+  --el-notif-production-crashed: var(--color-destructive);
   /* The organisation's credits went BELOW ZERO while its production apps run
      (MOTIR-12166, per design/hosting/design-notes.md, the credits-exhausted delta).
      --color-warning, not danger: the apps keep running and nothing is lost yet, but

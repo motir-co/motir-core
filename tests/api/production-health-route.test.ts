@@ -155,7 +155,12 @@ describe('GET …/production/health', () => {
     const res = await read('ACME', id);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ state: 'crashed', since: expect.any(String), condition: null });
+    expect(body).toMatchObject({
+      state: 'crashed',
+      since: expect.any(String),
+      condition: null,
+      healthCheckPath: '/api/health',
+    });
     expect(body.events).toEqual([
       {
         id: expect.any(String),
@@ -164,6 +169,7 @@ describe('GET …/production/health', () => {
         reason: 'exit code 1',
         lastLogLines: [{ at: expect.any(String), stream: 'app', message: 'panic' }],
         releaseId,
+        release: { commitSha: expect.stringMatching(/^[0-9a-f]{40}$/), state: 'live' },
       },
       {
         id: expect.any(String),
@@ -172,6 +178,7 @@ describe('GET …/production/health', () => {
         reason: 'exit code 2',
         lastLogLines: [{ at: expect.any(String), stream: 'app', message: 'panic' }],
         releaseId,
+        release: { commitSha: expect.stringMatching(/^[0-9a-f]{40}$/), state: 'live' },
       },
     ]);
     const times = body.events.map((e: { occurredAt: string }) => e.occurredAt);
@@ -186,6 +193,7 @@ describe('GET …/production/health', () => {
       state: null,
       since: null,
       condition: null,
+      healthCheckPath: null,
       events: [],
     });
     await goLive(id);

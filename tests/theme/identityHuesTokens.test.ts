@@ -71,6 +71,8 @@ describe('identity-hue element tokens map to their Tier-0 --color-* base', () =>
     '--el-notif-transitioned': '--color-accent-teal',
     // An org admin hibernated your agent (MOTIR-10368, the Fleet delta's token)
     '--el-notif-agent-hibernated': '--color-info',
+    // A production app crashed (MOTIR-12113, the live-app-ops delta's token)
+    '--el-notif-production-crashed': '--color-destructive',
     // The organisation's credits went below zero while its apps run (MOTIR-12166)
     '--el-notif-credits-exhausted': '--color-warning',
     // AI model dots (named family; deepseek decoupled from --el-type-subtask)

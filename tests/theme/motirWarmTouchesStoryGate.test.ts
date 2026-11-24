@@ -34,10 +34,12 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // Checking cues, MOTIR-11254), the same way.
 // And the `--el-editing` / `--el-fixing` pair (the planner's Editing and Fixing
 // cues, MOTIR-11362), the same way.
-// And `--el-notif-credits-exhausted` (the credits-exhausted notification hue,
-// MOTIR-12166), the same way.
+// And `--el-notif-production-crashed` (the production-crash notification hue,
+// MOTIR-12113), the same way.
 // And `--el-status-to-plan` / `--el-tint-clay` (the To plan status's hue and its
 // state-tag tint, MOTIR-12174), the same way.
+// And `--el-notif-credits-exhausted` (the credits-exhausted notification hue,
+// MOTIR-12166), the same way.
 // The four palettes MOTIR-10550 added (lagoon, olive, contrast, midnight) joined
 // the fixture at their resolved values when they were registered: a palette born
 // after the warm touches has no pre-change layer, so its row pins it from birth.

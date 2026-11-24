@@ -4761,7 +4761,7 @@
         "notFound": "To repozytorium nie jest już dla ciebie dostępne."
       },
       "readOnly": {
-        "note": "Widzisz każde wydanie. Tylko administratorzy projektu mogą wycofywać."
+        "note": "Widzisz każde wydanie, jego stan, logi i zużycie. Tylko administratorzy projektu mogą wycofywać lub zmieniać, kiedy aplikacja jest usypiana."
       },
       "empty": {
         "title": "Na produkcji jeszcze nic nie ma",
@@ -4780,11 +4780,158 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "W {target} typ {shape} może działać tylko bez przerwy, więc nie może się wstrzymać przy bezczynności."
+          "unsupported": "W {target} typ {shape} może działać tylko bez przerwy, więc nie może się wstrzymać przy bezczynności.",
+          "unsupportedKeeps": "Ta aplikacja działa cały czas.",
+          "unsupportedShort": "Hosting tej aplikacji nie obsługuje tego ustawienia, więc nic się nie zmieniło.",
+          "credits": "Ustawienie „Zawsze włączona” jest niedostępne, dopóki saldo kredytów organizacji jest poniżej zera. Doładuj kredyty, a potem ustaw je ponownie.",
+          "releaseInProgress": "Trwa wydanie. Zmień to po jego zakończeniu.",
+          "forbidden": "Tylko administratorzy projektu mogą to zmienić.",
+          "noApplication": "Na produkcji nic jeszcze nie ma. To ustawienie zacznie obowiązywać po wejściu pierwszego wydania.",
+          "failed": "Nowe ustawienie nie zostało zastosowane, więc nic się nie zmieniło. Spróbuj ponownie."
         },
         "shape": {
           "function": "funkcja",
           "container": "kontener"
+        },
+        "heading": "Przy bezczynności",
+        "option": {
+          "suspend": "Usypiaj przy bezczynności",
+          "alwaysOn": "Zawsze włączona"
+        },
+        "help": {
+          "suspend": "Aplikacja usypia, gdy nic jej nie wywołuje, i budzi się przy następnym żądaniu. Pierwsze żądanie po uśpieniu jest wolniejsze.",
+          "alwaysOn": "Aplikacja działa cały czas, więc żadne żądanie nie czeka na jej obudzenie. Zużywa kredyty co godzinę."
+        },
+        "default": "Nowe aplikacje zaczynają z ustawieniem „Usypiaj przy bezczynności”. Obowiązuje ono od pierwszego wydania.",
+        "switching": "Stosowanie w działającym wydaniu…",
+        "switchingNote": "Ta sama kompilacja jest wdrażana ponownie z nowym ustawieniem. Nic nie jest budowane od nowa.",
+        "readOnly": "Tylko administratorzy projektu mogą to zmienić.",
+        "loading": "Wczytywanie ustawienia…",
+        "loadError": "Nie udało się wczytać tego ustawienia."
+      },
+      "health": {
+        "heading": "Stan",
+        "state": {
+          "healthy": "Sprawna",
+          "unhealthy": "Niesprawna",
+          "suspended": "Uśpiona",
+          "crashed": "Awaria",
+          "deploying": "Wdrażanie"
+        },
+        "since": "{state} od {duration}",
+        "line": {
+          "healthy": "Odpowiada na kontrolę stanu pod {path}.",
+          "unhealthy": "Kontrola stanu pod {path} nie powiodła się dwa razy z rzędu.",
+          "suspended": "Uśpiona, bo nic jej nie wywołało. Następne żądanie ją obudzi.",
+          "crashed": "Proces się zatrzymał. {target} uruchamia go ponownie.",
+          "crashedOom": "Proces został zatrzymany: zabrakło mu pamięci. {target} uruchamia go ponownie.",
+          "deploying": "Wydanie {commit} jest wdrażane. Bieżące wydanie działa, dopóki nowe nie trafi na produkcję.",
+          "deployingUnnamed": "Nowe wydanie jest wdrażane. Bieżące wydanie działa, dopóki nowe nie trafi na produkcję."
+        },
+        "unreachable": "Motir nie może połączyć się z {address}, aby ją sprawdzić. To ostatni stan, jaki widział Motir; sama aplikacja może działać poprawnie.",
+        "unreachableNoAddress": "Motir nie może połączyć się z tą aplikacją, aby ją sprawdzić. To ostatni stan, jaki widział Motir; sama aplikacja może działać poprawnie.",
+        "pending": "Motir jeszcze nie sprawdził tej aplikacji. Pierwsza kontrola nastąpi w ciągu minuty od wejścia wydania na produkcję.",
+        "loading": "Sprawdzanie stanu…",
+        "failed": "Nie udało się odczytać stanu tej aplikacji.",
+        "retry": "Spróbuj ponownie"
+      },
+      "events": {
+        "heading": "Awarie",
+        "empty": "Brak zarejestrowanych awarii tej aplikacji.",
+        "reason": {
+          "exit": "Zakończono z kodem {code}",
+          "exited": "Zakończono",
+          "oom": "Brak pamięci",
+          "http": "Kontrola stanu nie powiodła się: HTTP {status}",
+          "timeout": "Kontrola stanu nie powiodła się: przekroczono czas"
+        },
+        "release": "Wydanie <code>{commit}</code>",
+        "rolledBackSince": "Później wycofane",
+        "showLines": "{count, plural, one {Pokaż ostatni wiersz przed awarią} few {Pokaż ostatnie # wiersze przed awarią} many {Pokaż ostatnie # wierszy przed awarią} other {Pokaż ostatnie # wiersza przed awarią}}",
+        "hideLines": "Ukryj ostatnie wiersze"
+      },
+      "logs": {
+        "heading": "Logi",
+        "order": "Najnowsze najpierw",
+        "range": {
+          "label": "Zakres czasu",
+          "15m": "15 min",
+          "1h": "1 godz.",
+          "24h": "24 godz.",
+          "7d": "7 dni"
+        },
+        "rangeSpan": {
+          "15m": "ostatnich 15 minutach",
+          "1h": "ostatniej godzinie",
+          "24h": "ostatnich 24 godzinach",
+          "7d": "ostatnich 7 dniach"
+        },
+        "filter": "Filtruj wiersze",
+        "stream": {
+          "app": "aplikacja",
+          "platform": "platforma"
+        },
+        "linesLabel": "Wiersze logu",
+        "line": {
+          "expand": "Pokaż cały wiersz",
+          "collapse": "Zwiń ten wiersz"
+        },
+        "more": "Pokaż wcześniejsze wiersze",
+        "moreError": "Nie udało się wczytać wcześniejszych wierszy. Spróbuj ponownie.",
+        "masked": "Każda tajna wartość ze środowiska tej aplikacji jest wyświetlana jako ***.",
+        "asleep": "Ostatnie wiersze przed uśpieniem aplikacji.",
+        "noMatch": "Żaden wiersz nie pasuje do „{filter}” w {range}.",
+        "empty": "Brak wierszy w {range}.",
+        "unavailable": "{target} nie zwrócił logów tej aplikacji. To usługa logów {target}, nie aplikacja: może ona nadal działać poprawnie. Starsze wiersze nie są pokazywane jako bieżące.",
+        "failed": "Nie udało się wczytać logów tej aplikacji.",
+        "retry": "Spróbuj ponownie",
+        "loading": "Wczytywanie wierszy…",
+        "noRelease": "Logi pojawią się tutaj, gdy pierwsze wydanie trafi na produkcję."
+      },
+      "usage": {
+        "heading": "Zużycie w tym okresie",
+        "loading": "Wczytywanie zużycia…",
+        "loadError": "Nie udało się wczytać zużycia w tym okresie.",
+        "retry": "Spróbuj ponownie",
+        "col": {
+          "what": "Co zużyto",
+          "amount": "Ilość",
+          "credits": "Kredyty"
+        },
+        "unit": {
+          "machine": "Maszyna Fly · {size}",
+          "lambdaCompute": "Obliczenia funkcji (GB-sekundy)",
+          "lambdaRequests": "Żądania do funkcji",
+          "containerCpu": "Kontener AWS · vCPU",
+          "containerMemory": "Kontener AWS · pamięć",
+          "dbCompute": "Baza danych {provider} · obliczenia",
+          "dbStorage": "Baza danych {provider} · przechowywanie"
+        },
+        "size": {
+          "small": "mała",
+          "medium": "średnia",
+          "large": "duża"
+        },
+        "total": "Kredyty naliczone w tym okresie",
+        "footnote": "1 kredyt to jedna minuta w przeliczeniu na Linux. Zużycie z każdego dnia jest naliczane raz, po północy UTC, i zaokrąglane w górę do pełnego kredytu, więc dzisiejszego nie ma jeszcze w sumie.",
+        "noRelease": "Nic jeszcze nie zużyto. Zużycie zaczyna się od pierwszego wydania na produkcji.",
+        "exhausted": {
+          "title": "Brak kredytów · saldo {balance}",
+          "titleNoBalance": "Brak kredytów",
+          "body": "Ta aplikacja nadal działa. Jeśli {date} saldo nadal będzie poniżej zera, Motir przełączy ją na „Usypiaj przy bezczynności”, aby usypiała, gdy nic jej nie wywołuje. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
+          "bodySuspended": "Ta aplikacja nadal działa i usypia, gdy nic jej nie wywołuje. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
+          "bodyCannotSuspend": "Ta aplikacja działa jako kontener AWS, którego nie można uśpić, więc działa bez przerwy i zużywa kredyty, dopóki saldo nie zostanie doładowane. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
+          "topUp": "Doładuj kredyty",
+          "member": "Właściciel lub administrator organizacji może doładować kredyty."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
         }
       }
     },
@@ -6305,11 +6452,13 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>",
-      "productionCreditsExhausted": "Kredyty Twojej organizacji spadły poniżej zera, gdy {count, plural, one {w produkcji działa <s>{apps}</s>} few {w produkcji działają <s>{apps}</s>} many {w produkcji działa <s>{apps}</s>} other {w produkcji działa <s>{apps}</s>}}"
+      "productionCreditsExhausted": "Kredyty Twojej organizacji spadły poniżej zera, gdy {count, plural, one {w produkcji działa <s>{apps}</s>} few {w produkcji działają <s>{apps}</s>} many {w produkcji działa <s>{apps}</s>} other {w produkcji działa <s>{apps}</s>}}",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> nie przechodzi kontroli stanu w środowisku produkcyjnym} other {<s>{repository}</s> uległa awarii w środowisku produkcyjnym}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci.",
-      "productionCreditsExhausted": "Od {date} aplikacje zawsze włączone będą wstrzymywane przy bezczynności"
+      "productionCreditsExhausted": "Od {date} aplikacje zawsze włączone będą wstrzymywane przy bezczynności",
+      "productionAppCrashed": "{reason} · {project}"
     },
     "appsMore": "{count, plural, one {# więcej} few {# więcej} many {# więcej} other {# więcej}}"
   },

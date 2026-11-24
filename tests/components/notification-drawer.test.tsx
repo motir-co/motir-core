@@ -175,6 +175,114 @@ describe('NotificationDrawer — the access-refused row', () => {
   });
 });
 
+// ── THE PRODUCTION-CRASH ROW (MOTIR-12113 · Story MOTIR-9799) ───────────────
+//
+// design/hosting/design-notes.md § Amendment 2026-11-23, panel 23: actorless, the
+// `ServerCrash` glyph promoted into the avatar slot on `--el-notif-production-crashed`,
+// "{repository} crashed in production" (or "is failing its health check"), the
+// reason in the Production panel's words and the project key below, and a link to
+// the event on the Production panel.
+
+describe('NotificationDrawer — the production-crash row', () => {
+  const crashRow = (
+    over: { eventKind?: 'crashed' | 'health_check_failed'; reason?: string; readAt?: string } = {},
+  ) => ({
+    id: `n-crash-${over.eventKind ?? 'crashed'}-${over.readAt ? 'read' : 'unread'}`,
+    type: 'production_app_crashed',
+    category: 'direct' as const,
+    readAt: over.readAt ?? null,
+    createdAt: new Date().toISOString(),
+    actor: null,
+    workItemId: null,
+    data: {
+      kind: 'production_app_crashed' as const,
+      projectKey: 'ACME',
+      projectRepositoryId: 'row/1',
+      repositoryName: 'acme-shop',
+      applicationId: 'app-1',
+      eventId: 'ev-9',
+      eventKind: over.eventKind ?? 'crashed',
+      reason: over.reason ?? 'out of memory',
+      occurredAt: new Date().toISOString(),
+    },
+  });
+  const summary = (branch: 'health_check_failed' | 'other') => {
+    const template = String(en.notifications.summary.productionAppCrashed);
+    const arm = new RegExp(`${branch} \\{([^}]*\\}[^}]*)\\}`).exec(template)![1]!;
+    return arm.replace(/<\/?s>/g, '').replace('{repository}', 'acme-shop');
+  };
+
+  it('names the application and the reason in the catalogue’s words, never the generic fallback', async () => {
+    renderDrawer(pageDTO({ notifications: [crashRow()] as never, totalCount: 1 }));
+    const row = await screen.findByRole('link', { name: /acme-shop/ });
+    expect(row.textContent).toContain(summary('other'));
+    expect(row.textContent).toContain(`${en.settings.production.events.reason.oom} · ACME`);
+    expect(row.textContent).not.toContain(en.notifications.actorFallback);
+    // The actor-shaped fallback ("… sent you a notification") never speaks for it.
+    expect(row.textContent).not.toContain(
+      String(en.notifications.summary.genericNoKey).split('</s>')[1]!.trim(),
+    );
+  });
+
+  it('says a failed health check as such, with the status in its reason', async () => {
+    renderDrawer(
+      pageDTO({
+        notifications: [
+          crashRow({ eventKind: 'health_check_failed', reason: 'HTTP 503' }),
+        ] as never,
+        totalCount: 1,
+      }),
+    );
+    const row = await screen.findByRole('link', { name: /acme-shop/ });
+    expect(row.textContent).toContain(summary('health_check_failed'));
+    expect(row.textContent).toContain(
+      `${String(en.settings.production.events.reason.http).replace('{status}', '503')} · ACME`,
+    );
+  });
+
+  it('draws the crash glyph in the avatar slot, on its own hue, with no initial letter', async () => {
+    renderDrawer(pageDTO({ notifications: [crashRow()] as never, totalCount: 1 }));
+    const row = await screen.findByRole('link', { name: /acme-shop/ });
+    const avatar = row.querySelector('[class*="bg-(--el-notif-production-crashed)"]');
+    expect(avatar).not.toBeNull();
+    expect(avatar!.querySelector('.lucide-server-crash')).not.toBeNull();
+    expect(avatar!.textContent).toBe('');
+  });
+
+  it('opens the event on the Production panel and marks the row read', async () => {
+    const { fetchMock } = renderDrawer(
+      pageDTO({ notifications: [crashRow()] as never, totalCount: 1 }),
+    );
+    const row = await screen.findByRole('link', { name: /acme-shop/ });
+    expect(row.getAttribute('href')).toBe(
+      '/settings/project/production?repository=row%2F1&event=ev-9&project=ACME',
+    );
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([u]) => String(u) === '/api/notifications/n-crash-crashed-unread/read',
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('takes the actorless read treatment: no dot, muted summary, dimmed glyph', async () => {
+    renderDrawer(
+      pageDTO({
+        notifications: [crashRow({ readAt: new Date().toISOString() })] as never,
+        totalCount: 1,
+      }),
+    );
+    const row = await screen.findByRole('link', { name: /acme-shop/ });
+    expect(row.querySelector('[class*="bg-(--el-accent)"]')).toBeNull();
+    expect(row.querySelector('strong')!.className).not.toContain('--el-text-strong');
+    expect(row.querySelector('[class*="bg-(--el-notif-production-crashed)"]')!.className).toContain(
+      'opacity-60',
+    );
+  });
+});
+
 // ── THE HIBERNATED-AGENT ROW (MOTIR-10368 · Story MOTIR-10363) ───────────────
 //
 // design/org-admin/design-notes.md, the Fleet delta's panel 12: the admin's

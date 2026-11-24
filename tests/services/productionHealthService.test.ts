@@ -562,6 +562,31 @@ describe('getHealthForRepository', () => {
     expect(read.events).toHaveLength(1);
   });
 
+  it('names each event’s release as it stands now, and none once it is gone', async () => {
+    const { fx, id } = await setup();
+    const { appRef, applicationId, releaseId } = await live(id);
+    hosting().setRuntimeState(appRef, { state: 'exited', exitCode: 1 });
+    await health.probeApplication(applicationId);
+    await adminDb.hostedRelease.update({
+      where: { id: releaseId },
+      data: { state: 'rolled_back' },
+    });
+    const [first] = (await health.getHealthForRepository('ACME', id, fx.ctx)).events;
+    expect(first).toMatchObject({
+      releaseId,
+      release: { commitSha: expect.stringMatching(/^[0-9a-f]{40}$/), state: 'rolled_back' },
+    });
+    const [event] = await events(applicationId);
+    await adminDb.hostedApplicationEvent.update({
+      where: { id: event!.id },
+      data: { releaseId: null },
+    });
+    expect((await health.getHealthForRepository('ACME', id, fx.ctx)).events[0]).toMatchObject({
+      releaseId: null,
+      release: null,
+    });
+  });
+
   it('reads stored lines defensively: only well-formed ones, platform kept apart', async () => {
     const { fx, id } = await setup();
     const { appRef, applicationId } = await live(id);

@@ -75,9 +75,27 @@ export interface ProductionSeed {
   api: ProductionRepo;
   /** The customer's imported repository — never offered, never addressable. */
   customer: ProductionRepo;
+  /** The administrator's user id, for a service call made as them. */
+  adminUserId: string;
+  /** With `awsContainer`: a Motir repository hosted on AWS as a container, with
+   *  production switched on and no release. */
+  aws: ProductionRepo | null;
 }
 
-export async function seedProductionRoom(slug: string): Promise<ProductionSeed> {
+export interface ProductionSeedOptions {
+  /** The manifest every Motir repository has at every commit; defaults to
+   *  `PRODUCTION_MANIFEST` (a Postgres database, migrated on each release). */
+  manifest?: HostingManifest;
+  /** Add an AWS-hosted Motir repository whose shape is `container` (Story
+   *  MOTIR-9799's idle-policy refusal). Off by default, so the deploy story's
+   *  room keeps exactly its two Motir repositories. */
+  awsContainer?: boolean;
+}
+
+export async function seedProductionRoom(
+  slug: string,
+  options: ProductionSeedOptions = {},
+): Promise<ProductionSeed> {
   const owner = await usersService.createUser({
     email: `prod-owner-${slug}@example.com`,
     password: PRODUCTION_PASSWORD,
@@ -101,6 +119,9 @@ export async function seedProductionRoom(slug: string): Promise<ProductionSeed> 
     { key: 'web', name: `shop-web-${slug}`, providerRepoId: String(base + 1) },
     { key: 'api', name: `shop-api-${slug}`, providerRepoId: String(base + 2) },
     { key: 'customer', name: `their-api-${slug}`, providerRepoId: String(base + 3) },
+    ...(options.awsContainer
+      ? [{ key: 'aws', name: `shop-worker-${slug}`, providerRepoId: String(base + 4) } as const]
+      : []),
   ] as const;
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
@@ -135,7 +156,9 @@ export async function seedProductionRoom(slug: string): Promise<ProductionSeed> 
       data: {
         state: 'created',
         seedSource: customer ? SEED_SOURCE_ORGANIZATION : 'nextjs-prisma-fly-starter',
-        hostingTarget: 'fly',
+        ...(entry.key === 'aws'
+          ? { hostingTarget: 'aws', hostingShape: 'container' }
+          : { hostingTarget: 'fly' }),
       },
     });
     if (customer) {
@@ -143,7 +166,8 @@ export async function seedProductionRoom(slug: string): Promise<ProductionSeed> 
     }
     // Production switched on, as enablement records it: the app name the
     // workflow pushes to, when, and the address the workspace's label gives it.
-    const address = `${entry.key === 'web' ? 'shop' : 'shop-api'}--acme-${slug}.motir.site`;
+    const label = { web: 'shop', api: 'shop-api', aws: 'shop-worker' }[entry.key];
+    const address = `${label}--acme-${slug}.motir.site`;
     const app = await hostedApplicationService.ensureApplication(row.id);
     await adminDb.hostedApplication.update({
       where: { id: app.id },
@@ -161,14 +185,20 @@ export async function seedProductionRoom(slug: string): Promise<ProductionSeed> 
     await repo(mirrored[1]),
     await repo(mirrored[2]),
   ];
+  const aws = mirrored[3] ? await repo(mirrored[3]) : null;
+  const manifest = options.manifest ?? PRODUCTION_MANIFEST;
   writeProductionReleaseControl({
     installations: { [E2E_PROVISIONING_ORG]: 99_100_001 },
     manifests: Object.fromEntries(
-      [web, api].map((r) => [`${E2E_PROVISIONING_ORG}/${r.name}`, PRODUCTION_MANIFEST]),
+      [web, api, ...(aws ? [aws] : [])].map((r) => [`${E2E_PROVISIONING_ORG}/${r.name}`, manifest]),
     ),
   });
 
-  async function persona(label: string, name: string, role: 'admin' | 'member') {
+  async function persona(
+    label: string,
+    name: string,
+    role: 'admin' | 'member',
+  ): Promise<{ email: string; id: string }> {
     const email = `prod-${label}-${slug}@example.com`;
     const user = await usersService.createUser({ email, password: PRODUCTION_PASSWORD, name });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
@@ -180,20 +210,24 @@ export async function seedProductionRoom(slug: string): Promise<ProductionSeed> 
       where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
       data: { activeProjectId: project.id },
     });
-    return email;
+    return { email, id: user.id };
   }
 
+  const admin = await persona('admin', 'Ada Admin', 'admin');
+  const member = await persona('member', 'Max Member', 'member');
   return {
     workspaceId: workspace.id,
     projectId: project.id,
     projectKey: project.identifier,
-    adminEmail: await persona('admin', 'Ada Admin', 'admin'),
+    adminEmail: admin.email,
     adminName: 'Ada Admin',
-    memberEmail: await persona('member', 'Max Member', 'member'),
+    adminUserId: admin.id,
+    memberEmail: member.email,
     password: PRODUCTION_PASSWORD,
     web,
     api,
     customer,
+    aws,
   };
 }
 

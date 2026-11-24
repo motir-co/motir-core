@@ -4,6 +4,7 @@ import { periodEndFor, periodStartFor } from '@/lib/ciMetering/period';
 import type { ProductionUsageDto, ProductionUsageExhaustedDto } from '@/lib/dto/productionUsage';
 import { HOSTED_IDLE_SECONDS_DEFAULT } from '@/lib/hosting/idlePolicy';
 import { dailyChargeCredits } from '@/lib/hosting/productionRates';
+import { utcDayOf } from '@/lib/hosting/productionUsage';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   hostedApplicationRepository,
@@ -95,11 +96,14 @@ async function getCurrentPeriod(
     };
   }
   const window = { from: start, to: end };
+  // The days CHARGED so far: each closes at UTC midnight, so today's open day is
+  // in the rows above but not yet in the total (design § Usage, the footnote).
+  const charged = { from: start, to: new Date(Math.min(end.getTime(), utcDayOf(now).getTime())) };
   const { lines, days, costed } = await withWorkspaceServiceContext(
     app.workspaceId,
     async (tx) => ({
       lines: await productionUsageSliceRepository.sumByUnit(app.id, window, tx),
-      days: await productionUsageSliceRepository.sumCreditsByDay(app.id, window, tx),
+      days: await productionUsageSliceRepository.sumCreditsByDay(app.id, charged, tx),
       costed: await productionUsageSliceRepository.hasMotirCost(app.id, window, tx),
     }),
   );

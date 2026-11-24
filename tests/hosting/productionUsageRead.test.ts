@@ -158,6 +158,17 @@ describe('this period’s usage', () => {
     expect(JSON.stringify(read)).not.toMatch(/motirCostUsd|0\.01\b/);
   });
 
+  it('counts today’s open day in the rows but not yet in the credits charged', async () => {
+    const live = await liveApp();
+    await slice(live, new Date('2026-11-22T10:00:00Z'), 0.5);
+    await slice(live, new Date('2026-11-23T10:00:00Z'), 0.5);
+
+    const read = await usage.getCurrentPeriod(live.app.id, { now: NOW });
+
+    expect(read.usage).toEqual([{ unit: 'fly_small_seconds', quantity: 7200, credits: 1 }]);
+    expect(read.credits).toBe(1);
+  });
+
   it('answers the empty period for an unknown application', async () => {
     expect(await usage.getCurrentPeriod('missing', { now: NOW })).toMatchObject({
       usage: [],

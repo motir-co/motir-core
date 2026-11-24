@@ -2,6 +2,7 @@ import type {
   HostedApplicationEventKind,
   HostedHealthCondition,
   HostedHealthState,
+  HostedReleaseState,
   Prisma,
 } from '@/generated/prisma/client';
 
@@ -32,6 +33,8 @@ export interface HostedApplicationEventRow {
   occurredAt: Date;
   lastLogLines: Prisma.JsonValue;
   transitionKey: string;
+  /** The release it happened on, as it stands now; null when it is gone. */
+  release: { commitSha: string; state: HostedReleaseState } | null;
 }
 
 const HEALTH_SELECT = {
@@ -56,6 +59,7 @@ const EVENT_SELECT = {
   occurredAt: true,
   lastLogLines: true,
   transitionKey: true,
+  release: { select: { commitSha: true, state: true } },
 } as const;
 
 export const hostedApplicationHealthRepository = {
@@ -94,7 +98,9 @@ export const hostedApplicationHealthRepository = {
    * Answers the new row's id, or null when nothing was written.
    */
   async insertEvent(
-    event: Omit<HostedApplicationEventRow, 'id' | 'lastLogLines'> & { workspaceId: string },
+    event: Omit<HostedApplicationEventRow, 'id' | 'lastLogLines' | 'release'> & {
+      workspaceId: string;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<string | null> {
     const written = await tx.hostedApplicationEvent.createMany({

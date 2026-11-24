@@ -4761,7 +4761,7 @@
         "notFound": "Este repositório não está mais disponível para você."
       },
       "readOnly": {
-        "note": "Você pode ver todas as versões. Somente administradores do projeto podem reverter."
+        "note": "Você pode ver cada versão, sua saúde, seus logs e seu consumo. Somente administradores do projeto podem reverter ou mudar quando o app entra em repouso."
       },
       "empty": {
         "title": "Nada em produção ainda",
@@ -4780,11 +4780,158 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "Em {target}, um {shape} só pode ficar sempre ativo, então não pode ser suspenso quando ocioso."
+          "unsupported": "Em {target}, um {shape} só pode ficar sempre ativo, então não pode ser suspenso quando ocioso.",
+          "unsupportedKeeps": "Este app fica em execução o tempo todo.",
+          "unsupportedShort": "A hospedagem deste app não aceita essa configuração, então nada mudou.",
+          "credits": "“Sempre ativo” não está disponível enquanto o saldo de créditos da sua organização estiver abaixo de zero. Recarregue créditos e configure novamente.",
+          "releaseInProgress": "Há uma versão em andamento. Altere isso quando ela terminar.",
+          "forbidden": "Somente administradores do projeto podem alterar isso.",
+          "noApplication": "Ainda não há nada em produção. Isso vale quando a primeira versão entrar no ar.",
+          "failed": "A nova configuração não foi aplicada, então nada mudou. Tente novamente."
         },
         "shape": {
           "function": "função",
           "container": "contêiner"
+        },
+        "heading": "Quando ocioso",
+        "option": {
+          "suspend": "Suspender quando ocioso",
+          "alwaysOn": "Sempre ativo"
+        },
+        "help": {
+          "suspend": "O app entra em repouso quando nada o solicita e desperta na próxima requisição. A primeira requisição após o repouso é mais lenta.",
+          "alwaysOn": "O app fica em execução o tempo todo, então nenhuma requisição espera que ele desperte. Ele consome créditos a cada hora."
+        },
+        "default": "Novos apps começam com “Suspender quando ocioso”. Vale a partir da primeira versão.",
+        "switching": "Aplicando à versão em execução…",
+        "switchingNote": "O mesmo build é reimplantado com a nova configuração. Nada é recompilado.",
+        "readOnly": "Somente administradores do projeto podem alterar isso.",
+        "loading": "Carregando a configuração…",
+        "loadError": "Não foi possível carregar esta configuração."
+      },
+      "health": {
+        "heading": "Saúde",
+        "state": {
+          "healthy": "Saudável",
+          "unhealthy": "Com falhas",
+          "suspended": "Em repouso",
+          "crashed": "Travou",
+          "deploying": "Implantando"
+        },
+        "since": "{state} há {duration}",
+        "line": {
+          "healthy": "Respondendo à verificação de saúde em {path}.",
+          "unhealthy": "A verificação de saúde em {path} falhou duas vezes seguidas.",
+          "suspended": "Em repouso porque nada a solicitou. A próxima requisição a desperta.",
+          "crashed": "O processo parou. {target} está reiniciando-o.",
+          "crashedOom": "O processo foi interrompido: ficou sem memória. {target} está reiniciando-o.",
+          "deploying": "A versão {commit} está sendo implantada. A versão atual continua no ar até que ela entre no ar.",
+          "deployingUnnamed": "Uma nova versão está sendo implantada. A versão atual continua no ar até que ela entre no ar."
+        },
+        "unreachable": "O Motir não consegue acessar {address} para verificá-la. Este é o último estado que o Motir viu; o app em si pode estar funcionando bem.",
+        "unreachableNoAddress": "O Motir não consegue acessar este app para verificá-lo. Este é o último estado que o Motir viu; o app em si pode estar funcionando bem.",
+        "pending": "O Motir ainda não verificou este app. A primeira verificação ocorre até um minuto depois de a versão entrar no ar.",
+        "loading": "Verificando a saúde…",
+        "failed": "Não foi possível ler a saúde deste app.",
+        "retry": "Tentar novamente"
+      },
+      "events": {
+        "heading": "Travamentos",
+        "empty": "Nenhum travamento registrado para este app.",
+        "reason": {
+          "exit": "Encerrado com o código {code}",
+          "exited": "Encerrado",
+          "oom": "Sem memória",
+          "http": "Falha na verificação de saúde: HTTP {status}",
+          "timeout": "Falha na verificação de saúde: tempo esgotado"
+        },
+        "release": "Versão <code>{commit}</code>",
+        "rolledBackSince": "Revertida depois",
+        "showLines": "{count, plural, one {Mostrar a última linha antes} other {Mostrar as últimas # linhas antes}}",
+        "hideLines": "Ocultar as últimas linhas"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Mais recentes primeiro",
+        "range": {
+          "label": "Período",
+          "15m": "15 min",
+          "1h": "1 hora",
+          "24h": "24 horas",
+          "7d": "7 dias"
+        },
+        "rangeSpan": {
+          "15m": "últimos 15 minutos",
+          "1h": "última hora",
+          "24h": "últimas 24 horas",
+          "7d": "últimos 7 dias"
+        },
+        "filter": "Filtrar linhas",
+        "stream": {
+          "app": "app",
+          "platform": "plataforma"
+        },
+        "linesLabel": "Linhas de log",
+        "line": {
+          "expand": "Mostrar a linha inteira",
+          "collapse": "Recolher esta linha"
+        },
+        "more": "Mostrar linhas anteriores",
+        "moreError": "Não foi possível carregar as linhas anteriores. Tente novamente.",
+        "masked": "Todo valor secreto do ambiente deste app aparece como ***.",
+        "asleep": "As últimas linhas antes de o app entrar em repouso.",
+        "noMatch": "Nenhuma linha corresponde a “{filter}” em: {range}.",
+        "empty": "Nenhuma linha em: {range}.",
+        "unavailable": "{target} não retornou os logs deste app. É o serviço de logs de {target}, não o app: ele pode estar funcionando bem. Nenhuma linha antiga é mostrada como atual.",
+        "failed": "Não foi possível carregar os logs deste app.",
+        "retry": "Tentar novamente",
+        "loading": "Carregando linhas…",
+        "noRelease": "Os logs aparecem aqui assim que a primeira versão entrar no ar."
+      },
+      "usage": {
+        "heading": "Consumo neste período",
+        "loading": "Carregando o consumo…",
+        "loadError": "Não foi possível carregar o consumo deste período.",
+        "retry": "Tentar novamente",
+        "col": {
+          "what": "O que usou",
+          "amount": "Quantidade",
+          "credits": "Créditos"
+        },
+        "unit": {
+          "machine": "Máquina Fly · {size}",
+          "lambdaCompute": "Computação de funções (GB-segundos)",
+          "lambdaRequests": "Requisições a funções",
+          "containerCpu": "Contêiner AWS · vCPU",
+          "containerMemory": "Contêiner AWS · memória",
+          "dbCompute": "Banco de dados {provider} · computação",
+          "dbStorage": "Banco de dados {provider} · armazenamento"
+        },
+        "size": {
+          "small": "pequena",
+          "medium": "média",
+          "large": "grande"
+        },
+        "total": "Créditos cobrados neste período",
+        "footnote": "1 crédito é um minuto equivalente de Linux. O consumo de cada dia é cobrado uma vez, depois da meia-noite UTC, arredondado para um crédito inteiro, então o de hoje ainda não está no total.",
+        "noRelease": "Nada consumido ainda. O consumo começa com a primeira versão no ar.",
+        "exhausted": {
+          "title": "Sem créditos · saldo {balance}",
+          "titleNoBalance": "Sem créditos",
+          "body": "Este app continua em execução. Se o saldo ainda estiver abaixo de zero em {date}, o Motir o muda para “Suspender quando ocioso”, para que entre em repouso quando nada o solicitar. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "bodySuspended": "Este app continua em execução e entra em repouso quando nada o solicita. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "bodyCannotSuspend": "Este app roda como contêiner AWS, que não pode ser suspenso, então continua sempre ativo e consumindo créditos até o saldo ser recarregado. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "topUp": "Recarregar créditos",
+          "member": "Um proprietário ou administrador da organização pode recarregar créditos."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
         }
       }
     },
@@ -6305,11 +6452,13 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernou seu agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mencionou você em <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> respondeu a um tópico em <s>{page}</s>",
-      "productionCreditsExhausted": "Os créditos da sua organização estão abaixo de zero enquanto {count, plural, one {<s>{apps}</s> está em produção} other {<s>{apps}</s> estão em produção}}"
+      "productionCreditsExhausted": "Os créditos da sua organização estão abaixo de zero enquanto {count, plural, one {<s>{apps}</s> está em produção} other {<s>{apps}</s> estão em produção}}",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> está falhando na verificação de integridade em produção} other {<s>{repository}</s> travou em produção}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Um administrador da organização o parou às {time}. Os arquivos dele foram mantidos; desperte-o em Agentes.",
-      "productionCreditsExhausted": "A partir de {date}, os apps sempre ativos suspendem quando ociosos"
+      "productionCreditsExhausted": "A partir de {date}, os apps sempre ativos suspendem quando ociosos",
+      "productionAppCrashed": "{reason} · {project}"
     },
     "appsMore": "{count, plural, one {mais #} other {mais #}}"
   },

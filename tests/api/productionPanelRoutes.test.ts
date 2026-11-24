@@ -595,7 +595,9 @@ describe('GET …/production/usage (MOTIR-12108)', () => {
     const body = await res.json();
     expect(body).toMatchObject({
       usage: [{ unit: 'fly_small_seconds', quantity: 3600, credits: 7.5 }],
-      credits: 8,
+      // Today's open day is in the rows, and charged only once it closes
+      // (Decision MOTIR-12100 §2), so nothing is charged yet.
+      credits: 0,
       motirCostRecorded: true,
       state: 'ok',
       exhausted: null,

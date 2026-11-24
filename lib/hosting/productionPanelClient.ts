@@ -1,4 +1,6 @@
+import type { IdlePolicyDto } from '@/lib/dto/idlePolicy';
 import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
+import type { ProductionUsageDto } from '@/lib/dto/productionUsage';
 
 // The Production panel's thin client over its two routes (Story MOTIR-9797 ·
 // MOTIR-10037): the read (`GET …/repositories/[rowId]/production`, one page of
@@ -73,6 +75,65 @@ async function call(url: string, init: RequestInit): Promise<ProductionResult> {
 
 const JSON_ACCEPT = { accept: 'application/json' };
 
+/** A refusal of the idle-policy switch (MOTIR-12110), under `settings.production`:
+ *  the words of the When idle control, not the rollback dialog's. */
+export type IdlePolicyRefusalKey =
+  | 'idle.refusal.credits'
+  | 'idle.refusal.unsupportedShort'
+  | 'idle.refusal.releaseInProgress'
+  | 'idle.refusal.forbidden'
+  | 'idle.refusal.noApplication'
+  | 'refusal.notFound'
+  | 'idle.refusal.failed';
+
+const IDLE_CODE_KEYS: Record<string, IdlePolicyRefusalKey> = {
+  always_on_refused_out_of_credits: 'idle.refusal.credits',
+  HOSTING_IDLE_POLICY_UNSUPPORTED: 'idle.refusal.unsupportedShort',
+  release_in_progress: 'idle.refusal.releaseInProgress',
+  idle_policy_not_permitted: 'idle.refusal.forbidden',
+  no_application: 'idle.refusal.noApplication',
+  repository_not_found: 'refusal.notFound',
+  idle_policy_failed: 'idle.refusal.failed',
+};
+
+async function idleRefusalKey(res: Response): Promise<IdlePolicyRefusalKey> {
+  try {
+    const body = (await res.json()) as { error?: { code?: unknown } };
+    const code = body.error?.code;
+    if (typeof code === 'string' && Object.hasOwn(IDLE_CODE_KEYS, code)) {
+      return IDLE_CODE_KEYS[code]!;
+    }
+  } catch {
+    // Not a typed refusal; the status decides.
+  }
+  if (res.status === 403) return 'idle.refusal.forbidden';
+  if (res.status === 404) return 'refusal.notFound';
+  return 'idle.refusal.failed';
+}
+
+/** What a switch asks for: Always on, or Suspend when idle at the route's
+ *  default quiet window unless one is named. */
+export type IdlePolicyRequest = { mode: 'always_on' } | { mode: 'suspend'; idleSeconds?: number };
+
+export type PanelReadResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; refusalKey: ProductionRefusalKey };
+
+async function readJson<T>(url: string): Promise<PanelReadResult<T>> {
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: JSON_ACCEPT });
+  } catch {
+    return { ok: false, refusalKey: 'dialog.error' };
+  }
+  if (!res.ok) return { ok: false, refusalKey: await productionRefusalKey(res) };
+  try {
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, refusalKey: 'dialog.error' };
+  }
+}
+
 export const productionPanelClient = {
   /** One page of the panel: the first without a cursor, the next with one. */
   read(
@@ -90,5 +151,46 @@ export const productionPanelClient = {
       method: 'POST',
       headers: JSON_ACCEPT,
     });
+  },
+
+  /** The application's idle policy, whether the viewer may change it, and the
+   *  policy its target refuses (MOTIR-12107). */
+  readIdlePolicy(
+    projectKey: string,
+    repositoryId: string,
+  ): Promise<PanelReadResult<IdlePolicyDto>> {
+    return readJson(`${base(projectKey, repositoryId)}/idle-policy`);
+  },
+
+  /** Switch the idle policy; answers once the serving release runs it. */
+  async setIdlePolicy(
+    projectKey: string,
+    repositoryId: string,
+    policy: IdlePolicyRequest,
+  ): Promise<{ ok: true; data: IdlePolicyDto } | { ok: false; refusalKey: IdlePolicyRefusalKey }> {
+    let res: Response;
+    try {
+      res = await fetch(`${base(projectKey, repositoryId)}/idle-policy`, {
+        method: 'PUT',
+        headers: { ...JSON_ACCEPT, 'content-type': 'application/json' },
+        body: JSON.stringify(policy),
+      });
+    } catch {
+      return { ok: false, refusalKey: 'idle.refusal.failed' };
+    }
+    if (!res.ok) return { ok: false, refusalKey: await idleRefusalKey(res) };
+    try {
+      return { ok: true, data: (await res.json()) as IdlePolicyDto };
+    } catch {
+      return { ok: false, refusalKey: 'idle.refusal.failed' };
+    }
+  },
+
+  /** This period's usage and credits for the application (MOTIR-12108). */
+  readUsage(
+    projectKey: string,
+    repositoryId: string,
+  ): Promise<PanelReadResult<ProductionUsageDto>> {
+    return readJson(`${base(projectKey, repositoryId)}/usage`);
   },
 };

@@ -4761,7 +4761,7 @@
         "notFound": "Dieses Repository ist für Sie nicht mehr verfügbar."
       },
       "readOnly": {
-        "note": "Sie können jedes Release sehen. Nur Projektadministratoren können zurücksetzen."
+        "note": "Sie können jedes Release, seinen Zustand, seine Logs und seine Nutzung sehen. Nur Projektadministratoren können zurücksetzen oder ändern, wann die App schläft."
       },
       "empty": {
         "title": "Noch nichts in Produktion",
@@ -4780,11 +4780,158 @@
       },
       "idle": {
         "refusal": {
-          "unsupported": "Auf {target} kann ein {shape} nur dauerhaft laufen und daher im Leerlauf nicht pausieren."
+          "unsupported": "Auf {target} kann ein {shape} nur dauerhaft laufen und daher im Leerlauf nicht pausieren.",
+          "unsupportedKeeps": "Diese App läuft ständig.",
+          "unsupportedShort": "Das Hosting dieser App unterstützt diese Einstellung nicht, daher hat sich nichts geändert.",
+          "credits": "„Dauerhaft an“ ist nicht verfügbar, solange das Credit-Guthaben Ihrer Organisation unter null liegt. Laden Sie Credits auf und stellen Sie es dann erneut ein.",
+          "releaseInProgress": "Ein Release läuft gerade. Ändern Sie dies, sobald es abgeschlossen ist.",
+          "forbidden": "Nur Projektadministratoren können dies ändern.",
+          "noApplication": "Noch ist nichts in Produktion. Dies gilt, sobald das erste Release live ist.",
+          "failed": "Die neue Einstellung wurde nicht übernommen, daher hat sich nichts geändert. Versuchen Sie es erneut."
         },
         "shape": {
           "function": "Function",
           "container": "Container"
+        },
+        "heading": "Bei Leerlauf",
+        "option": {
+          "suspend": "Bei Leerlauf pausieren",
+          "alwaysOn": "Dauerhaft an"
+        },
+        "help": {
+          "suspend": "Die App schläft, wenn nichts sie anfragt, und wacht bei der nächsten Anfrage auf. Die erste Anfrage nach dem Schlafen ist langsamer.",
+          "alwaysOn": "Die App läuft ständig, sodass keine Anfrage auf das Aufwachen warten muss. Sie verbraucht jede Stunde Credits."
+        },
+        "default": "Neue Apps starten mit „Bei Leerlauf pausieren“. Das gilt ab dem ersten Release.",
+        "switching": "Wird auf das laufende Release angewendet…",
+        "switchingNote": "Derselbe Build wird mit der neuen Einstellung erneut bereitgestellt. Nichts wird neu gebaut.",
+        "readOnly": "Nur Projektadministratoren können dies ändern.",
+        "loading": "Einstellung wird geladen…",
+        "loadError": "Diese Einstellung konnte nicht geladen werden."
+      },
+      "health": {
+        "heading": "Zustand",
+        "state": {
+          "healthy": "Gesund",
+          "unhealthy": "Gestört",
+          "suspended": "Pausiert",
+          "crashed": "Abgestürzt",
+          "deploying": "Wird bereitgestellt"
+        },
+        "since": "{state} seit {duration}",
+        "line": {
+          "healthy": "Beantwortet die Zustandsprüfung unter {path}.",
+          "unhealthy": "Die Zustandsprüfung unter {path} ist zweimal in Folge fehlgeschlagen.",
+          "suspended": "Schläft, weil nichts sie angefragt hat. Die nächste Anfrage weckt sie.",
+          "crashed": "Der Prozess wurde beendet. {target} startet ihn neu.",
+          "crashedOom": "Der Prozess wurde beendet: Der Arbeitsspeicher war erschöpft. {target} startet ihn neu.",
+          "deploying": "Release {commit} wird ausgerollt. Das aktuelle Release bedient weiter, bis es live ist.",
+          "deployingUnnamed": "Ein neues Release wird ausgerollt. Das aktuelle Release bedient weiter, bis es live ist."
+        },
+        "unreachable": "Motir erreicht {address} nicht, um es zu prüfen. Dies ist der letzte Zustand, den Motir gesehen hat; die App selbst läuft möglicherweise einwandfrei.",
+        "unreachableNoAddress": "Motir erreicht diese App nicht, um sie zu prüfen. Dies ist der letzte Zustand, den Motir gesehen hat; die App selbst läuft möglicherweise einwandfrei.",
+        "pending": "Motir hat diese App noch nicht geprüft. Die erste Prüfung läuft innerhalb einer Minute, nachdem das Release live ist.",
+        "loading": "Zustand wird geprüft…",
+        "failed": "Der Zustand dieser App konnte nicht gelesen werden.",
+        "retry": "Erneut versuchen"
+      },
+      "events": {
+        "heading": "Absturzereignisse",
+        "empty": "Für diese App sind keine Abstürze verzeichnet.",
+        "reason": {
+          "exit": "Mit Code {code} beendet",
+          "exited": "Beendet",
+          "oom": "Arbeitsspeicher erschöpft",
+          "http": "Zustandsprüfung fehlgeschlagen: HTTP {status}",
+          "timeout": "Zustandsprüfung fehlgeschlagen: Zeitüberschreitung"
+        },
+        "release": "Release <code>{commit}</code>",
+        "rolledBackSince": "Seitdem zurückgesetzt",
+        "showLines": "{count, plural, one {Die letzte Zeile davor anzeigen} other {Die letzten # Zeilen davor anzeigen}}",
+        "hideLines": "Letzte Zeilen ausblenden"
+      },
+      "logs": {
+        "heading": "Logs",
+        "order": "Neueste zuerst",
+        "range": {
+          "label": "Zeitraum",
+          "15m": "15 Min.",
+          "1h": "1 Stunde",
+          "24h": "24 Stunden",
+          "7d": "7 Tage"
+        },
+        "rangeSpan": {
+          "15m": "15 Minuten",
+          "1h": "Stunde",
+          "24h": "24 Stunden",
+          "7d": "7 Tage"
+        },
+        "filter": "Zeilen filtern",
+        "stream": {
+          "app": "App",
+          "platform": "Plattform"
+        },
+        "linesLabel": "Logzeilen",
+        "line": {
+          "expand": "Ganze Zeile anzeigen",
+          "collapse": "Zeile einklappen"
+        },
+        "more": "Frühere Zeilen anzeigen",
+        "moreError": "Frühere Zeilen konnten nicht geladen werden. Versuchen Sie es erneut.",
+        "masked": "Jeder geheime Wert aus der Umgebung dieser App wird als *** angezeigt.",
+        "asleep": "Die letzten Zeilen, bevor die App eingeschlafen ist.",
+        "noMatch": "Keine Zeilen passen zu „{filter}“ in den letzten {range}.",
+        "empty": "Keine Zeilen in den letzten {range}.",
+        "unavailable": "{target} hat die Logs dieser App nicht geliefert. Das betrifft den Logdienst von {target}, nicht die App: Sie läuft möglicherweise einwandfrei. Ältere Zeilen werden nicht als aktuell angezeigt.",
+        "failed": "Die Logs dieser App konnten nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "loading": "Zeilen werden geladen…",
+        "noRelease": "Logs erscheinen hier, sobald das erste Release live ist."
+      },
+      "usage": {
+        "heading": "Nutzung in diesem Zeitraum",
+        "loading": "Nutzung wird geladen…",
+        "loadError": "Die Nutzung dieses Zeitraums konnte nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "col": {
+          "what": "Was verbraucht wurde",
+          "amount": "Menge",
+          "credits": "Credits"
+        },
+        "unit": {
+          "machine": "Fly-Maschine · {size}",
+          "lambdaCompute": "Function-Rechenzeit (GB-Sekunden)",
+          "lambdaRequests": "Function-Anfragen",
+          "containerCpu": "AWS-Container · vCPU",
+          "containerMemory": "AWS-Container · Arbeitsspeicher",
+          "dbCompute": "{provider}-Datenbank · Rechenzeit",
+          "dbStorage": "{provider}-Datenbank · Speicher"
+        },
+        "size": {
+          "small": "klein",
+          "medium": "mittel",
+          "large": "groß"
+        },
+        "total": "In diesem Zeitraum berechnete Credits",
+        "footnote": "1 Credit entspricht einer Linux-äquivalenten Minute. Die Nutzung eines Tages wird einmal nach Mitternacht UTC berechnet und auf ganze Credits aufgerundet, daher ist die heutige noch nicht in der Summe.",
+        "noRelease": "Noch nichts verbraucht. Die Nutzung beginnt mit dem ersten Live-Release.",
+        "exhausted": {
+          "title": "Keine Credits mehr · Guthaben {balance}",
+          "titleNoBalance": "Keine Credits mehr",
+          "body": "Diese App läuft weiter. Liegt das Guthaben am {date} noch unter null, stellt Motir sie auf „Bei Leerlauf pausieren“ um, sodass sie schläft, wenn nichts sie anfragt. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "bodySuspended": "Diese App läuft weiter und schläft, wenn nichts sie anfragt. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "bodyCannotSuspend": "Diese App läuft als AWS-Container, der nicht pausiert werden kann. Sie läuft daher dauerhaft weiter und verbraucht Credits, bis das Guthaben aufgeladen ist. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "topUp": "Credits aufladen",
+          "member": "Ein Inhaber oder Administrator der Organisation kann Credits aufladen."
+        },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
         }
       }
     },
@@ -6305,11 +6452,13 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt",
       "pageMentioned": "<s>{actor}</s> hat Sie in <s>{page}</s> erwähnt",
       "pageReplied": "<s>{actor}</s> hat auf <s>{page}</s> in einem Thread geantwortet",
-      "productionCreditsExhausted": "Die Credits Ihrer Organisation sind unter null, während {count, plural, one {<s>{apps}</s> in Produktion läuft} other {<s>{apps}</s> in Produktion laufen}}"
+      "productionCreditsExhausted": "Die Credits Ihrer Organisation sind unter null, während {count, plural, one {<s>{apps}</s> in Produktion läuft} other {<s>{apps}</s> in Produktion laufen}}",
+      "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> besteht in der Produktion seine Zustandsprüfung nicht} other {<s>{repository}</s> ist in der Produktion abgestürzt}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Ein Admin der Organisation hat ihn um {time} gestoppt. Seine Dateien bleiben erhalten; wecken Sie ihn unter Agenten auf.",
-      "productionCreditsExhausted": "Ab {date} pausieren dauerhaft aktive Apps bei Inaktivität"
+      "productionCreditsExhausted": "Ab {date} pausieren dauerhaft aktive Apps bei Inaktivität",
+      "productionAppCrashed": "{reason} · {project}"
     },
     "appsMore": "{count, plural, one {# weitere} other {# weitere}}"
   },
