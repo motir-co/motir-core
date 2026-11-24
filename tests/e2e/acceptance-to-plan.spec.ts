@@ -199,7 +199,7 @@ async function expectedComment(item: Card, d: Card, started: boolean) {
 // ── Locators ────────────────────────────────────────────────────────────────
 
 const main = (page: Page) => page.getByRole('main');
-const columns = (page: Page) => main(page).locator('[data-testid^="board-column-"][aria-label]');
+const columns = (page: Page) => main(page).locator('[data-testid^="board-column-"]');
 const statusCard = (page: Page): Locator =>
   page
     .locator('[data-surface="card"]')
@@ -282,12 +282,19 @@ test('a corrected decision moves its not-started dependents to To plan, with a n
     const toPlan = columnByStatus(board, 'to_plan');
     expect(toPlan.cards).toEqual([]);
     await openBoard(page);
-    const names = await columns(page).evaluateAll((els) =>
-      els.map((el) => el.getAttribute('aria-label') ?? ''),
-    );
-    const at = (name: string) => names.findIndex((label) => label.startsWith(`${name},`));
-    expect(at('To plan')).toBeGreaterThan(-1);
-    expect(at('To plan')).toBe(at('Planning') + 1);
+    // The projection's own order: To plan is the column straight after Planning.
+    const order = board.columns.map((c) => c.id);
+    expect(order.indexOf(toPlan.id)).toBe(order.indexOf(columnByStatus(board, 'planning').id) + 1);
+    // …and the page draws it straight after Planning too (the column roots, by id).
+    const testIds = new Set(order.map((id) => `board-column-${id}`));
+    const drawn = (
+      await columns(page).evaluateAll((els) =>
+        els.map((el) => el.getAttribute('data-testid') ?? ''),
+      )
+    ).filter((id, i, all) => testIds.has(id) && all.indexOf(id) === i);
+    const planningDrawn = drawn.indexOf(`board-column-${columnByStatus(board, 'planning').id}`);
+    expect(planningDrawn).toBeGreaterThan(-1);
+    expect(drawn.indexOf(`board-column-${toPlan.id}`)).toBe(planningDrawn + 1);
     const column = main(page).getByTestId(`board-column-${toPlan.id}`);
     await column.scrollIntoViewIfNeeded();
     await expect(column).toBeVisible();
