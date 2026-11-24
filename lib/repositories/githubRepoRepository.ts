@@ -33,6 +33,10 @@ export interface UpsertGithubRepoInput {
    *  passes it, so a re-selection RE-STAMPS liveness the same way it re-stamps
    *  the coordinates. */
   archived?: boolean;
+  /** Whether the row is RETIRED from the connected set (bug MOTIR-12192). Omit to
+   *  leave it as it is; the provisioning mirror passes `null`, because mirroring a
+   *  repository for a project is what connects it again. */
+  retiredAt?: Date | null;
   /** Provider discriminator for the row — omit for GitHub (the column default),
    *  pass `'gitlab'` when persisting a GitLab project selection (MOTIR-1478). */
   provider?: string;
@@ -132,7 +136,7 @@ function pausedOrgsCte(search: string | null): Prisma.Sql {
         COUNT(*)::int AS "pausedRepos",
         (ARRAY_AGG(gr."index_paused_reason" ORDER BY gr."index_paused_at" DESC NULLS LAST))[1] AS "reason"
       FROM "github_repo" gr
-      WHERE gr."index_paused_reason" IS NOT NULL AND gr."archived" = false
+      WHERE gr."index_paused_reason" IS NOT NULL AND gr."archived" = false AND gr."retired_at" IS NULL
       GROUP BY gr."organization_id"
     ),
     stopped AS (
@@ -141,6 +145,19 @@ function pausedOrgsCte(search: string | null): Prisma.Sql {
       WHERE true ${nameFilter}
     )`;
 }
+
+/**
+ * THE CONNECTED SET (bug MOTIR-12192) — every `github_repo` row except a RETIRED
+ * one: a Motir-hosted repository no project holds any more, kept only so the pull
+ * requests that cascade from it stay readable. Spread into every read that answers
+ * "which repositories does this organisation (or Motir) have connected?"; the
+ * raw-SQL reads spell the same rule as `gr."retired_at" IS NULL`.
+ *
+ * Reads that are about the ROWS rather than the connected set — by id, by the
+ * host's repository id, under one installation, and the organisation offboarding's
+ * work set (which must erase retired rows too) — do not take it.
+ */
+const CONNECTED = { retiredAt: null } as const satisfies Prisma.GithubRepoWhereInput;
 
 export const githubRepoRepository = {
   /** The repos selected on an installation, stable-ordered for display. Runs
@@ -185,7 +202,7 @@ export const githubRepoRepository = {
    *  you do not mean the organisation. */
   async listByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
     return tx.githubRepo.findMany({
-      where: { workspaceId },
+      where: { workspaceId, ...CONNECTED },
       orderBy: [{ owner: 'asc' }, { name: 'asc' }],
     });
   },
@@ -271,6 +288,7 @@ export const githubRepoRepository = {
       FROM "github_repo" gr
       JOIN "github_installation" gi ON gi."id" = gr."installation_id"
       WHERE gr."archived" = false
+        AND gr."retired_at" IS NULL
         AND gr."indexed_head_sha" IS NOT NULL
         AND gr."default_branch_head_sha" IS NOT NULL
         AND gr."indexed_head_sha" <> gr."default_branch_head_sha"
@@ -467,6 +485,7 @@ export const githubRepoRepository = {
         -- push or refresh still does, and lifts it.
         AND gr."index_paused_reason" <> ${INDEX_SIZE_REFUSED_PAUSE_REASON}
         AND gr."archived" = false
+        AND gr."retired_at" IS NULL
       ORDER BY gr."index_paused_at" ASC NULLS FIRST, gr."id" ASC
       LIMIT ${limit}
     `;
@@ -544,6 +563,7 @@ export const githubRepoRepository = {
         JOIN "github_installation" gi ON gi."id" = gr."installation_id"
         LEFT JOIN "job_run" jr ON jr."id" = gr."indexing_run_id"
         WHERE gr."archived" = false
+          AND gr."retired_at" IS NULL
           AND gr."index_paused_reason" IS NULL
           AND gr."index_refused_at" IS NULL
           AND (
@@ -670,6 +690,7 @@ export const githubRepoRepository = {
         // The same rows the Stopped orgs list counts.
         indexPausedReason: { not: null },
         archived: false,
+        ...CONNECTED,
       },
       select: {
         organizationId: true,
@@ -694,6 +715,7 @@ export const githubRepoRepository = {
         organizationId,
         indexPausedReason: { not: null },
         archived: false,
+        ...CONNECTED,
       },
       orderBy: { indexPausedAt: 'desc' },
       select: { indexPausedReason: true, indexPausedAt: true },
@@ -773,7 +795,7 @@ export const githubRepoRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<GithubRepo[]> {
     return tx.githubRepo.findMany({
-      where: { organizationId },
+      where: { organizationId, ...CONNECTED },
       orderBy: [{ owner: 'asc' }, { name: 'asc' }],
     });
   },
@@ -793,7 +815,7 @@ export const githubRepoRepository = {
   ): Promise<Array<{ organizationId: string; owner: string; name: string }>> {
     if (organizationIds.length === 0) return [];
     return tx.githubRepo.findMany({
-      where: { organizationId: { in: organizationIds } },
+      where: { organizationId: { in: organizationIds }, ...CONNECTED },
       select: { organizationId: true, owner: true, name: true },
       orderBy: [{ organizationId: 'asc' }, { owner: 'asc' }, { name: 'asc' }],
     });
@@ -812,7 +834,12 @@ export const githubRepoRepository = {
   ): Promise<Array<Pick<GithubRepo, 'id' | 'workspaceId' | 'organizationId' | 'owner' | 'name'>>> {
     if (organizationIds.length === 0) return [];
     return tx.githubRepo.findMany({
-      where: { organizationId: { in: organizationIds }, provider: 'github', archived: false },
+      where: {
+        organizationId: { in: organizationIds },
+        provider: 'github',
+        archived: false,
+        ...CONNECTED,
+      },
       select: { id: true, workspaceId: true, organizationId: true, owner: true, name: true },
       orderBy: [{ organizationId: 'asc' }, { owner: 'asc' }, { name: 'asc' }, { id: 'asc' }],
     });
@@ -875,7 +902,7 @@ export const githubRepoRepository = {
     opts: { workspaceId?: string } = {},
   ): Promise<(GithubRepo & { installation: GithubInstallation })[]> {
     return tx.githubRepo.findMany({
-      where: opts.workspaceId ? { workspaceId: opts.workspaceId } : {},
+      where: opts.workspaceId ? { workspaceId: opts.workspaceId, ...CONNECTED } : CONNECTED,
       include: { installation: true },
       orderBy: [{ workspaceId: 'asc' }, { owner: 'asc' }, { name: 'asc' }],
     });
@@ -1023,6 +1050,7 @@ export const githubRepoRepository = {
         owner: { equals: owner, mode: 'insensitive' },
         name: { equals: name, mode: 'insensitive' },
         workspaceId,
+        ...CONNECTED,
       },
       include: { installation: true },
     });
@@ -1059,6 +1087,7 @@ export const githubRepoRepository = {
         owner: { equals: owner, mode: 'insensitive' },
         name: { equals: name, mode: 'insensitive' },
         organizationId,
+        ...CONNECTED,
       },
       include: { installation: true },
       orderBy: { createdAt: 'asc' },
@@ -1089,6 +1118,7 @@ export const githubRepoRepository = {
       where: {
         owner: { equals: owner, mode: 'insensitive' },
         name: { equals: name, mode: 'insensitive' },
+        ...CONNECTED,
       },
       include: { installation: true },
     });
@@ -1205,6 +1235,58 @@ export const githubRepoRepository = {
   ): Promise<number> {
     const result = await tx.githubRepo.deleteMany({ where: { installationId, organizationId } });
     return result.count;
+  },
+
+  /**
+   * RETIRE one mirror from the connected set (bug MOTIR-12192) — only while NO
+   * `project_repository` row, in any workspace, still holds it. One statement, so
+   * the "nobody holds it" test and the stamp cannot be split by a concurrent link.
+   * Idempotent: a row already retired, held, or gone is left alone (count 0).
+   *
+   * Whether the repository is one Motir HOSTS is the caller's question
+   * (`isMotirHostedOwner` over `motirOwnedOrgLogins()`, configuration SQL cannot
+   * read); this method never retires anything the caller did not classify.
+   *
+   * ⚠️ `tx` must be a `withSystemContext` transaction: the hold test spans every
+   * workspace of the organisation, and a narrower context would read a SUBSET of
+   * `project_repository` and retire a repository another workspace still holds.
+   */
+  async retireIfUnheld(id: string, now: Date, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.$executeRaw`
+      UPDATE "github_repo" gr
+         SET "retired_at" = ${now}, "updated_at" = ${now}
+       WHERE gr."id" = ${id}
+         AND gr."retired_at" IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM "project_repository" pr WHERE pr."github_repo_id" = gr."id"
+         )`;
+  },
+
+  /**
+   * Every CONNECTED mirror no `project_repository` row holds — the candidates the
+   * hosted-mirror sweep classifies by owner (bug MOTIR-12192). An organisation's
+   * own repository is legitimately in this list (connected, used by no project
+   * yet); the caller keeps only the ones Motir hosts. Stable-ordered so a dry run
+   * and the run after it print the same list.
+   *
+   * ⚠️ `tx` must be a `withSystemContext` transaction, for the reason
+   * {@link retireIfUnheld} states.
+   */
+  async listConnectedUnheld(
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<GithubRepo, 'id' | 'owner' | 'name' | 'organizationId' | 'workspaceId'>>> {
+    return tx.$queryRaw`
+      SELECT gr."id"              AS "id",
+             gr."owner"           AS "owner",
+             gr."name"            AS "name",
+             gr."organization_id" AS "organizationId",
+             gr."workspace_id"    AS "workspaceId"
+        FROM "github_repo" gr
+       WHERE gr."retired_at" IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM "project_repository" pr WHERE pr."github_repo_id" = gr."id"
+         )
+       ORDER BY gr."owner" ASC, gr."name" ASC, gr."id" ASC`;
   },
 
   /**

@@ -6862,7 +6862,6 @@
   "github.inventory.usedBy": "{count, plural, one {Used by # project} other {Used by # projects}}",
   "github.inventory.usedByNone": "Used by no project yet",
   "github.inventory.usedByExpanded": "Projects working on this repository",
-  "github.inventory.hostedByMotir": "Hosted by Motir",
   "github.organization.subtitle": "Connect {org} to GitHub or GitLab once. Every project in the organisation can then work on a connected repository — picking one never indexes it again.",
   "github.organization.connectionTitle": "Organisation connection",
   "github.organization.connectedBy": "Installed by @{login} on {date}",

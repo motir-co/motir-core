@@ -14,7 +14,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { deriveCodeGraphIndexState, hasBuiltGraph } from '@/lib/codeGraph/indexState';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
-import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
+import { isMotirHostedOwner, type HostOwners } from '@/lib/git/hostOwnership';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { toProjectRepoDto } from '@/lib/mappers/projectRepoMappers';
@@ -250,6 +250,27 @@ async function resolveUnclassifiedLinkConflict<T>(
   }
 }
 
+/**
+ * THE ORGANISATION'S OWN REPOSITORIES — its connected `github_repo` rows MINUS
+ * every repository Motir hosts (bug MOTIR-12192).
+ *
+ * A repository Motir provisions carries the creating project's organisation on
+ * its mirror (`persistProvisionedRepo`, so the tenant can dispatch into it), but
+ * it is that PROJECT's, not the organisation's: it lives in Motir's provisioning
+ * organisation and no other project may use it. So the organisation-scoped
+ * surfaces — Settings › Organisation › Git's inventory and the project picker's
+ * "from your organisation" segment — leave it out, whether or not its project
+ * still holds it; it stays visible in its own project's Repositories room, under
+ * Motir-hosted. The classification is `isMotirHostedOwner`, the predicate the room
+ * and the CI meter already share, over the owned-org set the caller resolved.
+ */
+function organizationOwnRepos<T extends { owner: string }>(
+  repos: readonly T[],
+  hostOwners: HostOwners,
+): T[] {
+  return repos.filter((repo) => !isMotirHostedOwner(repo.owner, hostOwners));
+}
+
 export const organizationRepoService = {
   /**
    * `Used by N projects` is the inverse of the explicit project_repository
@@ -257,6 +278,8 @@ export const organizationRepoService = {
    * disconnect dialog, so neither surface can reconstruct workspace membership.
    */
   async listRepositoryUsage(ctx: ServiceContext): Promise<OrgRepoUsageDto[]> {
+    // Resolved before the transaction: the owned-org set is its own system read.
+    const hostOwners = await motirOwnedOrgLogins();
     // The organisation is resolved from the actor's WORKSPACE row — trusted, not
     // request input — and membership is what admits the read at all.
     // ONE org-bound transaction for BOTH org-spanning reads. `github_repo` and
@@ -271,7 +294,10 @@ export const organizationRepoService = {
         const orgId = await resolveOrganizationId(ctx.workspaceId, tx);
         await assertOrgMember(ctx.userId, orgId, tx);
         await bindOrganizationContext(tx, orgId);
-        const found = await githubRepoRepository.listByOrganization(orgId, tx);
+        const found = organizationOwnRepos(
+          await githubRepoRepository.listByOrganization(orgId, tx),
+          hostOwners,
+        );
         const byRepo = new Map<string, string[]>();
         const ids = new Set<string>();
         for (const repo of found) {
@@ -378,6 +404,8 @@ export const organizationRepoService = {
         return githubRepoRepository.listByOrganization(organizationId, tx);
       },
     );
+    // `usage` already holds only the organisation's own repositories, and the rows
+    // are drawn from it, so a repository Motir hosts has no row here (MOTIR-12192).
     const byId = new Map(repos.map((r) => [r.id, r]));
 
     // WHICH claimed runs are actually still running. One read for the whole
@@ -393,16 +421,11 @@ export const organizationRepoService = {
       ),
     );
 
-    // ⚠️ WHOSE EACH ROW IS — resolved ONCE for the list, and the answer the ROOM
-    // already gives (bug MOTIR-4892). `listByOrganization` filters on
-    // `github_repo.organization_id` and nothing else, which answers "can this
-    // organisation's projects dispatch into it?" — deliberately, since
-    // `persistProvisionedRepo` stamps the creating project's organisation onto a
-    // repository MOTIR provisions. So a repository Motir hosts is in this list and
-    // must stay in it; what was missing is the row being able to SAY so.
-    // The classification is `isMotirHostedOwner`, the same predicate
-    // `lib/projectRepos/roomSections.ts` classifies the project room's sections
-    // with, so the two surfaces cannot answer "whose is it?" differently again.
+    // The DTO still says whose each row is, over the same owned-org set the usage
+    // read filtered on — so the field reads `false` on every row this inventory
+    // can draw, and `hostOwnershipAgreement.test.ts` keeps holding the mapper to
+    // the CI meter's answer (MOTIR-4892's property). Bug MOTIR-12192 reversed
+    // MOTIR-4892's choice to KEEP hosted repositories here with a label.
     const hostOwners = await motirOwnedOrgLogins();
 
     return usage.flatMap((row) => {
@@ -579,7 +602,8 @@ export const organizationRepoService = {
         projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx),
       ]);
       const taken = new Set(held.map((row) => row.githubRepoId).filter((id): id is string => !!id));
-      return orgRepos
+      // Never a repository Motir hosts: it is its own project's (MOTIR-12192).
+      return organizationOwnRepos(orgRepos, hostOwners)
         .filter((repo) => !taken.has(repo.id))
         .map((repo) => toOrgRepoOptionDto(repo, hostOwners));
     });
@@ -601,6 +625,8 @@ export const organizationRepoService = {
     input: LinkExistingRepoInput,
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
+    // Resolved before the transaction: the owned-org set is its own system read.
+    const hostOwners = await motirOwnedOrgLogins();
     const linked = await resolveUnclassifiedLinkConflict(projectId, ctx, () =>
       inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
         // The org-admin gate, in the SERVICE and inside the transaction. The room's
@@ -611,9 +637,18 @@ export const organizationRepoService = {
         await assertOrgAdmin(ctx.userId, organizationId, tx);
 
         const repo = await githubRepoRepository.findById(input.githubRepoId, tx);
-        // Not-found and belongs-to-another-org are ONE answer on purpose: a probe
-        // must not be able to tell a real id in a foreign org from a fictional one.
-        if (!repo || repo.organizationId !== organizationId) {
+        // Not-found, belongs-to-another-org, retired, and HOSTED BY MOTIR are ONE
+        // answer on purpose: a probe must not be able to tell a real id in a
+        // foreign org from a fictional one, and a repository Motir hosts is its
+        // own project's, never the organisation's to link (MOTIR-12192) — the
+        // picker does not offer one, and a caller that skipped the picker gets the
+        // same answer it would for any repository the organisation does not have.
+        if (
+          !repo ||
+          repo.organizationId !== organizationId ||
+          repo.retiredAt !== null ||
+          isMotirHostedOwner(repo.owner, hostOwners)
+        ) {
           throw new ProjectRepoInvalidFieldError(
             'githubRepoId',
             'it does not name a repository connected to this organisation.',

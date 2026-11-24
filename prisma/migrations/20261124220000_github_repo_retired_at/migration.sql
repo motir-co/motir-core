@@ -1,0 +1,20 @@
+-- ============================================================
+-- `github_repo.retired_at` — a Motir-hosted repository no project holds leaves
+-- the organisation's connected set (bug MOTIR-12192).
+-- ============================================================
+-- A repository Motir hosts belongs to the project it was created for. Removing
+-- it from that project used to un-claim its mirror the way an organisation's
+-- own repository is un-claimed, so the mirror stayed in every read keyed on
+-- `github_repo.organization_id`: Settings › Organisation › Git, the project
+-- picker, the first-index pass and the inventory motir-ai's reconcile reads.
+--
+-- The mirror is KEPT, not deleted, because `github_pull_request` cascades from
+-- it and a work item's linked pull requests must stay readable. This column is
+-- what every connected-set read filters on instead.
+--
+-- ADDITIVE AND NULLABLE: an old build neither reads nor writes it, so the
+-- migration is safe to apply before the new build serves. The rows already left
+-- behind are retired by the data script `retire-hosted-mirrors`, not here —
+-- which owners are Motir's is configuration (`GITHUB_FALLBACK_ORG` plus every
+-- fleet account's org, `motirOwnedOrgLogins()`), which SQL cannot read.
+ALTER TABLE "github_repo" ADD COLUMN "retired_at" TIMESTAMP(3);

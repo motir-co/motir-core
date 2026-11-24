@@ -47,6 +47,7 @@
     "db:backfill:run-discrepancy": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-run-discrepancy",
     "db:backfill:aws-costs": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts backfill-aws-costs",
     "db:first-index-pass": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts first-index-pass",
+    "db:retire:hosted-mirrors": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts retire-hosted-mirrors",
     "db:converge:unlanded-cards": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts converge-unlanded-cards",
     "db:converge:ejected-cards": "tsx --tsconfig tsconfig.node.json scripts/data-script-main.ts converge-unlanded-cards",
     "db:reevaluate:repo-set": "tsx --tsconfig tsconfig.node.json scripts/reevaluate-repo-set-completion.ts",

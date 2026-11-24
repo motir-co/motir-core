@@ -8742,8 +8742,7 @@
       },
       "usedBy": "{count, plural, other {프로젝트 #개에서 사용}}",
       "usedByNone": "아직 사용하는 프로젝트 없음",
-      "usedByExpanded": "이 저장소에서 작업하는 프로젝트",
-      "hostedByMotir": "Motir에서 호스팅"
+      "usedByExpanded": "이 저장소에서 작업하는 프로젝트"
     },
     "organization": {
       "subtitle": "{org}을(를) GitHub 또는 GitLab에 한 번만 연결하세요. 그러면 조직의 모든 프로젝트가 연결된 저장소에서 작업할 수 있으며, 저장소를 선택해도 다시 인덱싱되지 않습니다.",
