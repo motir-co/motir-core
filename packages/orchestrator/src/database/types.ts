@@ -46,9 +46,15 @@ export interface DatabaseCreated {
   readonly env: readonly ReleaseEnvVar[];
 }
 
-/** Compute time and storage of one database over a window. */
+/** Who measured a usage record: a database port's provider, or `aws` — the
+ *  Aurora cluster the AWS hosting target keeps in a tenant account, which is
+ *  the hosting adapter's and is read outside this port (MOTIR-12191). */
+export type DatabaseUsageProvider = DatabaseProvider | 'aws';
+
+/** Compute time and storage of one database over a window. On Aurora,
+ *  `computeSeconds` is ACU-seconds. */
 export interface DatabaseUsage {
-  readonly provider: DatabaseProvider;
+  readonly provider: DatabaseUsageProvider;
   readonly applicationRef: string;
   readonly since: Date;
   readonly until: Date;
