@@ -556,6 +556,7 @@
   "labels.defaultStatus.in_progress": "In Progress",
   "labels.defaultStatus.implemented": "Implemented",
   "labels.defaultStatus.planning": "Planning",
+  "labels.defaultStatus.to_plan": "To plan",
   "labels.defaultStatus.in_review": "In Review",
   "labels.defaultStatus.approved": "Approved",
   "labels.defaultStatus.done": "Done",

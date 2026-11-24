@@ -1,4 +1,4 @@
-import { CircleCheck, CircleEllipsis } from 'lucide-react';
+import { CircleCheck, CircleEllipsis, CirclePause } from 'lucide-react';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 
@@ -42,6 +42,10 @@ const TONE_BY_STATUS_KEY: Record<string, NonNullable<PillProps['status']>> = {
   // and In Review, so without this row a person cannot tell A PERSON SAID YES
   // from NOBODY HAS LOOKED YET, which is the whole point of the status.
   approved: 'approved',
+  // The THIRD (To plan): an `in_progress`-category status that must NOT read
+  // as In Progress — a card stopped because a decision it rests on changed is
+  // the opposite of work being done.
+  to_plan: 'to-plan',
 };
 
 /** The per-CATEGORY fallback — the mapping every status had before, unchanged,
@@ -79,6 +83,10 @@ const GLYPH_BY_STATUS_KEY: Record<string, typeof CircleEllipsis> = {
   // already speaks, and it is load-bearing rather than decorative: `approved`
   // and `done` are the two closest chips in the set at a 14% tint.
   approved: CircleCheck,
+  // A ring around a pause: stopped, and not being worked. It also tells this
+  // chip apart from the computed "To plan" slot pill a childless story wears,
+  // which shares the label and means something else.
+  to_plan: CirclePause,
 };
 
 /**

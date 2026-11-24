@@ -244,6 +244,7 @@ async function assertStoryTakesAReceipt(
     reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
     implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
     approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+    toPlanKey: statuses.find((s) => s.key === 'to_plan')?.key ?? null,
   });
   if (rank < RUNG_RANK.implemented) return;
 

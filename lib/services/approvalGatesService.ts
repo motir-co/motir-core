@@ -2950,6 +2950,9 @@ export const approvalGatesService = {
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
     appliedTransitions: AppliedGateTransition[],
+    /** The effect's post-commit work, for the caller to await once ITS transaction
+     *  commits — this method runs inside the caller's, so it can never run it. */
+    afterCommits: Array<() => Promise<void>> = [],
   ): Promise<DecideGateResult> {
     // 1 · LOCK AND RE-READ.
     const locked = await approvalGateRepository.lockById(gateId, tx);
@@ -3003,8 +3006,11 @@ export const approvalGatesService = {
     const pinnedId = await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
     const filesKept = locked.kind === 'design_result' ? pinnedId === locked.subjectId : null;
 
-    // 5 · THE KIND'S EFFECT — the same `approve` a person's press runs.
-    const effect = await handler.approve(args);
+    // 5 · THE KIND'S EFFECT — the same `approve` a person's press runs. Its
+    //     `afterCommit` (MOTIR-12175: a decision kind's correction mark) goes to the
+    //     caller, which awaits it after its own commit, exactly as the door does.
+    const { afterCommit, ...effect } = await handler.approve(args);
+    if (afterCommit) afterCommits.push(afterCommit);
 
     // 6 · THE DECISION, LAST, with the §2c markers.
     const decided = await approvalGateRepository.decide(

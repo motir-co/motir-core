@@ -128,6 +128,9 @@ describe('the status a fresh project is seeded with', () => {
     // grew. The fold was RE-MEASURED at nine columns rather than assumed —
     // `design/boards/approved-column.mock.html`, panel 1 — and the count of
     // fully-visible columns is unchanged at every viewport.
+    //
+    // MOTIR-12174 added `to_plan` at slot 6, again AFTER `implemented`
+    // (`design/boards/board--to-plan-status.mock.html`, panel 1).
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
     expect(wf.statuses.map((s) => s.key)).toEqual([
       'todo',
@@ -135,6 +138,7 @@ describe('the status a fresh project is seeded with', () => {
       'in_progress',
       'implemented',
       'planning',
+      'to_plan',
       'in_review',
       'approved',
       'done',

@@ -738,6 +738,7 @@
       "in_progress": "En curso",
       "implemented": "Implementado",
       "planning": "En planificación",
+      "to_plan": "Por planificar",
       "in_review": "En revisión",
       "approved": "Aprobado",
       "done": "Hecho",

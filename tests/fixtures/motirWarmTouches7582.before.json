@@ -276,7 +276,9 @@
     "--el-cta-warm": "#f0b90b",
     "--el-cta-warm-text": "#0b0e11",
     "--el-chart-workload-assigned": "#fcd535",
-    "--el-chart-workload-unassigned": "#2dd4bf"
+    "--el-chart-workload-unassigned": "#2dd4bf",
+    "--el-status-to-plan": "color-mix(in srgb, #fbab4c 45%, #eaecef)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #fbab4c 45%, #eaecef) 30%, #1e2329)"
   },
   "amber/light": {
     "--el-accent": "#f0b90b",
@@ -555,7 +557,9 @@
     "--el-cta-warm": "#97751a",
     "--el-cta-warm-text": "#181a20",
     "--el-chart-workload-assigned": "#7d6000",
-    "--el-chart-workload-unassigned": "#0e8f86"
+    "--el-chart-workload-unassigned": "#0e8f86",
+    "--el-status-to-plan": "color-mix(in srgb, #b45309 45%, #181a20)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #b45309 45%, #181a20) 30%, #f4f5f7)"
   },
   "amethyst/dark": {
     "--el-accent": "#6c5cdd",
@@ -834,7 +838,9 @@
     "--el-cta-warm": "#ff64c8",
     "--el-cta-warm-text": "#0f0f0f",
     "--el-chart-workload-assigned": "#7b6ce5",
-    "--el-chart-workload-unassigned": "#2a9d99"
+    "--el-chart-workload-unassigned": "#2a9d99",
+    "--el-status-to-plan": "color-mix(in srgb, #dd5b00 45%, #f3f4f6)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #dd5b00 45%, #f3f4f6) 30%, #1a1a1a)"
   },
   "amethyst/light": {
     "--el-accent": "#5645d4",
@@ -1113,7 +1119,9 @@
     "--el-cta-warm": "#ff64c8",
     "--el-cta-warm-text": "#1a1a1a",
     "--el-chart-workload-assigned": "#5645d4",
-    "--el-chart-workload-unassigned": "#2a9d99"
+    "--el-chart-workload-unassigned": "#2a9d99",
+    "--el-status-to-plan": "color-mix(in srgb, #dd5b00 45%, #1a1a1a)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #dd5b00 45%, #1a1a1a) 30%, #f6f5f4)"
   },
   "candy/dark": {
     "--el-accent": "#ff8dcc",
@@ -1392,7 +1400,9 @@
     "--el-cta-warm": "#e796f3",
     "--el-cta-warm-text": "#191117",
     "--el-chart-workload-assigned": "#ff8dcc",
-    "--el-chart-workload-unassigned": "#1fd8a4"
+    "--el-chart-workload-unassigned": "#1fd8a4",
+    "--el-status-to-plan": "color-mix(in srgb, #ffca16 45%, #eeeef0)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ffca16 45%, #eeeef0) 30%, #37172f)"
   },
   "candy/light": {
     "--el-accent": "#efbfdd",
@@ -1671,7 +1681,9 @@
     "--el-cta-warm": "#ab4aba",
     "--el-cta-warm-text": "#211f26",
     "--el-chart-workload-assigned": "#b72682",
-    "--el-chart-workload-unassigned": "#208368"
+    "--el-chart-workload-unassigned": "#208368",
+    "--el-status-to-plan": "color-mix(in srgb, #ab6400 45%, #211f26)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ab6400 45%, #211f26) 30%, #fee9f5)"
   },
   "citrine/dark": {
     "--el-accent": "#ffd02f",
@@ -1950,7 +1962,9 @@
     "--el-cta-warm": "#5b76fe",
     "--el-cta-warm-text": "#090909",
     "--el-chart-workload-assigned": "#ffd02f",
-    "--el-chart-workload-unassigned": "#7a90fe"
+    "--el-chart-workload-unassigned": "#7a90fe",
+    "--el-status-to-plan": "color-mix(in srgb, #ffd850 45%, #f6f7f9)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ffd850 45%, #f6f7f9) 30%, #1a1b1e)"
   },
   "citrine/light": {
     "--el-accent": "#ffd02f",
@@ -2229,7 +2243,9 @@
     "--el-cta-warm": "#3859ff",
     "--el-cta-warm-text": "#050038",
     "--el-chart-workload-assigned": "#746019",
-    "--el-chart-workload-unassigned": "#243797"
+    "--el-chart-workload-unassigned": "#243797",
+    "--el-status-to-plan": "color-mix(in srgb, #91771e 45%, #050038)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #91771e 45%, #050038) 30%, #f3f4f6)"
   },
   "cobalt/dark": {
     "--el-accent": "#4a63cf",
@@ -2508,7 +2524,9 @@
     "--el-cta-warm": "#2ec3d6",
     "--el-cta-warm-text": "#0b111d",
     "--el-chart-workload-assigned": "#7e98f2",
-    "--el-chart-workload-unassigned": "#2db6a8"
+    "--el-chart-workload-unassigned": "#2db6a8",
+    "--el-status-to-plan": "color-mix(in srgb, #f08a4b 45%, #e7edf6)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #f08a4b 45%, #e7edf6) 30%, #131d2c)"
   },
   "cobalt/light": {
     "--el-accent": "#3650c2",
@@ -2787,7 +2805,9 @@
     "--el-cta-warm": "#0e93a8",
     "--el-cta-warm-text": "#0f1b2e",
     "--el-chart-workload-assigned": "#3a57cf",
-    "--el-chart-workload-unassigned": "#0e8f86"
+    "--el-chart-workload-unassigned": "#0e8f86",
+    "--el-status-to-plan": "color-mix(in srgb, #c2410c 45%, #0f1b2e)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #c2410c 45%, #0f1b2e) 30%, #eef2f8)"
   },
   "evergreen/dark": {
     "--el-accent": "#3ddc97",
@@ -3066,7 +3086,9 @@
     "--el-cta-warm": "#a78bfa",
     "--el-cta-warm-text": "#0c130f",
     "--el-chart-workload-assigned": "#3ddc97",
-    "--el-chart-workload-unassigned": "#2dd4bf"
+    "--el-chart-workload-unassigned": "#2dd4bf",
+    "--el-status-to-plan": "color-mix(in srgb, #fb923c 45%, #e8efe9)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #fb923c 45%, #e8efe9) 30%, #141d18)"
   },
   "evergreen/light": {
     "--el-accent": "#0c7a52",
@@ -3345,7 +3367,9 @@
     "--el-cta-warm": "#8257e6",
     "--el-cta-warm-text": "#14201b",
     "--el-chart-workload-assigned": "#0b714c",
-    "--el-chart-workload-unassigned": "#0d8a86"
+    "--el-chart-workload-unassigned": "#0d8a86",
+    "--el-status-to-plan": "color-mix(in srgb, #b45309 45%, #14201b)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #b45309 45%, #14201b) 30%, #eef3f0)"
   },
   "garnet/dark": {
     "--el-accent": "#c30021",
@@ -3624,7 +3648,9 @@
     "--el-cta-warm": "#e35bb8",
     "--el-cta-warm-text": "#0e0e0e",
     "--el-chart-workload-assigned": "#ff5a76",
-    "--el-chart-workload-unassigned": "#2dd4bf"
+    "--el-chart-workload-unassigned": "#2dd4bf",
+    "--el-status-to-plan": "color-mix(in srgb, #fbab4c 45%, #efefef)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #fbab4c 45%, #efefef) 30%, #1a1a1a)"
   },
   "garnet/light": {
     "--el-accent": "#c30021",
@@ -3903,7 +3929,9 @@
     "--el-cta-warm": "#9c2d7f",
     "--el-cta-warm-text": "#111111",
     "--el-chart-workload-assigned": "#c30021",
-    "--el-chart-workload-unassigned": "#0e8f86"
+    "--el-chart-workload-unassigned": "#0e8f86",
+    "--el-status-to-plan": "color-mix(in srgb, #b45309 45%, #111111)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #b45309 45%, #111111) 30%, #efefef)"
   },
   "motir/dark": {
     "--el-accent": "#edeef0",
@@ -4182,7 +4210,9 @@
     "--el-cta-warm": "#fa5500",
     "--el-cta-warm-text": "#0c0d0f",
     "--el-chart-workload-assigned": "#7db1ff",
-    "--el-chart-workload-unassigned": "#2db6a8"
+    "--el-chart-workload-unassigned": "#2db6a8",
+    "--el-status-to-plan": "color-mix(in srgb, #f08a4b 45%, #edeef0)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #f08a4b 45%, #edeef0) 30%, #18191c)"
   },
   "motir/light": {
     "--el-accent": "#1a1d21",
@@ -4461,7 +4491,9 @@
     "--el-cta-warm": "#d66000",
     "--el-cta-warm-text": "#16191d",
     "--el-chart-workload-assigned": "#155bc4",
-    "--el-chart-workload-unassigned": "#0e8f86"
+    "--el-chart-workload-unassigned": "#0e8f86",
+    "--el-status-to-plan": "color-mix(in srgb, #c2410c 45%, #16191d)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #c2410c 45%, #16191d) 30%, #eef0f3)"
   },
   "sienna/dark": {
     "--el-accent": "#ff7a38",
@@ -4740,7 +4772,9 @@
     "--el-cta-warm": "#ffa110",
     "--el-cta-warm-text": "#15120d",
     "--el-chart-workload-assigned": "#ff8a4c",
-    "--el-chart-workload-unassigned": "#2dd4bf"
+    "--el-chart-workload-unassigned": "#2dd4bf",
+    "--el-status-to-plan": "color-mix(in srgb, #fbab4c 45%, #f5efe2)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #fbab4c 45%, #f5efe2) 30%, #1f1d17)"
   },
   "sienna/light": {
     "--el-accent": "#fa520f",
@@ -5019,7 +5053,9 @@
     "--el-cta-warm": "#b5660a",
     "--el-cta-warm-text": "#1f1f1f",
     "--el-chart-workload-assigned": "#b53b09",
-    "--el-chart-workload-unassigned": "#0e8f86"
+    "--el-chart-workload-unassigned": "#0e8f86",
+    "--el-status-to-plan": "color-mix(in srgb, #b45309 45%, #1f1f1f)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #b45309 45%, #1f1f1f) 30%, #fbf1d3)"
   },
   "spectrum/dark": {
     "--el-accent": "#6d4fd6",
@@ -5298,7 +5334,9 @@
     "--el-cta-warm": "#ff5fb0",
     "--el-cta-warm-text": "#14111f",
     "--el-chart-workload-assigned": "#a78bfa",
-    "--el-chart-workload-unassigned": "#2dc4b8"
+    "--el-chart-workload-unassigned": "#2dc4b8",
+    "--el-status-to-plan": "color-mix(in srgb, #fb8b4c 45%, #ece9f6)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #fb8b4c 45%, #ece9f6) 30%, #1d1830)"
   },
   "spectrum/light": {
     "--el-accent": "#5a37c9",
@@ -5577,7 +5615,9 @@
     "--el-cta-warm": "#e23d97",
     "--el-cta-warm-text": "#1a1626",
     "--el-chart-workload-assigned": "#6440d6",
-    "--el-chart-workload-unassigned": "#0d9488"
+    "--el-chart-workload-unassigned": "#0d9488",
+    "--el-status-to-plan": "color-mix(in srgb, #ea580c 45%, #1a1626)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ea580c 45%, #1a1626) 30%, #f4f2fb)"
   },
   "lagoon/light": {
     "--el-accent": "#0f667c",
@@ -5856,7 +5896,9 @@
     "--el-cta-warm": "#d13415",
     "--el-cta-warm-text": "#1c2024",
     "--el-chart-workload-assigned": "#0f667c",
-    "--el-chart-workload-unassigned": "#008573"
+    "--el-chart-workload-unassigned": "#008573",
+    "--el-status-to-plan": "color-mix(in srgb, #ab6400 45%, #1c2024)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ab6400 45%, #1c2024) 30%, #def7f9)"
   },
   "lagoon/dark": {
     "--el-accent": "#4ccce6",
@@ -6135,7 +6177,9 @@
     "--el-cta-warm": "#ff977d",
     "--el-cta-warm-text": "#0b161a",
     "--el-chart-workload-assigned": "#4ccce6",
-    "--el-chart-workload-unassigned": "#0bd8b6"
+    "--el-chart-workload-unassigned": "#0bd8b6",
+    "--el-status-to-plan": "color-mix(in srgb, #ffca16 45%, #edeef0)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ffca16 45%, #edeef0) 30%, #082c36)"
   },
   "olive/light": {
     "--el-accent": "#4a5e26",
@@ -6414,7 +6458,9 @@
     "--el-cta-warm": "#cc4e00",
     "--el-cta-warm-text": "#1d211c",
     "--el-chart-workload-assigned": "#4a5e26",
-    "--el-chart-workload-unassigned": "#008573"
+    "--el-chart-workload-unassigned": "#008573",
+    "--el-status-to-plan": "color-mix(in srgb, #ab6400 45%, #1d211c)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ab6400 45%, #1d211c) 30%, #eff1ef)"
   },
   "olive/dark": {
     "--el-accent": "#bde56c",
@@ -6693,7 +6739,9 @@
     "--el-cta-warm": "#ffa057",
     "--el-cta-warm-text": "#111210",
     "--el-chart-workload-assigned": "#bde56c",
-    "--el-chart-workload-unassigned": "#0bd8b6"
+    "--el-chart-workload-unassigned": "#0bd8b6",
+    "--el-status-to-plan": "color-mix(in srgb, #ffca16 45%, #eceeec)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ffca16 45%, #eceeec) 30%, #212220)"
   },
   "contrast/light": {
     "--el-accent": "#953ea3",
@@ -6972,7 +7020,9 @@
     "--el-cta-warm": "#cc4e00",
     "--el-cta-warm-text": "#202020",
     "--el-chart-workload-assigned": "#953ea3",
-    "--el-chart-workload-unassigned": "#008573"
+    "--el-chart-workload-unassigned": "#008573",
+    "--el-status-to-plan": "color-mix(in srgb, #ab6400 45%, #202020)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ab6400 45%, #202020) 30%, #f0f0f0)"
   },
   "contrast/dark": {
     "--el-accent": "#e796f3",
@@ -7251,7 +7301,9 @@
     "--el-cta-warm": "#ffa057",
     "--el-cta-warm-text": "#191919",
     "--el-chart-workload-assigned": "#e796f3",
-    "--el-chart-workload-unassigned": "#0bd8b6"
+    "--el-chart-workload-unassigned": "#0bd8b6",
+    "--el-status-to-plan": "color-mix(in srgb, #ffca16 45%, #eeeeee)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ffca16 45%, #eeeeee) 30%, #2a2a2a)"
   },
   "midnight/light": {
     "--el-accent": "#7ce2fe",
@@ -7530,7 +7582,9 @@
     "--el-cta-warm": "#8145b5",
     "--el-cta-warm-text": "#1c2024",
     "--el-chart-workload-assigned": "#1d3e56",
-    "--el-chart-workload-unassigned": "#027864"
+    "--el-chart-workload-unassigned": "#027864",
+    "--el-status-to-plan": "color-mix(in srgb, #ab6400 45%, #1c2024)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ab6400 45%, #1c2024) 30%, #f0f0f3)"
   },
   "midnight/dark": {
     "--el-accent": "#7ce2fe",
@@ -7809,6 +7863,8 @@
     "--el-cta-warm": "#d19dff",
     "--el-cta-warm-text": "#18191b",
     "--el-chart-workload-assigned": "#75c7f0",
-    "--el-chart-workload-unassigned": "#58d5ba"
+    "--el-chart-workload-unassigned": "#58d5ba",
+    "--el-status-to-plan": "color-mix(in srgb, #ffca16 45%, #edeef0)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #ffca16 45%, #edeef0) 30%, #212225)"
   }
 }

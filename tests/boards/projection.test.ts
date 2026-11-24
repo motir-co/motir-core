@@ -47,6 +47,8 @@ const DEFAULT_KEYS = [
   // because slot 4 is the last board column a laptop shows in full.
   'implemented',
   'planning',
+  // MOTIR-10139 — planned, but a decision it rests on was corrected since.
+  'to_plan',
   'in_review',
   // MOTIR-5139 — a person's YES, between review and the merge.
   'approved',

@@ -42,6 +42,11 @@ const STATUS_KEY_EL: Record<string, string> = {
   // control a person uses to SET the status**. Drawn, and visible, in
   // design/boards/approved-column.mock.html panel 4.
   approved: '--el-status-approved',
+  // STOPPED FOR RE-PLANNING — the fourth in-progress-category status with its
+  // own key entry, for the reason the three above give: without it To plan's
+  // option dot in the status picker would wear In Progress's hue. Drawn in
+  // design/boards/board--to-plan-status.mock.html panel 3.
+  to_plan: '--el-status-to-plan',
   done: '--el-status-done',
   cancelled: '--el-status-cancelled',
 };

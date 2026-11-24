@@ -738,6 +738,7 @@
       "in_progress": "進行中",
       "implemented": "実装済み",
       "planning": "計画中",
+      "to_plan": "計画待ち",
       "in_review": "レビュー中",
       "approved": "承認済み",
       "done": "完了",

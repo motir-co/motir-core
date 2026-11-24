@@ -278,7 +278,9 @@
     "--el-cta-warm": "#ff64c8",
     "--el-cta-warm-text": "#0f0f0f",
     "--el-chart-workload-assigned": "#7b6ce5",
-    "--el-chart-workload-unassigned": "#2a9d99"
+    "--el-chart-workload-unassigned": "#2a9d99",
+    "--el-status-to-plan": "color-mix(in srgb, #dd5b00 45%, #f3f4f6)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #dd5b00 45%, #f3f4f6) 30%, #1a1a1a)"
   },
   "amethyst/light": {
     "--el-accent": "#5645d4",
@@ -559,7 +561,9 @@
     "--el-cta-warm": "#ff64c8",
     "--el-cta-warm-text": "#1a1a1a",
     "--el-chart-workload-assigned": "#5645d4",
-    "--el-chart-workload-unassigned": "#2a9d99"
+    "--el-chart-workload-unassigned": "#2a9d99",
+    "--el-status-to-plan": "color-mix(in srgb, #dd5b00 45%, #1a1a1a)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #dd5b00 45%, #1a1a1a) 30%, #f6f5f4)"
   },
   "motir/dark": {
     "--el-accent": "#edeef0",
@@ -840,7 +844,9 @@
     "--el-cta-warm": "#fa5500",
     "--el-cta-warm-text": "#0c0d0f",
     "--el-chart-workload-assigned": "#7db1ff",
-    "--el-chart-workload-unassigned": "#2db6a8"
+    "--el-chart-workload-unassigned": "#2db6a8",
+    "--el-status-to-plan": "color-mix(in srgb, #f08a4b 45%, #edeef0)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #f08a4b 45%, #edeef0) 30%, #18191c)"
   },
   "motir/light": {
     "--el-accent": "#1a1d21",
@@ -1121,6 +1127,8 @@
     "--el-cta-warm": "#d66000",
     "--el-cta-warm-text": "#16191d",
     "--el-chart-workload-assigned": "#155bc4",
-    "--el-chart-workload-unassigned": "#0e8f86"
+    "--el-chart-workload-unassigned": "#0e8f86",
+    "--el-status-to-plan": "color-mix(in srgb, #c2410c 45%, #16191d)",
+    "--el-tint-clay": "color-mix(in srgb, color-mix(in srgb, #c2410c 45%, #16191d) 30%, #eef0f3)"
   }
 }

@@ -4523,6 +4523,7 @@ export const workItemRepository = {
       reviewStatusKey: string | null;
       implementedStatusKey: string | null;
       approvedStatusKey?: string | null;
+      toPlanStatusKey?: string | null;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<{
@@ -4541,12 +4542,18 @@ export const workItemRepository = {
     // keeps compiling and keeps its old answer — `null` buckets nothing, which
     // is exactly how a project without the `approved` backfill behaves.
     const approvedStatusKey = ladderKeys.approvedStatusKey ?? null;
+    // MOTIR-12174. The one key pulled DOWN: `to_plan` is `in_progress`-category
+    // (that keeps it out of the claim doors) but means planned, NOT started, so
+    // it is bucketed as `todo` — the rung `rankOfStatus` gives it. Optional for
+    // the same reason as the approved key above.
+    const toPlanStatusKey = ladderKeys.toPlanStatusKey ?? null;
     const rows = await client.$queryRaw<
       Array<{
         category: string;
         is_review: boolean;
         is_implemented: boolean;
         is_approved: boolean;
+        is_to_plan: boolean;
         count: number;
         last_changed_at: Date | null;
       }>
@@ -4560,6 +4567,9 @@ export const workItemRepository = {
              (${approvedStatusKey}::text IS NOT NULL
                AND w."status" = ${approvedStatusKey}::text)
                AS "is_approved",
+             (${toPlanStatusKey}::text IS NOT NULL
+               AND w."status" = ${toPlanStatusKey}::text)
+               AS "is_to_plan",
              COUNT(*)::int AS "count",
              MAX(GREATEST(w."createdAt", w."updatedAt")) AS "last_changed_at"
         FROM "work_item" w
@@ -4568,7 +4578,7 @@ export const workItemRepository = {
         WHERE w."parentId" = ${parentId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-        GROUP BY ws."category", "is_review", "is_implemented", "is_approved"`;
+        GROUP BY ws."category", "is_review", "is_implemented", "is_approved", "is_to_plan"`;
 
     const out = {
       total: 0,
@@ -4616,6 +4626,7 @@ export const workItemRepository = {
       if (r.is_approved) out.approved += r.count;
       else if (r.is_review) out.inReview += r.count;
       else if (r.is_implemented) out.implemented += r.count;
+      else if (r.is_to_plan) out.todo += r.count;
       else if (r.category === 'todo') out.todo += r.count;
       else if (r.category === 'in_progress') out.inProgress += r.count;
       else if (r.category === 'done') out.done += r.count;
