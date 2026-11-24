@@ -47,6 +47,12 @@ export interface ProjectCanvasNode {
    *  control's first-priority target (MOTIR-1421). Set by the work-item consumer; the
    *  content-agnostic canvas only reads it to centre on the current position. */
   here?: boolean;
+  /** The node's card wears a TAB on its top-left edge — You are here, blocked
+   *  elsewhere (MOTIR-12158) or a decided plan card's outcome — so the canvas fans
+   *  its top-side edges right of the tab and no arrowhead lands under it (design
+   *  MOTIR-12157 § "Arrowheads entering a tabbed card's top"). A `here` node is
+   *  tabbed whether or not this is set. */
+  topTab?: boolean;
   /** This node is READY to start (MOTIR-1417) — the LOCATE control's fallback target
    *  when there is no frontier; multiple ready nodes are cycled. */
   ready?: boolean;

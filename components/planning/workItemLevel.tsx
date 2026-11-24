@@ -647,6 +647,9 @@ export function buildWorkItemLevel(
       // ("you are here") and the ready-to-start flag, so the canvas can centre on the
       // actionable node without knowing about work-item readiness itself.
       here: item.id === activeId,
+      // The here tab or the blocked tab rides the card's top edge (MOTIR-12158),
+      // so its top-side edges fan right of it.
+      ...(item.id === activeId || crossBlocked.has(item.id) ? { topTab: true } : {}),
       ready: item.ready ?? false,
       content: (
         <WorkItemNode

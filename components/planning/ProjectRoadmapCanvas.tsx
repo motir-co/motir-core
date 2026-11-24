@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronUp,
   Eye,
+  Flag,
   Folder,
   LocateFixed,
   Maximize,
@@ -17,6 +18,7 @@ import {
   Target,
   X,
 } from 'lucide-react';
+import { BLOCKED_TAB_TONE, CARD_EDGE_TAB_SHAPE } from '@/components/planning/cardEdgeTab';
 import {
   PlanningCanvas,
   type CanvasEdge,
@@ -1506,9 +1508,10 @@ export function ProjectRoadmapCanvas({
     width: n.width ?? NODE_W,
     height: n.height ?? NODE_H,
     ...(n.changeKey !== undefined ? { changeKey: n.changeKey } : {}),
-    // The "here" card wears the You are here tab on its top-left edge
-    // (MOTIR-10630), so its top-side edges fan right of it.
-    ...(n.here ? { topTab: true } : {}),
+    // A card wearing a tab on its top-left edge — You are here (MOTIR-10630),
+    // blocked elsewhere or a decided outcome (MOTIR-12158) — fans its top-side
+    // edges right of the tab, so no arrowhead lands under it.
+    ...(n.here || n.topTab ? { topTab: true } : {}),
   }));
   const canvasEdges: CanvasEdge[] = deps.map((d) => ({
     from: d.from,
@@ -2485,6 +2488,20 @@ export function ProjectRoadmapCanvas({
                     }
                   />
                 </svg>
+                {/* The blocked TAB's specimen (MOTIR-12158; design MOTIR-12157 §
+                    "Legend"): the red tab a blocked card wears, between the orange
+                    edge's swatch and its label, so the two read as one fact. Static
+                    and decorative — the row's words carry the meaning. */}
+                {kind === 'warning' ? (
+                  <span
+                    aria-hidden="true"
+                    data-testid="legend-blocked-tab"
+                    className={`${CARD_EDGE_TAB_SHAPE} shrink-0 ${BLOCKED_TAB_TONE}`}
+                  >
+                    <Flag className="size-3 shrink-0" aria-hidden="true" />
+                    {t('node.blockedShort')}
+                  </span>
+                ) : null}
                 {label}
                 <span className="text-(--el-text-secondary)">· {meaning}</span>
               </span>

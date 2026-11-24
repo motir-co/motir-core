@@ -12,7 +12,6 @@ import {
 import {
   Brain,
   FilePen,
-  Flag,
   ListTree,
   Maximize2,
   Minus,
@@ -91,8 +90,8 @@ export interface CanvasEdge {
   /**
    * `firm` = a hard dependency (solid); `pending` = a not-yet-done edge (dashed);
    * `cross` = a dependency crossing a story/parent boundary — the bad-plan SIGNAL
-   * the dependency-arrow audit forbids (warning-toned + a flag badge at the
-   * midpoint, so a reviewer SEES the tangle). A correct plan is a TREE; a `cross`
+   * the dependency-arrow audit forbids (warning-toned; the blocked card carries
+   * the "blocked elsewhere" tab, so a reviewer SEES the tangle). A correct plan is a TREE; a `cross`
    * edge means the plan is wrong (design `design/roadmap/*`, MOTIR-1009/1194).
    *
    * `running` = the dependency a RUN is currently travelling along: an edge FROM
@@ -1267,42 +1266,10 @@ export function PlanningCanvas({
           })}
         </div>
 
-        {/* "blocked elsewhere" flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
-            the edge <svg>, whose <path> count is asserted): a warning chip + flag
-            glyph + label at each cross edge's midpoint, so the tangle never rests
-            on edge colour alone. Decorative — the dependency facts live in the
-            node list. Rendered AFTER the node layer (MOTIR-1583) so the chip paints
-            ABOVE the cards: both layers are position:absolute with no z-index, so a
-            chip sitting at an edge's midpoint over a card would otherwise be occluded.
-            The layer is pointer-events-none, so stacking it on top intercepts nothing. */}
-        <div
-          className="pointer-events-none absolute top-0 left-0"
-          style={worldTransform}
-          aria-hidden="true"
-          data-testid="canvas-cross-flags"
-        >
-          {liveEdges.map((edge, i) => {
-            if (edge.variant !== 'cross') return null;
-            const route = routes[i];
-            if (!route) return null;
-            const m = route.mid;
-            return (
-              <span
-                key={`flag~${edge.from}~${edge.to}~${i}`}
-                // the chip rides its edge's motion (MOTIR-6297), so it never lands before the arrow
-                className={withMotion(
-                  'absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)',
-                  edgeMotion(edge),
-                )}
-                style={{ left: m.x, top: m.y }}
-                data-testid="cross-flag"
-              >
-                <Flag className="size-3.5" />
-                {t('node.blockedElsewhere')}
-              </span>
-            );
-          })}
-        </div>
+        {/* No "blocked elsewhere" chip is drawn on a `cross` edge any more
+            (MOTIR-12158; design MOTIR-12157): a midpoint chip landed on whatever
+            card the route passed under and read as THAT card's flag. The blocked
+            card owns the fact, on its own top-edge tab (`BlockedTab`). */}
       </div>
 
       {/* zoom controls (fixed — do not pan/zoom) */}

@@ -4,18 +4,13 @@ import { Fragment, useState, useTransition } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import type { RawSpendRow } from '@/lib/ai/motirAiClient';
+import { CHARGED_CATEGORIES } from '@/lib/platform/spend';
 import { formatMicroUsd } from '../../../_components/spendFormat';
 import { loadWorkspaceProjects } from '../usageActions';
 
-const CREDIT_COLUMNS = [
-  'planning_tokens',
-  'agent_tokens',
-  'agent_machine',
-  'agent_instance',
-  'agent_storage',
-  'ci',
-  'search',
-] as const;
+const CREDIT_COLUMNS = CHARGED_CATEGORIES;
+/** Name + every charged category + indexing minutes + charged total + Motir cost. */
+const COLUMN_COUNT = CREDIT_COLUMNS.length + 4;
 
 type Named = RawSpendRow & { name: string };
 
@@ -96,7 +91,7 @@ export function SpendChildrenTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-2 py-2 text-(--el-text-secondary)">
+              <td colSpan={COLUMN_COUNT} className="px-2 py-2 text-(--el-text-secondary)">
                 {t('empty')}
               </td>
             </tr>
@@ -129,14 +124,17 @@ export function SpendChildrenTable({
                 </tr>
                 {state === 'loading' ? (
                   <tr>
-                    <td colSpan={11} className="py-1 pl-8 text-xs text-(--el-text-secondary)">
+                    <td
+                      colSpan={COLUMN_COUNT}
+                      className="py-1 pl-8 text-xs text-(--el-text-secondary)"
+                    >
                       {t('loading')}
                     </td>
                   </tr>
                 ) : state === 'failed' ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={COLUMN_COUNT}
                       className="py-1 pl-8 text-xs text-(--el-text-secondary)"
                       role="status"
                     >
@@ -146,7 +144,10 @@ export function SpendChildrenTable({
                 ) : Array.isArray(state) ? (
                   state.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-1 pl-8 text-xs text-(--el-text-secondary)">
+                      <td
+                        colSpan={COLUMN_COUNT}
+                        className="py-1 pl-8 text-xs text-(--el-text-secondary)"
+                      >
                         {t('noProjects')}
                       </td>
                     </tr>

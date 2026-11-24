@@ -12948,6 +12948,7 @@
         "agent_storage": "智能体存储",
         "ci": "CI",
         "search": "网页搜索",
+        "hosting_production": "生产环境托管",
         "indexing": "索引"
       },
       "models": {
