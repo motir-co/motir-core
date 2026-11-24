@@ -80,6 +80,15 @@ const pillVariants = cva(
         // chip's nearest neighbour is `done`'s.
         approved:
           'bg-[color-mix(in_srgb,var(--el-status-approved)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+        // STOPPED FOR RE-PLANNING. The THIRD per-status tone, on the same
+        // recipe: `to_plan` sits in the `in_progress` category, so without its
+        // own tone it would wear In Progress's sky chip and read as work being
+        // done. At 14% the ramp compresses (its nearest chip, Blocked's, sits
+        // closer than the shipped Implemented/Approved control pair), so the
+        // `CirclePause` glyph `StatusPill` gives it is load-bearing, as
+        // finding #35 asks. design/boards/design-notes.md § "To plan".
+        'to-plan':
+          'bg-[color-mix(in_srgb,var(--el-status-to-plan)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
         done: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
       },
       severity: {

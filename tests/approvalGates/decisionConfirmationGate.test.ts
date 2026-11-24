@@ -483,6 +483,8 @@ describe('the handler directly', () => {
       statusWritten: null,
       statusDeferredReason: 'no_status_in_target_category',
       confirmedRecord: { kind: 'none' },
+      // The decision-correction mark (MOTIR-12175), run by the door after its commit.
+      afterCommit: expect.any(Function),
     });
   });
 

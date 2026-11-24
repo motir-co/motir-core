@@ -66,6 +66,7 @@ import {
   CONTAINER_CLAIM_STATUS_KEYS,
   RUNG_RANK,
   childrenBelowClaimBar,
+  ladderKeysFrom,
   rankOfStatus,
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
@@ -3966,11 +3967,7 @@ export const workItemsService = {
           ctx.workspaceId,
           tx,
         )),
-        keys: {
-          reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
-          implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
-          approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
-        },
+        keys: ladderKeysFrom(statuses),
         system: false,
       });
     // ⚠️ AND A MOVE TO CANCELLED WITHDRAWS THE QUESTION ON EVERY ROUTE (MOTIR-7109).
@@ -4102,6 +4099,7 @@ export const workItemsService = {
         reviewKey: 'in_review',
         implementedKey: 'implemented',
         approvedKey: 'approved',
+        toPlanKey: 'to_plan',
       });
       if (rank >= RUNG_RANK.implemented) {
         const fresh = await workItemRepository.findById(workItemId, tx);
@@ -4201,6 +4199,7 @@ export const workItemsService = {
           // child ranks as plain in-progress and this gate refuses a container
           // whose every child has been approved.
           approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+          toPlanKey: statuses.find((s) => s.key === 'to_plan')?.key ?? null,
         });
         if (open.length > 0) {
           throw new ContainerHasOpenChildrenError(
