@@ -932,6 +932,8 @@ describe('planReviewService.getPlanReview', () => {
     expect(defaultPlanView(review)).toBe('canvas');
   });
 
+  // Each of the next tests seeds and reads the plan review several times over: ~8 s
+  // alone, and past the 15 s default on a loaded CI shard. Hence a 60 s budget.
   it('counts the root\'s loose non-epic cards as the ONE "Not in epic" node the canvas draws (Bug MOTIR-12162)', async () => {
     // More loose root tasks than the canvas holds. The canvas folds every unfiled,
     // non-epic root the plan does not touch into one "Not in epic" node — as long as
@@ -1015,7 +1017,7 @@ describe('planReviewService.getPlanReview', () => {
         view: defaultPlanView(review),
       }).toEqual({ plan: shape.title, size: shape.size, total: shape.total, view: shape.view });
     }
-  });
+  }, 60_000);
 
   it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
     // Three plans, each over its own copy of one tree (a plan holds its targets, so
@@ -1096,7 +1098,7 @@ describe('planReviewService.getPlanReview', () => {
         total: review.arrivalLevelTotal,
       }).toEqual({ plan: shape.title, size: shape.size, total: shape.total });
     }
-  });
+  }, 60_000);
 
   it('does NOT count the project root for a plan with NO items — it has no arrival level (MOTIR-10739)', async () => {
     // A plan being written has no proposals at its first read. `fullestContainer`
