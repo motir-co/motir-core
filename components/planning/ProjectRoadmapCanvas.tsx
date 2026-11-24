@@ -2273,6 +2273,54 @@ export function ProjectRoadmapCanvas({
             )}
           </div>
         )}
+
+        {/* LEVEL CAPTION (bug MOTIR-3453) — Part IX §1.4's `lvlcap` slot, which the
+            design's mock draws and the canvas never had. Composed as the edge
+            LEGEND below already composes a canvas overlay: the same `--el-surface`
+            chip with the canvas's border and shadow, and the same 10.5px tracked
+            uppercase ramp, so a second overlay language is not invented for one
+            line of text.
+
+            ⚠️ The ink is `--el-text-secondary`, where the mock's `.lvlcap` rule
+            says `var(--accent)`. That is the one deliberate deviation, and it is
+            `CLAUDE.md`'s contrast rule doing its job — *"a design mock is NOT
+            authority here"*. `--el-accent-on-surface` is specified as the accent
+            used as text on a SURFACE, and this caption rides `--el-canvas`, a
+            RECESSED board that every `data-palette` redefines; nothing measures
+            that pairing, and there are eight palettes to be wrong in.
+            `--el-text-secondary` is the token whose own definition carries the
+            guarantee ("AA on EVERY surface"), and it is what the legend beside it
+            already uses over the same canvas. Nothing is lost: the distinction
+            this caption draws lives in its WORDS, which is what Part IX §1.3 asks
+            for one decision earlier — text first, never colour alone.
+
+            Suppressed while the first level is still loading: a caption over a
+            spinner describes a level nobody can see.
+
+            ⚠️ IN THE TOP BAND'S FLOW, not at a computed `top` (bug MOTIR-12194).
+            It shipped as its own `absolute` overlay at `top: --height-control +
+            1.75rem` — ONE row of chrome. The band is not always one row: a LEVEL
+            CHANGE BAND (MOTIR-6223) stacks a second row into the breadcrumb card,
+            and a narrow canvas wraps the cluster onto a row of its own. Both times
+            the caption landed on the chrome and hid the band's button. As the
+            band's LAST child on a `basis-full` row, the caption wraps below
+            whatever the band holds, however many rows that is, with the band's
+            own `gap-2` between; with nothing else in the band it takes the band's
+            top, as before. The chip opts back into pointer events, as it did
+            when it was an overlay of its own. */}
+        {levelCaption && level !== null && (
+          <div className="flex min-w-0 basis-full" data-testid="level-caption-row">
+            <div
+              data-testid="level-caption"
+              data-below-chrome={drilled || searchable || fullScreenable || !!emphasis || undefined}
+              className="pointer-events-auto max-w-[min(32rem,100%)] rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) shadow-(--shadow-card)"
+            >
+              <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
+                {levelCaption}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ESC hint — only while full screen; the other overlay controls stay reachable. */}
@@ -2352,63 +2400,6 @@ export function ProjectRoadmapCanvas({
           <RotateCcw className="size-3.5" aria-hidden="true" />
           {t('resetLayout')}
         </button>
-      )}
-
-      {/* LEVEL CAPTION (bug MOTIR-3453) — Part IX §1.4's `lvlcap` slot, which the
-          design's mock draws and the canvas never had. Composed as the edge
-          LEGEND below already composes a canvas overlay: the same `--el-surface`
-          chip with the canvas's border and shadow, and the same 10.5px tracked
-          uppercase ramp, so a second overlay language is not invented for one
-          line of text.
-
-          ⚠️ The ink is `--el-text-secondary`, where the mock's `.lvlcap` rule
-          says `var(--accent)`. That is the one deliberate deviation, and it is
-          `CLAUDE.md`'s contrast rule doing its job — *"a design mock is NOT
-          authority here"*. `--el-accent-on-surface` is specified as the accent
-          used as text on a SURFACE, and this caption rides `--el-canvas`, a
-          RECESSED board that every `data-palette` redefines; nothing measures
-          that pairing, and there are eight palettes to be wrong in.
-          `--el-text-secondary` is the token whose own definition carries the
-          guarantee ("AA on EVERY surface"), and it is what the legend beside it
-          already uses over the same canvas. Nothing is lost: the distinction
-          this caption draws lives in its WORDS, which is what Part IX §1.3 asks
-          for one decision earlier — text first, never colour alone.
-
-          Sits UNDER the breadcrumb while drilled and takes its place when not,
-          so it never collides with the overlay above it. Suppressed while the
-          first level is still loading: a caption over a spinner describes a
-          level nobody can see.
-
-          ⚠️ The offset is DERIVED, and it is measured against the whole TOP
-          BAND, not just the breadcrumb. Two overlays live at `top-3`: the
-          breadcrumb on the left (while drilled) and the search / full-screen /
-          Show-changes cluster on the right. Both are `--height-control` tall
-          plus their own padding, and that token is 34–40px across the shipped
-          styles — so the mock's literal 56px clears them under some styles and
-          lands INSIDE them under others, and a caption wide enough to reach the
-          right edge would run under the cluster at any offset. The mock's crumb
-          is smaller than the shipped one; what it specifies is the RELATIONSHIP
-          (the caption sits just below the chrome), and a `calc` off the same
-          token is how that survives a style swap. */}
-      {levelCaption && level !== null && (
-        <div
-          data-testid="level-caption"
-          data-below-chrome={drilled || searchable || fullScreenable || !!emphasis || undefined}
-          className={[
-            'absolute left-3 z-10 max-w-[min(32rem,calc(100%-1.5rem))]',
-            // 12px band top + the overlay's own height (`--height-control` plus
-            // 8px of padding) + an 8px gap. Only a canvas with an EMPTY top band
-            // — no breadcrumb and no cluster — can take the band itself.
-            drilled || searchable || fullScreenable || emphasis
-              ? 'top-[calc(var(--height-control)+1.75rem)]'
-              : 'top-3',
-            'rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) shadow-(--shadow-card)',
-          ].join(' ')}
-        >
-          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
-            {levelCaption}
-          </span>
-        </div>
       )}
 
       {/* edge LEGEND — shown when the level has real blocked-by DEPENDENCY edges,
