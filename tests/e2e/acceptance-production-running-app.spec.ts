@@ -202,10 +202,11 @@ test('a live app is looked after from its Production panel: logs, health and a c
   await chapter(
     'Filtering by a word leaves the line that carries it; the secret stays masked',
     async () => {
+      // The panel sends its filter as `q` (`productionRuntimeClient.readLogs`, read by the
+      // logs route), once typing pauses.
       const filtered = page.waitForResponse(
         (res) =>
-          routeOf(seed.web, 'logs')(res) &&
-          new URL(res.url()).searchParams.get('filter') === 'checkout',
+          routeOf(seed.web, 'logs')(res) && new URL(res.url()).searchParams.get('q') === 'checkout',
       );
       await logs(page).getByTestId('production-logs-filter').fill('checkout');
       const answer = await filtered;
@@ -214,7 +215,9 @@ test('a live app is looked after from its Production panel: logs, health and a c
       await expect(logMessages(page)).toHaveText(['POST /checkout 201 in 212ms order=ord_1042']);
       await beat();
 
-      const cleared = page.waitForResponse(routeOf(seed.web, 'logs'));
+      const cleared = page.waitForResponse(
+        (res) => routeOf(seed.web, 'logs')(res) && !new URL(res.url()).searchParams.has('q'),
+      );
       await logs(page).getByTestId('production-logs-filter').fill('');
       const whole = await cleared;
       expect(whole.status()).toBe(200);
