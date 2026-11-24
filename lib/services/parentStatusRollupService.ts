@@ -340,7 +340,12 @@ export const parentStatusRollupService = {
     // comparison from inside the locked transaction below, which is one query per
     // rung per pass for an answer that never changes within a pass.
     const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
-    const ladderKeys = { reviewKey, implementedKey, approvedKey };
+    // THE ONE KEY PULLED DOWN (MOTIR-12174), resolved by LITERAL key and never
+    // through `resolveStatusKey`: its category fallback would hand back the
+    // first `in_progress` status — `in_progress` itself — and rank real started
+    // work at the todo rung. A project without the status passes `null`.
+    const toPlanKey = statuses.find((s) => s.key === 'to_plan')?.key ?? null;
+    const ladderKeys = { reviewKey, implementedKey, approvedKey, toPlanKey };
     // ⚠️ A DEGENERATE PROJECT CAN ALIAS THE TWO RUNGS ONTO ONE KEY. With no
     // `implemented` status of its own, `resolveStatusKey` falls back to the first
     // `in_progress`-category status — which on such a project is also what the
@@ -369,6 +374,7 @@ export const parentStatusRollupService = {
           reviewStatusKey: reviewKey,
           implementedStatusKey: implementedKey,
           approvedStatusKey: approvedKey,
+          toPlanStatusKey: toPlanKey,
         },
         tx,
       );

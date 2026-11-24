@@ -109,6 +109,7 @@ async function moveToReviewWhenUndelivered(
     reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
     implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
     approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+    toPlanKey: statuses.find((s) => s.key === 'to_plan')?.key ?? null,
   });
   if (rank >= RUNG_RANK.in_review) return;
   // LAZY, for the cycle `designEvidenceService` documents: the walk is applied

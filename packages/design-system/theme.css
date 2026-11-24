@@ -4827,6 +4827,16 @@
      and nothing in CI re-performs it when a palette moves.
      See design/boards/design-notes.md § "Approved — the ninth board column". */
   --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+  /* The EIGHTH tint, for the To plan status's state tag. The seven above are
+     each held by a status (peach Blocked, sky In Progress, rose Implemented,
+     yellow Planning, lavender In Review, sage Approved, mint Done), and
+     borrowing one re-creates two statuses that render as one (MOTIR-3170).
+     It rides --el-status-to-plan, so it moves with that hue and, like sage,
+     needs no Tier-0 tint and no palette block. 30% is measured: worst ΔE2000
+     9.9 against the seven tints plus --el-muted across all fourteen palettes x
+     both themes, worst --el-text-strong ink 4.87:1 (amber/dark); 32% drops the
+     ink to 4.64. See design/boards/design-notes.md § "To plan". */
+  --el-tint-clay: color-mix(in srgb, var(--el-status-to-plan) 30%, var(--color-surface));
 
   /* ── Status hues (MOTIR-1273 · 1266.2 — un-collapse the workflow statuses) ──
      Each workflow status renders its dot/icon in its OWN hue, so in_review /
@@ -4906,6 +4916,19 @@
      citrine at 9.8. Contrast 9.54-13.72:1 on card/surface/page.
      See design/boards/design-notes.md § "Approved — the ninth board column". */
   --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+  /* STOPPED FOR RE-PLANNING — a card the corrected decision it rests on made
+     stale. Blocked's amber taken deep toward the ink: the two make the same
+     claim to a reader (this cannot proceed) for different reasons, so To plan
+     is drawn in Blocked's family and pushed well away from it, as Approved is
+     Done's green one ink step deeper. Deep umber on a light page, pale sand on
+     a dark one, because --color-ink flips. One expression, no palette block:
+     both inputs are Tier-0 sources every palette declares. MEASURED: the
+     45% ratio clears statusHueSeparation's ΔE2000 floor of 10 against the
+     nine shipped status hues in all fourteen palettes x both themes, global
+     minimum 11.8 (contrast/dark vs blocked); 40% falls to 10.6 and 50%
+     to 10.3. Contrast 8.22-16.43:1 on card/surface/page.
+     See design/boards/design-notes.md § "To plan". */
+  --el-status-to-plan: color-mix(in srgb, var(--color-warning) 45%, var(--color-ink));
   --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
   --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
   --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
