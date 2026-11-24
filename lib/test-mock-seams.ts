@@ -91,6 +91,22 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-9800 · MOTIR-12140 — a TAKEOVER's GitHub calls, made by the
+    // webServer (a Fly or serverless takeover) AND the job worker (the AWS
+    // handover's steps): the owner's account id, Actions re-enabled, the
+    // repository's secrets, variables and `production` environment deleted, and
+    // the transfer. Stateless, with a file journal, so both processes install it.
+    // ⚠️ FIRST of the GitHub seams: its paths are narrow and scoped to the
+    // provisioning org, and a seam that claims a repository's paths wholesale
+    // must not shadow them.
+    flag: 'E2E_TEST_GITHUB_TAKEOVER',
+    message: 'GitHub takeover calls (owner id, Actions, secrets, transfer) mocked.',
+    install: async (agent) => {
+      const { installGithubTakeoverMock } = await import('@/lib/test-github-takeover-mock');
+      installGithubTakeoverMock(agent);
+    },
+  },
+  {
     // Story MOTIR-9797 · MOTIR-10040 — a production release's GitHub calls, made
     // by the job WORKER: the manifest read at the merged commit, the deployment
     // and its statuses, and the org installation read before the token mint.

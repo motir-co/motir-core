@@ -203,6 +203,17 @@ process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PA
 // alone, reached the REAL api.github.com. The two halves only ever travel
 // together: `githubMergeSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
 process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
+// Story MOTIR-9800 · MOTIR-12140 — a TAKEOVER's GitHub calls (the owner's id, Actions
+// re-enabled, the repository's secrets, variables and environment deleted, the
+// transfer), answered by `lib/test-github-takeover-mock.ts`. A Fly takeover makes them
+// in the webServer and the AWS handover's steps in the worker, so the seam is
+// stateless and journals to one file both processes append to — and the worker
+// installs it through `githubTakeoverSeamEnv`. NO REAL REPOSITORY IS EVER TRANSFERRED.
+const MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH = path.resolve(
+  '/tmp/motir-acceptance-github-takeover-journal.jsonl',
+);
+process.env['MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH'] ??= MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH;
+process.env['E2E_JOB_WORKER_GITHUB_TAKEOVER_SEAM'] ??= '1';
 
 // ── The GitHub FLEET ORG CI seam (Story MOTIR-8699 · MOTIR-8717) ─────────────
 //
@@ -678,6 +689,9 @@ const APP_SERVER_ENV = {
   E2E_TEST_GITHUB_MERGE: '1',
   MOTIR_GITHUB_MERGE_CONTROL_PATH,
   MOTIR_GITHUB_MERGE_JOURNAL_PATH,
+  // A takeover's GitHub calls (MOTIR-12140) — see the block above.
+  E2E_TEST_GITHUB_TAKEOVER: '1',
+  MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH: process.env['MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH']!,
   // The fleet settings journey's GitHub (MOTIR-8717) — see the block above.
   E2E_TEST_GITHUB_FLEET_ORG_CI: '1',
   E2E_GITHUB_FLEET_ORG_CI_CONTROL: process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL']!,

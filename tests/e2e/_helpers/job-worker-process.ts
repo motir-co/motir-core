@@ -382,6 +382,29 @@ export function takeoverHandoverSeamEnv(): Record<string, string> {
   };
 }
 
+/**
+ * A TAKEOVER'S GITHUB SEAM, MIRRORED INTO THE WORKER (Story MOTIR-9800 ·
+ * MOTIR-12140). The AWS handover's steps run here: the deploy role reads the new
+ * owner's account id, Motir's access removal deletes each repository's production
+ * secret and variables, and the last step transfers every repository. The seam
+ * (`lib/test-github-takeover-mock.ts`) is stateless and journals to a file, so a
+ * second copy here agrees with the webServer's. Its token mint is the merge seam's
+ * and its org installation read the production-release seam's, both mirrored here
+ * already; the org it is scoped to is the one they share.
+ *
+ * Opt-in (`E2E_JOB_WORKER_GITHUB_TAKEOVER_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane's server installs it.
+ */
+export function githubTakeoverSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_GITHUB_TAKEOVER_SEAM'] !== '1') return {};
+  const journal = process.env['MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH'];
+  return {
+    E2E_TEST_GITHUB_TAKEOVER: '1',
+    ...(journal ? { MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH: journal } : {}),
+    GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+  };
+}
+
 /** A fresh RSA private key (PKCS#8 PEM) for an App JWT nothing will verify. */
 function generateAppPrivateKey(): string {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -623,6 +646,8 @@ export async function startJobWorker(): Promise<void> {
       ...graceWindowSeamEnv(),
       // The takeover handover's fake AWS tenant — see `takeoverHandoverSeamEnv`.
       ...takeoverHandoverSeamEnv(),
+      // A takeover's GitHub calls — see `githubTakeoverSeamEnv`.
+      ...githubTakeoverSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -756,6 +781,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       ...graceWindowSeamEnv(),
       // The takeover handover's fake AWS tenant — see `takeoverHandoverSeamEnv`.
       ...takeoverHandoverSeamEnv(),
+      // A takeover's GitHub calls — see `githubTakeoverSeamEnv`.
+      ...githubTakeoverSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
