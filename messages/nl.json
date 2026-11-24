@@ -12957,6 +12957,7 @@
         "agent_storage": "Agentopslag",
         "ci": "CI",
         "search": "Webzoekopdrachten",
+        "hosting_production": "Productiehosting",
         "indexing": "Indexeren"
       },
       "models": {

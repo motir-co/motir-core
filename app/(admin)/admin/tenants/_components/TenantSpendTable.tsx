@@ -5,18 +5,11 @@ import { useState, useTransition } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformTenantSpendRowDTO } from '@/lib/dto/platform';
+import { CHARGED_CATEGORIES } from '@/lib/platform/spend';
 import { formatMicroUsd } from '../../_components/spendFormat';
 import { loadMoreTenants } from '../listActions';
 
-const CREDIT_COLUMNS = [
-  'planning_tokens',
-  'agent_tokens',
-  'agent_machine',
-  'agent_instance',
-  'agent_storage',
-  'ci',
-  'search',
-] as const;
+const CREDIT_COLUMNS = CHARGED_CATEGORIES;
 
 /** Every sortable column, in the order the header draws them (design D10). */
 const SORT_COLUMNS = [...CREDIT_COLUMNS, 'indexing', 'charged', 'cost'] as const;

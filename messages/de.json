@@ -12957,6 +12957,7 @@
         "agent_storage": "Agentenspeicher",
         "ci": "CI",
         "search": "Websuche",
+        "hosting_production": "Produktions-Hosting",
         "indexing": "Indexierung"
       },
       "models": {

@@ -12954,6 +12954,7 @@
         "agent_storage": "エージェントのストレージ",
         "ci": "CI",
         "search": "ウェブ検索",
+        "hosting_production": "本番ホスティング",
         "indexing": "インデックス作成"
       },
       "models": {

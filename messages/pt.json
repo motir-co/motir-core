@@ -12957,6 +12957,7 @@
         "agent_storage": "Armazenamento de agentes",
         "ci": "CI",
         "search": "Busca na web",
+        "hosting_production": "Hospedagem de produção",
         "indexing": "Indexação"
       },
       "models": {
