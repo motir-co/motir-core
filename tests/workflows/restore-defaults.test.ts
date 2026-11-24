@@ -87,15 +87,16 @@ describe('restoreDefaultTransitions — additive merge', () => {
     expect(result.transitionsAdded).toBe(3);
 
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    // Full default graph restored (41, incl. 7.8.11's in_review→blocked,
+    // Full default graph restored (46, incl. 7.8.11's in_review→blocked,
     // MOTIR-1625's in_progress→done, MOTIR-2425's five planning edges,
     // MOTIR-3003's seven implemented edges, MOTIR-5139's four approved edges,
     // MOTIR-5630's three ejection edges, of which MOTIR-5804 swapped
     // `implemented → approved` for `approved → in_review`, and MOTIR-5643's five
-    // parking edges) + the one custom edge kept = 42.
-    expect(wf.transitions).toHaveLength(42);
-    // Statuses untouched: 9 defaults + on_hold.
-    expect(wf.statuses).toHaveLength(10);
+    // parking edges, and MOTIR-12174's five to_plan edges = 46) + the one
+    // custom edge kept = 47.
+    expect(wf.transitions).toHaveLength(47);
+    // Statuses untouched: 10 defaults + on_hold.
+    expect(wf.statuses).toHaveLength(11);
     const has = (from: string, to: string) =>
       wf.transitions.some((t) => t.fromStatusId === idOf(from) && t.toStatusId === idOf(to));
     expect(has('todo', 'in_progress')).toBe(true);
@@ -112,7 +113,7 @@ describe('restoreDefaultTransitions — additive merge', () => {
     });
     expect(again).toEqual({ transitionsAdded: 0 });
     const wf2 = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    expect(wf2.transitions).toHaveLength(42);
+    expect(wf2.transitions).toHaveLength(47);
   });
 
   it('is a no-op on a pristine default-seeded project', async () => {

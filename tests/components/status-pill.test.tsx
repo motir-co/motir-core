@@ -117,6 +117,26 @@ describe('APPROVED — the second per-status tone (MOTIR-5141)', () => {
   });
 });
 
+describe('TO PLAN — the third per-status tone (MOTIR-12174)', () => {
+  it('takes its own tone, not In Progress or Planning', () => {
+    expect(statusPillTone('to_plan', 'in_progress')).toBe('to-plan');
+    expect(statusPillTone('to_plan', 'in_progress')).not.toBe(
+      statusPillTone('in_progress', 'in_progress'),
+    );
+  });
+
+  it('paints from the status token and carries an aria-hidden glyph', () => {
+    render(<StatusPill statusKey="to_plan" category="in_progress" label="To plan" />);
+    const chip = chipFor('To plan');
+    expect(chip.className).toContain('var(--el-status-to-plan)');
+    expect(chip.className).toContain('text-(--el-text-strong)');
+    expect(chip.className).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    const glyph = chip.querySelector('svg');
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
+    expect(chip.textContent).toBe('To plan');
+  });
+});
+
 describe('the rendered chip', () => {
   it('renders Implemented DIFFERENTLY from the three statuses it shares a category with', () => {
     // The whole point of the card, as one assertion: four statuses, four chips

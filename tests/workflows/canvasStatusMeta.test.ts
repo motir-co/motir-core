@@ -27,6 +27,25 @@ describe('every DEFAULT status resolves to a chip of its own', () => {
   });
 });
 
+describe('TO PLAN takes the EIGHTH tint (MOTIR-12174)', () => {
+  it('resolves by KEY to clay and CirclePause, not the in_progress fallback', () => {
+    const toPlan = canvasStatusMeta('to_plan', 'in_progress');
+    const inProgress = canvasStatusMeta('in_progress', 'in_progress');
+    expect(toPlan.tint).toBe('bg-(--el-tint-clay)');
+    expect(toPlan.text).toBe('text-(--el-text-strong)');
+    expect(toPlan.icon.displayName ?? toPlan.icon.name).toMatch(/CirclePause/);
+    expect(toPlan.tint).not.toBe(inProgress.tint);
+  });
+
+  it('does not borrow a tint another status already holds', () => {
+    const tint = canvasStatusMeta('to_plan', 'in_progress').tint;
+    for (const status of DEFAULT_STATUSES) {
+      if (status.key === 'to_plan') continue;
+      expect(canvasStatusMeta(status.key, status.category).tint).not.toBe(tint);
+    }
+  });
+});
+
 describe('APPROVED takes the SEVENTH tint (MOTIR-5141)', () => {
   it('resolves by KEY and not through the in_progress category fallback', () => {
     // The defect this prevents is MOTIR-3170's exactly: `approved` is an

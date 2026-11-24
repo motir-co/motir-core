@@ -204,6 +204,9 @@ describe('the operation count does not grow with rows', () => {
     // MOTIR-10534's status slot adds ONE batched read over every card — which of
     // them have live children (the To plan pill) — per call, not per row.
     const STATUS_SLOT_READS = ['workItem.findMany'];
+    // MOTIR-12174's To plan column: the board pages each COLUMN's lane with its own
+    // read, so a tenth default column is one more read per call — not per row.
+    const TO_PLAN_COLUMN_READS = ['workItem.findMany'];
     await seed(N);
     const { ops } = await recordModelOps(() => boardsService.getBoard(fx.projectId, fx.ctx));
     const modelOps = ops.filter((op) => !op.startsWith('_'));
@@ -212,9 +215,10 @@ describe('the operation count does not grow with rows', () => {
       PRE_STORY_BOARD_MODEL_OPS +
         MARKER_READS.length +
         REVIEW_READS.length +
-        STATUS_SLOT_READS.length,
+        STATUS_SLOT_READS.length +
+        TO_PLAN_COLUMN_READS.length,
     );
-    const added = [...MARKER_READS, ...REVIEW_READS, ...STATUS_SLOT_READS];
+    const added = [...MARKER_READS, ...REVIEW_READS, ...STATUS_SLOT_READS, ...TO_PLAN_COLUMN_READS];
     for (const op of new Set(added)) {
       const extra = added.filter((o) => o === op).length;
       expect(modelOps.filter((o) => o === op).length).toBeGreaterThanOrEqual(extra);
