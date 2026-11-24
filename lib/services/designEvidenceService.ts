@@ -13,7 +13,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { gateSetFor } from '@/lib/services/gateSetFor';
-import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
+import { RUNG_RANK, ladderKeysFrom, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -488,12 +488,7 @@ async function moveToReviewWhenUndelivered(
     ctx.workspaceId,
     tx,
   );
-  const rank = rankOfStatus(current.status, statuses, {
-    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
-    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
-    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
-    toPlanKey: statuses.find((s) => s.key === 'to_plan')?.key ?? null,
-  });
+  const rank = rankOfStatus(current.status, statuses, ladderKeysFrom(statuses));
   if (rank >= RUNG_RANK.in_review) return;
 
   const { hopsToReview } = await import('@/lib/services/choiceGateService');
@@ -528,12 +523,7 @@ async function assertDesignSettled(
     ctx.workspaceId,
     tx,
   );
-  const rank = rankOfStatus(item.status, statuses, {
-    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
-    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
-    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
-    toPlanKey: statuses.find((s) => s.key === 'to_plan')?.key ?? null,
-  });
+  const rank = rankOfStatus(item.status, statuses, ladderKeysFrom(statuses));
   if (rank < RUNG_RANK.implemented) return;
 
   throw DesignCardClosedError.becauseApproved(item.identifier, item.status);
