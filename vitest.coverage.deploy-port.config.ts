@@ -211,6 +211,20 @@ export default defineConfig({
       'tests/hosting/productionUsageMeter.test.ts',
       'tests/hosting/productionUsageRead.test.ts',
       'tests/hosting/productionCreditBalance.test.ts',
+      // Story MOTIR-9800 — the takeover and the AWS handover: the handover states,
+      // the export, the grace window and the stop add errors to errors.ts and
+      // reads and guarded writes to the hosted-application repository.
+      'tests/hosting/takeoverHandoverIntegration.test.ts',
+      'tests/repositories/hostedApplicationHandover.test.ts',
+      'tests/hosting/hostedApplicationHandoverAddresses.test.ts',
+      'tests/hosting/hostedApplicationExportService.test.ts',
+      'tests/hosting/hostedApplicationExportRoutes.test.ts',
+      'tests/hosting/hostedApplicationExportJobs.test.ts',
+      'tests/hosting/hostedApplicationGrace.test.ts',
+      'tests/hosting/hostedApplicationGraceStop.test.ts',
+      'tests/hosting/hostedApplicationStopRoute.test.ts',
+      'tests/hosting/tenantAccountHandoverService.test.ts',
+      'tests/hosting/tenantAccountHandoverRoutes.test.ts',
     ],
     coverage: {
       provider: 'v8',
