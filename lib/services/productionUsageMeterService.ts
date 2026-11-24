@@ -36,11 +36,16 @@ import {
   type ProductionUsageSliceInput,
 } from '@/lib/repositories/productionUsageSliceRepository';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
+import { productionCreditsNotificationService } from '@/lib/services/productionCreditsNotificationService';
 import {
   EXHAUSTED_SUSPEND_AFTER_MS,
   productionCreditBalanceService,
 } from '@/lib/services/productionCreditBalanceService';
-import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import type { ProductionUsageUnit } from '@/generated/prisma/client';
 
 // THE PRODUCTION USAGE METER (Story MOTIR-9799 · MOTIR-12108; Decision
@@ -74,6 +79,8 @@ import type { ProductionUsageUnit } from '@/generated/prisma/client';
 //     clears it once the balance is zero or above; after 7 days still below zero,
 //     an always-on application whose target can suspend is switched to suspend
 //     when idle through the idle-policy path. Nothing here ever stops an app.
+//     The organisation's transition below zero notifies its owners and admins
+//     once (`productionCreditsNotificationService`, MOTIR-12166).
 //   · STOP RULES (§8). A customer repository is never metered or charged; an
 //     application with no live release is not sliced; an AWS application whose
 //     organisation's tenant account is not `ready` (it has left Motir's
@@ -257,16 +264,42 @@ async function accrueDatabase(app: Meterable): Promise<number> {
 /** Record the organisation's balance after a debit or a read on all of its
  *  applications: the transition below zero, or back to zero or above. */
 async function recordBalance(organizationId: string, balance: number, at: Date): Promise<void> {
-  const apps = await withSystemContext((tx) =>
-    hostedApplicationRepository.listByOrganization(organizationId, tx),
-  );
-  const byWorkspace = new Map<string, string[]>();
-  for (const a of apps)
-    byWorkspace.set(a.workspaceId, [...(byWorkspace.get(a.workspaceId) ?? []), a.id]);
-  for (const [workspaceId, ids] of byWorkspace) {
-    await withWorkspaceServiceContext(workspaceId, (tx) =>
-      hostedApplicationRepository.setCreditsExhaustedSince(ids, balance < 0 ? at : null, tx),
-    );
+  // ONE transaction for the whole organisation, each workspace bound in turn before
+  // its write. The transition is decided from the state READ in that transaction
+  // before any write — no application of the organisation was below zero — never
+  // from how many rows one pass changed: with a transaction per workspace, a pass
+  // that failed half-way left some rows set, and every later pass then changed
+  // fewer than all of them, so nobody was ever told (MOTIR-12166 review).
+  const { changed, transition } = await withSystemContext(async (tx) => {
+    const apps = await hostedApplicationRepository.listByOrganization(organizationId, tx);
+    const wasExhausted = apps.some((a) => a.creditsExhaustedSince !== null);
+    const byWorkspace = new Map<string, string[]>();
+    for (const a of apps)
+      byWorkspace.set(a.workspaceId, [...(byWorkspace.get(a.workspaceId) ?? []), a.id]);
+    const ids: string[] = [];
+    for (const [workspaceId, wsIds] of byWorkspace) {
+      // A trusted id: the workspace of a row this transaction just read.
+      await bindWorkspaceContext(tx, workspaceId);
+      ids.push(
+        ...(await hostedApplicationRepository.setCreditsExhaustedSince(
+          wsIds,
+          balance < 0 ? at : null,
+          tx,
+        )),
+      );
+    }
+    return { changed: ids, transition: balance < 0 && !wasExhausted && ids.length > 0 };
+  });
+  // THE ORGANISATION'S TRANSITION below zero — none of its applications was below
+  // zero before this pass — tells its administrators once (MOTIR-12166). A later
+  // pass still below zero, and an application added while below zero, find one
+  // already set: neither notifies.
+  if (transition) {
+    await productionCreditsNotificationService.notifyCreditsExhausted({
+      organizationId,
+      applicationIds: changed,
+      since: at,
+    });
   }
 }
 

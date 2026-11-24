@@ -506,3 +506,68 @@ The units and the out-of-credits behaviour are drawn from the decision page, quo
   room at all (base panel 16, not found; panel 19, no row).
 - **No element shows or changes the project's phase.**
 - No Motir own-cost figure, no rate table, no per-slice detail, and no log download or live tail.
+
+## Amendment 2026-11-23 — the credits-exhausted notification (MOTIR-12166 · Decision MOTIR-12100 §9)
+
+**Delta mock:** `production--credits-exhausted-notification.mock.html` (2 panels). It **amends** §
+_Amendment 2026-11-23 — live app operations_ above, whose panels 23 and 24 of
+`production--live-app-ops.mock.html` draw only the crash notification. That mock stays as drawn.
+
+Decision MOTIR-12100 §9 settles that when an organisation's balance goes below zero while a production
+app runs, the app keeps running and **administrators are notified once per transition**, and that after
+7 days still below zero an always-on app that can suspend is switched to suspend when idle. This
+amendment draws that notification. Both panels are the shipped `NotificationRow` and
+`NotificationPreferencesCard` rendered with the new event type, against `messages/en.json`.
+
+**Who receives it.** Every **owner and admin of the organisation** (the credits are the organisation's,
+not a project's), once per transition below zero: a later pass still below zero, or an app that starts
+while the balance is already below zero, writes nothing. A top-up clears the transition, so the next drop
+below zero notifies again. A member who is not an owner or admin never receives it, though the
+preferences row is listed for everyone, as the crash row is.
+
+**Where it leads.** The row opens `/settings/organization/billing`, where credits are topped up — the
+same destination as the Usage section's **Top up credits** button.
+
+### Panels
+
+| #   | Panel                                                                                                   | Composes                    |
+| --- | ------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 1   | The row in the drawer: unread with one app · unread with five apps (the first three and a count) · read | NotificationRow             |
+| 2   | Its row in Account › Notifications, appended last, after the crash row                                  | NotificationPreferencesCard |
+
+### Copy — final English (under `notifications` unless noted)
+
+| Key                                                                                  | English                                                                                                                               |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `summary.productionCreditsExhausted`                                                 | Your organization's credits are below zero while {count, plural, one {<s>{apps}</s> is} other {<s>{apps}</s> are}} live in production |
+| `excerpt.productionCreditsExhausted`                                                 | From {date}, always-on apps suspend when idle                                                                                         |
+| `appsMore`                                                                           | {count, plural, one {# more} other {# more}}                                                                                          |
+| `settings.account.notifications.events.production_credits_exhausted.label` / `.desc` | Credits ran out while apps are live / Your organization's credit balance went below zero while Motir hosts its apps in production.    |
+
+- `{apps}` is the repository names of the organisation's **running** production apps (a live release,
+  on a repository Motir made) **in the workspace whose bell shows the row**, oldest first, joined as a
+  list in the reader's language; past three it reads the first three and "{count} more". The bell is a
+  per-workspace surface, so every workspace that holds a running app gets its own row.
+- `{date}` is the day the 7-day switch falls on (the transition plus 7 days), short month and day in the
+  reader's calendar. It comes **first** in the excerpt because the excerpt is one truncated line and the
+  date is what the administrator acts on. A payload without the date draws no excerpt at all, never a
+  sentence with a hole in it.
+- No balance or amount is named: the row says that the credits ran out, the billing page says by how much.
+
+### Tokens and parts
+
+- The shipped `NotificationRow` grammar, **actorless** (the glyph promoted into the avatar slot, no
+  initial and no fallback name), glyph `Coins` — the credits themselves.
+- Badge **`--el-notif-credits-exhausted`**, a new Tier-3 token in `packages/design-system/theme.css`
+  beside the other `--el-notif-*` hues, mapped to **`--color-warning`**: not danger, because the apps keep
+  running and nothing is lost yet, but something waits on the administrator — the hue the access-refused
+  and review-to-run rows take for the same reason.
+- The preferences row is the shipped matrix row: label `--el-text`, description `--el-text-secondary`,
+  both channels on by default. Email has no producer yet, as the crash row's has none; the cell is the
+  person's standing choice for when one ships.
+
+### What this amendment does not draw
+
+- No notification on the 7-day switch itself: the excerpt names its date, and the Production panel's
+  Usage section and **When idle** control show the switched state.
+- No email; no change to the drawer's layout, the bell, or any other row.

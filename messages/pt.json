@@ -3217,6 +3217,10 @@
           "production_app_crashed": {
             "label": "Um app de produção falhou",
             "desc": "Um app que o Motir hospeda para um projeto que você administra falhou ou não passou na verificação de integridade."
+          },
+          "production_credits_exhausted": {
+            "label": "Créditos esgotados com apps em produção",
+            "desc": "O saldo de créditos da sua organização ficou abaixo de zero enquanto o Motir hospeda os apps dela em produção."
           }
         },
         "soon": "Em breve",
@@ -6448,12 +6452,15 @@
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernou seu agente <s>{agent}</s>",
       "pageMentioned": "<s>{actor}</s> mencionou você em <s>{page}</s>",
       "pageReplied": "<s>{actor}</s> respondeu a um tópico em <s>{page}</s>",
+      "productionCreditsExhausted": "Os créditos da sua organização estão abaixo de zero enquanto {count, plural, one {<s>{apps}</s> está em produção} other {<s>{apps}</s> estão em produção}}",
       "productionAppCrashed": "{event, select, health_check_failed {<s>{repository}</s> está falhando na verificação de integridade em produção} other {<s>{repository}</s> travou em produção}}"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Um administrador da organização o parou às {time}. Os arquivos dele foram mantidos; desperte-o em Agentes.",
+      "productionCreditsExhausted": "A partir de {date}, os apps sempre ativos suspendem quando ociosos",
       "productionAppCrashed": "{reason} · {project}"
-    }
+    },
+    "appsMore": "{count, plural, one {mais #} other {mais #}}"
   },
   "orgAdmin": {
     "menu": {

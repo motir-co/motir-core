@@ -68,6 +68,18 @@ function toNotificationData(raw: Notification['data']): NotificationData {
       occurredAt: str(d.occurredAt),
     };
   }
+  if (d.kind === 'production_credits_exhausted') {
+    const apps = Array.isArray(d.apps) ? (d.apps as unknown[]) : [];
+    return {
+      kind: 'production_credits_exhausted',
+      apps: apps.map((a) => {
+        const app = (a ?? {}) as Record<string, unknown>;
+        return { repositoryName: str(app.repositoryName), projectKey: str(app.projectKey) };
+      }),
+      exhaustedSince: str(d.exhaustedSince),
+      suspendFrom: str(d.suspendFrom),
+    };
+  }
   if (d.kind === 'review_sent_back') {
     return {
       kind: 'review_sent_back',
