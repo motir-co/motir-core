@@ -86,6 +86,7 @@ import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 import type {
   TenantCloudWatch,
   TenantFunctionState,
+  TenantMetricPoint,
   TenantFunctionVersion,
   TenantLambda,
 } from './function/lambdaClient';
@@ -516,6 +517,52 @@ export function sdkTenantCloudWatch(client: AwsSdkClient): TenantCloudWatch {
         throw tenantApiError('cloudwatch', err);
       }
       return total;
+    },
+
+    async metricPoints(query) {
+      const points: TenantMetricPoint[] = [];
+      let nextToken: string | undefined;
+      try {
+        do {
+          const page = (await client.send(
+            new GetMetricDataCommand({
+              StartTime: query.start,
+              EndTime: query.end,
+              ScanBy: 'TimestampAscending',
+              MetricDataQueries: [
+                {
+                  Id: 'series',
+                  ReturnData: true,
+                  MetricStat: {
+                    Metric: {
+                      Namespace: query.namespace,
+                      MetricName: query.metricName,
+                      Dimensions: Object.entries(query.dimensions).map(([Name, Value]) => ({
+                        Name,
+                        Value,
+                      })),
+                    },
+                    Period: query.periodSeconds,
+                    Stat: query.stat,
+                  },
+                },
+              ],
+              ...(nextToken ? { NextToken: nextToken } : {}),
+            }),
+          )) as { MetricDataResults?: MetricDataResult[]; NextToken?: string };
+          for (const result of page.MetricDataResults ?? []) {
+            const values = result.Values ?? [];
+            (result.Timestamps ?? []).forEach((at, i) => {
+              const value = values[i];
+              if (value !== undefined) points.push({ at: new Date(at), value });
+            });
+          }
+          nextToken = page.NextToken;
+        } while (nextToken);
+      } catch (err) {
+        throw tenantApiError('cloudwatch', err);
+      }
+      return points.sort((a, b) => a.at.getTime() - b.at.getTime());
     },
   };
 }

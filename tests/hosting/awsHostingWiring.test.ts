@@ -9,7 +9,10 @@ import {
 } from '@motir/orchestrator';
 import { TENANT_ACCOUNT_REGION } from '@/lib/ciFleet/hostingTenantAccounts';
 import { RepositoryOwnerIdApiError, githubRepositoryOwnerId } from '@/lib/github/repositoryOwnerId';
-import { createConfiguredAwsHostingPort } from '@/lib/orchestrator/awsHosting';
+import {
+  createConfiguredAwsHostingPort,
+  getAwsDatabaseUsageReader,
+} from '@/lib/orchestrator/awsHosting';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
@@ -197,5 +200,30 @@ describe('createConfiguredAwsHostingPort', () => {
     await expect(
       port.ensureApp({ repositoryId, environment: { kind: 'production' } }),
     ).rejects.toBeInstanceOf(GithubRepositoryIdsMissingError);
+  });
+});
+
+describe('getAwsDatabaseUsageReader', () => {
+  it('reads nothing for a repository whose organisation’s tenant account is not ready yet', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::1:role/motir-org-admin');
+    const { organizationId, repositoryId } = await seedRepo('blank');
+    const since = new Date('2026-11-24T10:00:00Z');
+
+    expect(await getAwsDatabaseUsageReader().usageSince({ repositoryId }, since)).toEqual({
+      provider: 'aws',
+      applicationRef: repositoryId,
+      since,
+      until: since,
+      computeSeconds: 0,
+      storageBytes: 0,
+    });
+    // Asking is what requests the account.
+    expect(await adminDb.hostingTenantAccount.count({ where: { organizationId } })).toBe(1);
+  });
+
+  it('is one fake, measuring nothing, while the orchestrator is the fake', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    expect(getAwsDatabaseUsageReader()).toBe(getAwsDatabaseUsageReader());
   });
 });
