@@ -13,7 +13,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { gateSetFor } from '@/lib/services/gateSetFor';
-import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
+import { RUNG_RANK, ladderKeysFrom, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -488,11 +488,7 @@ async function moveToReviewWhenUndelivered(
     ctx.workspaceId,
     tx,
   );
-  const rank = rankOfStatus(current.status, statuses, {
-    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
-    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
-    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
-  });
+  const rank = rankOfStatus(current.status, statuses, ladderKeysFrom(statuses));
   if (rank >= RUNG_RANK.in_review) return;
 
   const { hopsToReview } = await import('@/lib/services/choiceGateService');
@@ -527,11 +523,7 @@ async function assertDesignSettled(
     ctx.workspaceId,
     tx,
   );
-  const rank = rankOfStatus(item.status, statuses, {
-    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
-    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
-    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
-  });
+  const rank = rankOfStatus(item.status, statuses, ladderKeysFrom(statuses));
   if (rank < RUNG_RANK.implemented) return;
 
   throw DesignCardClosedError.becauseApproved(item.identifier, item.status);
@@ -635,6 +627,7 @@ async function persistEvidence(
   // the system approval's (Bug MOTIR-9415) — announced once it commits: both run in
   // this transaction and cannot.
   const appliedTransitions: AppliedGateTransition[] = [];
+  const systemAfterCommits: Array<() => Promise<void>> = [];
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
     // ⚠️ THE AUTHORITATIVE "DOES WORK WAIT ON THIS?" READ — INSIDE the write's own
     // transaction (MOTIR-5491; AMENDMENT 4 Q2). The callers pre-check the same
@@ -887,7 +880,13 @@ async function persistEvidence(
     // this service for the pin.
     if (systemApproves) {
       const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
-      await approvalGatesService.approveBySystem(raised.id, ctx, tx, appliedTransitions);
+      await approvalGatesService.approveBySystem(
+        raised.id,
+        ctx,
+        tx,
+        appliedTransitions,
+        systemAfterCommits,
+      );
     }
 
     // Re-read so the caller gets the evidence WITH its just-inserted assets.
@@ -895,6 +894,8 @@ async function persistEvidence(
     // statements above, and nothing between can remove it.
     return (await designEvidenceRepository.findById(evidence.id, tx))!;
   }).then(async (persisted) => {
+    // The system approval's post-commit work, after this commit (MOTIR-12175).
+    for (const afterCommit of systemAfterCommits) await afterCommit();
     await emitAppliedGateTransitions(appliedTransitions, ctx);
     // TO RESUME (MOTIR-7707): with design approval switched off the gate above was
     // approved by the system, which releases a parent run that stopped at this

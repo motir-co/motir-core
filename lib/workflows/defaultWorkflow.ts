@@ -81,6 +81,34 @@ const STATUS_ORDER: ReadonlyArray<Omit<DefaultStatusSpec, 'position'>> = [
   // abandoned, it is in progress on the planning axis rather than the
   // implementation one.
   { key: 'planning', label: 'Planning', category: 'in_progress', isInitial: false },
+  // ⚠️ THE CATEGORY IS THE MECHANISM, A FOURTH TIME (MOTIR-12174). A card at
+  // `to_plan` was planned and not finished, and its description is OUT OF DATE:
+  // a decision it rests on was corrected after it was written. It must leave the
+  // pickable set until it is re-planned, and it must not count as finished.
+  //
+  // The CATEGORY does both, not the key. Both claim doors (`claim_next_ready`,
+  // `claim_work_item`) take only the `todo` category, so a card here is not
+  // handed to a run; and only the `done` category is terminal
+  // (`blockerReadiness.isOpenBlocker`), so its dependents stay blocked and no
+  // count closes it. Nothing special-cases the key.
+  //
+  // It is NOT `blocked`, for the reason the `planning` note above gives in full:
+  // readiness is computed from the `is_blocked_by` EDGES, and `blocked` sits in
+  // the `todo` category, so a `blocked` card with no open blocker is claimable.
+  // And it is NOT `planning`: nobody is re-planning it yet. A plan that names it
+  // parks it at `planning` (`to_plan → planning`, below) and the decision on that
+  // plan rests it.
+  //
+  // ⚠️ ORDER: slot 6, immediately after `planning`, which the design settles
+  // (`design/boards/board--to-plan-status.mock.html`, panel 1). The two
+  // re-planning states sit side by side, and the insert is AFTER `implemented`,
+  // so the eighth column's slot-4 invariant survives.
+  //
+  // ⚠️ LABEL: a childless story or epic already draws a COMPUTED "To plan"
+  // status-slot pill (`lib/workItems/statusSlot.ts`) that means something else.
+  // The two never render on one card (`isToPlanItem` is false for an
+  // `in_progress`-category status), and the glyph and fill tell them apart.
+  { key: 'to_plan', label: 'To plan', category: 'in_progress', isInitial: false },
   { key: 'in_review', label: 'In Review', category: 'in_progress', isInitial: false },
   // ⚠️ THE CATEGORY IS THE MECHANISM, A THIRD TIME (MOTIR-5139), and here it is
   // the whole of the story rather than one of its consequences. A person's YES
@@ -135,7 +163,8 @@ export const DEFAULT_STATUSES: ReadonlyArray<DefaultStatusSpec> = (() => {
 })();
 
 /**
- * The keys of the eight default statuses (Subtask 2.2.10). A status whose `key`
+ * The keys of the ten default statuses (Subtask 2.2.10; derived from
+ * `STATUS_ORDER`, so a status added there is protected without a second list). A status whose `key`
  * is in here is a PROTECTED default: it can be recolored but NOT renamed,
  * recategorized, reordered, or deleted (finding #49). Used by the service gates
  * and by the editor UI to render the "Default" badge + lock the affordances.
@@ -213,6 +242,12 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // 5804 was net ZERO (one out, one in), so the sum is 36 + 5 = 41 — the same
 // number either order, but a DIFFERENT edge set from the one MOTIR-5643 was
 // first measured against.
+//
+// MOTIR-12174 adds `to_plan` and FIVE more edges (two in, three out), bringing
+// the total to FORTY-SIX — with a backfill of the status, its edges and a board
+// column (`20261124010000_add_to_plan_default_status`). Each is justified in the
+// `to_plan` block at the end of this list, beside the three it deliberately
+// leaves out.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -388,4 +423,33 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['approved', 'in_review'],
   ['approved', 'implemented'],
   ['in_review', 'implemented'],
+  // ── To plan (MOTIR-12174) ──────────────────────────────────────────────────
+  // IN, two — the moves the MARK makes when a corrected decision makes the
+  // work planned against it stale. It moves only NOT-STARTED work, so the only
+  // sources are the two `todo`-category statuses:
+  //   • `todo → to_plan`
+  //   • `blocked → to_plan`
+  ['todo', 'to_plan'],
+  ['blocked', 'to_plan'],
+  // OUT, three:
+  //   • `to_plan → planning`  — a plan that names the card PARKS it.
+  //     `planTargetLockService.acquireOne` parks a target exactly when
+  //     `canTransition(status → planning)` holds, so this one edge is all the
+  //     park needs. Approving the plan then rests the card through the existing
+  //     `planning → todo` / `planning → blocked`; DECLINING it restores
+  //     `to_plan` by a system write (`releaseOne`), which skips the edge check,
+  //     so there is no `planning → to_plan` edge.
+  //   • `to_plan → todo`      — a person decides the card is fine as written.
+  //   • `to_plan → cancelled` — cancellation is legal from every non-terminal
+  //     state, this constant's convention.
+  //
+  // ⚠️ DELIBERATELY ABSENT, three: `to_plan → blocked`, `to_plan → in_progress`
+  // and `to_plan → done`. A stale card goes back to the queue through `todo`
+  // (readiness is computed from edges, so `todo` and `blocked` read the same to
+  // a run), and it must not be STARTED or CLOSED without being re-planned. The
+  // absence also keeps the upward rollup, which walks real edges, from pulling a
+  // `to_plan` parent forward to In Progress.
+  ['to_plan', 'planning'],
+  ['to_plan', 'todo'],
+  ['to_plan', 'cancelled'],
 ];

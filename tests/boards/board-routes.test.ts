@@ -145,6 +145,8 @@ describe('board API routes', () => {
       // MOTIR-3003 — built, pull request open, CI not yet green.
       'implemented',
       'planning',
+      // MOTIR-10139 — planned, but a decision it rests on was corrected since.
+      'to_plan',
       'in_review',
       // MOTIR-5139 — a person's YES, between review and the merge.
       'approved',

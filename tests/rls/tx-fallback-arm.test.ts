@@ -516,6 +516,11 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
     await workItemsService.updateStatus(itemId, 'in_progress', fx.ctx);
     const changedAt = await workItemRevisionRepository.findLatestStatusChangeAt(itemId);
     expect(changedAt).toBeNull();
+
+    // The decision-correction mark's staleness read (MOTIR-12175). Bound, it finds
+    // the item's `created` revision; unbound it must come back NULL, never a date
+    // from a row this connection may not read.
+    expect(await workItemRevisionRepository.findLatestDescriptionChangeAt(itemId)).toBeNull();
   });
 
   it('customFieldOptionRepository — the option lookups, unbound', async () => {

@@ -738,6 +738,7 @@
       "in_progress": "진행 중",
       "implemented": "구현됨",
       "planning": "계획 중",
+      "to_plan": "계획 필요",
       "in_review": "검토 중",
       "approved": "승인됨",
       "done": "완료",
