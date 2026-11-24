@@ -218,9 +218,14 @@ export interface GateEffect {
    * WHAT MAY ONLY HAPPEN AFTER THE DOOR COMMITS (MOTIR-6035; ADR §11.5) — events,
    * triggers and anything that opens its own transaction. The door awaits it once its
    * transaction has committed and strips it from the result, so it never crosses the
-   * wire and a rolled-back decision never announces anything. Absent on every kind but
-   * `plan_approval`, whose approve and decline keep `approvePlan` / `declinePlan`'s
-   * post-commit work exactly where those methods put it.
+   * wire and a rolled-back decision never announces anything. Returned by
+   * `plan_approval` (approve and decline keep `approvePlan` / `declinePlan`'s
+   * post-commit work exactly where those methods put it), by the DECISION kinds —
+   * `decision_approval`'s approve on both arms and `decision_confirmation`'s confirm,
+   * which run the decision-correction mark (MOTIR-12175) — and by `design_result` /
+   * `agent_review` for their post-commit asks. Every path that decides a gate goes
+   * through `approvalGatesService.decide`, which awaits it; `approveBySystem` hands it
+   * to its caller's own post-commit step.
    */
   afterCommit?: () => Promise<void>;
 }

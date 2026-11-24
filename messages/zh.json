@@ -738,6 +738,7 @@
       "in_progress": "进行中",
       "implemented": "已实现",
       "planning": "规划中",
+      "to_plan": "待规划",
       "in_review": "评审中",
       "approved": "已批准",
       "done": "已完成",
@@ -12948,6 +12949,7 @@
         "agent_storage": "智能体存储",
         "ci": "CI",
         "search": "网页搜索",
+        "hosting_production": "生产环境托管",
         "indexing": "索引"
       },
       "models": {

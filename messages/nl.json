@@ -738,6 +738,7 @@
       "in_progress": "Bezig",
       "implemented": "Geïmplementeerd",
       "planning": "In planning",
+      "to_plan": "Te plannen",
       "in_review": "In review",
       "approved": "Goedgekeurd",
       "done": "Klaar",
@@ -12957,6 +12958,7 @@
         "agent_storage": "Agentopslag",
         "ci": "CI",
         "search": "Webzoekopdrachten",
+        "hosting_production": "Productiehosting",
         "indexing": "Indexeren"
       },
       "models": {

@@ -261,7 +261,11 @@ function readTags(container: HTMLElement) {
     name: slot.getAttribute('title'),
     className: slot.className,
     manual: Array.from(row.children).some((c) => c.textContent === 'Manual'),
-    blocked: container.querySelector('[data-testid="cross-blocked-flag"]') !== null,
+    // The canvas card wears its blocked flag as a TAB on its top edge (MOTIR-12158),
+    // the other surfaces in the tag row: either is the same blocked fact.
+    blocked:
+      container.querySelector('[data-testid="cross-blocked-flag"],[data-testid="blocked-tab"]') !==
+      null,
   };
 }
 

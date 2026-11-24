@@ -18,20 +18,26 @@ import {
 // against real Postgres in `tests/workflows/container-completeness-gate.test.ts`
 // and `tests/integration/workflows/parentStatusRollup.test.ts`.
 
-/** The default workflow's eight statuses, as the ladder sees them. */
+/** The default workflow's statuses, as the ladder sees them. */
 const DEFAULT_STATUSES = [
   { key: 'todo', category: 'todo' as const },
   { key: 'blocked', category: 'todo' as const },
   { key: 'in_progress', category: 'in_progress' as const },
   { key: 'implemented', category: 'in_progress' as const },
   { key: 'planning', category: 'in_progress' as const },
+  { key: 'to_plan', category: 'in_progress' as const },
   { key: 'in_review', category: 'in_progress' as const },
   { key: 'approved', category: 'in_progress' as const },
   { key: 'done', category: 'done' as const },
   { key: 'cancelled', category: 'done' as const },
 ];
 
-const KEYS = { reviewKey: 'in_review', implementedKey: 'implemented', approvedKey: 'approved' };
+const KEYS = {
+  reviewKey: 'in_review',
+  implementedKey: 'implemented',
+  approvedKey: 'approved',
+  toPlanKey: 'to_plan',
+};
 
 describe('rankOfStatus — six rungs, by category with three keys pulled out', () => {
   it.each([
@@ -85,6 +91,25 @@ describe('rankOfStatus — six rungs, by category with three keys pulled out', (
     expect(rankOfStatus('approved', DEFAULT_STATUSES, noApproved)).toBe(RUNG_RANK.in_progress);
   });
 
+  it('ranks `to_plan` at the TODO rung — planned, not started (MOTIR-12174)', () => {
+    // Its category is in_progress (that keeps it out of the claim doors), so by
+    // category alone it would rank as started — and an epic over a story the
+    // mark moved would derive to In Progress. Pulled DOWN, not up.
+    const rank = (k: string) => rankOfStatus(k, DEFAULT_STATUSES, KEYS);
+    expect(rank('to_plan')).toBe(RUNG_RANK.todo);
+    expect(rank('to_plan')).toBe(rank('todo'));
+    expect(rank('to_plan')).toBeLessThan(rank('in_progress'));
+    // A project without the status: the key is null and it ranks by category.
+    expect(rankOfStatus('to_plan', DEFAULT_STATUSES, { ...KEYS, toPlanKey: null })).toBe(
+      RUNG_RANK.in_progress,
+    );
+  });
+
+  it('a to_plan child is BELOW the container-claim bar', () => {
+    const rows = [{ identifier: 'X-1', status: 'to_plan' }];
+    expect(childrenBelowClaimBar(rows, DEFAULT_STATUSES, KEYS)).toHaveLength(1);
+  });
+
   it('ranks an UNKNOWN key lowest — a status nobody can classify is not evidence of progress', () => {
     expect(rankOfStatus('nonesuch', DEFAULT_STATUSES, KEYS)).toBe(RUNG_RANK.todo);
   });
@@ -99,7 +124,7 @@ describe('rankOfStatus — six rungs, by category with three keys pulled out', (
       { key: 'qa', category: 'in_progress' as const },
       { key: 'shipped', category: 'done' as const },
     ];
-    const noKeys = { reviewKey: null, implementedKey: null, approvedKey: null };
+    const noKeys = { reviewKey: null, implementedKey: null, approvedKey: null, toPlanKey: null };
     expect(rankOfStatus('doing', renamed, noKeys)).toBe(RUNG_RANK.in_progress);
     expect(rankOfStatus('qa', renamed, noKeys)).toBe(RUNG_RANK.in_progress);
     expect(rankOfStatus('shipped', renamed, noKeys)).toBe(RUNG_RANK.done);
@@ -111,7 +136,12 @@ describe('rankOfStatus — six rungs, by category with three keys pulled out', (
       { key: 'built', category: 'in_progress' as const },
       { key: 'qa', category: 'in_progress' as const },
     ];
-    const keys = { reviewKey: 'qa', implementedKey: 'built', approvedKey: 'signed-off' };
+    const keys = {
+      reviewKey: 'qa',
+      implementedKey: 'built',
+      approvedKey: 'signed-off',
+      toPlanKey: null,
+    };
     expect(rankOfStatus('built', renamed, keys)).toBe(RUNG_RANK.implemented);
     expect(rankOfStatus('qa', renamed, keys)).toBe(RUNG_RANK.in_review);
     expect(rankOfStatus('doing', renamed, keys)).toBe(RUNG_RANK.in_progress);
@@ -123,13 +153,23 @@ describe('rankOfStatus — six rungs, by category with three keys pulled out', (
     // the derivation and the stricter one for the gate.
     const one = [{ key: 'qa', category: 'in_progress' as const }];
     expect(
-      rankOfStatus('qa', one, { reviewKey: 'qa', implementedKey: 'qa', approvedKey: null }),
+      rankOfStatus('qa', one, {
+        reviewKey: 'qa',
+        implementedKey: 'qa',
+        approvedKey: null,
+        toPlanKey: null,
+      }),
     ).toBe(RUNG_RANK.in_review);
     // MOTIR-5140 — and APPROVED outranks review, so it wins over both. This is
     // the same precedence `aggregateChildrenStatus` applies when it buckets, and
     // the two must not drift: the rank and the bucket are one decision.
     expect(
-      rankOfStatus('qa', one, { reviewKey: 'qa', implementedKey: 'qa', approvedKey: 'qa' }),
+      rankOfStatus('qa', one, {
+        reviewKey: 'qa',
+        implementedKey: 'qa',
+        approvedKey: 'qa',
+        toPlanKey: null,
+      }),
     ).toBe(RUNG_RANK.approved);
   });
 });
@@ -229,12 +269,14 @@ describe('the container-completeness bar', () => {
 describe('ladderKeysFrom (MOTIR-6537)', () => {
   it('resolves each named rung by literal key, and null where the project has none', () => {
     expect(ladderKeysFrom([{ key: 'todo' }, { key: 'implemented' }, { key: 'in_review' }])).toEqual(
-      { reviewKey: 'in_review', implementedKey: 'implemented', approvedKey: null },
+      { reviewKey: 'in_review', implementedKey: 'implemented', approvedKey: null, toPlanKey: null },
     );
+    expect(ladderKeysFrom([{ key: 'to_plan' }])).toMatchObject({ toPlanKey: 'to_plan' });
     expect(ladderKeysFrom([])).toEqual({
       reviewKey: null,
       implementedKey: null,
       approvedKey: null,
+      toPlanKey: null,
     });
   });
 });

@@ -738,6 +738,7 @@
       "in_progress": "In Progress",
       "implemented": "Implemented",
       "planning": "Planning",
+      "to_plan": "To plan",
       "in_review": "In Review",
       "approved": "Approved",
       "done": "Done",
@@ -12954,6 +12955,7 @@
         "agent_storage": "Agent storage",
         "ci": "CI",
         "search": "Web search",
+        "hosting_production": "Production hosting",
         "indexing": "Indexing"
       },
       "models": {

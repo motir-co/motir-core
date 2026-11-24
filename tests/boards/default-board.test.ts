@@ -39,6 +39,7 @@ describe('buildDefaultBoard', () => {
       'In Progress',
       'Implemented',
       'Planning',
+      'To plan',
       'In Review',
       'Approved',
       'Done',
@@ -51,6 +52,7 @@ describe('buildDefaultBoard', () => {
       ['in_progress'],
       ['implemented'],
       ['planning'],
+      ['to_plan'],
       ['in_review'],
       ['approved'],
       ['done'],
@@ -97,7 +99,7 @@ describe('buildDefaultBoard', () => {
     expect(input.map((s) => s.key)).toEqual(snapshot);
   });
 
-  it('matches the canonical nine-column default (snapshot)', () => {
+  it('matches the canonical ten-column default (snapshot)', () => {
     // Snapshot the meaningful projection — name, type, and each column's label
     // + mapped keys. The opaque fractional-index `position` is an
     // implementation detail of the workflow seed (asserted to mirror the status
@@ -140,6 +142,12 @@ describe('buildDefaultBoard', () => {
             "name": "Planning",
             "statusKeys": [
               "planning",
+            ],
+          },
+          {
+            "name": "To plan",
+            "statusKeys": [
+              "to_plan",
             ],
           },
           {

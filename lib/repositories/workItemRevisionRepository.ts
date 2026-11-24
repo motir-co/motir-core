@@ -123,6 +123,33 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * WHEN this work item's DESCRIPTION was last written (MOTIR-12175) — the
+   * `changedAt` of its most recent revision whose diff carries `descriptionMd`, or
+   * of its `created` revision (a create writes the birth body, and a card created
+   * with no body has no `descriptionMd` cell to find). `null` only for a row with
+   * no revision at all.
+   *
+   * The decision-correction mark compares it with the deciding gate's raise time:
+   * a body written before the corrected version was put to the gate was planned
+   * against the old one. Same single-row walk of the `(workItemId, changedAt)`
+   * index as {@link findLatestStatusChangeAt}.
+   */
+  async findLatestDescriptionChangeAt(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const client = tx ?? dbRead;
+    const rows = await client.$queryRaw<Array<{ changed_at: Date }>>`
+      SELECT r."changedAt" AS "changed_at"
+        FROM "work_item_revision" r
+       WHERE r."workItemId" = ${workItemId}
+         AND (r."diff" -> 'descriptionMd' IS NOT NULL OR r."changeKind" = 'created')
+       ORDER BY r."changedAt" DESC
+       LIMIT 1`;
+    return rows[0]?.changed_at ?? null;
+  },
+
+  /**
    * WHO last changed this work item's status, and WHEN (MOTIR-2961).
    *
    * The same single-row walk of the `(workItemId, changedAt)` index that
