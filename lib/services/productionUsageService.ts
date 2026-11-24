@@ -1,16 +1,15 @@
-import { idlePolicyRefusal } from '@motir/orchestrator';
-import { getOrgUsage } from '@/lib/ai/motirAiClient';
 import { periodEndFor, periodStartFor } from '@/lib/ciMetering/period';
 import type { ProductionUsageDto, ProductionUsageExhaustedDto } from '@/lib/dto/productionUsage';
-import { HOSTED_IDLE_SECONDS_DEFAULT } from '@/lib/hosting/idlePolicy';
 import { dailyChargeCredits } from '@/lib/hosting/productionRates';
 import { utcDayOf } from '@/lib/hosting/productionUsage';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import {
-  hostedApplicationRepository,
-  type HostedApplicationMeterTarget,
-} from '@/lib/repositories/hostedApplicationRepository';
+import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { productionUsageSliceRepository } from '@/lib/repositories/productionUsageSliceRepository';
+import {
+  EXHAUSTED_SUSPEND_AFTER_MS,
+  productionCreditBalanceService,
+} from '@/lib/services/productionCreditBalanceService';
+import { resolveRepository } from '@/lib/services/productionPanelService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -25,51 +24,9 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 // balance falls below zero), confirmed by a live balance read: a top-up shows at
 // once rather than at the meter's next pass. A customer repository is refused
 // before anything is read (`resolveRepository`), and nothing here reads or
-// writes the project's phase.
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** How long an always-on application may run below zero before it is switched
- *  to suspend when idle (Decision MOTIR-12100 §9). */
-export const EXHAUSTED_SUSPEND_AFTER_MS = 7 * DAY_MS;
-
-/** The organisation's credit balance, or null when motir-ai could not answer —
- *  never 0 and never a throw: an outage must not read as exhaustion. */
-async function readOrganizationBalance(organizationId: string): Promise<number | null> {
-  try {
-    const usage = await getOrgUsage({ coreOrganizationId: organizationId, scope: 'org' });
-    return typeof usage.balance === 'number' ? usage.balance : null;
-  } catch (error) {
-    console.warn('[productionUsageService] could not read an organisation’s balance', {
-      organizationId,
-      error: error instanceof Error ? error.name : 'UNKNOWN',
-    });
-    return null;
-  }
-}
-
-/**
- * Whether the organisation is below zero now: the live balance when it can be
- * read, otherwise the meter's stored transition (`storedSince`). The
- * always-on refusal and the Usage read both decide by it.
- */
-async function isBelowZero(
-  organizationId: string,
-  storedSince: Date | null,
-): Promise<{ below: boolean; balance: number | null }> {
-  const balance = await readOrganizationBalance(organizationId);
-  return { below: balance === null ? storedSince !== null : balance < 0, balance };
-}
-
-/** Whether the application's target and shape can run suspend-when-idle. */
-function canSuspend(app: Pick<HostedApplicationMeterTarget, 'target' | 'hostingShape'>): boolean {
-  return (
-    idlePolicyRefusal(app.target, app.hostingShape, {
-      mode: 'suspend',
-      idleSeconds: HOSTED_IDLE_SECONDS_DEFAULT,
-    }) === null
-  );
-}
+// writes the project's phase. The balance reads live in
+// `productionCreditBalanceService`, which the meter imports instead of this
+// module: this one's panel-service import reaches `@/lib/auth` (MOTIR-12168).
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -110,9 +67,12 @@ async function getCurrentPeriod(
 
   let exhausted: ProductionUsageExhaustedDto | null = null;
   if (app.creditsExhaustedSince) {
-    const { below, balance } = await isBelowZero(app.organizationId, app.creditsExhaustedSince);
+    const { below, balance } = await productionCreditBalanceService.isBelowZero(
+      app.organizationId,
+      app.creditsExhaustedSince,
+    );
     if (below) {
-      const suspends = canSuspend(app);
+      const suspends = productionCreditBalanceService.canSuspend(app);
       exhausted = {
         since: app.creditsExhaustedSince.toISOString(),
         balance,
@@ -149,13 +109,6 @@ async function getUsageForRepository(
   actor: ServiceContext,
   options: { now?: Date } = {},
 ): Promise<ProductionUsageDto> {
-  // Loaded on demand: the production usage meter (a system job) imports this
-  // module for the balance read, and the panel service's static import graph
-  // reaches `@/lib/workspaces` → `@/lib/auth`, which needs the auth env at load.
-  // A job registry that loads auth cannot be imported by the docs-guard lane
-  // (`tests/jobs/catch-up-disposition-adr.test.ts`), so only this user-facing
-  // read pulls the panel service in.
-  const { resolveRepository } = await import('@/lib/services/productionPanelService');
   const { projectId } = await resolveRepository(projectKey, projectRepositoryId, actor);
   const permissions = await projectAccessService.getPermissions(projectId, actor);
   if (!permissions.has('project:browse')) throw new ProjectNotFoundError(projectId);
@@ -170,7 +123,4 @@ async function getUsageForRepository(
 export const productionUsageService = {
   getCurrentPeriod,
   getUsageForRepository,
-  readOrganizationBalance,
-  isBelowZero,
-  canSuspend,
 };

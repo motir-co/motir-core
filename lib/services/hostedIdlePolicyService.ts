@@ -31,7 +31,7 @@ import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseReposit
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
-import { productionUsageService } from '@/lib/services/productionUsageService';
+import { productionCreditBalanceService } from '@/lib/services/productionCreditBalanceService';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 
@@ -224,8 +224,8 @@ async function assertAlwaysOnAffordable(
   );
   // Only an application the meter has seen below zero is asked about: the
   // live read then confirms it, so a top-up lifts the refusal at once.
-  if (!meter?.creditsExhaustedSince || !productionUsageService.canSuspend(meter)) return;
-  const { below } = await productionUsageService.isBelowZero(
+  if (!meter?.creditsExhaustedSince || !productionCreditBalanceService.canSuspend(meter)) return;
+  const { below } = await productionCreditBalanceService.isBelowZero(
     meter.organizationId,
     meter.creditsExhaustedSince,
   );

@@ -37,8 +37,8 @@ import {
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
 import {
   EXHAUSTED_SUSPEND_AFTER_MS,
-  productionUsageService,
-} from '@/lib/services/productionUsageService';
+  productionCreditBalanceService,
+} from '@/lib/services/productionCreditBalanceService';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { ProductionUsageUnit } from '@/generated/prisma/client';
 
@@ -358,7 +358,7 @@ async function enforceCredits(
   apps: readonly HostedApplicationMeterTarget[],
   now: Date,
 ): Promise<number> {
-  const balance = await productionUsageService.readOrganizationBalance(organizationId);
+  const balance = await productionCreditBalanceService.readOrganizationBalance(organizationId);
   if (balance === null) return 0;
   await recordBalance(organizationId, balance, now);
   if (balance >= 0) return 0;
@@ -368,7 +368,7 @@ async function enforceCredits(
     if (
       !app?.creditsExhaustedSince ||
       app.idleMode !== 'always_on' ||
-      !productionUsageService.canSuspend(app) ||
+      !productionCreditBalanceService.canSuspend(app) ||
       now.getTime() - app.creditsExhaustedSince.getTime() < EXHAUSTED_SUSPEND_AFTER_MS
     ) {
       continue;
