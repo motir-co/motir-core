@@ -70,6 +70,7 @@ function panel(overrides: Partial<ProductionPanelDto> = {}): ProductionPanelDto 
     nextCursor: null,
     isAdministrator: true,
     canRollback: true,
+    handover: null,
     ...overrides,
   };
 }

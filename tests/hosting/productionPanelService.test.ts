@@ -232,6 +232,7 @@ describe('getProductionPanel', () => {
       nextCursor: null,
       isAdministrator: true,
       canRollback: false,
+      handover: null,
     });
     expect(await adminDb.hostedApplication.count()).toBe(0);
   });
@@ -358,5 +359,219 @@ describe('productionRouteError', () => {
     const res = productionRouteErrorResponse(leaky)!;
     expect(res.status).toBe(502);
     expect(await res.text()).not.toMatch(/postgres|hunter2/);
+  });
+});
+
+// MOTIR-12138 — the panel's read carries the takeover facts for an application in
+// every state, sets canManageHandover from the organisation-admin question, keeps
+// Roll back off whenever the deploy guard answers taken_over, and never carries a
+// storage key, connection string or provider message.
+describe('getProductionPanel — the takeover handover', () => {
+  async function world() {
+    const { fx, member } = await setup();
+    const id = await repo(fx);
+    const [first] = await releases(id, 2);
+    const app = await adminDb.hostedApplication.findFirstOrThrow({
+      where: { projectRepositoryId: id },
+    });
+    const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
+    const org = await adminDb.organization.findUniqueOrThrow({
+      where: { id: ws.organizationId! },
+    });
+    const read = (actor: { userId: string; workspaceId: string } = fx.ctx) =>
+      service.getProductionPanel({
+        projectKey: fx.projectIdentifier,
+        projectRepositoryId: id,
+        actor,
+      });
+    return { fx, member, id, app, org, first: first!, read };
+  }
+
+  function carriesNoSecret(panel: unknown) {
+    const json = JSON.stringify(panel);
+    expect(json).not.toContain('storageKey');
+    expect(json).not.toContain('hosting-exports/');
+    expect(json).not.toMatch(/postgres(ql)?:\/\//);
+  }
+
+  it('reads a live app: the organisation, no notice, no exports, Roll back as shipped', async () => {
+    const w = await world();
+    const panel = await w.read();
+    expect(panel.handover).toEqual({
+      state: 'live',
+      target: 'fly',
+      stopsAt: null,
+      handedOverAt: null,
+      upstreamAddress: null,
+      handedOverAccountId: null,
+      organizationId: w.org.id,
+      organizationName: w.org.name,
+      latestGraceNotice: null,
+      canManageHandover: true,
+      deployRefusal: null,
+      exports: [],
+      finalExportExpiresAt: null,
+    });
+    expect(panel.canRollback).toBe(true);
+  });
+
+  it('reads a grace app: stopsAt, the newest notice, the exports with who asked, taken_over and no Roll back', async () => {
+    const w = await world();
+    const stopsAt = new Date('2026-12-22T10:00:00.000Z');
+    await adminDb.hostedApplication.update({
+      where: { id: w.app.id },
+      data: { state: 'grace', stopsAt },
+    });
+    await adminDb.hostedApplicationNotice.create({
+      data: {
+        workspaceId: w.fx.workspaceId,
+        applicationId: w.app.id,
+        kind: 'transferred',
+        sentAt: new Date('2026-11-22T10:00:00.000Z'),
+      },
+    });
+    await adminDb.hostedApplicationNotice.create({
+      data: {
+        workspaceId: w.fx.workspaceId,
+        applicationId: w.app.id,
+        kind: 'seven_days',
+        sentAt: new Date('2026-12-15T10:00:00.000Z'),
+      },
+    });
+    const future = new Date(Date.now() + 7 * 86_400_000);
+    const base = {
+      workspaceId: w.fx.workspaceId,
+      applicationId: w.app.id,
+      kind: 'on_demand',
+      expiresAt: future,
+    };
+    await adminDb.hostedApplicationExport.create({
+      data: {
+        ...base,
+        id: 'exp-old',
+        requestedByUserId: w.fx.ownerId,
+        storageKey: 'hosting-exports/w/a/exp-old.dump',
+        sizeBytes: BigInt(1024),
+        createdAt: new Date(Date.now() - 2 * 3_600_000),
+      },
+    });
+    await adminDb.hostedApplicationExport.create({
+      data: {
+        ...base,
+        id: 'exp-new',
+        requestedByUserId: 'user-gone',
+        storageKey: 'hosting-exports/w/a/exp-new.dump',
+        sizeBytes: BigInt(2048),
+        createdAt: new Date(Date.now() - 3_600_000),
+      },
+    });
+    await adminDb.hostedApplicationExport.create({
+      data: {
+        ...base,
+        id: 'exp-expired',
+        requestedByUserId: null,
+        storageKey: 'hosting-exports/w/a/exp-expired.dump',
+        sizeBytes: BigInt(1),
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    });
+    const owner = await adminDb.user.findUniqueOrThrow({ where: { id: w.fx.ownerId } });
+
+    const panel = await w.read();
+    expect(panel.handover).toMatchObject({
+      state: 'grace',
+      stopsAt: stopsAt.toISOString(),
+      latestGraceNotice: { kind: 'seven_days', sentAt: '2026-12-15T10:00:00.000Z' },
+      deployRefusal: 'taken_over',
+      canManageHandover: true,
+    });
+    expect(panel.handover!.exports).toEqual([
+      expect.objectContaining({ id: 'exp-new', sizeBytes: '2048', requestedBy: null }),
+      expect.objectContaining({
+        id: 'exp-old',
+        kind: 'on_demand',
+        requestedBy: { id: w.fx.ownerId, name: owner.name },
+      }),
+    ]);
+    // An administrator with a previous release still gets no Roll back.
+    expect(panel).toMatchObject({ isAdministrator: true, canRollback: false });
+    carriesNoSecret(panel);
+
+    // A member reads the same facts and list, read-only.
+    const asMember = await w.read(w.member);
+    expect(asMember.handover).toMatchObject({ canManageHandover: false, state: 'grace' });
+    expect(asMember.handover!.exports.map((e) => e.id)).toEqual(['exp-new', 'exp-old']);
+  });
+
+  it('sets canManageHandover false for a project administrator who is not an organisation admin', async () => {
+    const w = await world();
+    await addToProjectAs({
+      key: w.fx.projectIdentifier,
+      actorUserId: w.fx.ownerId,
+      ctx: w.fx.ctx,
+      targetUserId: w.member.userId,
+      role: 'admin',
+    });
+    const panel = await w.read(w.member);
+    expect(panel.isAdministrator).toBe(true);
+    expect(panel.handover!.canManageHandover).toBe(false);
+  });
+
+  it('reads an AWS app handed over: the account id and the upstream address', async () => {
+    const w = await world();
+    const at = new Date('2026-11-24T10:00:00.000Z');
+    await adminDb.hostedApplication.update({
+      where: { id: w.app.id },
+      data: {
+        target: 'aws',
+        state: 'handed_over',
+        handedOverAt: at,
+        handedOverAccountId: '482109375512',
+        upstreamAddress: 'd2k8f4w1q9x3ab.cloudfront.net',
+      },
+    });
+    const panel = await w.read();
+    expect(panel.handover).toMatchObject({
+      state: 'handed_over',
+      target: 'aws',
+      handedOverAt: at.toISOString(),
+      handedOverAccountId: '482109375512',
+      upstreamAddress: 'd2k8f4w1q9x3ab.cloudfront.net',
+      deployRefusal: 'taken_over',
+      finalExportExpiresAt: null,
+    });
+    expect(panel.canRollback).toBe(false);
+  });
+
+  it('reads a stopped Fly app: when its final export is kept until', async () => {
+    const w = await world();
+    const at = new Date('2026-12-22T10:02:00.000Z');
+    await adminDb.hostedApplication.update({
+      where: { id: w.app.id },
+      data: { state: 'handed_over', handedOverAt: at },
+    });
+    const panel = await w.read();
+    expect(panel.handover).toMatchObject({
+      state: 'handed_over',
+      finalExportExpiresAt: '2027-01-21T10:02:00.000Z',
+    });
+  });
+
+  it('reads handing_over as taken over, and the rollback still refuses on the server', async () => {
+    const w = await world();
+    await adminDb.hostedApplication.update({
+      where: { id: w.app.id },
+      data: { state: 'handing_over' },
+    });
+    const panel = await w.read();
+    expect(panel.handover).toMatchObject({ state: 'handing_over', deployRefusal: 'taken_over' });
+    expect(panel.canRollback).toBe(false);
+    await expect(
+      service.rollback({
+        projectKey: w.fx.projectIdentifier,
+        projectRepositoryId: w.id,
+        actor: w.fx.ctx,
+      }),
+    ).rejects.toBeInstanceOf(RepositoryTakenOverError);
   });
 });

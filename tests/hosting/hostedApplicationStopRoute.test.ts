@@ -183,7 +183,10 @@ describe('POST …/hosting/applications/[applicationId]/stop', () => {
     );
     const failed = await stop(world.organizationId, world.applicationId);
     expect(failed.status).toBe(502);
-    expect(((await failed.json()) as { code: string }).code).toBe('APPLICATION_STOP_FAILED');
+    expect(await failed.json()).toMatchObject({
+      code: 'APPLICATION_STOP_FAILED',
+      step: 'delete_database',
+    });
 
     const boom = new Error('boom');
     vi.spyOn(hostedApplicationHandoverService, 'stopApplication').mockRejectedValueOnce(boom);

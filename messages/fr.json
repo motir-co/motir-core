@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Cette app est en cours de transfert",
+          "body": "{organization} reprend son hébergement AWS. Motir ne la déploie plus, ne la redéploie plus et ne la restaure plus ; l’app continue de tourner pendant tout ce temps.",
+          "link": "Suivre le transfert dans Dépôts",
+          "memberNote": "Vous voyez la production. Seuls les administrateurs de l’organisation reprennent l’hébergement."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} a rejoint votre GitHub — elle continue de tourner ici jusqu’au {date}",
+            "body": "Déployez-la sur votre propre hébergeur d’ici là. Téléchargez un export de la base de données à tout moment, et arrêtez l’app plus tôt quand vous êtes prêt."
+          },
+          "sevenDays": {
+            "title": "{name} cesse de tourner sur Motir dans 7 jours, le {date}",
+            "body": "Restaurez un export de la base de données sur votre nouvel hébergeur et pointez-y vos domaines."
+          },
+          "oneDay": {
+            "title": "{name} cesse de tourner sur Motir demain, le {date}",
+            "body": "Si votre nouvel hébergeur n’a pas encore vos dernières données, téléchargez un export récent maintenant."
+          }
+        },
+        "grace": {
+          "memberNote": "Vous voyez la production. Seuls les administrateurs de l’organisation peuvent télécharger des exports ou arrêter l’app plus tôt.",
+          "runsUntil": "Tourne jusqu’au",
+          "body": "Motir continue de servir {name} à {address} jusque-là. Ensuite l’app s’arrête et sa base de données est supprimée ; un export final est conservé 30 jours.",
+          "bodyNoAddress": "Motir continue de servir {name} jusque-là. Ensuite l’app s’arrête et sa base de données est supprimée ; un export final est conservé 30 jours.",
+          "pill": "Période de grâce"
+        },
+        "exports": {
+          "title": "Exports de la base de données",
+          "download": "Télécharger un export",
+          "busy": "Export en cours…",
+          "busyStatus": "L’export est en cours — cela peut prendre quelques minutes. Il apparaît ici dès qu’il est prêt.",
+          "help": "Un dump complet de la base de données de production (pg_dump, format personnalisé) à restaurer sur votre nouvel hébergeur. Chaque export peut être téléchargé jusqu’à la date indiquée à côté.",
+          "empty": "Aucun export pour l’instant.",
+          "row": "{size} · par {name} · conservé jusqu’au {date}",
+          "rowUnnamed": "{size} · conservé jusqu’au {date}",
+          "downloadLink": "Télécharger",
+          "downloadAria": "Télécharger l’export du {date}",
+          "failed": "L’export ne s’est pas terminé. Rien n’a changé dans la base de données — <retry>réessayez</retry>."
+        },
+        "refusal": {
+          "forbidden": "Seuls les administrateurs de l’organisation peuvent faire cela.",
+          "notInGrace": "Cette app n’est plus dans sa période de grâce, donc rien n’a changé.",
+          "notFound": "Cette app ne vous est plus accessible."
+        },
+        "stop": {
+          "title": "L’arrêter plus tôt",
+          "body": "Quand votre nouvel hébergeur sert l’app, arrêtez {name} maintenant au lieu d’attendre le {date}.",
+          "button": "Arrêter maintenant",
+          "failed": {
+            "stop_serving": "L’arrêt ne s’est pas terminé pendant la mise hors ligne de {name}. Rien n’a été supprimé. Réessayer reprend à partir de là.",
+            "final_export": "L’arrêt ne s’est pas terminé pendant l’export final. L’app n’est plus servie, et rien n’a été supprimé. Réessayer reprend à partir de là.",
+            "delete_database": "L’arrêt ne s’est pas terminé pendant la suppression de la base de données. Ce qui est déjà fait le reste — l’app n’est plus servie et l’export final est conservé. Réessayer reprend à partir de là.",
+            "record": "L’arrêt ne s’est pas terminé pendant l’enregistrement de l’arrêt. L’app et sa base de données sont supprimées et l’export final est conservé. Réessayer reprend à partir de là.",
+            "unknown": "L’arrêt ne s’est pas terminé. Ce qui est déjà fait le reste. Réessayer reprend à partir de là."
+          }
+        },
+        "dialog": {
+          "title": "Arrêter {name} maintenant ?",
+          "body": "Motir cesse de servir {name} aujourd’hui au lieu du {date}. Ensuite il supprime :",
+          "deleteApp": "l’app et son adresse {address}",
+          "deleteAppNoAddress": "l’app",
+          "deleteDatabase": "la base de données de production",
+          "finalExport": "Un export final de la base de données est d’abord réalisé et conservé 30 jours, pour que vous puissiez encore le télécharger ici. Cette action est irréversible.",
+          "cancel": "Annuler",
+          "confirm": "Arrêter {name} maintenant",
+          "busy": "Arrêt en cours…",
+          "retry": "Réessayer"
+        },
+        "handedOver": {
+          "copy": "Copier",
+          "copied": "Copié",
+          "aws": {
+            "title": "Transférée",
+            "body": "{organization} fait tourner {name} sur son propre compte AWS depuis le {date}. Motir ne la déploie et ne la sert plus.",
+            "pill": "Transférée",
+            "account": "Compte AWS",
+            "copyAccount": "Copier l’identifiant du compte AWS",
+            "upstream": "Adresse d’origine",
+            "copyUpstream": "Copier l’adresse d’origine"
+          },
+          "stopped": {
+            "title": "Arrêtée",
+            "body": "{name} a rejoint votre GitHub, et son app sur le compte {target, select, fly {Fly} other {serverless}} de Motir s’est arrêtée. Son app, son adresse et sa base de données sont supprimées. Motir ne la déploie et ne la sert plus.",
+            "pill": "Arrêtée"
+          },
+          "final": {
+            "title": "Export final de la base de données",
+            "taken": "Réalisé à l’arrêt, {date}",
+            "meta": "{size} · conservé jusqu’au {date}",
+            "download": "Télécharger",
+            "downloadAria": "Télécharger l’export final de la base de données",
+            "memberNote": "Vous voyez la production. Seuls les administrateurs de l’organisation peuvent télécharger l’export final.",
+            "expired": "L’export final a été conservé jusqu’au {date} et a été supprimé. Les exports que vous avez téléchargés ne sont pas concernés.",
+            "none": "Aucun export final n’est conservé pour cette app."
+          }
+        }
       }
     },
     "workspaceAddress": {
@@ -10757,7 +10856,7 @@
       "githubOwnerInvalid": "Saisissez le nom d’un compte ou d’une organisation GitHub : lettres, chiffres et tirets simples.",
       "handedOverTogether": "Transmis ensemble",
       "noAwsRepositories": "{org} n’a aucun dépôt qui s’exécute sur AWS : il n’y a rien à transmettre.",
-      "awsStepsNote": "Quelques étapes se font dans AWS même — se connecter en tant qu’utilisateur root, ajouter un moyen de paiement. Motir ne demande jamais de données de paiement ni de mot de passe root.",
+      "awsStepsNote": "Quelques étapes se font dans AWS même — se connecter en tant qu’utilisateur root, ajouter un moyen de paiement. Motir ne collecte jamais de données de paiement ni de mot de passe root.",
       "confirmTitle": "Démarrer la transmission ?",
       "confirmNewOwner": "Nouveau propriétaire du compte AWS",
       "confirmRepositoriesGoTo": "Les dépôts vont à",
@@ -10848,7 +10947,7 @@
         "contact": "Confirmer les coordonnées",
         "agreement": "Accepter le contrat client d’AWS"
       },
-      "standaloneNote": "Cela se fait dans AWS, pas ici. Motir ne demande jamais de données de paiement ni de mot de passe root.",
+      "standaloneNote": "Cela se fait dans AWS, pas ici. Motir ne collecte jamais de données de paiement ni de mot de passe root.",
       "checkAgain": "Vérifier à nouveau",
       "signIn": "Ouvrir la page de connexion AWS (s’ouvre dans un nouvel onglet)",
       "notReady": "Pas encore prêt — AWS a encore besoin de :",

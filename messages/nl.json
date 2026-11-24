@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Deze app wordt overgedragen",
+          "body": "{organization} neemt de AWS-hosting over. Motir zet de app niet meer live, niet opnieuw live en draait hem niet meer terug; de app blijft al die tijd draaien.",
+          "link": "Volg de overdracht in Repository's",
+          "memberNote": "Je kunt productie zien. Alleen organisatiebeheerders nemen de hosting over."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} is verhuisd naar je GitHub — hij blijft hier draaien tot {date}",
+            "body": "Zet hem voor die tijd live op je eigen host. Download wanneer je wilt een database-export, en stop de app eerder als je klaar bent."
+          },
+          "sevenDays": {
+            "title": "{name} stopt over 7 dagen met draaien op Motir, op {date}",
+            "body": "Zet een database-export terug op je nieuwe host en laat je domeinen ernaar wijzen."
+          },
+          "oneDay": {
+            "title": "{name} stopt morgen met draaien op Motir, {date}",
+            "body": "Heeft je nieuwe host je nieuwste gegevens nog niet? Download dan nu een verse export."
+          }
+        },
+        "grace": {
+          "memberNote": "Je kunt productie zien. Alleen organisatiebeheerders kunnen exports downloaden of de app eerder stoppen.",
+          "runsUntil": "Draait tot",
+          "body": "Motir blijft {name} tot dan serveren op {address}. Daarna stopt de app en wordt de database verwijderd; een laatste export wordt 30 dagen bewaard.",
+          "bodyNoAddress": "Motir blijft {name} tot dan serveren. Daarna stopt de app en wordt de database verwijderd; een laatste export wordt 30 dagen bewaard.",
+          "pill": "Overgangsperiode"
+        },
+        "exports": {
+          "title": "Database-exports",
+          "download": "Export downloaden",
+          "busy": "Exporteren…",
+          "busyStatus": "De export wordt gemaakt — dit kan een paar minuten duren. Hij staat hier zodra hij klaar is.",
+          "help": "Een volledige dump van de productiedatabase (pg_dump, custom-formaat) om terug te zetten op je nieuwe host. Elke export kun je downloaden tot de datum ernaast.",
+          "empty": "Nog geen exports.",
+          "row": "{size} · door {name} · bewaard tot {date}",
+          "rowUnnamed": "{size} · bewaard tot {date}",
+          "downloadLink": "Downloaden",
+          "downloadAria": "De export van {date} downloaden",
+          "failed": "De export is niet afgerond. Er is niets in de database veranderd — <retry>probeer het opnieuw</retry>."
+        },
+        "refusal": {
+          "forbidden": "Alleen organisatiebeheerders kunnen dit doen.",
+          "notInGrace": "Deze app zit niet meer in zijn overgangsperiode, dus er is niets veranderd.",
+          "notFound": "Deze app is niet meer beschikbaar voor je."
+        },
+        "stop": {
+          "title": "Eerder stoppen",
+          "body": "Zodra je nieuwe host serveert, stop je {name} nu in plaats van te wachten tot {date}.",
+          "button": "Nu stoppen",
+          "failed": {
+            "stop_serving": "Het stoppen is niet afgerond bij het offline halen van {name}. Er is niets verwijderd. Opnieuw proberen gaat daar verder.",
+            "final_export": "Het stoppen is niet afgerond bij het maken van de laatste export. De app wordt niet meer geserveerd, en er is niets verwijderd. Opnieuw proberen gaat daar verder.",
+            "delete_database": "Het stoppen is niet afgerond bij het verwijderen van de database. Wat al gebeurd is, blijft gebeurd — de app wordt niet meer geserveerd en de laatste export blijft bewaard. Opnieuw proberen gaat daar verder.",
+            "record": "Het stoppen is niet afgerond bij het vastleggen van de stop. De app en de database zijn verwijderd en de laatste export blijft bewaard. Opnieuw proberen gaat daar verder.",
+            "unknown": "Het stoppen is niet afgerond. Wat al gebeurd is, blijft gebeurd. Opnieuw proberen gaat daar verder."
+          }
+        },
+        "dialog": {
+          "title": "{name} nu stoppen?",
+          "body": "Motir stopt vandaag met het serveren van {name} in plaats van op {date}. Daarna verwijdert het:",
+          "deleteApp": "de app en het adres {address}",
+          "deleteAppNoAddress": "de app",
+          "deleteDatabase": "de productiedatabase",
+          "finalExport": "Eerst wordt een laatste database-export gemaakt en 30 dagen bewaard, zodat je hem hier nog kunt downloaden. Dit kan niet ongedaan worden gemaakt.",
+          "cancel": "Annuleren",
+          "confirm": "{name} nu stoppen",
+          "busy": "Stoppen…",
+          "retry": "Opnieuw proberen"
+        },
+        "handedOver": {
+          "copy": "Kopiëren",
+          "copied": "Gekopieerd",
+          "aws": {
+            "title": "Overgedragen",
+            "body": "{organization} draait {name} sinds {date} op een eigen AWS-account. Motir zet de app niet meer live en serveert hem niet meer.",
+            "pill": "Overgedragen",
+            "account": "AWS-account",
+            "copyAccount": "Het AWS-account-ID kopiëren",
+            "upstream": "Upstream-adres",
+            "copyUpstream": "Het upstream-adres kopiëren"
+          },
+          "stopped": {
+            "title": "Gestopt",
+            "body": "{name} is verhuisd naar je GitHub, en de app op het {target, select, fly {Fly} other {serverless}}-account van Motir is gestopt. De app, het adres en de database zijn verwijderd. Motir zet hem niet meer live en serveert hem niet meer.",
+            "pill": "Gestopt"
+          },
+          "final": {
+            "title": "Laatste database-export",
+            "taken": "Gemaakt bij het stoppen, {date}",
+            "meta": "{size} · bewaard tot {date}",
+            "download": "Downloaden",
+            "downloadAria": "De laatste database-export downloaden",
+            "memberNote": "Je kunt productie zien. Alleen organisatiebeheerders kunnen de laatste export downloaden.",
+            "expired": "De laatste export is bewaard tot {date} en is verwijderd. Exports die je hebt gedownload, blijven gewoon bestaan.",
+            "none": "Voor deze app wordt geen laatste export bewaard."
+          }
+        }
       }
     },
     "workspaceAddress": {

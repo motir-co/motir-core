@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Esta app se está traspasando",
+          "body": "{organization} está asumiendo su alojamiento en AWS. Motir ya no la despliega, ni la vuelve a desplegar ni la revierte; la app sigue funcionando todo el tiempo.",
+          "link": "Sigue el traspaso en Repositorios",
+          "memberNote": "Puedes ver producción. Solo los administradores de la organización asumen el alojamiento."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} se ha movido a tu GitHub — sigue funcionando aquí hasta el {date}",
+            "body": "Despliégala en tu propio host antes de esa fecha. Descarga una exportación de la base de datos cuando quieras y detén la app antes cuando estés listo."
+          },
+          "sevenDays": {
+            "title": "{name} deja de funcionar en Motir en 7 días, el {date}",
+            "body": "Restaura una exportación de la base de datos en tu nuevo host y apunta tus dominios a él."
+          },
+          "oneDay": {
+            "title": "{name} deja de funcionar en Motir mañana, {date}",
+            "body": "Si tu nuevo host aún no tiene tus datos más recientes, descarga ahora una exportación nueva."
+          }
+        },
+        "grace": {
+          "memberNote": "Puedes ver producción. Solo los administradores de la organización pueden descargar exportaciones o detener la app antes.",
+          "runsUntil": "Funciona hasta",
+          "body": "Motir sigue sirviendo {name} en {address} hasta entonces. Después la app se detiene y se elimina su base de datos; se guarda una exportación final durante 30 días.",
+          "bodyNoAddress": "Motir sigue sirviendo {name} hasta entonces. Después la app se detiene y se elimina su base de datos; se guarda una exportación final durante 30 días.",
+          "pill": "Periodo de gracia"
+        },
+        "exports": {
+          "title": "Exportaciones de la base de datos",
+          "download": "Descargar exportación",
+          "busy": "Exportando…",
+          "busyStatus": "Tomando la exportación — puede tardar unos minutos. Aparece aquí cuando esté lista.",
+          "help": "Un volcado completo de la base de datos de producción (pg_dump, formato personalizado) para restaurar en tu nuevo host. Cada exportación se puede descargar hasta la fecha que aparece junto a ella.",
+          "empty": "Aún no hay exportaciones.",
+          "row": "{size} · por {name} · se guarda hasta el {date}",
+          "rowUnnamed": "{size} · se guarda hasta el {date}",
+          "downloadLink": "Descargar",
+          "downloadAria": "Descargar la exportación del {date}",
+          "failed": "La exportación no terminó. No cambió nada en la base de datos — <retry>inténtalo de nuevo</retry>."
+        },
+        "refusal": {
+          "forbidden": "Solo los administradores de la organización pueden hacer esto.",
+          "notInGrace": "Esta app ya no está en su periodo de gracia, así que no cambió nada.",
+          "notFound": "Esta app ya no está disponible para ti."
+        },
+        "stop": {
+          "title": "Detenerla antes",
+          "body": "Cuando tu nuevo host esté sirviendo, detén {name} ahora en lugar de esperar al {date}.",
+          "button": "Detener ahora",
+          "failed": {
+            "stop_serving": "La detención no terminó al dejar de servir {name}. No se eliminó nada. Reintentar continúa desde ahí.",
+            "final_export": "La detención no terminó al tomar la exportación final. La app ya no se sirve y no se eliminó nada. Reintentar continúa desde ahí.",
+            "delete_database": "La detención no terminó al eliminar la base de datos. Lo que ya ocurrió se mantiene — la app ya no se sirve y la exportación final se conserva. Reintentar continúa desde ahí.",
+            "record": "La detención no terminó al registrar la detención. La app y su base de datos están eliminadas y la exportación final se conserva. Reintentar continúa desde ahí.",
+            "unknown": "La detención no terminó. Lo que ya ocurrió se mantiene. Reintentar continúa desde ahí."
+          }
+        },
+        "dialog": {
+          "title": "¿Detener {name} ahora?",
+          "body": "Motir deja de servir {name} hoy en lugar del {date}. Después elimina:",
+          "deleteApp": "la app y su dirección {address}",
+          "deleteAppNoAddress": "la app",
+          "deleteDatabase": "la base de datos de producción",
+          "finalExport": "Primero se toma una exportación final de la base de datos y se guarda durante 30 días, así que aún puedes descargarla aquí. Esto no se puede deshacer.",
+          "cancel": "Cancelar",
+          "confirm": "Detener {name} ahora",
+          "busy": "Deteniendo…",
+          "retry": "Reintentar"
+        },
+        "handedOver": {
+          "copy": "Copiar",
+          "copied": "Copiado",
+          "aws": {
+            "title": "Traspasada",
+            "body": "{organization} ejecuta {name} en su propia cuenta de AWS desde el {date}. Motir ya no la despliega ni la sirve.",
+            "pill": "Traspasada",
+            "account": "Cuenta de AWS",
+            "copyAccount": "Copiar el ID de la cuenta de AWS",
+            "upstream": "Dirección de origen",
+            "copyUpstream": "Copiar la dirección de origen"
+          },
+          "stopped": {
+            "title": "Detenida",
+            "body": "{name} se movió a tu GitHub y su app en la cuenta {target, select, fly {Fly} other {serverless}} de Motir se detuvo. Su app, su dirección y su base de datos están eliminadas. Motir ya no la despliega ni la sirve.",
+            "pill": "Detenida"
+          },
+          "final": {
+            "title": "Exportación final de la base de datos",
+            "taken": "Tomada al detenerse, {date}",
+            "meta": "{size} · se guarda hasta el {date}",
+            "download": "Descargar",
+            "downloadAria": "Descargar la exportación final de la base de datos",
+            "memberNote": "Puedes ver producción. Solo los administradores de la organización pueden descargar la exportación final.",
+            "expired": "La exportación final se guardó hasta el {date} y se ha eliminado. Las exportaciones que descargaste no se ven afectadas.",
+            "none": "No se guarda ninguna exportación final para esta app."
+          }
+        }
       }
     },
     "workspaceAddress": {

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { HostedApplicationExport } from '@/generated/prisma/client';
 import { deleteAttachmentBlob, putPrivateStream, signedDownloadUrl } from '@/lib/blob/uploader';
 import type { HostedApplicationExportDto } from '@/lib/dto/hostedApplicationExport';
+import type { ProductionExportDto } from '@/lib/dto/productionPanel';
 import {
   ExportFailedError,
   ExportNotAllowedError,
@@ -16,6 +17,7 @@ import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organization
 import { hostedApplicationExportDownloadRepository } from '@/lib/repositories/hostedApplicationExportDownloadRepository';
 import { hostedApplicationExportRepository } from '@/lib/repositories/hostedApplicationExportRepository';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
 import { productionDatabaseService } from '@/lib/services/productionDatabaseService';
@@ -58,7 +60,7 @@ export interface ExportScope {
 /** How long a dump stays downloadable, by kind: the final export for the 30
  *  days decision MOTIR-9802 fixes, an on-demand one a week (the admin can take
  *  another while the application runs). */
-const EXPORT_RETENTION_DAYS: Record<HostedApplicationExportKind, number> = {
+export const EXPORT_RETENTION_DAYS: Record<HostedApplicationExportKind, number> = {
   final: 30,
   on_demand: 7,
 };
@@ -354,6 +356,42 @@ export const hostedApplicationExportService = {
       hostedApplicationExportRepository.listUnexpiredByApplication(subject.id, new Date(), tx),
     );
     return rows.map(toHostedApplicationExportDto);
+  },
+
+  /**
+   * The application's exports not yet expired, newest first, with who asked for
+   * each — the Production panel's list (MOTIR-12138), read inside the panel's own
+   * browse-gated read rather than through the admin-only list route, so a member
+   * sees the list read-only. No storage key, and no download: those stay behind
+   * {@link downloadUrl}'s admin gate.
+   */
+  async listForPanel(workspaceId: string, applicationId: string): Promise<ProductionExportDto[]> {
+    return withWorkspaceServiceContext(workspaceId, async (tx) => {
+      const rows = await hostedApplicationExportRepository.listUnexpiredByApplication(
+        applicationId,
+        new Date(),
+        tx,
+      );
+      const ids = [
+        ...new Set(rows.flatMap((r) => (r.requestedByUserId ? [r.requestedByUserId] : []))),
+      ];
+      const names = new Map((await userRepository.findByIds(ids, tx)).map((u) => [u.id, u.name]));
+      return rows.map((row) => {
+        const dto = toHostedApplicationExportDto(row);
+        const name = row.requestedByUserId ? names.get(row.requestedByUserId) : undefined;
+        return {
+          id: dto.id,
+          kind: dto.kind,
+          sizeBytes: dto.sizeBytes,
+          createdAt: dto.createdAt,
+          expiresAt: dto.expiresAt,
+          requestedBy:
+            row.requestedByUserId && name !== undefined
+              ? { id: row.requestedByUserId, name }
+              : null,
+        };
+      });
+    });
   },
 
   /**

@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Ta aplikacja jest przekazywana",
+          "body": "{organization} przejmuje jej hosting AWS. Motir już jej nie wdraża, nie wdraża ponownie ani nie przywraca; aplikacja działa przez cały ten czas.",
+          "link": "Śledź przekazanie w Repozytoriach",
+          "memberNote": "Widzisz produkcję. Hosting przejmują tylko administratorzy organizacji."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} przeniesiono do Twojego GitHuba — działa tu dalej do {date}",
+            "body": "Do tego czasu wdróż ją na własnym hoście. Pobieraj eksport bazy danych w dowolnej chwili i zatrzymaj aplikację wcześniej, gdy będziesz gotowy."
+          },
+          "sevenDays": {
+            "title": "{name} przestanie działać w Motir za 7 dni, {date}",
+            "body": "Przywróć eksport bazy danych na nowym hoście i skieruj na niego swoje domeny."
+          },
+          "oneDay": {
+            "title": "{name} przestanie działać w Motir jutro, {date}",
+            "body": "Jeśli nowy host nie ma jeszcze Twoich najnowszych danych, pobierz teraz świeży eksport."
+          }
+        },
+        "grace": {
+          "memberNote": "Widzisz produkcję. Tylko administratorzy organizacji mogą pobierać eksporty lub wcześniej zatrzymać aplikację.",
+          "runsUntil": "Działa do",
+          "body": "Do tego czasu Motir nadal udostępnia {name} pod adresem {address}. Potem aplikacja się zatrzymuje, a jej baza danych jest usuwana; końcowy eksport jest przechowywany przez 30 dni.",
+          "bodyNoAddress": "Do tego czasu Motir nadal udostępnia {name}. Potem aplikacja się zatrzymuje, a jej baza danych jest usuwana; końcowy eksport jest przechowywany przez 30 dni.",
+          "pill": "Okres przejściowy"
+        },
+        "exports": {
+          "title": "Eksporty bazy danych",
+          "download": "Pobierz eksport",
+          "busy": "Eksportowanie…",
+          "busyStatus": "Trwa tworzenie eksportu — może to potrwać kilka minut. Pojawi się tutaj, gdy będzie gotowy.",
+          "help": "Pełny zrzut produkcyjnej bazy danych (pg_dump, format niestandardowy) do przywrócenia na nowym hoście. Każdy eksport można pobrać do daty podanej obok.",
+          "empty": "Nie ma jeszcze eksportów.",
+          "row": "{size} · przez {name} · przechowywany do {date}",
+          "rowUnnamed": "{size} · przechowywany do {date}",
+          "downloadLink": "Pobierz",
+          "downloadAria": "Pobierz eksport z {date}",
+          "failed": "Eksport nie został ukończony. Nic się nie zmieniło w bazie danych — <retry>spróbuj ponownie</retry>."
+        },
+        "refusal": {
+          "forbidden": "Mogą to zrobić tylko administratorzy organizacji.",
+          "notInGrace": "Ta aplikacja nie jest już w okresie przejściowym, więc nic się nie zmieniło.",
+          "notFound": "Ta aplikacja nie jest już dla Ciebie dostępna."
+        },
+        "stop": {
+          "title": "Zatrzymaj wcześniej",
+          "body": "Gdy nowy host już działa, zatrzymaj {name} teraz zamiast czekać do {date}.",
+          "button": "Zatrzymaj teraz",
+          "failed": {
+            "stop_serving": "Zatrzymywanie nie zostało ukończone podczas wyłączania {name}. Nic nie zostało usunięte. Ponowna próba kontynuuje od tego miejsca.",
+            "final_export": "Zatrzymywanie nie zostało ukończone podczas tworzenia końcowego eksportu. Aplikacja nie jest już udostępniana i nic nie zostało usunięte. Ponowna próba kontynuuje od tego miejsca.",
+            "delete_database": "Zatrzymywanie nie zostało ukończone podczas usuwania bazy danych. To, co już się stało, pozostaje — aplikacja nie jest już udostępniana, a końcowy eksport jest zachowany. Ponowna próba kontynuuje od tego miejsca.",
+            "record": "Zatrzymywanie nie zostało ukończone podczas zapisywania zatrzymania. Aplikacja i jej baza danych są usunięte, a końcowy eksport jest zachowany. Ponowna próba kontynuuje od tego miejsca.",
+            "unknown": "Zatrzymywanie nie zostało ukończone. To, co już się stało, pozostaje. Ponowna próba kontynuuje od tego miejsca."
+          }
+        },
+        "dialog": {
+          "title": "Zatrzymać {name} teraz?",
+          "body": "Motir przestaje udostępniać {name} dzisiaj zamiast {date}. Następnie usuwa:",
+          "deleteApp": "aplikację i jej adres {address}",
+          "deleteAppNoAddress": "aplikację",
+          "deleteDatabase": "produkcyjną bazę danych",
+          "finalExport": "Najpierw tworzony jest końcowy eksport bazy danych przechowywany przez 30 dni, więc nadal możesz go tutaj pobrać. Tej operacji nie można cofnąć.",
+          "cancel": "Anuluj",
+          "confirm": "Zatrzymaj {name} teraz",
+          "busy": "Zatrzymywanie…",
+          "retry": "Spróbuj ponownie"
+        },
+        "handedOver": {
+          "copy": "Kopiuj",
+          "copied": "Skopiowano",
+          "aws": {
+            "title": "Przekazano",
+            "body": "{organization} uruchamia {name} na własnym koncie AWS od {date}. Motir już jej nie wdraża ani nie udostępnia.",
+            "pill": "Przekazano",
+            "account": "Konto AWS",
+            "copyAccount": "Kopiuj identyfikator konta AWS",
+            "upstream": "Adres źródłowy",
+            "copyUpstream": "Kopiuj adres źródłowy"
+          },
+          "stopped": {
+            "title": "Zatrzymano",
+            "body": "{name} przeniesiono do Twojego GitHuba, a jej aplikacja na koncie {target, select, fly {Fly} other {serverless}} Motir została zatrzymana. Aplikacja, adres i baza danych są usunięte. Motir już jej nie wdraża ani nie udostępnia.",
+            "pill": "Zatrzymano"
+          },
+          "final": {
+            "title": "Końcowy eksport bazy danych",
+            "taken": "Utworzony przy zatrzymaniu, {date}",
+            "meta": "{size} · przechowywany do {date}",
+            "download": "Pobierz",
+            "downloadAria": "Pobierz końcowy eksport bazy danych",
+            "memberNote": "Widzisz produkcję. Tylko administratorzy organizacji mogą pobrać końcowy eksport.",
+            "expired": "Końcowy eksport był przechowywany do {date} i został usunięty. Pobrane już eksporty pozostają bez zmian.",
+            "none": "Dla tej aplikacji nie jest przechowywany żaden końcowy eksport."
+          }
+        }
       }
     },
     "workspaceAddress": {

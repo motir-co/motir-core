@@ -17,17 +17,26 @@ import { OrgForbiddenError } from '@/lib/organizations/errors';
  *   OrgForbiddenError → 403 (a member who is not an admin)
  *   ApplicationNotStoppableError → 409 (neither in its grace window nor
  *     handed over; nothing was called)
- *   ApplicationStopFailedError → 502 (a step failed; still in its grace
- *     window, and Stop now or the next sweep continues it)
+ *   ApplicationStopFailedError → 502 with its `step` (a step failed; still in
+ *     its grace window, and Stop now or the next sweep continues it)
  */
 export function mapStopError(err: unknown): NextResponse | null {
   if (err instanceof ApplicationNotFoundError) return reply(err.code, err.message, 404);
   if (err instanceof OrgForbiddenError) return reply(err.code, 'Organisation admins only.', 403);
   if (err instanceof ApplicationNotStoppableError) return reply(err.code, err.message, 409);
-  if (err instanceof ApplicationStopFailedError) return reply(err.code, err.message, 502);
+  if (err instanceof ApplicationStopFailedError) {
+    // The step is a closed vocabulary, so the panel can say where it stopped
+    // without reading the message (MOTIR-12138).
+    return reply(err.code, err.message, 502, { step: err.step });
+  }
   return null;
 }
 
-function reply(code: string, error: string, status: number): NextResponse {
-  return NextResponse.json({ code, error }, { status });
+function reply(
+  code: string,
+  error: string,
+  status: number,
+  extra: Record<string, string> = {},
+): NextResponse {
+  return NextResponse.json({ code, error, ...extra }, { status });
 }

@@ -9,13 +9,23 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import type { ProductionHealthDto } from '@/lib/dto/productionHealth';
-import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
-import { ProductionPanel } from '@/components/hosting/ProductionPanel';
+import type {
+  ProductionExportDto,
+  ProductionHandoverDto,
+  ProductionPanelDto,
+} from '@/lib/dto/productionPanel';
+import {
+  EXPORT_POLL_ATTEMPTS,
+  EXPORT_POLL_MS,
+  ProductionPanel,
+  STOP_POLL_ATTEMPTS,
+  STOP_POLL_MS,
+} from '@/components/hosting/ProductionPanel';
 import { ProductionError } from '@/components/hosting/ProductionError';
 import { ProductionSkeleton } from '@/components/hosting/ProductionSkeleton';
 import { ProductionRepositoryPicker } from '@/components/hosting/ProductionRepositoryPicker';
 import { COPIED_MS } from '@/components/hosting/CurrentReleaseCard';
-import { productionRefusalKey } from '@/lib/hosting/productionPanelClient';
+import { handoverRefusalKey, productionRefusalKey } from '@/lib/hosting/productionPanelClient';
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -65,6 +75,7 @@ function panel(overrides: Partial<ProductionPanelDto> = {}): ProductionPanelDto 
     nextCursor: null,
     isAdministrator: true,
     canRollback: true,
+    handover: null,
     ...overrides,
   };
 }
@@ -701,5 +712,620 @@ describe('the room’s other parts', () => {
     fireEvent.click(screen.getAllByRole('option')[1]!);
     await flush();
     expect(push).toHaveBeenCalledWith('/settings/project/production?repository=row-2');
+  });
+});
+
+// ── MOTIR-12138 — the takeover handover states (delta mock
+// `design/hosting/production--takeover-handover.mock.html`) ──────────────────
+
+const ORG_APP = '/api/organizations/org-1/hosting/applications/app-1';
+const STOPS_AT = '2026-12-22T10:00:00.000Z';
+
+function exportRow(overrides: Partial<ProductionExportDto> = {}): ProductionExportDto {
+  return {
+    id: 'exp-1',
+    kind: 'on_demand',
+    sizeBytes: String(412 * 1024 * 1024),
+    createdAt: '2026-12-19T09:12:00.000Z',
+    expiresAt: '2026-12-26T09:12:00.000Z',
+    requestedBy: { id: 'u-1', name: 'Dana Ito' },
+    ...overrides,
+  };
+}
+
+function handover(overrides: Partial<ProductionHandoverDto> = {}): ProductionHandoverDto {
+  return {
+    state: 'grace',
+    target: 'fly',
+    stopsAt: STOPS_AT,
+    handedOverAt: null,
+    upstreamAddress: null,
+    handedOverAccountId: null,
+    organizationId: 'org-1',
+    organizationName: 'Acme',
+    latestGraceNotice: { kind: 'transferred', sentAt: '2026-11-22T10:00:00.000Z' },
+    canManageHandover: true,
+    deployRefusal: 'taken_over',
+    exports: [],
+    finalExportExpiresAt: null,
+    ...overrides,
+  };
+}
+
+function inState(h: Partial<ProductionHandoverDto>, rest: Partial<ProductionPanelDto> = {}) {
+  return panel({ canRollback: false, handover: handover(h), ...rest });
+}
+
+function noReleaseControls() {
+  expect(screen.queryByTestId('production-rollback')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Roll back' })).toBeNull();
+  expect(screen.queryByTestId('production-rollback-dialog')).toBeNull();
+  expect(screen.queryByTestId('production-idle-policy')).toBeNull();
+}
+
+describe('the handover states — live and taken over', () => {
+  it('renders a live app exactly as shipped, with Roll back', () => {
+    render(panel({ handover: handover({ state: 'live', deployRefusal: null }) }));
+    expect(screen.getByTestId('production-rollback')).toBeTruthy();
+    expect(screen.queryByTestId('production-handing-over')).toBeNull();
+    expect(screen.queryByTestId('production-grace-panel')).toBeNull();
+  });
+
+  it('hides Roll back whenever the deploy guard answers taken_over, even on a live app', () => {
+    render(panel({ handover: handover({ state: 'live', deployRefusal: 'taken_over' }) }));
+    expect(screen.getByTestId('production-current-release')).toBeTruthy();
+    noReleaseControls();
+  });
+});
+
+describe('handing over', () => {
+  it('shows the in-progress notice with the link for an organisation admin, and no release control', () => {
+    render(inState({ state: 'handing_over', target: 'aws', stopsAt: null }));
+    const notice = screen.getByTestId('production-handing-over');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.textContent).toContain('This app is being handed over');
+    expect(notice.textContent).toContain(
+      'Acme is taking over its AWS hosting. Motir no longer deploys, redeploys or rolls it back; the app keeps running throughout.',
+    );
+    expect(
+      within(notice)
+        .getByRole('link', { name: 'Follow the handover in Repositories' })
+        .getAttribute('href'),
+    ).toBe('/settings/project/repositories');
+    // The current release card stays, without Roll back.
+    expect(screen.getByTestId('production-current-release')).toBeTruthy();
+    noReleaseControls();
+    expect(screen.queryByTestId('production-read-only-note')).toBeNull();
+  });
+
+  it('gives a member the note instead of the link', () => {
+    render(
+      inState(
+        { state: 'handing_over', target: 'aws', canManageHandover: false },
+        { isAdministrator: false },
+      ),
+    );
+    const notice = screen.getByTestId('production-handing-over');
+    expect(notice.textContent).toContain(
+      'You can see production. Only organisation admins take over the hosting.',
+    );
+    expect(within(notice).queryByRole('link')).toBeNull();
+    noReleaseControls();
+  });
+});
+
+describe('the grace window', () => {
+  it('shows the transfer banner, Runs until, Download export, Stop now and no release control', () => {
+    render(inState({}));
+    const banner = screen.getByTestId('production-grace-banner');
+    expect(banner.getAttribute('data-kind')).toBe('transferred');
+    expect(banner.textContent).toContain(
+      'shop moved to your GitHub — it keeps running here until Dec 22, 2026',
+    );
+    const grace = screen.getByTestId('production-grace-panel');
+    expect(grace.textContent).toContain('Runs until');
+    expect(screen.getByTestId('production-grace-stops-at').getAttribute('dateTime')).toBe(STOPS_AT);
+    expect(screen.getByTestId('production-grace-stops-at').textContent).toContain('Dec 22, 2026');
+    expect(grace.textContent).toContain(
+      'Motir keeps serving shop at shop--acme.motir.site until then.',
+    );
+    expect(grace.textContent).toContain('Grace window');
+    expect(screen.getByTestId('production-exports-empty').textContent).toBe('No exports yet.');
+    expect(screen.getByRole('button', { name: 'Download export' })).toBeTruthy();
+    expect(grace.textContent).toContain(
+      'When your new host is serving, stop shop now instead of waiting for Dec 22, 2026.',
+    );
+    expect(screen.getByRole('button', { name: 'Stop now' })).toBeTruthy();
+    noReleaseControls();
+    expect(screen.queryByTestId('production-handover-member-note')).toBeNull();
+  });
+
+  it.each([
+    ['seven_days', 'shop stops running on Motir in 7 days, on Dec 22, 2026'],
+    ['one_day', 'shop stops running on Motir tomorrow, Dec 22, 2026'],
+  ] as const)('turns the banner to warning at %s', (kind, title) => {
+    render(inState({ latestGraceNotice: { kind, sentAt: '2026-12-15T10:00:00.000Z' } }));
+    const banner = screen.getByTestId('production-grace-banner');
+    expect(banner.getAttribute('data-kind')).toBe(kind);
+    expect(banner.className).toContain('--el-warning-surface');
+    expect(banner.textContent).toContain(title);
+  });
+
+  it('renders no banner without a notice, or for the stop notice', () => {
+    render(inState({ latestGraceNotice: null }));
+    expect(screen.queryByTestId('production-grace-banner')).toBeNull();
+    cleanup();
+    render(inState({ latestGraceNotice: { kind: 'stopped', sentAt: STOPS_AT } }));
+    expect(screen.queryByTestId('production-grace-banner')).toBeNull();
+  });
+
+  it('says what Motir serves without an address when none is claimed', () => {
+    render(inState({}, { application: { id: 'app-1', target: 'fly', productionAddress: null } }));
+    expect(screen.getByTestId('production-grace-panel').textContent).toContain(
+      'Motir keeps serving shop until then.',
+    );
+  });
+
+  it('lists past exports newest first with size, who asked, until when, and Download', () => {
+    render(
+      inState({
+        exports: [
+          exportRow(),
+          exportRow({
+            id: 'exp-2',
+            sizeBytes: String(Math.round(1.5 * 1024 ** 3)),
+            requestedBy: null,
+          }),
+          exportRow({ id: 'final-x', kind: 'final' }),
+        ],
+      }),
+    );
+    const rows = screen.getAllByTestId('production-export-row');
+    // The final export is the Handed-over panel's, never a grace row.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.textContent).toContain('412 MB · by Dana Ito · kept until Dec 26, 2026');
+    expect(rows[1]!.textContent).toContain('1.5 GB · kept until Dec 26, 2026');
+    const download = within(rows[0]!).getByTestId('production-export-download');
+    expect(download.getAttribute('href')).toBe(`${ORG_APP}/exports/exp-1/download`);
+    expect(download.getAttribute('aria-label')).toContain('Download the export taken');
+  });
+
+  it('shows a member the window and the list read-only, with the member note', () => {
+    render(
+      inState({ canManageHandover: false, exports: [exportRow()] }, { isAdministrator: false }),
+    );
+    expect(screen.getByTestId('production-handover-member-note').textContent).toBe(
+      'You can see production. Only organisation admins can download exports or stop the app early.',
+    );
+    expect(screen.getAllByTestId('production-export-row')).toHaveLength(1);
+    expect(screen.queryByTestId('production-export-download')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Download export' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop now' })).toBeNull();
+    expect(screen.queryByTestId('production-read-only-note')).toBeNull();
+  });
+});
+
+describe('Download export', () => {
+  function graceRead(exports: ProductionExportDto[]) {
+    return respond(200, inState({ exports }));
+  }
+
+  it('is busy until the 202, then re-reads until the new export is listed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const post = deferred();
+    const reads = [graceRead([]), graceRead([exportRow({ id: 'job-1' })])];
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === `${ORG_APP}/exports` && init?.method === 'POST') return post.promise;
+      if (url === BASE) return Promise.resolve(reads.shift()!);
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+    stubPanelFetch(fetchMock);
+    render(inState({}));
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    await flush();
+    const button = screen.getByTestId('production-export');
+    expect(button.textContent).toContain('Exporting…');
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByTestId('production-export-busy').textContent).toContain(
+      'Taking the export — this can take a few minutes.',
+    );
+
+    post.resolve(respond(202, { jobId: 'job-1' }));
+    await flush();
+    await act(async () => {
+      vi.advanceTimersByTime(EXPORT_POLL_MS);
+    });
+    await flush();
+    // The first re-read does not list it yet: still busy.
+    expect(screen.getByTestId('production-export-busy')).toBeTruthy();
+    await act(async () => {
+      vi.advanceTimersByTime(EXPORT_POLL_MS);
+    });
+    await flush();
+    expect(screen.queryByTestId('production-export-busy')).toBeNull();
+    expect(screen.getAllByTestId('production-export-row')).toHaveLength(1);
+    expect(screen.getByTestId('production-export').textContent).toContain('Download export');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps re-reading through a failed read', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const reads = [respond(500, {}), graceRead([exportRow({ id: 'job-1' })])];
+    stubPanelFetch(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return respond(202, { jobId: 'job-1' });
+      return reads.shift()!;
+    });
+    render(inState({}));
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    for (let i = 0; i < 2; i += 1) {
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(EXPORT_POLL_MS);
+      });
+    }
+    await flush();
+    expect(screen.getAllByTestId('production-export-row')).toHaveLength(1);
+    expect(screen.queryByTestId('production-export-error')).toBeNull();
+  });
+
+  it('shows the error line with try again on a network failure, and retries', async () => {
+    let calls = 0;
+    stubPanelFetch(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('offline');
+      return respond(409, { code: 'EXPORT_NOT_ALLOWED', error: 'no' });
+    });
+    render(inState({}));
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    await flush();
+    const error = screen.getByTestId('production-export-error');
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(error.textContent).toBe(
+      'The export didn’t finish. Nothing in the database changed — try again.',
+    );
+    fireEvent.click(screen.getByTestId('production-export-retry'));
+    await flush();
+    expect(screen.getByTestId('production-export-error').textContent).toBe(
+      'This app is no longer in its grace window, so nothing changed.',
+    );
+  });
+
+  it('shows the error line when the bounded re-read ends without the export', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stubPanelFetch(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? respond(202, { jobId: 'job-1' }) : graceRead([]),
+    );
+    render(inState({}));
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    for (let i = 0; i < EXPORT_POLL_ATTEMPTS; i += 1) {
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(EXPORT_POLL_MS);
+      });
+    }
+    await flush();
+    expect(screen.getByTestId('production-export-error').textContent).toContain(
+      'The export didn’t finish.',
+    );
+  });
+
+  it('drops a re-read loop when the panel unmounts', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? respond(202, { jobId: 'job-1' }) : graceRead([]),
+    );
+    stubPanelFetch(fetchMock);
+    const view = render(inState({}));
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    await flush();
+    view.unmount();
+    await act(async () => {
+      vi.advanceTimersByTime(EXPORT_POLL_MS * 3);
+    });
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Stop now', () => {
+  async function openStop() {
+    fireEvent.click(screen.getByRole('button', { name: 'Stop now' }));
+    await flush();
+    return screen.getByRole('alertdialog');
+  }
+
+  it('names what is deleted and that the final export is kept 30 days; Cancel closes it', async () => {
+    render(inState({}));
+    const dialog = await openStop();
+    expect(within(dialog).getByText('Stop shop now?')).toBeTruthy();
+    expect(dialog.textContent).toContain(
+      'Motir stops serving shop today instead of on Dec 22, 2026. Then it deletes:',
+    );
+    expect(dialog.textContent).toContain('the app and its address shop--acme.motir.site');
+    expect(dialog.textContent).toContain('the production database');
+    expect(dialog.textContent).toContain(
+      'A final database export is taken first and kept for 30 days, so you can still download it here. This cannot be undone.',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await flush();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('says only "the app" without an address', async () => {
+    render(inState({}, { application: { id: 'app-1', target: 'fly', productionAddress: null } }));
+    const dialog = await openStop();
+    expect(within(dialog).getAllByRole('listitem')[0]!.textContent).toBe('the app');
+  });
+
+  it('stays busy until the stop answers and the read leaves grace, then shows the Handed-over panel', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const stop = deferred();
+    const reads = [
+      respond(200, inState({})),
+      respond(
+        200,
+        inState({
+          state: 'handed_over',
+          handedOverAt: '2026-12-02T10:02:00.000Z',
+          exports: [exportRow({ id: 'final-1', kind: 'final', requestedBy: null })],
+        }),
+      ),
+    ];
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === `${ORG_APP}/stop` && init?.method === 'POST') return stop.promise;
+      if (url === BASE) return Promise.resolve(reads.shift()!);
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+    stubPanelFetch(fetchMock);
+    render(inState({}));
+    const dialog = await openStop();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop shop now' }));
+    await flush();
+    expect(screen.getByTestId('production-stop-dialog').getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByTestId('production-stop-confirm').textContent).toContain('Stopping…');
+    expect(screen.getByTestId('production-stop-cancel').hasAttribute('disabled')).toBe(true);
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+    await flush();
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+
+    stop.resolve(respond(200, { outcome: 'stopped' }));
+    await flush();
+    // The first re-read still answers grace: still stopping.
+    expect(screen.getByTestId('production-stop-confirm').textContent).toContain('Stopping…');
+    await act(async () => {
+      vi.advanceTimersByTime(STOP_POLL_MS);
+    });
+    await flush();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByTestId('production-grace-panel')).toBeNull();
+    expect(screen.getByTestId('production-handed-over').getAttribute('data-target')).toBe('fly');
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      respond(502, { code: 'APPLICATION_STOP_FAILED', step: 'delete_database', error: 'x' }),
+      'Stopping didn’t finish while deleting the database. What already happened stays done — the app is no longer served and the final export is kept. Try again picks up from there.',
+    ],
+    [
+      respond(502, { code: 'APPLICATION_STOP_FAILED', step: 'stop_serving' }),
+      'Stopping didn’t finish while taking shop offline. Nothing was deleted. Try again picks up from there.',
+    ],
+    [
+      respond(502, { code: 'APPLICATION_STOP_FAILED', step: 'elsewhere' }),
+      'Stopping didn’t finish. What already happened stays done. Try again picks up from there.',
+    ],
+    [respond(403, { code: 'ORG_FORBIDDEN', error: 'no' }), 'Only organisation admins can do this.'],
+  ])('shows the refusal and leaves the Grace panel as it was (%#)', async (answer, line) => {
+    stubPanelFetch(async () => answer);
+    render(inState({}));
+    const dialog = await openStop();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop shop now' }));
+    await flush();
+    expect(screen.getByTestId('production-stop-error').textContent).toBe(line);
+    expect(screen.getByTestId('production-stop-confirm').textContent).toBe('Try again');
+    expect(screen.getByTestId('production-grace-panel')).toBeTruthy();
+  });
+
+  it('says it did not finish when the bounded re-read never leaves grace', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stubPanelFetch(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? respond(200, {}) : respond(200, inState({})),
+    );
+    render(inState({}));
+    const dialog = await openStop();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop shop now' }));
+    for (let i = 0; i < STOP_POLL_ATTEMPTS; i += 1) {
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(STOP_POLL_MS);
+      });
+    }
+    await flush();
+    expect(screen.getByTestId('production-stop-error').textContent).toContain(
+      'Stopping didn’t finish.',
+    );
+  });
+
+  it('a stop that answers with no body still re-reads', async () => {
+    stubPanelFetch(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Response('not json', { status: 200 })
+        : respond(200, inState({})),
+    );
+    render(inState({}));
+    const dialog = await openStop();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop shop now' }));
+    await flush();
+    expect(screen.getByTestId('production-stop-error').textContent).toContain(
+      'Stopping didn’t finish.',
+    );
+  });
+});
+
+describe('handed over', () => {
+  it('names the AWS account and the upstream address, each with Copy, and no release control', async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    render(
+      inState({
+        state: 'handed_over',
+        target: 'aws',
+        stopsAt: null,
+        handedOverAt: '2026-11-24T10:00:00.000Z',
+        handedOverAccountId: '482109375512',
+        upstreamAddress: 'd2k8f4w1q9x3ab.cloudfront.net',
+      }),
+    );
+    const card = screen.getByTestId('production-handed-over');
+    expect(card.textContent).toContain(
+      'Acme runs shop on its own AWS account since Nov 24, 2026. Motir no longer deploys or serves it.',
+    );
+    expect(screen.getByTestId('production-handed-over-account').textContent).toContain(
+      '4821 0937 5512',
+    );
+    expect(screen.getByTestId('production-handed-over-upstream').textContent).toContain(
+      'd2k8f4w1q9x3ab.cloudfront.net',
+    );
+    const copyAccount = screen.getByRole('button', { name: 'Copy the AWS account id' });
+    await act(async () => {
+      fireEvent.click(copyAccount);
+    });
+    expect(writeText).toHaveBeenCalledWith('482109375512');
+    expect(copyAccount.textContent).toBe('Copied');
+    expect(screen.getByRole('button', { name: 'Copy the upstream address' })).toBeTruthy();
+    expect(screen.queryByTestId('production-current-release')).toBeNull();
+    expect(screen.queryByTestId('production-health')).toBeNull();
+    noReleaseControls();
+    // The history stays, read-only.
+    expect(screen.getAllByTestId('production-release-row').length).toBeGreaterThan(0);
+  });
+
+  it('keeps Copy when the clipboard is refused, and shows an account id as given when it is not twelve digits', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: { writeText: vi.fn(async () => Promise.reject(new Error('denied'))) },
+    });
+    render(
+      inState(
+        { state: 'handed_over', target: 'aws', handedOverAccountId: 'acct-x', handedOverAt: null },
+        { releases: [] },
+      ),
+    );
+    const copy = screen.getByRole('button', { name: 'Copy the AWS account id' });
+    await act(async () => {
+      fireEvent.click(copy);
+    });
+    expect(copy.textContent).toBe('Copy');
+    expect(screen.getByTestId('production-handed-over-account').textContent).toContain('acct-x');
+    expect(screen.queryByTestId('production-handed-over-upstream')).toBeNull();
+  });
+
+  it('shows a stopped Fly app’s date and its final export with Download for an organisation admin', () => {
+    render(
+      inState({
+        state: 'handed_over',
+        handedOverAt: '2026-12-22T10:02:00.000Z',
+        finalExportExpiresAt: '2027-01-21T10:02:00.000Z',
+        exports: [
+          exportRow({
+            id: 'final-1',
+            kind: 'final',
+            requestedBy: null,
+            sizeBytes: String(418 * 1024 * 1024),
+            createdAt: '2026-12-22T10:02:00.000Z',
+            expiresAt: '2027-01-21T10:02:00.000Z',
+          }),
+        ],
+      }),
+    );
+    const card = screen.getByTestId('production-handed-over');
+    expect(card.textContent).toContain('Stopped');
+    expect(screen.getByTestId('production-stopped-at').textContent).toContain('Dec 22, 2026');
+    expect(card.textContent).toContain(
+      'shop moved to your GitHub, and its app on Motir’s Fly account stopped.',
+    );
+    const final = screen.getByTestId('production-final-export');
+    expect(final.textContent).toContain('Taken at the stop, Dec 22, 2026');
+    expect(final.textContent).toContain('418 MB · kept until Jan 21, 2027');
+    expect(screen.getByTestId('production-final-export-download').getAttribute('href')).toBe(
+      `${ORG_APP}/exports/final-1/download`,
+    );
+    expect(screen.queryByTestId('production-handover-member-note')).toBeNull();
+    noReleaseControls();
+  });
+
+  it('gives a member the record without Download, naming the serverless account', () => {
+    render(
+      inState(
+        {
+          state: 'handed_over',
+          target: 'serverless',
+          canManageHandover: false,
+          handedOverAt: '2026-12-22T10:02:00.000Z',
+          exports: [exportRow({ id: 'final-1', kind: 'final', requestedBy: null })],
+        },
+        { isAdministrator: false },
+      ),
+    );
+    expect(screen.getByTestId('production-handover-member-note').textContent).toBe(
+      'You can see production. Only organisation admins can download the final export.',
+    );
+    expect(screen.getByTestId('production-handed-over').textContent).toContain(
+      'its app on Motir’s serverless account stopped',
+    );
+    expect(screen.getByTestId('production-final-export')).toBeTruthy();
+    expect(screen.queryByTestId('production-final-export-download')).toBeNull();
+  });
+
+  it('says the final export expired once it is gone', () => {
+    render(
+      inState({
+        state: 'handed_over',
+        handedOverAt: '2026-12-22T10:02:00.000Z',
+        finalExportExpiresAt: '2027-01-21T10:02:00.000Z',
+      }),
+    );
+    expect(screen.getByTestId('production-final-export-expired').textContent).toBe(
+      'The final export was kept until Jan 21, 2027 and has been deleted. Exports you downloaded are unaffected.',
+    );
+  });
+
+  it('says no final export is kept when the read has no stop date', () => {
+    render(inState({ state: 'handed_over', handedOverAt: null }));
+    expect(screen.getByTestId('production-final-export-expired').textContent).toBe(
+      'No final export is kept for this app.',
+    );
+    expect(screen.queryByTestId('production-stopped-at')).toBeNull();
+  });
+});
+
+describe('handoverRefusalKey', () => {
+  it.each([
+    [{ code: 'ORG_FORBIDDEN' }, 403, 'export', 'handover.refusal.forbidden'],
+    [{ code: 'EXPORT_NOT_ALLOWED' }, 409, 'export', 'handover.refusal.notInGrace'],
+    [{ code: 'APPLICATION_NOT_STOPPABLE' }, 409, 'stop', 'handover.refusal.notInGrace'],
+    [{ code: 'EXPORT_NOT_FOUND' }, 404, 'export', 'handover.refusal.notFound'],
+    [{ code: 'APPLICATION_NOT_FOUND' }, 404, 'stop', 'handover.refusal.notFound'],
+    [
+      { code: 'APPLICATION_STOP_FAILED', step: 'record' },
+      502,
+      'stop',
+      'handover.stop.failed.record',
+    ],
+    [{ code: 'APPLICATION_STOP_FAILED', step: 7 }, 502, 'stop', 'handover.stop.failed.unknown'],
+    [{ code: 'EXPORT_FAILED' }, 502, 'export', 'handover.exports.failed'],
+    [{}, 403, 'stop', 'handover.refusal.forbidden'],
+    [{}, 404, 'export', 'handover.refusal.notFound'],
+    [{}, 500, 'stop', 'handover.stop.failed.unknown'],
+    [null, 500, 'export', 'handover.exports.failed'],
+  ] as const)('%j %i (%s) → %s', async (body, status, action, key) => {
+    expect(await handoverRefusalKey(respond(status, body), action)).toBe(key);
+  });
+
+  it('reads a body that is not JSON by its status', async () => {
+    expect(await handoverRefusalKey(new Response('<html>', { status: 404 }), 'stop')).toBe(
+      'handover.refusal.notFound',
+    );
   });
 });

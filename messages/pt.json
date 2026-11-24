@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Este app está sendo transferido",
+          "body": "{organization} está assumindo a hospedagem dele na AWS. O Motir não faz mais o deploy, o redeploy nem o rollback; o app continua rodando o tempo todo.",
+          "link": "Acompanhe a transferência em Repositórios",
+          "memberNote": "Você pode ver a produção. Só os administradores da organização assumem a hospedagem."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} foi para o seu GitHub — continua rodando aqui até {date}",
+            "body": "Faça o deploy no seu próprio host antes disso. Baixe uma exportação do banco de dados quando quiser e pare o app antes quando estiver pronto."
+          },
+          "sevenDays": {
+            "title": "{name} para de rodar no Motir em 7 dias, em {date}",
+            "body": "Restaure uma exportação do banco de dados no seu novo host e aponte seus domínios para ele."
+          },
+          "oneDay": {
+            "title": "{name} para de rodar no Motir amanhã, {date}",
+            "body": "Se o seu novo host ainda não tem seus dados mais recentes, baixe agora uma exportação nova."
+          }
+        },
+        "grace": {
+          "memberNote": "Você pode ver a produção. Só os administradores da organização podem baixar exportações ou parar o app antes.",
+          "runsUntil": "Roda até",
+          "body": "O Motir continua servindo {name} em {address} até lá. Depois o app para e o banco de dados dele é excluído; uma exportação final fica guardada por 30 dias.",
+          "bodyNoAddress": "O Motir continua servindo {name} até lá. Depois o app para e o banco de dados dele é excluído; uma exportação final fica guardada por 30 dias.",
+          "pill": "Período de carência"
+        },
+        "exports": {
+          "title": "Exportações do banco de dados",
+          "download": "Baixar exportação",
+          "busy": "Exportando…",
+          "busyStatus": "Fazendo a exportação — isso pode levar alguns minutos. Ela aparece aqui quando estiver pronta.",
+          "help": "Um dump completo do banco de dados de produção (pg_dump, formato personalizado) para restaurar no seu novo host. Cada exportação pode ser baixada até a data mostrada ao lado.",
+          "empty": "Ainda não há exportações.",
+          "row": "{size} · por {name} · guardada até {date}",
+          "rowUnnamed": "{size} · guardada até {date}",
+          "downloadLink": "Baixar",
+          "downloadAria": "Baixar a exportação de {date}",
+          "failed": "A exportação não terminou. Nada mudou no banco de dados — <retry>tente de novo</retry>."
+        },
+        "refusal": {
+          "forbidden": "Só os administradores da organização podem fazer isso.",
+          "notInGrace": "Este app não está mais no período de carência, então nada mudou.",
+          "notFound": "Este app não está mais disponível para você."
+        },
+        "stop": {
+          "title": "Parar antes",
+          "body": "Quando o seu novo host estiver servindo, pare {name} agora em vez de esperar até {date}.",
+          "button": "Parar agora",
+          "failed": {
+            "stop_serving": "A parada não terminou ao tirar {name} do ar. Nada foi excluído. Tentar de novo continua daí.",
+            "final_export": "A parada não terminou ao fazer a exportação final. O app não é mais servido e nada foi excluído. Tentar de novo continua daí.",
+            "delete_database": "A parada não terminou ao excluir o banco de dados. O que já aconteceu continua feito — o app não é mais servido e a exportação final está guardada. Tentar de novo continua daí.",
+            "record": "A parada não terminou ao registrar a parada. O app e o banco de dados dele foram excluídos e a exportação final está guardada. Tentar de novo continua daí.",
+            "unknown": "A parada não terminou. O que já aconteceu continua feito. Tentar de novo continua daí."
+          }
+        },
+        "dialog": {
+          "title": "Parar {name} agora?",
+          "body": "O Motir para de servir {name} hoje em vez de em {date}. Depois ele exclui:",
+          "deleteApp": "o app e o endereço dele {address}",
+          "deleteAppNoAddress": "o app",
+          "deleteDatabase": "o banco de dados de produção",
+          "finalExport": "Primeiro é feita uma exportação final do banco de dados, guardada por 30 dias, para que você ainda possa baixá-la aqui. Isso não pode ser desfeito.",
+          "cancel": "Cancelar",
+          "confirm": "Parar {name} agora",
+          "busy": "Parando…",
+          "retry": "Tentar de novo"
+        },
+        "handedOver": {
+          "copy": "Copiar",
+          "copied": "Copiado",
+          "aws": {
+            "title": "Transferido",
+            "body": "{organization} roda {name} na própria conta da AWS desde {date}. O Motir não faz mais o deploy nem serve o app.",
+            "pill": "Transferido",
+            "account": "Conta da AWS",
+            "copyAccount": "Copiar o ID da conta da AWS",
+            "upstream": "Endereço de origem",
+            "copyUpstream": "Copiar o endereço de origem"
+          },
+          "stopped": {
+            "title": "Parado",
+            "body": "{name} foi para o seu GitHub, e o app dele na conta {target, select, fly {Fly} other {serverless}} do Motir parou. O app, o endereço e o banco de dados foram excluídos. O Motir não faz mais o deploy nem serve o app.",
+            "pill": "Parado"
+          },
+          "final": {
+            "title": "Exportação final do banco de dados",
+            "taken": "Feita na parada, {date}",
+            "meta": "{size} · guardada até {date}",
+            "download": "Baixar",
+            "downloadAria": "Baixar a exportação final do banco de dados",
+            "memberNote": "Você pode ver a produção. Só os administradores da organização podem baixar a exportação final.",
+            "expired": "A exportação final ficou guardada até {date} e foi excluída. As exportações que você baixou não são afetadas.",
+            "none": "Nenhuma exportação final é guardada para este app."
+          }
+        }
       }
     },
     "workspaceAddress": {

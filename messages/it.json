@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Questa app è in fase di consegna",
+          "body": "{organization} sta prendendo in carico il suo hosting AWS. Motir non la distribuisce, non la ridistribuisce e non la ripristina più; l’app continua a funzionare per tutto il tempo.",
+          "link": "Segui la consegna in Repository",
+          "memberNote": "Puoi vedere la produzione. Solo gli admin dell’organizzazione prendono in carico l’hosting."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} si è spostata nel tuo GitHub — continua a funzionare qui fino al {date}",
+            "body": "Distribuiscila sul tuo host prima di allora. Scarica un export del database quando vuoi e ferma l’app in anticipo quando sei pronto."
+          },
+          "sevenDays": {
+            "title": "{name} smette di funzionare su Motir tra 7 giorni, il {date}",
+            "body": "Ripristina un export del database sul tuo nuovo host e punta lì i tuoi domini."
+          },
+          "oneDay": {
+            "title": "{name} smette di funzionare su Motir domani, {date}",
+            "body": "Se il tuo nuovo host non ha ancora i tuoi dati più recenti, scarica subito un nuovo export."
+          }
+        },
+        "grace": {
+          "memberNote": "Puoi vedere la produzione. Solo gli admin dell’organizzazione possono scaricare gli export o fermare l’app in anticipo.",
+          "runsUntil": "Attiva fino al",
+          "body": "Motir continua a servire {name} su {address} fino ad allora. Poi l’app si ferma e il suo database viene eliminato; un export finale viene conservato per 30 giorni.",
+          "bodyNoAddress": "Motir continua a servire {name} fino ad allora. Poi l’app si ferma e il suo database viene eliminato; un export finale viene conservato per 30 giorni.",
+          "pill": "Periodo di tolleranza"
+        },
+        "exports": {
+          "title": "Export del database",
+          "download": "Scarica export",
+          "busy": "Esportazione…",
+          "busyStatus": "Export in corso — può richiedere qualche minuto. Compare qui quando è pronto.",
+          "help": "Un dump completo del database di produzione (pg_dump, formato personalizzato) da ripristinare sul tuo nuovo host. Ogni export si può scaricare fino alla data indicata accanto.",
+          "empty": "Ancora nessun export.",
+          "row": "{size} · da {name} · conservato fino al {date}",
+          "rowUnnamed": "{size} · conservato fino al {date}",
+          "downloadLink": "Scarica",
+          "downloadAria": "Scarica l’export del {date}",
+          "failed": "L’export non è stato completato. Nel database non è cambiato nulla — <retry>riprova</retry>."
+        },
+        "refusal": {
+          "forbidden": "Solo gli admin dell’organizzazione possono farlo.",
+          "notInGrace": "Questa app non è più nel suo periodo di tolleranza, quindi non è cambiato nulla.",
+          "notFound": "Questa app non è più disponibile per te."
+        },
+        "stop": {
+          "title": "Fermala in anticipo",
+          "body": "Quando il tuo nuovo host è attivo, ferma {name} adesso invece di aspettare il {date}.",
+          "button": "Ferma ora",
+          "failed": {
+            "stop_serving": "L’arresto non è stato completato mentre {name} veniva messa offline. Non è stato eliminato nulla. Riprova riparte da lì.",
+            "final_export": "L’arresto non è stato completato durante l’export finale. L’app non viene più servita e non è stato eliminato nulla. Riprova riparte da lì.",
+            "delete_database": "L’arresto non è stato completato durante l’eliminazione del database. Ciò che è già avvenuto resta — l’app non viene più servita e l’export finale è conservato. Riprova riparte da lì.",
+            "record": "L’arresto non è stato completato durante la registrazione dell’arresto. L’app e il suo database sono eliminati e l’export finale è conservato. Riprova riparte da lì.",
+            "unknown": "L’arresto non è stato completato. Ciò che è già avvenuto resta. Riprova riparte da lì."
+          }
+        },
+        "dialog": {
+          "title": "Fermare {name} adesso?",
+          "body": "Motir smette di servire {name} oggi invece che il {date}. Poi elimina:",
+          "deleteApp": "l’app e il suo indirizzo {address}",
+          "deleteAppNoAddress": "l’app",
+          "deleteDatabase": "il database di produzione",
+          "finalExport": "Prima viene eseguito un export finale del database, conservato per 30 giorni, così potrai ancora scaricarlo qui. L’operazione non si può annullare.",
+          "cancel": "Annulla",
+          "confirm": "Ferma {name} ora",
+          "busy": "Arresto…",
+          "retry": "Riprova"
+        },
+        "handedOver": {
+          "copy": "Copia",
+          "copied": "Copiato",
+          "aws": {
+            "title": "Consegnata",
+            "body": "{organization} esegue {name} sul proprio account AWS dal {date}. Motir non la distribuisce né la serve più.",
+            "pill": "Consegnata",
+            "account": "Account AWS",
+            "copyAccount": "Copia l’ID dell’account AWS",
+            "upstream": "Indirizzo upstream",
+            "copyUpstream": "Copia l’indirizzo upstream"
+          },
+          "stopped": {
+            "title": "Fermata",
+            "body": "{name} si è spostata nel tuo GitHub e la sua app sull’account {target, select, fly {Fly} other {serverless}} di Motir si è fermata. App, indirizzo e database sono eliminati. Motir non la distribuisce né la serve più.",
+            "pill": "Fermata"
+          },
+          "final": {
+            "title": "Export finale del database",
+            "taken": "Eseguito all’arresto, {date}",
+            "meta": "{size} · conservato fino al {date}",
+            "download": "Scarica",
+            "downloadAria": "Scarica l’export finale del database",
+            "memberNote": "Puoi vedere la produzione. Solo gli admin dell’organizzazione possono scaricare l’export finale.",
+            "expired": "L’export finale è stato conservato fino al {date} ed è stato eliminato. Gli export che hai scaricato non sono interessati.",
+            "none": "Per questa app non viene conservato alcun export finale."
+          }
+        }
       }
     },
     "workspaceAddress": {

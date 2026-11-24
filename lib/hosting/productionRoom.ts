@@ -8,3 +8,7 @@ export const PRODUCTION_ROOM_HREF = '/settings/project/production';
 
 /** The Public address room the no-address note links to (MOTIR-9790 §1). */
 export const PUBLIC_ADDRESS_HREF = '/settings/project/public-address';
+
+/** The Repositories room, where an organisation admin follows the AWS hosting
+ *  handover (MOTIR-12137); the handing-over notice links to it (MOTIR-12138). */
+export const REPOSITORIES_ROOM_HREF = '/settings/project/repositories';

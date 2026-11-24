@@ -4942,6 +4942,105 @@
           "topUp": "Top up credits",
           "member": "An organisation owner or admin can top up credits."
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "This app is being handed over",
+          "body": "{organization} is taking over its AWS hosting. Motir no longer deploys, redeploys or rolls it back; the app keeps running throughout.",
+          "link": "Follow the handover in Repositories",
+          "memberNote": "You can see production. Only organisation admins take over the hosting."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} moved to your GitHub — it keeps running here until {date}",
+            "body": "Deploy it on your own host before then. Download a database export any time, and stop the app early when you are ready."
+          },
+          "sevenDays": {
+            "title": "{name} stops running on Motir in 7 days, on {date}",
+            "body": "Restore a database export on your new host and point your domains at it."
+          },
+          "oneDay": {
+            "title": "{name} stops running on Motir tomorrow, {date}",
+            "body": "If your new host does not have your latest data yet, download a fresh export now."
+          }
+        },
+        "grace": {
+          "memberNote": "You can see production. Only organisation admins can download exports or stop the app early.",
+          "runsUntil": "Runs until",
+          "body": "Motir keeps serving {name} at {address} until then. Then the app stops and its database is deleted; a final export is kept for 30 days.",
+          "bodyNoAddress": "Motir keeps serving {name} until then. Then the app stops and its database is deleted; a final export is kept for 30 days.",
+          "pill": "Grace window"
+        },
+        "exports": {
+          "title": "Database exports",
+          "download": "Download export",
+          "busy": "Exporting…",
+          "busyStatus": "Taking the export — this can take a few minutes. It is listed here when it is ready.",
+          "help": "A full dump of the production database (pg_dump, custom format) to restore on your new host. Each export can be downloaded until the date shown beside it.",
+          "empty": "No exports yet.",
+          "row": "{size} · by {name} · kept until {date}",
+          "rowUnnamed": "{size} · kept until {date}",
+          "downloadLink": "Download",
+          "downloadAria": "Download the export taken {date}",
+          "failed": "The export didn’t finish. Nothing in the database changed — <retry>try again</retry>."
+        },
+        "refusal": {
+          "forbidden": "Only organisation admins can do this.",
+          "notInGrace": "This app is no longer in its grace window, so nothing changed.",
+          "notFound": "This app is no longer available to you."
+        },
+        "stop": {
+          "title": "Stop it early",
+          "body": "When your new host is serving, stop {name} now instead of waiting for {date}.",
+          "button": "Stop now",
+          "failed": {
+            "stop_serving": "Stopping didn’t finish while taking {name} offline. Nothing was deleted. Try again picks up from there.",
+            "final_export": "Stopping didn’t finish while taking the final export. The app is no longer served, and nothing was deleted. Try again picks up from there.",
+            "delete_database": "Stopping didn’t finish while deleting the database. What already happened stays done — the app is no longer served and the final export is kept. Try again picks up from there.",
+            "record": "Stopping didn’t finish while recording the stop. The app and its database are deleted and the final export is kept. Try again picks up from there.",
+            "unknown": "Stopping didn’t finish. What already happened stays done. Try again picks up from there."
+          }
+        },
+        "dialog": {
+          "title": "Stop {name} now?",
+          "body": "Motir stops serving {name} today instead of on {date}. Then it deletes:",
+          "deleteApp": "the app and its address {address}",
+          "deleteAppNoAddress": "the app",
+          "deleteDatabase": "the production database",
+          "finalExport": "A final database export is taken first and kept for 30 days, so you can still download it here. This cannot be undone.",
+          "cancel": "Cancel",
+          "confirm": "Stop {name} now",
+          "busy": "Stopping…",
+          "retry": "Try again"
+        },
+        "handedOver": {
+          "copy": "Copy",
+          "copied": "Copied",
+          "aws": {
+            "title": "Handed over",
+            "body": "{organization} runs {name} on its own AWS account since {date}. Motir no longer deploys or serves it.",
+            "pill": "Handed over",
+            "account": "AWS account",
+            "copyAccount": "Copy the AWS account id",
+            "upstream": "Upstream address",
+            "copyUpstream": "Copy the upstream address"
+          },
+          "stopped": {
+            "title": "Stopped",
+            "body": "{name} moved to your GitHub, and its app on Motir’s {target, select, fly {Fly} other {serverless}} account stopped. Its app, address and database are deleted. Motir no longer deploys or serves it.",
+            "pill": "Stopped"
+          },
+          "final": {
+            "title": "Final database export",
+            "taken": "Taken at the stop, {date}",
+            "meta": "{size} · kept until {date}",
+            "download": "Download",
+            "downloadAria": "Download the final database export",
+            "memberNote": "You can see production. Only organisation admins can download the final export.",
+            "expired": "The final export was kept until {date} and has been deleted. Exports you downloaded are unaffected.",
+            "none": "No final export is kept for this app."
+          }
+        }
       }
     },
     "workspaceAddress": {

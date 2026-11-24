@@ -4942,6 +4942,105 @@
           "cuHours": "{value} CU-h",
           "acuHours": "{value} ACU-h"
         }
+      },
+      "handover": {
+        "notice": {
+          "title": "Diese App wird übergeben",
+          "body": "{organization} übernimmt ihr AWS-Hosting. Motir stellt sie nicht mehr bereit, stellt sie nicht erneut bereit und setzt sie nicht zurück; die App läuft währenddessen weiter.",
+          "link": "Die Übergabe unter Repositorys verfolgen",
+          "memberNote": "Du siehst die Produktion. Nur Organisationsadmins übernehmen das Hosting."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} ist in dein GitHub umgezogen — hier läuft es weiter bis {date}",
+            "body": "Stelle es bis dahin auf deinem eigenen Host bereit. Lade jederzeit einen Datenbankexport herunter und stoppe die App früher, wenn du so weit bist."
+          },
+          "sevenDays": {
+            "title": "{name} läuft in 7 Tagen nicht mehr auf Motir, am {date}",
+            "body": "Stelle einen Datenbankexport auf deinem neuen Host wieder her und richte deine Domains darauf aus."
+          },
+          "oneDay": {
+            "title": "{name} läuft morgen nicht mehr auf Motir, am {date}",
+            "body": "Wenn dein neuer Host deine neuesten Daten noch nicht hat, lade jetzt einen frischen Export herunter."
+          }
+        },
+        "grace": {
+          "memberNote": "Du siehst die Produktion. Nur Organisationsadmins können Exporte herunterladen oder die App früher stoppen.",
+          "runsUntil": "Läuft bis",
+          "body": "Motir stellt {name} bis dahin unter {address} bereit. Danach stoppt die App und ihre Datenbank wird gelöscht; ein letzter Export wird 30 Tage aufbewahrt.",
+          "bodyNoAddress": "Motir stellt {name} bis dahin bereit. Danach stoppt die App und ihre Datenbank wird gelöscht; ein letzter Export wird 30 Tage aufbewahrt.",
+          "pill": "Übergangsfrist"
+        },
+        "exports": {
+          "title": "Datenbankexporte",
+          "download": "Export herunterladen",
+          "busy": "Wird exportiert…",
+          "busyStatus": "Der Export wird erstellt — das kann einige Minuten dauern. Er erscheint hier, sobald er fertig ist.",
+          "help": "Ein vollständiger Dump der Produktionsdatenbank (pg_dump, Custom-Format) zum Wiederherstellen auf deinem neuen Host. Jeder Export kann bis zu dem Datum daneben heruntergeladen werden.",
+          "empty": "Noch keine Exporte.",
+          "row": "{size} · von {name} · aufbewahrt bis {date}",
+          "rowUnnamed": "{size} · aufbewahrt bis {date}",
+          "downloadLink": "Herunterladen",
+          "downloadAria": "Den Export vom {date} herunterladen",
+          "failed": "Der Export wurde nicht abgeschlossen. An der Datenbank hat sich nichts geändert — <retry>versuche es erneut</retry>."
+        },
+        "refusal": {
+          "forbidden": "Das können nur Organisationsadmins.",
+          "notInGrace": "Diese App ist nicht mehr in ihrer Übergangsfrist, also hat sich nichts geändert.",
+          "notFound": "Diese App ist für dich nicht mehr verfügbar."
+        },
+        "stop": {
+          "title": "Früher stoppen",
+          "body": "Sobald dein neuer Host bereitstellt, stoppe {name} jetzt, statt bis {date} zu warten.",
+          "button": "Jetzt stoppen",
+          "failed": {
+            "stop_serving": "Das Stoppen wurde beim Offline-Nehmen von {name} nicht abgeschlossen. Nichts wurde gelöscht. Erneut versuchen macht dort weiter.",
+            "final_export": "Das Stoppen wurde beim Erstellen des letzten Exports nicht abgeschlossen. Die App wird nicht mehr bereitgestellt, und nichts wurde gelöscht. Erneut versuchen macht dort weiter.",
+            "delete_database": "Das Stoppen wurde beim Löschen der Datenbank nicht abgeschlossen. Was schon passiert ist, bleibt bestehen — die App wird nicht mehr bereitgestellt und der letzte Export bleibt erhalten. Erneut versuchen macht dort weiter.",
+            "record": "Das Stoppen wurde beim Festhalten des Stopps nicht abgeschlossen. Die App und ihre Datenbank sind gelöscht und der letzte Export bleibt erhalten. Erneut versuchen macht dort weiter.",
+            "unknown": "Das Stoppen wurde nicht abgeschlossen. Was schon passiert ist, bleibt bestehen. Erneut versuchen macht dort weiter."
+          }
+        },
+        "dialog": {
+          "title": "{name} jetzt stoppen?",
+          "body": "Motir stellt {name} heute statt am {date} nicht mehr bereit. Danach löscht es:",
+          "deleteApp": "die App und ihre Adresse {address}",
+          "deleteAppNoAddress": "die App",
+          "deleteDatabase": "die Produktionsdatenbank",
+          "finalExport": "Zuerst wird ein letzter Datenbankexport erstellt und 30 Tage aufbewahrt, sodass du ihn hier weiterhin herunterladen kannst. Das lässt sich nicht rückgängig machen.",
+          "cancel": "Abbrechen",
+          "confirm": "{name} jetzt stoppen",
+          "busy": "Wird gestoppt…",
+          "retry": "Erneut versuchen"
+        },
+        "handedOver": {
+          "copy": "Kopieren",
+          "copied": "Kopiert",
+          "aws": {
+            "title": "Übergeben",
+            "body": "{organization} betreibt {name} seit {date} in einem eigenen AWS-Konto. Motir stellt es nicht mehr bereit und liefert es nicht mehr aus.",
+            "pill": "Übergeben",
+            "account": "AWS-Konto",
+            "copyAccount": "Die AWS-Kontonummer kopieren",
+            "upstream": "Upstream-Adresse",
+            "copyUpstream": "Die Upstream-Adresse kopieren"
+          },
+          "stopped": {
+            "title": "Gestoppt",
+            "body": "{name} ist in dein GitHub umgezogen, und seine App im {target, select, fly {Fly} other {Serverless}}-Konto von Motir wurde gestoppt. App, Adresse und Datenbank sind gelöscht. Motir stellt es nicht mehr bereit und liefert es nicht mehr aus.",
+            "pill": "Gestoppt"
+          },
+          "final": {
+            "title": "Letzter Datenbankexport",
+            "taken": "Beim Stopp erstellt, {date}",
+            "meta": "{size} · aufbewahrt bis {date}",
+            "download": "Herunterladen",
+            "downloadAria": "Den letzten Datenbankexport herunterladen",
+            "memberNote": "Du siehst die Produktion. Nur Organisationsadmins können den letzten Export herunterladen.",
+            "expired": "Der letzte Export wurde bis {date} aufbewahrt und ist gelöscht. Bereits heruntergeladene Exporte sind nicht betroffen.",
+            "none": "Für diese App wird kein letzter Export aufbewahrt."
+          }
+        }
       }
     },
     "workspaceAddress": {

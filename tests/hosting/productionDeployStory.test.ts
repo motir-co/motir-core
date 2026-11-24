@@ -539,7 +539,9 @@ describe('a preview beside a production application', () => {
     expect(reasons).toContain('migrate: exit 1');
   });
 
-  it('lets only the production release service import the production database service', () => {
+  // The grace-window export (MOTIR-12134) is the one other reader: `pg_dump` needs
+  // the DIRECT connection string, which it passes in `PGPASSWORD`, never logged.
+  it('lets only the production release and export services import the production database service', () => {
     const importers = ['lib', 'app']
       .flatMap((d) => sources(join(ROOT, d)))
       .filter((f) =>
@@ -547,7 +549,10 @@ describe('a preview beside a production application', () => {
           readFileSync(join(ROOT, f), 'utf8'),
         ),
       );
-    expect(importers).toEqual(['lib/services/productionReleaseService.ts']);
+    expect(importers.sort()).toEqual([
+      'lib/services/hostedApplicationExportService.ts',
+      'lib/services/productionReleaseService.ts',
+    ]);
   });
 });
 
