@@ -10,7 +10,7 @@ import { arrivalLevel } from '@/lib/planning/planArrival';
 import { ARRIVAL_LEVEL_MAX_NODES, defaultPlanView } from '@/lib/planning/planView';
 import { foldersService } from '@/lib/services/foldersService';
 import { DEFAULT_BUG_FOLDER_NAME } from '@/lib/projects/bugDestination';
-import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { createTestWorkItems, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -167,6 +167,25 @@ async function seedChild(
     fx.ctx,
   );
   return { id: dto.id, identifier: dto.identifier };
+}
+
+/**
+ * `count` committed siblings of one `kind` on one level — the project root, or
+ * the folder `folderId` names — for the cases whose subject is a level's SIZE.
+ * They land in ONE insert (MOTIR-12181): forty `seedChild` service creates took
+ * most of a 15 s test budget and crossed it on a loaded CI shard. The size reads
+ * only the rows; a case that reads a card's revision seeds it with `seedChild`.
+ */
+async function seedLevel(
+  fx: WorkItemFixture,
+  kind: 'epic' | 'task',
+  prefix: string,
+  count: number,
+  folderId?: string,
+): Promise<{ id: string; identifier: string }[]> {
+  const titles = Array.from({ length: count }, (_, i) => `${prefix} ${i}`);
+  const made = await createTestWorkItems(fx, { kind, titles, folderId: folderId ?? null });
+  return made.map((w) => ({ id: w.id, identifier: w.identifier }));
 }
 
 beforeEach(async () => {
@@ -858,9 +877,7 @@ describe('planReviewService.getPlanReview', () => {
     // three adds into the folder, so the canvas opens there and the size must
     // describe it — 1 filed card + 3 adds — not the root's 37 cards.
     const fx = await makeWorkItemFixture();
-    for (let i = 0; i <= ARRIVAL_LEVEL_MAX_NODES; i += 1) {
-      await seedChild(fx, 'epic', `Root ${i}`);
-    }
+    await seedLevel(fx, 'epic', 'Root', ARRIVAL_LEVEL_MAX_NODES + 1);
     const later = await foldersService.createFolder(
       { projectId: fx.projectId, parentFolderId: null, name: 'Later' },
       fx.ctx,
@@ -989,10 +1006,7 @@ describe('planReviewService.getPlanReview', () => {
     const bugs = await adminDb.folder.findFirstOrThrow({
       where: { projectId: fx.projectId, parentFolderId: null, name: DEFAULT_BUG_FOLDER_NAME },
     });
-    for (let i = 0; i <= ARRIVAL_LEVEL_MAX_NODES; i += 1) {
-      const filed = await seedChild(fx, 'epic', `Filed bug ${i}`);
-      await adminDb.workItem.update({ where: { id: filed.id }, data: { folderId: bugs.id } });
-    }
+    await seedLevel(fx, 'epic', 'Filed bug', ARRIVAL_LEVEL_MAX_NODES + 1, bugs.id);
 
     const plan = await plansService.createPlan(fx.projectId, { title: 'Roots' }, fx.ctx);
     await plansService.addProposals(
@@ -1029,7 +1043,8 @@ describe('planReviewService.getPlanReview', () => {
     //
     // One test per shape: each seeds its own ARRIVAL_LEVEL_MAX_NODES + 5 cards, and
     // four shapes in one test came within a second of the 15 s test budget on CI
-    // (14.3 s on #4418) and crossed it on #4424.
+    // (14.3 s on #4418) and crossed it on #4424. The cards land in one insert
+    // (`seedLevel`), not one service create each (MOTIR-12181).
     const loose = ARRIVAL_LEVEL_MAX_NODES + 5;
     const epicAdd = {
       op: 'add' as const,
@@ -1092,9 +1107,8 @@ describe('planReviewService.getPlanReview', () => {
 
     it.each(shapes)('$title', async (shape) => {
       const fx = await makeWorkItemFixture();
-      for (let i = 0; i < shape.epics; i += 1) await seedChild(fx, 'epic', `Epic ${i}`);
-      const tasks: { id: string }[] = [];
-      for (let i = 0; i < loose; i += 1) tasks.push(await seedChild(fx, 'task', `Loose task ${i}`));
+      await seedLevel(fx, 'epic', 'Epic', shape.epics);
+      const tasks = await seedLevel(fx, 'task', 'Loose task', loose);
 
       const plan = await plansService.createPlan(fx.projectId, { title: shape.title }, fx.ctx);
       await plansService.addProposals(plan.id, shape.proposals(tasks), fx.ctx);
@@ -1110,11 +1124,15 @@ describe('planReviewService.getPlanReview', () => {
     });
   });
 
-  it('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', async () => {
+  describe('sizes the level arrivalLevel opens on — parented, folder-filed and root-only plans (Bug MOTIR-12144)', () => {
     // Three plans, each over its own copy of one tree (a plan holds its targets, so
     // the plans cannot share one): an epic with 2 children, and a folder holding 1
     // filed root card. Each plan's size is the committed nodes of the level the
     // canvas arrives at plus the plan's adds on it.
+    //
+    // One test per plan, so each tree's seeding has its own 15 s budget: the three
+    // in one test timed out beside the MOTIR-12162 case on a loaded CI shard
+    // (MOTIR-12181).
     type Tree = { epic: string; folder: string };
     const add = (title: string, parentRef?: string) => ({
       op: 'add' as const,
@@ -1162,7 +1180,7 @@ describe('planReviewService.getPlanReview', () => {
       },
     ];
 
-    for (const shape of shapes) {
+    it.each(shapes)('$title', async (shape) => {
       const fx = await makeWorkItemFixture();
       const epic = await seedChild(fx, 'epic', 'Payments');
       await seedChild(fx, 'story', 'Refunds', epic.id);
@@ -1188,7 +1206,7 @@ describe('planReviewService.getPlanReview', () => {
         size: review.arrivalLevelSize,
         total: review.arrivalLevelTotal,
       }).toEqual({ plan: shape.title, size: shape.size, total: shape.total });
-    }
+    });
   });
 
   it('does NOT count the project root for a plan with NO items — it has no arrival level (MOTIR-10739)', async () => {

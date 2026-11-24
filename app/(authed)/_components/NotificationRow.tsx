@@ -16,6 +16,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { agentVerdictHref } from '@/lib/agentReview/verdictActivity';
+import { projectSettingsHref } from '@/lib/settings/projectSettingsLink';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationData, NotificationDTO } from '@/lib/dto/notifications';
 import { useRelativeTime } from '@/lib/hooks/useRelativeTime';
@@ -190,7 +191,9 @@ export function NotificationRow({
   const href = page
     ? `/pages/${encodeURIComponent(page.pageId)}?thread=${encodeURIComponent(page.threadRootId)}`
     : data.kind === 'code_access_refused'
-      ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
+      ? // The link names its project, so the room opens on it whatever the reader's
+        // active project is (MOTIR-12169) — `projectSettingsHref` is the one spelling.
+        projectSettingsHref('/settings/project/code-access', data.projectKey)
       : // Out of credits opens where they are topped up.
         data.kind === 'production_credits_exhausted'
         ? '/settings/organization/billing'
