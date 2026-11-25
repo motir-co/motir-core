@@ -142,15 +142,16 @@ describe('mark_integrated (7.8.11) — transactional status + branch', () => {
 
   it('an ILLEGAL transition to implemented throws and leaves the branch untouched', async () => {
     const fx = await makeWorkItemFixture();
-    // A is in `todo`; todo → implemented is NOT a legal default transition (only
-    // in_progress → implemented and blocked → implemented are), so
-    // mark_integrated must reject it.
+    // A is at `planning`; planning → implemented is NOT a legal default transition
+    // (todo, in_progress, blocked and the ejection's in_review / approved are — the
+    // first since MOTIR-12202), so mark_integrated must reject it.
     const a = await task(fx, 'A');
+    await workItemsService.updateStatus(a.id, 'planning', fx.ctx);
     await expect(workItemsService.markIntegrated(a.id, 'session/x', fx.ctx)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
     const after = await workItemsService.getWorkItem(a.id, fx.ctx);
-    expect(after.status).toBe('todo');
+    expect(after.status).toBe('planning');
     expect(after.sessionBranch).toBeNull();
   });
 });

@@ -248,6 +248,12 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // column (`20261124010000_add_to_plan_default_status`). Each is justified in the
 // `to_plan` block at the end of this list, beside the three it deliberately
 // leaves out.
+//
+// MOTIR-12202 adds TWO more with no new status — `todo → implemented` and
+// `todo → in_review` — bringing the total to FORTY-EIGHT, with a backfill of the
+// edges alone (`20261125000000_add_todo_delivery_default_edges`). They are the
+// pull-request lifecycle's, for a card a pull request delivers while nobody moved
+// it off To Do; each is justified in the `todo` block below the Implemented one.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -376,6 +382,25 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['implemented', 'blocked'],
   ['implemented', 'cancelled'],
   ['implemented', 'done'],
+  // ── A pull request delivering a To Do card (MOTIR-12202) ───────────────────
+  // One pull request often delivers more than one card, and a run does not always
+  // claim every card it delivers first — so a card can be LINKED to an open pull
+  // request while it still reads To Do. Before these two edges the link-time sync's
+  // `→ implemented` and the CI-green latch's `→ in_review` were both refused as
+  // undeclared hops, silently, and the merge's `→ done` was refused the same way:
+  // the card stayed To Do after its code shipped (MOTIR-12189).
+  //   • `todo → implemented` — linking (or opening) an open, non-draft pull request
+  //     on a To Do card records the fact the same way it does from In Progress.
+  //   • `todo → in_review`   — the CI-green latch, when the pull request's whole set
+  //     is ALREADY green at the link (or turns green before anything else moved the
+  //     card): it goes straight to review, as an In Progress card does since
+  //     MOTIR-12094, and the approve-to-merge question is raised with it.
+  // The merge then completes it through `implemented → done` / `in_review → done`,
+  // so no `todo → done` is declared. `blocked` keeps its exclusion
+  // (`HELD_BELOW_IMPLEMENTED`, MOTIR-12094): a person's block is never lifted by a
+  // pull request, and `blocked → in_review` stays undeclared.
+  ['todo', 'implemented'],
+  ['todo', 'in_review'],
 
   // `approved` (MOTIR-5139) — a person's YES, between CI's verdict and the
   // merge. ONE edge in and THREE out — plus the ejection's TWO more out

@@ -43,7 +43,8 @@ const OWNER_EMAIL = 'e2e-board-ui-owner@example.com';
 // is laid out in this order; the drag tests pick a target whose legality is
 // known from this graph.
 //   todo → in_progress | blocked | cancelled   (legal)
-//   todo → in_review | done                     (illegal — no transition)
+//   todo → implemented | in_review              (legal — a delivering pull request's, MOTIR-12202)
+//   todo → done                                 (illegal — no transition)
 
 // Sign-up auto-creates `<local>'s Workspace`; here we add the one project the
 // board hangs off and pin it active so getActiveProject() resolves it on /boards.
@@ -339,41 +340,47 @@ test.describe('board-ui @smoke', () => {
   }) => {
     await signUp(page, OWNER_EMAIL);
     const { projectId } = await seedActiveProject(OWNER_EMAIL);
-    const item = await createItem(page.request, projectId, 'cannot reach review');
+    const item = await createItem(page.request, projectId, 'cannot go back to the queue');
+    // Park it at Implemented via the API. `implemented → todo` has NO transition —
+    // a built card goes back through In Progress. (`todo → in_review` was this
+    // test's example until MOTIR-12202 declared it, for a pull request delivering a
+    // To Do card; both columns here are on screen at the default width.)
+    expect((await transition(page.request, item.id, 'in_progress')).status()).toBe(200);
+    expect((await transition(page.request, item.id, 'implemented')).status()).toBe(200);
 
     const board = await getBoard(page.request);
     const todoCol = columnByStatus(board, 'todo');
-    const inReviewCol = columnByStatus(board, 'in_review'); // todo → in_review has NO transition
-    const card = todoCol.cards.find((c) => c.id === item.id)!;
+    const implementedCol = columnByStatus(board, 'implemented');
+    const card = implementedCol.cards.find((c) => c.id === item.id)!;
 
     await openBoard(page);
 
     const res = await pointerDrag(
       page,
       page.getByTestId(cardTid(card.identifier)),
-      page.getByTestId(`board-column-${inReviewCol.id}`),
+      page.getByTestId(`board-column-${todoCol.id}`),
     );
     expect(res.status(), 'an illegal move returns 409').toBe(409);
     expect(((await res.json()) as { code: string }).code).toBe('ILLEGAL_BOARD_MOVE');
 
-    // The rejection is surfaced (a toast), and the card animates BACK to To Do —
-    // it never rests in the In Review column it was dropped on. `exact` keeps the
-    // toast TITLE distinct from the aria-live announcement, which embeds the same
-    // phrase in a longer "Notification Move not allowed…" string.
+    // The rejection is surfaced (a toast), and the card animates BACK to
+    // Implemented — it never rests in the To Do column it was dropped on. `exact`
+    // keeps the toast TITLE distinct from the aria-live announcement, which embeds
+    // the same phrase in a longer "Notification Move not allowed…" string.
     await expect(page.getByText('Move not allowed', { exact: true })).toBeVisible();
     await expect(
-      page.getByTestId(`board-column-${todoCol.id}`).getByTestId(cardTid(card.identifier)),
+      page.getByTestId(`board-column-${implementedCol.id}`).getByTestId(cardTid(card.identifier)),
     ).toBeVisible();
     await expect(
-      page.getByTestId(`board-column-${inReviewCol.id}`).getByTestId(cardTid(card.identifier)),
+      page.getByTestId(`board-column-${todoCol.id}`).getByTestId(cardTid(card.identifier)),
     ).toHaveCount(0);
-    await expect(page.getByTestId(`board-count-${todoCol.id}`)).toHaveText('1');
-    await expect(page.getByTestId(`board-count-${inReviewCol.id}`)).toHaveText('0');
+    await expect(page.getByTestId(`board-count-${implementedCol.id}`)).toHaveText('1');
+    await expect(page.getByTestId(`board-count-${todoCol.id}`)).toHaveText('0');
 
     // The status is untouched on re-fetch — the snap-back was visual only.
     const after = await getBoard(page.request);
-    expect(cardIdsIn(after, 'todo')).toContain(item.id);
-    expect(cardIdsIn(after, 'in_review')).not.toContain(item.id);
+    expect(cardIdsIn(after, 'implemented')).toContain(item.id);
+    expect(cardIdsIn(after, 'todo')).not.toContain(item.id);
   });
 
   test('an in-column drag reorders rank only — no transition, and the order survives a reload', async ({

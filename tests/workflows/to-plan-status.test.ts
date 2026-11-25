@@ -131,7 +131,7 @@ describe('the seeded workflow carries the tenth status', () => {
 
   it('seeds exactly the five edges', { timeout: DB_TEST_TIMEOUT_MS }, async () => {
     expect(await edgesTouching(fx.projectId)).toEqual(EXPECTED_EDGES);
-    expect(DEFAULT_TRANSITIONS).toHaveLength(46);
+    expect(DEFAULT_TRANSITIONS).toHaveLength(48);
   });
 });
 

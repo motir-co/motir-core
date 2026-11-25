@@ -93,8 +93,18 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // keeps today's reading of `null` (a legacy row, not a draft), which is why that arm
 // is per source.
 //
-// Still never a source: `todo`, `blocked` and `planning`. Nobody has started a card at
-// those, so a green set on one asks nobody anything.
+// ⚠️ AMENDED BY MOTIR-12202: `todo` IS A SOURCE TOO. A card can be delivered while it
+// still reads To Do — one pull request delivering several cards, a run that never moved
+// the second one — and a green, landable set on it is the same evidence it is on an In
+// Progress card. Leaving it out stranded the card at To Do through the green build AND
+// the merge (MOTIR-12189), so it now goes straight to `in_review` over the declared
+// `todo → in_review` edge, its question raised in the same transaction. It is held
+// exactly as `in_progress` is: a draft member, or one of unknown draft-ness, holds it
+// (`UNSTARTED_REVIEW_SOURCES`), because nobody has said the pull request is ready.
+//
+// Still never a source: `blocked` and `planning` (and `to_plan`). A Blocked card is a
+// person's hold, which a pull request never lifts (MOTIR-12094), and a card being
+// re-planned is not reviewable until the plan is decided.
 //
 // ── THE VERDICT IS `derivePrCiState`, DELIBERATELY ──────────────────────────
 // Both edges ask the shipped per-PR derivation over ALL of a change request's
@@ -136,7 +146,7 @@ const SKIPPABLE = [
   // the rest of this list, says nothing about the other cards the run delivered.
   ApprovalGatePendingError,
   // THE PLAN HOLD (MOTIR-6265; AMENDMENT 21 §5(b)). A promotion moves a card out of
-  // `in_progress` or `implemented` (MOTIR-12094), so a card a plan holds at one of
+  // `todo`, `in_progress` or `implemented` (MOTIR-12094 · MOTIR-12202), so a card a plan holds at one of
   // them is refused by the funnel — and, like the rest of this list, that says nothing
   // about the other cards the run delivered.
   PlanTargetHeldError,
@@ -153,9 +163,11 @@ const SKIPPABLE = [
  * edge 2, the re-read before edge 2 and every sweep that calls into this module read,
  * so no two of them can disagree about which cards are promotable.
  */
-export const PROMOTABLE_SOURCE_STATUSES: readonly string[] = ['in_progress', 'implemented'];
-/** The source at which a member of UNKNOWN draft-ness holds (see `heldByDraft`). */
-const UNSTARTED_REVIEW_SOURCE = 'in_progress';
+export const PROMOTABLE_SOURCE_STATUSES: readonly string[] = ['todo', 'in_progress', 'implemented'];
+/** The sources at which a member of UNKNOWN draft-ness holds (see `heldByDraft`): the
+ *  two that no ready pull request has yet vouched for — `implemented` is written only
+ *  for a pull request known not to be a draft (MOTIR-12202 adds `todo`). */
+const UNSTARTED_REVIEW_SOURCES: readonly string[] = ['todo', 'in_progress'];
 
 /** Is this status one a green, landable delivery set promotes a card out of? */
 export function isPromotableSourceStatus(status: string): boolean {
@@ -294,7 +306,8 @@ async function isPromotable(
 
 /**
  * THE DRAFT HOLD (MOTIR-12094) — true while any OPEN delivering pull request is a draft,
- * or, for a card promoted from `in_progress`, of unknown draft-ness (`draft` null).
+ * or, for a card promoted from `in_progress` or `todo` (MOTIR-12202), of unknown draft-ness
+ * (`draft` null).
  *
  * A draft is its author saying *not ready*, and the host refuses to merge one, so a card
  * promoted over it would sit In Review with no question anybody could answer
@@ -315,7 +328,7 @@ function heldByDraft(byId: Map<string, DeliveredPullRequest>, status: string): b
   for (const pr of byId.values()) {
     if (pr.state !== 'open' || pr.merged) continue;
     if (pr.draft === true) return true;
-    if (pr.draft === null && status === UNSTARTED_REVIEW_SOURCE) return true;
+    if (pr.draft === null && UNSTARTED_REVIEW_SOURCES.includes(status)) return true;
   }
   return false;
 }
@@ -356,7 +369,7 @@ function heldByConflict(byId: Map<string, DeliveredPullRequest>): boolean {
  * EDGE 1 — CI has just reported a terminal verdict for one change request.
  *
  * Promotes every card that change request delivers and that currently sits at a
- * source status — `in_progress` or `implemented` (MOTIR-12094) — straight to
+ * source status — `todo`, `in_progress` or `implemented` (MOTIR-12094 · MOTIR-12202) — straight to
  * `in_review`. Best-effort by construction: it runs AFTER the feedback
  * comment and the `ciState` write have committed, and a failure here must never
  * turn a recorded verdict into a webhook the host retries forever.
@@ -388,9 +401,9 @@ export async function promoteDeliveredCardsOnGreen(args: {
       githubPullRequestId: pr.id,
       tx,
     });
-    // Only the cards at a SOURCE status — `in_progress` or `implemented` (MOTIR-12094).
-    // A card nobody has started (`todo`, `blocked`, `planning`) is asked nothing, and a
-    // card already in review is the re-raise's, below.
+    // Only the cards at a SOURCE status — `todo`, `in_progress` or `implemented`
+    // (MOTIR-12094 · MOTIR-12202). A card held at `blocked` or being re-planned is asked
+    // nothing, and a card already in review is the re-raise's, below.
     const atSource = set.items.filter((item) => isPromotableSourceStatus(item.status));
 
     // ⚠️ AND ONLY THE ONES WHOSE WHOLE SET IS GREEN (MOTIR-3685). This pull
@@ -727,7 +740,7 @@ async function reconcileClaimedCompleteDeliveries(
       const item = await workItemRepository.findById(workItemId, tx);
       // ⚠️ THIS GATE IS THE LATCH'S, NOT THE RE-READ'S (Bug MOTIR-11638). Edge 2 asks
       // only about a card it could promote, so it re-reads only at a source status
-      // (MOTIR-12094: `in_progress` or `implemented`). A
+      // (MOTIR-12094 · MOTIR-12202: `todo`, `in_progress` or `implemented`). A
       // card at any OTHER status — In Review after a send-back, above all — has its
       // lost completions settled by the reconcile tick's status-independent sweep
       // (`lostCheckCompletionService.settleLostCheckCompletions`), which runs for every
