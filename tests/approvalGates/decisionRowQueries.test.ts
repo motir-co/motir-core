@@ -24,6 +24,7 @@ function delivery(workItemId: string, number: number): WorkItemDeliveryWithCheck
       number,
       state: 'open',
       merged: false,
+      mergeOutcomeRef: null,
       checkRuns: [],
       decisionDocOutcome: 'one',
       decisionDocPath: `docs/decisions/d-${number}.md`,

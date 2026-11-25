@@ -1265,9 +1265,8 @@ describe('ProjectRoadmapCanvas — levelCaption', () => {
   });
 
   it('clears the TOP BAND’s way — the breadcrumb on the left, the cluster on the right', async () => {
-    // Asserted on the STATE, not the offset: the offset is a `calc` off
-    // `--height-control` precisely so it tracks a style swap, and pinning its
-    // literal value here would forbid the thing that makes it correct.
+    // Asserted on the STATE, not a pixel offset: the caption sits in the band's
+    // flow (MOTIR-12194), so where it lands follows from the chrome above it.
     const bare = render(<ProjectRoadmapCanvas loadLevel={loadLevel} levelCaption="A caption" />);
     await screen.findByText('Epic one');
     // A canvas with NO chrome at all: the band is empty, so the caption has it.
@@ -1299,6 +1298,73 @@ describe('ProjectRoadmapCanvas — levelCaption', () => {
 
     expect(screen.getByTestId('level-caption').getAttribute('data-below-chrome')).toBe('true');
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeTruthy();
+  });
+
+  // Bug MOTIR-12194: the caption was an `absolute` overlay at a `top` worth ONE
+  // row of chrome, and a LEVEL CHANGE BAND (MOTIR-6223) makes the breadcrumb card
+  // two rows tall — so on a drilled, all-proposed level the caption covered the
+  // band's button. jsdom lays nothing out, so what is asserted is the STRUCTURE
+  // that makes the overlap impossible: the caption is a full-width row in the
+  // top band's flex-wrap flow, AFTER the nav, carrying no positioning of its own.
+  it('lays the caption out AFTER the breadcrumb bar in the top band’s flow — never at a fixed `top` — when a level change band stacks a second row', async () => {
+    const onBand = vi.fn();
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        rootLabel="Roadmap"
+        levelCaption="Nothing committed here yet"
+        searchable
+        searchLabel="Search the roadmap"
+        levelBand={() => (
+          <div data-testid="band-row">
+            <button type="button" onClick={onBand}>
+              What this plan changes here
+            </button>
+          </div>
+        )}
+      />,
+    );
+    await screen.findByText('Epic one');
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('Story one');
+
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    // The band really is the bar's second row — the shape that used to collide.
+    expect(within(nav).getByTestId('band-row')).toBeTruthy();
+    expect(nav.className).toContain('flex-col');
+
+    const caption = screen.getByTestId('level-caption');
+    const row = screen.getByTestId('level-caption-row');
+    expect(row.contains(caption)).toBe(true);
+    // Same parent as the nav: the top band's wrapping flex container…
+    const band = nav.parentElement!;
+    expect(row.parentElement).toBe(band);
+    expect(band.className).toContain('flex-wrap');
+    // …as its LAST child, on a row of its own, after the nav and the cluster.
+    expect(band.lastElementChild).toBe(row);
+    expect(nav.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row.className.split(/\s+/)).toContain('basis-full');
+    // No positioning of its own: neither the row nor the chip is absolute, and
+    // neither carries a computed `top`.
+    for (const node of [row, caption]) {
+      const classes = node.className.split(/\s+/);
+      expect(classes).not.toContain('absolute');
+      expect(classes.some((c) => c.startsWith('top-'))).toBe(false);
+    }
+
+    // The band's button is reachable and fires.
+    fireEvent.click(within(nav).getByRole('button', { name: 'What this plan changes here' }));
+    expect(onBand).toHaveBeenCalledTimes(1);
+  });
+
+  it('with NO chrome in the band, the caption is the band’s only content — it takes the band’s top', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={loadLevel} levelCaption="A caption" />);
+    await screen.findByText('Epic one');
+    const row = screen.getByTestId('level-caption-row');
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+    expect(row.parentElement!.firstElementChild).toBe(row);
+    expect(row.parentElement!.className).toContain('top-3');
   });
 });
 

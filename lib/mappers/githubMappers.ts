@@ -24,6 +24,7 @@ import type {
 } from '@/lib/repositories/githubPullRequestRepository';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
+import { presentedPullRequestState } from '@/lib/github/pullRequestState';
 import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 import { previewUrl } from '@/lib/preview/url';
 
@@ -114,7 +115,9 @@ export function toLinkedPullRequestDto(
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,
     number: row.number,
-    state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
+    // The host's word on a merge — its delivery OR its answer to Motir's own merge, which
+    // lands first (Bug MOTIR-12232) — so a re-read never draws Open beside a Merged press.
+    state: presentedPullRequestState(row),
     // ⚠️ BOTH FIELDS ARE READ AT ONE COMMIT — the stored host head (MOTIR-11932). `ci` was
     // the verdict at the newest CHECK-ROW sha while `headSha` was the host's, so for the
     // minutes between a push and its first check row the pair said "the new head is red"
@@ -126,7 +129,7 @@ export function toLinkedPullRequestDto(
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
     baseRef: row.baseRef,
     // Only an OPEN member can conflict: a merged or closed one merges into nothing more.
-    conflicted: !row.merged && row.state === 'open' && isConflictedAtCurrentHead(row),
+    conflicted: presentedPullRequestState(row) === 'open' && isConflictedAtCurrentHead(row),
   };
 }
 
@@ -241,7 +244,7 @@ export function toPullRequestLinkCandidateDto(
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,
     number: row.number,
-    state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
+    state: presentedPullRequestState(row),
     linkedTo: [...linkedTo],
   };
 }

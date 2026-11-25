@@ -11,6 +11,7 @@ function pr(number: number) {
     number,
     state: 'open',
     merged: false,
+    mergeOutcomeRef: null,
     headSha: 'abc',
     checkRuns: [],
   };
