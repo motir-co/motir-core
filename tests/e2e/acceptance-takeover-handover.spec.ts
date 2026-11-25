@@ -39,6 +39,7 @@ import { adminDb, db, resetDatabase } from './_helpers/db-reset';
 import { E2E_PROVISIONING_ORG } from './_helpers/github-const';
 import { signIn } from './_helpers/shell-session';
 import {
+  PRODUCTION_INSTALLATION_ID,
   PRODUCTION_MANIFEST,
   commit,
   deliverMerge,
@@ -74,7 +75,6 @@ const tp = en.settings.production;
 const ROOM = '/settings/project/repositories';
 const PRODUCTION = '/settings/project/production';
 const PASSWORD = 'takeover-e2e-pass-9800';
-const INSTALLATION_ID = '99980001';
 const ACCOUNT = '210987654321';
 const OWNER_EMAIL = 'cloud-owner@acme.example';
 const GITHUB_LOGIN = 'ada-acme';
@@ -133,7 +133,9 @@ async function seedTakeoverRoom(slug: string): Promise<Seed> {
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: {
-      installationId: INSTALLATION_ID,
+      // The id `deliverMerge` signs its workflow_run with: a merge from any other
+      // installation is `unknown_installation` and releases nothing.
+      installationId: PRODUCTION_INSTALLATION_ID,
       accountLogin: E2E_PROVISIONING_ORG,
       accountType: 'Organization',
     },
