@@ -195,7 +195,13 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
 
     await submitJob('plan', tenant, { planningCadence: 'subtask' }, { userId: 'user-1' });
     await submitJob('plan', tenant, { planningCadence: 'story' }, { userId: 'user-1' });
-    await submitJob('plan', tenant, { planningCadence: 'sprint' }, { userId: 'user-1' });
+    // A value off the wire that the type forbids: the mock must drop it, not journal it.
+    await submitJob(
+      'plan',
+      tenant,
+      { planningCadence: 'sprint' as unknown as 'story' },
+      { userId: 'user-1' },
+    );
     await submitJob('plan', tenant, {}, { userId: 'user-1' });
     await submitJob('ask_project', tenant, { planningCadence: 'subtask' }, { userId: 'user-1' });
 
