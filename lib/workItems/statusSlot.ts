@@ -63,6 +63,22 @@ export function isToPlanItem(item: StatusSlotItem): boolean {
   return category === 'todo';
 }
 
+/** The workflow status KEY a corrected decision moves not-started work into
+ *  (MOTIR-10139, `lib/workflows/defaultWorkflow.ts`): the card has to be planned
+ *  again before anyone builds it. */
+export const TO_PLAN_STATUS_KEY = 'to_plan';
+
+/**
+ * Is the item IN THE TO PLAN STATUS (MOTIR-12234)? Distinct from {@link isToPlanItem},
+ * the COMPUTED To plan (a childless `todo` story or epic): the status sits in the
+ * `in_progress` category, can be on a card of any kind and may already have
+ * children, and the status chip — not a slot pill — already says so. The canvas
+ * offers it the same Plan button, held by the same `isPlanHeld` rule.
+ */
+export function isInToPlanStatus(item: Pick<StatusSlotItem, 'status'>): boolean {
+  return item.status === TO_PLAN_STATUS_KEY;
+}
+
 /**
  * Which pill the status slot draws, in the canvas card's precedence
  * (MOTIR-10508): Done › To plan › Ready › the status chip — on every surface, the

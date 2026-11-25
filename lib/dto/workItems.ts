@@ -972,8 +972,10 @@ export interface RoadmapNodeDto {
    *  to a story that is not archived, not in a `done`-category status, and has no
    *  live children — `lib/planning/plannability.ts`'s rule, computed with
    *  `planBlockReasons` so the canvas and the Plan button's check never disagree.
-   *  A held childless story is not To plan (`isToPlanItem`). Always `false` on
-   *  any other kind. */
+   *  A held childless story is not To plan (`isToPlanItem`). Computed for every
+   *  story whatever its status or children, so a story in the To plan STATUS
+   *  (`to_plan`) is held by the same rule (MOTIR-12234). Always `false` on any
+   *  other kind. */
   planHeld: boolean;
   /** Whether the node is itself a member of the ACTIVE sprint (MOTIR-1379
    *  follow-up). In SPRINT scope the root level shows only in-sprint members, but
