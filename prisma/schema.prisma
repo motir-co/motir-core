@@ -2820,6 +2820,14 @@ model ProjectKeyAlias {
   @@map("project_key_alias")
 }
 
+/// The project AI planning setting "Planning cadence" (Story MOTIR-12203 ·
+/// MOTIR-12204) — see `Project.aiPlanningCadence`. `story` is today's walk and
+/// the default a NULL column resolves to; `subtask` plans one step and stops.
+enum AiPlanningCadence {
+  story
+  subtask
+}
+
 /// The org-scoped role a user holds in an `Organization` (Story 6.10), DISTINCT
 /// from the workspace role (`WorkspaceRole`) and sitting ABOVE it:
 ///   - `owner`  — the org founder; administers every workspace under the org,
@@ -2831,14 +2839,6 @@ model ProjectKeyAlias {
 /// The role-precedence composition + the access gate that reads this land in
 /// 6.10.4. Closed + stable set → a Postgres enum, the same shape as
 /// `WorkspaceRole`.
-/// The project AI planning setting "Planning cadence" (Story MOTIR-12203 ·
-/// MOTIR-12204) — see `Project.aiPlanningCadence`. `story` is today's walk and
-/// the default a NULL column resolves to; `subtask` plans one step and stops.
-enum AiPlanningCadence {
-  story
-  subtask
-}
-
 enum OrganizationRole {
   owner
   admin
@@ -7623,6 +7623,15 @@ model ApiToken {
   @@map("api_token")
 }
 
+/// How a walk ended on purpose (Story MOTIR-12203 · MOTIR-12207) — see
+/// `Plan.walkEndedBy`.
+enum PlanWalkEndedBy {
+  cadence
+  person_stop
+
+  @@map("plan_walk_ended_by")
+}
+
 /// The lifecycle state of an AI-planning proposal bundle (Story 7.21).
 /// `generating` — the producer (7.4 generation / 7.11 re-planning) has opened
 /// the plan and is still appending proposals. `planned` — the generation
@@ -7663,15 +7672,6 @@ model ApiToken {
 /// (`declined` / `discarded`, as an unfinished plan's ending is recorded).
 /// Appended LAST, as `ALTER TYPE … ADD VALUE` places it; nothing orders plans
 /// by status.
-/// How a walk ended on purpose (Story MOTIR-12203 · MOTIR-12207) — see
-/// `Plan.walkEndedBy`.
-enum PlanWalkEndedBy {
-  cadence
-  person_stop
-
-  @@map("plan_walk_ended_by")
-}
-
 enum PlanStatus {
   generating
   planned

@@ -276,8 +276,10 @@ async function buildPlanningJobContext(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  // How far this plan walks (MOTIR-12204)? ALWAYS sent, resolved at THIS submit:
-  // a resume or revise carries the project's current value, never a stored one.
+  // How far this plan walks (MOTIR-12204)? ALWAYS sent, resolved at THIS submit, so
+  // the wire carries the project's current value. On a RESUME motir-ai replaces it with
+  // the first job's cadence (`planJobService.withResumedConversation`): a running plan
+  // keeps the cadence it started with.
   const planningCadence = await resolvePlanningCadenceForJob(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
