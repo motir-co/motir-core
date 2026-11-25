@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   isBlockedNotStarted,
+  isInToPlanStatus,
   isReadyToStart,
   isToPlanItem,
+  TO_PLAN_STATUS_KEY,
   statusSlotOf,
 } from '@/lib/workItems/statusSlot';
 
@@ -134,6 +136,27 @@ describe('isToPlanItem', () => {
   it('falls back to the default todo key when the category is missing, never a custom key', () => {
     expect(isToPlanItem({ kind: 'story', status: 'todo', hasChildren: false })).toBe(true);
     expect(isToPlanItem({ kind: 'story', status: 'backlog', hasChildren: false })).toBe(false);
+  });
+});
+
+describe('isInToPlanStatus (MOTIR-12234)', () => {
+  it('is the to_plan status key, on any kind, children or none', () => {
+    expect(TO_PLAN_STATUS_KEY).toBe('to_plan');
+    expect(isInToPlanStatus({ status: 'to_plan' })).toBe(true);
+    for (const status of ['todo', 'planning', 'in_progress', 'done']) {
+      expect(isInToPlanStatus({ status })).toBe(false);
+    }
+  });
+
+  it('is not the computed To plan: an in_progress-category card keeps the status chip', () => {
+    const card = {
+      kind: 'story',
+      status: 'to_plan',
+      statusCategory: 'in_progress' as const,
+      hasChildren: true,
+    };
+    expect(isToPlanItem(card)).toBe(false);
+    expect(statusSlotOf(card, { ready: false, blocked: false })).toBe('status');
   });
 });
 

@@ -8,6 +8,7 @@ import {
   AI_AUTO_PLAN_THRESHOLD_MIN,
   AI_SPRINT_LENGTH_DAYS_MAX,
   AI_SPRINT_LENGTH_DAYS_MIN,
+  isPlanningCadence,
 } from '@/lib/projectAiSettings/limits';
 import { toProjectAiSettingsDto } from '@/lib/mappers/projectAiSettingsMappers';
 import type {
@@ -20,7 +21,8 @@ import type {
 // (`aiAutoPlanEnabled` / `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` /
 // `aiSprintLengthDays`, plus the Story-7.4
 // `aiGenerateExplanations`, the MOTIR-3331 `aiRecordPlanningMistakes` and the
-// MOTIR-11264 `aiFinalCheck` the same panel surfaces).
+// MOTIR-11264 `aiFinalCheck` and the MOTIR-12204 `aiPlanningCadence` the same
+// panel surfaces).
 //
 // Open-core by construction: these are ordinary project-settings columns the PM
 // core owns and reads (the cadence engine MOTIR-916, the sprint-packing persist
@@ -136,24 +138,10 @@ async function resolveProjectByKeyInTx(
  * threshold only when `aiAutoPlanEnabled` is true would let a bad number persist
  * and fire later.
  */
-function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
-  aiAutoPlanEnabled?: boolean;
-  aiAutoPlanThreshold?: number;
-  aiSprintPlanningEnabled?: boolean;
-  aiSprintLengthDays?: number;
-  aiGenerateExplanations?: boolean;
-  aiRecordPlanningMistakes?: boolean;
-  aiFinalCheck?: boolean;
-} {
-  const data: {
-    aiAutoPlanEnabled?: boolean;
-    aiAutoPlanThreshold?: number;
-    aiSprintPlanningEnabled?: boolean;
-    aiSprintLengthDays?: number;
-    aiGenerateExplanations?: boolean;
-    aiRecordPlanningMistakes?: boolean;
-    aiFinalCheck?: boolean;
-  } = {};
+function validateAiSettingsPatch(
+  patch: UpdateProjectAiSettingsInput,
+): UpdateProjectAiSettingsInput {
+  const data: UpdateProjectAiSettingsInput = {};
 
   if (patch.aiAutoPlanEnabled !== undefined) data.aiAutoPlanEnabled = patch.aiAutoPlanEnabled;
   if (patch.aiSprintPlanningEnabled !== undefined) {
@@ -177,6 +165,12 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   if (patch.aiFinalCheck !== undefined) {
     data.aiFinalCheck = patch.aiFinalCheck;
   }
+  // The planning cadence (MOTIR-12204): absent leaves the column alone (a
+  // never-written project keeps its NULL, which reads as `story`); a present value
+  // must be one of the two cadences, refused BEFORE the transaction opens.
+  if (patch.aiPlanningCadence !== undefined) {
+    data.aiPlanningCadence = validatePlanningCadence(patch.aiPlanningCadence);
+  }
 
   if (patch.aiAutoPlanThreshold !== undefined) {
     data.aiAutoPlanThreshold = validateBoundedInteger(
@@ -199,6 +193,21 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   }
 
   return data;
+}
+
+/**
+ * One of the two planning cadences. Anything else — another string, `null`, a
+ * number — is a caller bug, refused rather than coerced to the default: silently
+ * reading a typo as `story` would hide that the save did not take.
+ */
+function validatePlanningCadence(value: unknown): 'story' | 'subtask' {
+  if (!isPlanningCadence(value)) {
+    throw new InvalidAiSettingsError(
+      'aiPlanningCadence',
+      'The planning cadence must be "story" or "subtask".',
+    );
+  }
+  return value;
 }
 
 /**

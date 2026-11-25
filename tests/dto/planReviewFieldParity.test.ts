@@ -104,6 +104,11 @@ const NOT_A_CARD_FIELD: Readonly<Record<string, string>> = {
     'of it to the work item, so there is nothing for a reviewer to decide on. The review ' +
     'model reports it read-only as the written state (MOTIR-10496), add-only, for the run ' +
     'context and the plan surface — still not a field anyone decides.',
+  leftLaid:
+    'MOTIR-12207 — whether a walk LEFT the card laid on purpose (Planning cadence, or the ' +
+    "person's Stop): core-written planner state ABOUT the card, rewritten by every close. " +
+    'Approve reads it only to choose the `to_plan` status, so there is nothing for a reviewer ' +
+    'to decide on; `authorFinished` wins wherever both are read.',
 };
 
 describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {

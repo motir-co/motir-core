@@ -92,6 +92,9 @@ const USAGE_CREDITS = 'settings.production.usage.col.credits';
 // English example as it is rather than inventing a non-ASCII one.
 const HANDOVER_EMAIL_PLACEHOLDER = 'repositoryTakeover.awsHandover.ownerEmailPlaceholder';
 const HANDOVER_GITHUB_PLACEHOLDER = 'repositoryTakeover.awsHandover.githubOwnerPlaceholder';
+// The Planning cadence's « Story » option (MOTIR-12206): the glossary keeps the
+// work-item kind as « Story » in de, fr and nl, so the option label is the same word.
+const CADENCE_STORY = 'settings.aiPlanning.planner.cadence.story.label';
 
 const SAME_WORD: Record<string, string[]> = {
   zh: [
@@ -123,6 +126,7 @@ const SAME_WORD: Record<string, string[]> = {
     IDLE_SHAPE_CONTAINER,
   ],
   fr: [
+    CADENCE_STORY,
     ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
     LIVE_OPS_APP,
@@ -182,6 +186,7 @@ const SAME_WORD: Record<string, string[]> = {
   ],
   de: [
     HANDOVER_EMAIL_PLACEHOLDER,
+    CADENCE_STORY,
     ...USAGE_AMOUNTS,
     USAGE_CREDITS,
     LIVE_OPS_RELEASE,
@@ -197,6 +202,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.triage.title',
   ],
   nl: [
+    CADENCE_STORY,
     ...USAGE_AMOUNTS,
     USAGE_CREDITS,
     LIVE_OPS_RELEASE,

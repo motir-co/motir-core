@@ -11,6 +11,10 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
+import {
+  PLANNING_CADENCE_CONTEXT_FIELD,
+  resolvePlanningCadenceForJob,
+} from '@/lib/ai/planningCadence';
 import { PLAN_SESSION_ID_CONTEXT_FIELD, allocatePlanSessionId } from '@/lib/ai/planSessionContext';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
@@ -55,6 +59,7 @@ import type {
   PlanStepDto,
   PlanStepProviderWaitDto,
   PlanStepKindDto,
+  PlanWalkEndedByDto,
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
@@ -212,6 +217,13 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The planning cadence (MOTIR-12204) — sent on EVERY plan submit, resolved
+    // HERE at submit so the job keeps the cadence it started with; absent reads
+    // on the far side as `story`.
+    const planningCadence = await resolvePlanningCadenceForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     // The two languages (MOTIR-8741): reached only from a click, so the clicker is
     // the person who started it.
     const languages = await resolveTenantLanguages({
@@ -238,6 +250,7 @@ export const aiGenerationService = {
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
         [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
         [FINAL_CHECK_CONTEXT_FIELD]: finalCheck,
+        [PLANNING_CADENCE_CONTEXT_FIELD]: planningCadence,
         ...routeOnboardingContextFor(ctx.project),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
@@ -316,6 +329,13 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The planning cadence (MOTIR-12204) — sent on EVERY plan submit, resolved
+    // HERE at submit so the job keeps the cadence it started with; absent reads
+    // on the far side as `story`.
+    const planningCadence = await resolvePlanningCadenceForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     // The two languages (MOTIR-8741): a generation starts from a click, so the
     // clicker is the person who started the plan.
     const languages = await resolveTenantLanguages({
@@ -360,6 +380,8 @@ export const aiGenerationService = {
         [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
         // ALWAYS present, `false` when off (MOTIR-11264) — absent reads as ON.
         [FINAL_CHECK_CONTEXT_FIELD]: finalCheck,
+        // ALWAYS present, `story` included (MOTIR-12204) — absent reads as `story`.
+        [PLANNING_CADENCE_CONTEXT_FIELD]: planningCadence,
         // Is this the project's FIRST plan (MOTIR-4736)? Read off the marker the
         // service already holds — `ProjectContext.project` is a `ProjectDTO` and
         // `onboardingRanAt` rides the base DTO, so this costs no round-trip and
@@ -654,6 +676,11 @@ export const aiGenerationService = {
       walkIncomplete?: boolean;
       /** …because it RETURNED with a question (Bug MOTIR-11701): no failure is recorded. */
       walkReturned?: boolean;
+      /**
+       * …ON PURPOSE (Story MOTIR-12203 · MOTIR-12207): the Planning cadence or the
+       * person's Stop. Read on a FINAL append only; the close writes `planned`.
+       */
+      walkEndedBy?: PlanWalkEndedByDto;
     } = {},
   ): Promise<{
     planId: string;
@@ -740,6 +767,7 @@ export const aiGenerationService = {
         trailDiff: { proposalCount: createdIds.length },
         ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
         ...(opts.walkReturned ? { walkReturned: true } : {}),
+        ...(opts.walkEndedBy ? { walkEndedBy: opts.walkEndedBy } : {}),
       });
       return {
         planId: plan.id,
@@ -771,6 +799,7 @@ export const aiGenerationService = {
         authorModel: opts.authorModel ?? null,
         ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
         ...(opts.walkReturned ? { walkReturned: true } : {}),
+        ...(opts.walkEndedBy ? { walkEndedBy: opts.walkEndedBy } : {}),
       });
       planned = closed.status === 'planned';
       stopped = closed.status === 'stopped';

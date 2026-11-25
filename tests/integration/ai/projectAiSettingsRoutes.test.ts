@@ -96,6 +96,8 @@ describe('GET /api/projects/[key]/ai-settings', () => {
       aiRecordPlanningMistakes: true,
       // MOTIR-11264 — ON by default the same way.
       aiFinalCheck: true,
+      // MOTIR-12204 — `story` by default the same way.
+      aiPlanningCadence: 'story',
     });
   });
 
@@ -143,6 +145,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
       aiFinalCheck: false,
+      aiPlanningCadence: 'subtask',
     });
 
     expect(res.status).toBe(200);
@@ -154,6 +157,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
       aiFinalCheck: false,
+      aiPlanningCadence: 'subtask',
     });
 
     // Read back through the service — the write really landed on the columns.
@@ -242,6 +246,11 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(tooLong.status).toBe(422);
     await expect(tooLong.json()).resolves.toMatchObject({ field: 'aiSprintLengthDays' });
 
+    // MOTIR-12204 — a cadence outside the two is refused the same way.
+    const badCadence = await patch(fx.projectIdentifier, { aiPlanningCadence: 'epic' });
+    expect(badCadence.status).toBe(422);
+    await expect(badCadence.json()).resolves.toMatchObject({ field: 'aiPlanningCadence' });
+
     // Nothing was written by either rejected patch.
     const settings = await projectAiSettingsService.getAiSettings(
       fx.projectIdentifier,
@@ -250,6 +259,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(settings).toMatchObject({
       aiAutoPlanThreshold: 5,
       aiSprintLengthDays: 2,
+      aiPlanningCadence: 'story',
     });
   });
 
@@ -270,6 +280,30 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
 
     const write = await patch(fx.projectIdentifier, { aiAutoPlanEnabled: true });
     expect(write.status).toBe(403);
+  });
+
+  // MOTIR-12206 — the Settings › AI planning cadence control sends the cadence
+  // ALONE when it is the only change; the route forwards it, a reload reads it
+  // back, and a member without `ai:configure` cannot move it.
+  it('persists `aiPlanningCadence` sent alone, reads it back on a reload, and 403s a member', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
+    signInAs(fx);
+
+    const res = await patch(fx.projectIdentifier, { aiPlanningCadence: 'subtask' });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ aiPlanningCadence: 'subtask' });
+    const reload = await get(fx.projectIdentifier);
+    await expect(reload.json()).resolves.toMatchObject({ aiPlanningCadence: 'subtask' });
+
+    const member = await createTestUser({ email: 'member-cadence@example.com' });
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    });
+    signInAs(fx, member.id);
+    const refused = await patch(fx.projectIdentifier, { aiPlanningCadence: 'story' });
+    expect(refused.status).toBe(403);
+    const after = await get(fx.projectIdentifier);
+    await expect(after.json()).resolves.toMatchObject({ aiPlanningCadence: 'subtask' });
   });
 
   it('404s a cross-workspace key (no existence leak on the write path either)', async () => {

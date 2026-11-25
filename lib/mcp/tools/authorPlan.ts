@@ -22,13 +22,16 @@ import type {
   CorrectProposalKey,
   ProposedTodoInput,
   CorrectPlanBriefKey,
+  PlanWalkEndedByDto,
 } from '@/lib/dto/plans';
 import {
   MODIFY_KIND_TARGETS,
   PLAN_ITEM_REASON_MAX,
+  PLAN_WALK_ENDED_BY,
   PLANNER_RECORD_MAX_BYTES,
 } from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
+import { isLeftLaid } from '@/lib/plans/walkCompleteness';
 import { PLAN_CODE_READ_BATCH_MAX } from '@/lib/plans/planCodeRead';
 import { PLAN_LESSON_CALL_BATCH_MAX, PLAN_LESSON_CALL_KINDS } from '@/lib/plans/planLessonCall';
 import { PLAN_GAP_BATCH_MAX } from '@/lib/plans/planRaisedGap';
@@ -858,6 +861,20 @@ const addPlanItemsInputSchema = {
     .describe(
       'Set true together with `final: true` when your walk ENDED BEFORE EVERY CARD WAS WRITTEN — the person stopped it, an author session failed, a limit or an interruption cut it short. The plan then closes `stopped` instead of `planned`: it keeps every proposal, offers Resume and never Approve, and no approval gate is raised. Without it the close still writes `stopped` when a walked plan holds a card that is not written yet. Ignored without `final`.',
     ),
+  walkEndedBy: z
+    .enum(PLAN_WALK_ENDED_BY)
+    .optional()
+    .describe(
+      'Set together with `final: true` when your walk ENDED ON PURPOSE before every card was written: ' +
+        "`cadence` — the project's Planning cadence (`planningCadence` on `get_project_state`) stopped it " +
+        'where it was meant to stop; `person_stop` — the person pressed Stop and you have already ' +
+        "discarded your in-flight sessions' half-written changes (`update_plan_item` with " +
+        '`authorFinished: null` and the laid body; `withdraw_plan_proposal` for an unfinished `modify`). ' +
+        'The plan then closes `planned` and approvable, never `stopped`: every `add` without ' +
+        "`authorFinished` is stamped `leftLaid` and is created at the project's `to_plan` status on " +
+        'approve, and a committed card the walk listed but never re-authored is left as it stands. It ' +
+        'GOVERNS over `walkIncomplete`. Refused without `final`.',
+    ),
   revision: z
     .boolean()
     .optional()
@@ -1640,6 +1657,8 @@ interface AddPlanItemsArgs {
   final?: boolean;
   /** Bug MOTIR-11701: the walk ended unfinished — close `stopped`, never `planned`. */
   walkIncomplete?: boolean;
+  /** MOTIR-12207: the walk ended ON PURPOSE — close `planned`, not-authored cards `leftLaid`. */
+  walkEndedBy?: PlanWalkEndedByDto;
   revision?: boolean;
 }
 
@@ -1713,6 +1732,39 @@ function summarizeStopped(plan: PlanWithItemsDto): string {
       'planning rail, or with `plan.py --resume <run dir>`, which takes ' +
       '`hold_plan_revision` on it, writes only the unfinished cards and closes it again. ' +
       'Decline it to discard it instead.',
+  ].join('\n');
+}
+
+/** How many of a plan's `add`s a deliberate close stamped `leftLaid` (MOTIR-12207). */
+function countLeftLaid(items: readonly { op: string; proposedFields: unknown }[]): number {
+  return items.filter((item) => isLeftLaid(item as Parameters<typeof isLeftLaid>[0])).length;
+}
+
+/**
+ * The result of a close that carried `walkEndedBy` (Story MOTIR-12203 · MOTIR-12207):
+ * a deliberate end puts the plan in front of a reviewer with its not-authored cards
+ * left laid, or — over a plan holding nothing — discards it because nothing was
+ * finished. A guard rather than a fourth arm of {@link summarizeClose}: the plan can
+ * only be `planned`, `declined` or, if the verdict still owed a card it did not
+ * leave on purpose, `stopped`.
+ */
+function summarizeDeliberateClose(plan: PlanWithItemsDto, appended: number, laid: number): string {
+  if (plan.status === 'stopped') return summarizeStopped(plan);
+  if (plan.status !== 'planned') {
+    return (
+      `Closed plan ${plan.id} — ${plan.status}: it was DISCARDED because nothing was finished. ` +
+      'The walk ended on purpose before it proposed any card, so there is nothing for a ' +
+      'reviewer to decide and nobody will be shown it.'
+    );
+  }
+  return [
+    `Closed plan ${plan.id} — planned, ${plan.itemCount} proposal(s) in total` +
+      (appended > 0 ? `, ${appended} appended by this call` : '') +
+      `. The walk ended on purpose (${plan.walkEndedBy ?? 'deliberate'}), so the plan is in ` +
+      `front of a reviewer now, with ${laid} card(s) left laid: approving it creates them at ` +
+      'To plan, for a later planning pass to write.',
+    '',
+    PROPOSAL_GATE,
   ].join('\n');
 }
 
@@ -2043,6 +2095,14 @@ export async function runAddPlanItems(
   //     empty-and-not-final, but its message is about `generating` and would send
   //     the caller to `final: true`, which is the one thing this pairing must not
   //     do.
+  // `walkEndedBy` says how a CLOSE ended (MOTIR-12207), so a call that closes nothing
+  // cannot carry it — refused before anything is written, never silently dropped.
+  if (args.walkEndedBy !== undefined && args.final !== true) {
+    throw new InvalidProposalError(
+      '`walkEndedBy` is read only with `final: true`: it says how the walk that this close ' +
+        'ends ended. Send it on the batch that closes the plan.',
+    );
+  }
   if (args.revision && args.final) {
     throw new InvalidProposalError(
       '`revision: true` and `final: true` cannot be combined. `final` CLOSES a plan ' +
@@ -2128,19 +2188,27 @@ export async function runAddPlanItems(
   // rather than silently landing on a `planned` plan.
   const plan = args.final
     ? {
-        ...(await plansService.markPlanned(
-          args.planId,
-          ctx,
-          args.walkIncomplete === true ? { walkIncomplete: true } : {},
-        )),
+        ...(await plansService.markPlanned(args.planId, ctx, {
+          ...(args.walkIncomplete === true ? { walkIncomplete: true } : {}),
+          ...(args.walkEndedBy !== undefined ? { walkEndedBy: args.walkEndedBy } : {}),
+        })),
         items: appended.items,
       }
     : appended;
 
   return toolOk(
-    args.proposals.length === 0
-      ? summarizeClose(plan)
-      : summarizeAppend(plan, planItemIds, args.revision === true) +
+    args.walkEndedBy !== undefined
+      ? summarizeDeliberateClose(
+          plan,
+          args.proposals.length,
+          // The stamps are written BY the close, after the append's items were read.
+          plan.status === 'planned'
+            ? countLeftLaid((await plansService.getPlan(args.planId, ctx)).items)
+            : 0,
+        )
+      : args.proposals.length === 0
+        ? summarizeClose(plan)
+        : summarizeAppend(plan, planItemIds, args.revision === true) +
           linkWarningsText(appended.warnings) +
           rescopeWarningsText(appended.rescopeWarnings),
     derived(
@@ -2649,6 +2717,17 @@ const holdPlanRevisionInputSchema = {
         '(you stopped it, an author session failed, a limit was hit). The plan then closes ' +
         '`stopped` — Resume, never Approve — instead of back in front of a reviewer.',
     ),
+  walkEndedBy: z
+    .enum(PLAN_WALK_ENDED_BY)
+    .optional()
+    .describe(
+      "With `action: 'end'` only: the walk ended ON PURPOSE — `cadence` (the project's " +
+        'Planning cadence stopped it) or `person_stop` (the person pressed Stop and you ' +
+        "already discarded your in-flight sessions' changes). The plan then closes `planned` " +
+        'in front of a reviewer, never `stopped`: every `add` without `authorFinished` is ' +
+        "stamped `leftLaid` and is created at the project's `to_plan` status on approve. " +
+        'It governs over `walkIncomplete`. Refused with any other action.',
+    ),
 };
 
 interface HoldPlanRevisionArgs {
@@ -2657,6 +2736,8 @@ interface HoldPlanRevisionArgs {
   harness?: string;
   model?: string;
   walkIncomplete?: boolean;
+  /** MOTIR-12207: the walk ended on purpose — close `planned`, not-authored cards `leftLaid`. */
+  walkEndedBy?: PlanWalkEndedByDto;
 }
 
 /**
@@ -2673,6 +2754,13 @@ export async function runHoldPlanRevision(
     harness: args.harness ?? null,
     model: args.model ?? null,
   };
+  // `walkEndedBy` says how a CLOSE ended (MOTIR-12207); only `end` closes.
+  if (args.walkEndedBy !== undefined && args.action !== 'end') {
+    throw new InvalidProposalError(
+      "`walkEndedBy` is read only with `action: 'end'`: it says how the walk this revision " +
+        'closes ended. Send it when you end the revision.',
+    );
+  }
   if (args.action === 'start') {
     const lease = await plansService.acquireRevisionLease(args.planId, ctx, actor);
     return toolOk(
@@ -2709,17 +2797,29 @@ export async function runHoldPlanRevision(
   const released = await plansService.closeRevision(args.planId, ctx, actor, {
     trailDiff: { via: HOLD_PLAN_REVISION_TOOL_NAME },
     ...(args.walkIncomplete === true ? { walkIncomplete: true } : {}),
+    ...(args.walkEndedBy !== undefined ? { walkEndedBy: args.walkEndedBy } : {}),
   });
+  const laid =
+    args.walkEndedBy !== undefined && released.status === 'planned'
+      ? countLeftLaid((await plansService.getPlan(args.planId, ctx)).items)
+      : 0;
   return toolOk(
     released.status === 'declined'
-      ? `Ended the revision of plan ${args.planId}: it holds no proposals, so it was discarded ` +
+      ? args.walkEndedBy !== undefined
+        ? `Ended the revision of plan ${args.planId}: it was discarded because nothing was ` +
+          'finished — it holds no proposals, so there is nothing for a reviewer to decide.'
+        : `Ended the revision of plan ${args.planId}: it holds no proposals, so it was discarded ` +
           'rather than put in front of a reviewer.'
-      : released.status === 'stopped'
-        ? `Ended the revision of plan ${args.planId}: its walk is still owed a card, so it ` +
-          'closed `stopped` — not in front of a reviewer. Resume it to write the rest.'
-        : released.released
-          ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
-          : `Plan ${args.planId} was not held; nothing was written.`,
+      : args.walkEndedBy !== undefined && released.status === 'planned'
+        ? `Ended the revision of plan ${args.planId}: the walk ended on purpose ` +
+          `(${args.walkEndedBy}), so it closed \`planned\` in front of a reviewer with ${laid} ` +
+          'card(s) left laid — approving it creates them at To plan.'
+        : released.status === 'stopped'
+          ? `Ended the revision of plan ${args.planId}: its walk is still owed a card, so it ` +
+            'closed `stopped` — not in front of a reviewer. Resume it to write the rest.'
+          : released.released
+            ? `Released plan ${args.planId}: it is back in Waiting on you and can be decided.`
+            : `Plan ${args.planId} was not held; nothing was written.`,
     exempt(HOLD_PLAN_REVISION_TOOL_NAME, {
       planId: args.planId,
       action: args.action,

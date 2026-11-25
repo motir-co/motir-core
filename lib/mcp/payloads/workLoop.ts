@@ -21,7 +21,7 @@ import {
   workItemRepairClaimSchema,
 } from '@/lib/api/v1/workLoop/schema';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
-import { PLAN_DECISION_REASONS } from '@/lib/dto/plans';
+import { PLAN_DECISION_REASONS, PLAN_WALK_ENDED_BY } from '@/lib/dto/plans';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
@@ -256,6 +256,14 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
    */
   decisionReason: z.enum(PLAN_DECISION_REASONS).nullable(),
   /**
+   * How the plan's walk ended ON PURPOSE at its last close (Story MOTIR-12203 ·
+   * MOTIR-12207) — `cadence` (the project plans one subtask at a time) or
+   * `person_stop` (the person pressed Stop and the plan keeps what finished). An
+   * authoring agent reads why a plan holds cards left laid for a later plan rather
+   * than unwritten ones. Null when the last close was not a deliberate end.
+   */
+  walkEndedBy: z.enum(PLAN_WALK_ENDED_BY).nullable(),
+  /**
    * The planning SESSION the plan belongs to (MOTIR-6022; AMENDMENT 17 §5) — an
    * MCP-only field on the same extension point as the four above. An agent that
    * authored a plan reads back which conversation it hangs off; `create_plan`
@@ -393,6 +401,7 @@ export function presentMcpPlan(
     // MCP surface holds the rule on its own (MOTIR-7225).
     authorModel: redactNativeActor(plan.authorSource, plan.authorModel),
     decisionReason: plan.decisionReason,
+    walkEndedBy: plan.walkEndedBy,
     sessionId: plan.sessionId,
     sharpenedRequirement: plan.sharpenedRequirement,
     // Each proposal carries the folder it NAMES and that folder's path

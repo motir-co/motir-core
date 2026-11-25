@@ -250,9 +250,10 @@ describe('githubWebhookService — pull_request → status sync', () => {
   });
 
   it('an opened delivery for a card with NO legal edge to implemented leaves it alone (MOTIR-3005)', async () => {
-    // `todo → implemented` is deliberately not an edge — a card nobody started
-    // has nothing built. The delivery must still COMPLETE: a webhook is never
-    // failed by an unreachable transition, or the host retries it forever.
+    // The default workflow declares `todo → implemented` since MOTIR-12202, so the
+    // unreachable edge is a CUSTOM workflow's here: the project's own graph drops
+    // it. The delivery must still COMPLETE: a webhook is never failed by an
+    // unreachable transition, or the host retries it forever.
     // `classifyTransitionError` in `changeRequestStatusSync` is where that is
     // caught, and it reports the outcome rather than swallowing it silently.
     const s = await makeScenario('unreachable@example.com');
@@ -260,6 +261,13 @@ describe('githubWebhookService — pull_request → status sync', () => {
     // The fixture leaves the item at `in_progress`; send it back to the queue.
     await workItemsService.updateStatus(s.item.id, 'todo', s.ctx);
     expect(await statusOf(s.item.id)).toBe('todo');
+    await adminDb.workflowTransition.deleteMany({
+      where: {
+        projectId: s.project.id,
+        fromStatus: { key: 'todo' },
+        toStatus: { key: 'implemented' },
+      },
+    });
 
     const opened = await githubWebhookService.handleEvent(
       'pull_request',

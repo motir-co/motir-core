@@ -1,5 +1,6 @@
 import type { MigrateIndexRepoDto, MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
 import { resolveStarterLibraryContext } from '@/lib/ai/starterLibraryContext';
+import { resolvePlanningCadenceForJob } from '@/lib/ai/planningCadence';
 import type { ProjectPlanningGateDto, ProjectStateDto } from '@/lib/dto/projectState';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -224,6 +225,13 @@ export const projectStateService = {
       ),
     );
 
+    // The planning cadence (MOTIR-12204), through the SAME resolver the plan job
+    // envelope uses, so plan.py and the hosted planner never read two values.
+    const planningCadence = await resolvePlanningCadenceForJob(project.id, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+
     return {
       project: {
         key: project.identifier,
@@ -237,6 +245,7 @@ export const projectStateService = {
       onboarding: run ? toMigrateOnboardingDto(run) : null,
       starterLibrary,
       contentLanguage,
+      planningCadence,
     };
   },
 };

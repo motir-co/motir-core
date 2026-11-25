@@ -55,6 +55,13 @@ async function statusOf(id: string): Promise<string> {
   return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 }
 
+/** Remove ONE edge from the project's own graph — a workflow that does not declare it. */
+async function cutEdge(fx: WorkItemFixture, from: string, to: string): Promise<void> {
+  await adminDb.workflowTransition.deleteMany({
+    where: { projectId: fx.projectId, fromStatus: { key: from }, toStatus: { key: to } },
+  });
+}
+
 /** A story with N subtasks, every status pinned explicitly (the fixture writes
  *  through the repository, which skips the service's initial-status lookup). */
 async function storyWithChildren(fx: WorkItemFixture, statuses: string[]) {
@@ -587,8 +594,13 @@ describe('gates and no-ops', () => {
     // parent would sit in todo FOREVER — no later event changes this aggregate,
     // so it never gets another chance. (MOTIR-1623 surfaced this; it used to land
     // one rung short, at `in_progress`, and wait for a later event that in this
-    // shape never comes.)
+    // shape never comes.) The default workflow declares `todo → in_review` since
+    // MOTIR-12202 (a pull request delivering a To Do card), so the graph here is
+    // one without it — the shape this test is about — nor its sibling
+    // `todo → implemented`, the other stone that edge story added.
     const { story, children } = await storyWithChildren(fx, ['in_review']);
+    await cutEdge(fx, 'todo', 'in_review');
+    await cutEdge(fx, 'todo', 'implemented');
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
@@ -609,9 +621,10 @@ describe('gates and no-ops', () => {
     // project already has.
     //
     // And it takes the SHORTEST path, because each hop tries the highest stone
-    // first: `todo → in_progress` (in_review is illegal from todo), then straight
-    // to `done` over MOTIR-1625's edge. In_review is never stood on — a rung is a
-    // stepping stone only when the graph makes it one.
+    // first: `todo → in_review` (MOTIR-12202's edge; `todo → done` is illegal),
+    // then `in_review → done`. Before MOTIR-12202 the same rule took
+    // `todo → in_progress → done` — a rung is a stepping stone only when the graph
+    // makes it one, and the graph now offers the higher one.
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
 
@@ -620,7 +633,7 @@ describe('gates and no-ops', () => {
     expect(res).toMatchObject({
       outcome: 'rolled_up',
       toStatus: 'done',
-      via: ['in_progress'],
+      via: ['in_review'],
     });
     expect(await statusOf(story.id)).toBe('done');
     // ONE event for the NET move — a watcher is told once about one derivation.
@@ -700,6 +713,9 @@ describe('gates and no-ops', () => {
     await adminDb.workflowTransition.deleteMany({
       where: { projectId: fx.projectId, fromStatusId: idOf('in_progress') },
     });
+    // …and MOTIR-12202's two edges out of `todo`, which are paths above it too.
+    await cutEdge(fx, 'todo', 'in_review');
+    await cutEdge(fx, 'todo', 'implemented');
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 

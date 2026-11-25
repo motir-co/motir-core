@@ -66,6 +66,25 @@ export type PlanStatusDto = (typeof PLAN_STATUS_DTO_VALUES)[number];
 export type PlanDecisionReasonDto = 'reviewed' | 'discarded' | 'abandoned';
 
 /**
+ * HOW a walk that left cards laid ENDED ON PURPOSE (Story MOTIR-12203 ·
+ * MOTIR-12207). `cadence` — the project's Planning cadence stopped the walk where
+ * it was meant to stop; `person_stop` — the person pressed Stop, and the planner
+ * discarded its in-flight sessions' changes before closing. A close carrying it
+ * closes the plan `planned` and approvable, stamps every not-authored `add`
+ * {@link PlanItemProposedFields.leftLaid}, and approve creates those cards at
+ * `to_plan`. Absent, an incomplete walk closes `stopped` with Resume exactly as
+ * before (MOTIR-11701).
+ */
+export const PLAN_WALK_ENDED_BY = ['cadence', 'person_stop'] as const;
+
+export type PlanWalkEndedByDto = (typeof PLAN_WALK_ENDED_BY)[number];
+
+/** Whether `value` is one of {@link PLAN_WALK_ENDED_BY}. */
+export function isPlanWalkEndedBy(value: unknown): value is PlanWalkEndedByDto {
+  return typeof value === 'string' && (PLAN_WALK_ENDED_BY as readonly string[]).includes(value);
+}
+
+/**
  * The same vocabulary as a runtime list, for the schemas that need to enumerate
  * it (`mcpPlanSchema`). The `AssertTotal` beside it is what stops the two
  * drifting: adding a member to the union above without adding it here is a
@@ -452,6 +471,16 @@ export interface PlanItemProposedFields {
    * nothing of it to the work item, and no reader consults it yet.
    */
   authorFinished?: true | null;
+  /**
+   * The card was LEFT LAID ON PURPOSE (Story MOTIR-12203 · MOTIR-12207): a close
+   * carrying {@link PlanWalkEndedByDto} stamped it because its walk ended — by the
+   * project's Planning cadence or the person's Stop — before an author session
+   * wrote it. CORE-WRITTEN planner state, rewritten by every close: no append,
+   * deepen or correction door may set it. The walk verdict does not owe a
+   * `leftLaid` card, and approve creates it at the project's `to_plan` status.
+   * `authorFinished` wins wherever both are read.
+   */
+  leftLaid?: true | null;
 }
 
 /**
@@ -1210,6 +1239,12 @@ export interface PlanDto {
    * fourth kind of ending. See {@link PlanDecisionReasonDto}.
    */
   decisionReason: PlanDecisionReasonDto | null;
+  /**
+   * How the plan's walk ended ON PURPOSE at its last close (Story MOTIR-12203 ·
+   * MOTIR-12207), or null when that close was not a deliberate end. See
+   * {@link PlanWalkEndedByDto}.
+   */
+  walkEndedBy: PlanWalkEndedByDto | null;
   /**
    * The requirement a Sharpen session SETTLED on this plan (Task MOTIR-1101 ·
    * MOTIR-8183), or null when nobody has sharpened it. Written whole by the

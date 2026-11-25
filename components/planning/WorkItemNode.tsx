@@ -54,7 +54,7 @@ import {
   WorkItemBlockedTag,
   WorkItemStateTags,
 } from '@/components/workItems/WorkItemStateTags';
-import { isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
+import { isInToPlanStatus, isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
 // MOTIR-1194) — the card the reusable `ProjectRoadmapCanvas` renders for an epic /
@@ -126,8 +126,9 @@ export interface WorkItemNodeData {
   hasChildren?: boolean;
   /** HELD out of planning (MOTIR-11546, the level read's `planHeld`): a story
    *  blocked by an unfinished story with no subtasks yet. Not To plan — the card
-   *  shows as blocked, with no To plan pill, wash or Plan button. Optional: a node
-   *  built without it is not held. */
+   *  shows as blocked, with no To plan pill, wash or Plan button. A card in the
+   *  To plan STATUS is held by it too (MOTIR-12234): no Plan button, the blocked
+   *  tag. Optional: a node built without it is not held. */
   planHeld?: boolean;
   /** Why the card is stuck until something is repaired (MOTIR-6600) — a
    *  `ci_failed` / `changes_requested` card offers `motir fix` (MOTIR-10509). */
@@ -204,7 +205,8 @@ export type CopyActionReason = 'ci_failed' | 'changes_requested';
  *
  * | card                                          | button               |
  * | --------------------------------------------- | -------------------- |
- * | To plan                                       | Plan (the overlay)   |
+ * | To plan, not held                             | Plan (the overlay)   |
+ * | To plan, held                                 | none                 |
  * | fix reason `ci_failed` / `changes_requested`  | copy `motir fix`     |
  * | In Review                                     | copy `motir review`  |
  * | Ready epic                                    | none                 |
@@ -220,10 +222,19 @@ export type CopyActionReason = 'ci_failed' | 'changes_requested';
  * command — its stories are — and it carries no executor or type, so neither
  * `motir run` nor `motir guide` applies to it. Only the ready row looks at the
  * kind: To plan, fix and In Review keep their rows for every kind.
+ *
+ * TWO KINDS OF TO PLAN take the first row (MOTIR-12234): the COMPUTED To plan (a
+ * childless `todo` story or epic, `isToPlanItem`, never held) and the To plan
+ * STATUS (`to_plan`, any kind, children or none). A To plan card HELD out of
+ * planning (`planHeld`, the same `isPlanHeld` rule the Plan click's check
+ * refuses with) still takes the row — so no fix, review or run button stands in
+ * for planning — and draws nothing there: the card wears the blocked tag.
  */
 export function cardNextAction(input: {
   kind: IssueType;
   toPlan: boolean;
+  /** Held out of planning — the To plan row draws no button (MOTIR-12234). */
+  planHeld?: boolean;
   fixReason: WorkItemFixReasonDto | null | undefined;
   status: string;
   ready: boolean;
@@ -232,7 +243,7 @@ export function cardNextAction(input: {
 }): CardNextAction | null {
   const { options } = input;
   if (!options) return null;
-  if (input.toPlan) return options.plan ? { kind: 'plan' } : null;
+  if (input.toPlan) return options.plan && input.planHeld !== true ? { kind: 'plan' } : null;
   if (input.fixReason === 'ci_failed' || input.fixReason === 'changes_requested') {
     return { kind: 'copy', verb: 'fix', reason: input.fixReason };
   }
@@ -348,9 +359,15 @@ export function WorkItemNode({
   // flag is drawn only where the story would otherwise be To plan (a childless
   // `todo` story): a story that has started, has children or is Done cannot be
   // blocked from planning, the same rule the board card's `isBlockedNotStarted` keeps.
+  //
+  // A card in the To plan STATUS (MOTIR-12234) is held by the same rule and wears
+  // the same flag in the same place, its To plan status chip kept in the slot: the
+  // status is what asks for planning, so a held one is blocked from it exactly as
+  // a held To do story is.
+  const inToPlanStatus = isInToPlanStatus(item);
   const showHeldFlag =
     item.planHeld === true &&
-    isToPlanItem({ ...item, planHeld: false }) &&
+    (inToPlanStatus || isToPlanItem({ ...item, planHeld: false })) &&
     !crossBlocked &&
     item.status !== 'blocked';
   const showToPlanPill = slot === 'to-plan';
@@ -392,7 +409,9 @@ export function WorkItemNode({
               : 'normal';
   const action = cardNextAction({
     kind: item.kind,
-    toPlan,
+    // The To plan ROW (MOTIR-12234): the computed To plan, or the To plan status.
+    toPlan: toPlan || inToPlanStatus,
+    planHeld: item.planHeld === true,
     fixReason: item.fixReason,
     status: item.status,
     ready,
@@ -563,7 +582,7 @@ export function WorkItemNode({
       tab={here ? <HereTab /> : crossBlocked ? <BlockedTab sprint={crossBlockedSprint} /> : null}
       action={
         action === null ? null : action.kind === 'plan' ? (
-          <PlanNextAction itemKey={item.identifier} />
+          <PlanNextAction itemKey={item.identifier} replan={item.hasChildren === true} />
         ) : (
           <CopyNextAction itemKey={item.identifier} verb={action.verb} reason={action.reason} />
         )
@@ -978,8 +997,10 @@ function CopyNextAction({
 
 /** Open the planning overlay with this card as the target — the work-item context
  *  of the shipped launcher (`lib/planning/launcher.ts`), the same door
- *  `WorkItemPlanEntrance` opens, wearing its Plan face. A To plan story has no
- *  children, so there is no plan to re-plan (`hasPlan: false`).
+ *  `WorkItemPlanEntrance` opens, wearing its Plan face. A computed To plan story
+ *  has no children, so there is no plan to re-plan (`hasPlan: false`); a card in
+ *  the To plan STATUS that already has children opens as a RE-PLAN of that card
+ *  (`replan`, MOTIR-12234), the container face `planEntranceFace` gives it.
  *
  *  CHECKED FIRST (MOTIR-10544; design MOTIR-10543): the click asks the server
  *  whether the card can be planned (`usePlanCheck`) and only then opens the
@@ -988,7 +1009,7 @@ function CopyNextAction({
  *  Spinner for Sparkles, label unchanged, disabled, `aria-busy`), and stays shown
  *  even when the pointer leaves the card, so the state never vanishes mid-check.
  *  A modified click (⌘ / ctrl / shift / alt) still does nothing, as before. */
-function PlanNextAction({ itemKey }: { itemKey: string }) {
+function PlanNextAction({ itemKey, replan }: { itemKey: string; replan: boolean }) {
   const t = useTranslations('roadmap.canvas.node.action');
   const tEntrance = useTranslations('aiPlanning.entrance');
   const { checking, alert, check, closeAlert } = usePlanCheck();
@@ -1011,7 +1032,7 @@ function PlanNextAction({ itemKey }: { itemKey: string }) {
             e.stopPropagation();
             if (!isPlainPrimaryClick(e)) return;
             e.preventDefault();
-            void check(itemKey);
+            void check(itemKey, { hasPlan: replan });
           }}
           {...stopCanvasGesture}
         >

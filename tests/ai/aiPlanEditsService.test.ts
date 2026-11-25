@@ -47,6 +47,13 @@ vi.mock('@/lib/ai/finalCheck', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/finalCheck')>()),
   resolveFinalCheckForJob: vi.fn(),
 }));
+// The planning-cadence resolver (MOTIR-12204), mocked for the same reason: it
+// reads the settings row, covered against Postgres in
+// `tests/ai/planningCadence.test.ts`.
+vi.mock('@/lib/ai/planningCadence', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/planningCadence')>()),
+  resolvePlanningCadenceForJob: vi.fn(),
+}));
 // The session-id allocator (MOTIR-11294), pinned so a NEW session's id is a value the
 // assertions can name; the wire key stays the real constant.
 vi.mock('@/lib/ai/planSessionContext', async (importOriginal) => ({
@@ -75,6 +82,10 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
+import {
+  PLANNING_CADENCE_CONTEXT_FIELD,
+  resolvePlanningCadenceForJob,
+} from '@/lib/ai/planningCadence';
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ProjectContext } from '@/lib/projects';
@@ -157,6 +168,7 @@ beforeEach(() => {
   vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
   // Default ON, which is what an untouched project resolves to (MOTIR-11264).
   vi.mocked(resolveFinalCheckForJob).mockResolvedValue(true);
+  vi.mocked(resolvePlanningCadenceForJob).mockResolvedValue('story');
   vi.mocked(plansService.createPlan).mockResolvedValue({ id: 'plan_1' } as PlanDto);
 });
 
@@ -736,6 +748,57 @@ describe('aiPlanEditsService — the final-check setting rides every plan-edit e
   });
 });
 
+// ─── The planning cadence on the wire (MOTIR-12204) ───────────────────────────
+// motir-ai reads how far to walk ONLY from `context.planningCadence`, and an
+// absent field reads as `story`, so every plan-edit submit sends it, `story`
+// included, resolved at THIS submit.
+describe('aiPlanEditsService — the planning cadence rides every plan-edit envelope', () => {
+  const WIRE_KEY = 'planningCadence';
+
+  const CASES: Array<{
+    name: string;
+    run: (c: ProjectContext) => Promise<{ jobId: string; planId: string }>;
+  }> = [
+    { name: 'submitAugment', run: (c) => aiPlanEditsService.submitAugment('add a login flow', c) },
+    {
+      name: 'submitContextual',
+      run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
+    },
+    { name: 'submitExpand', run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c) },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  for (const c of CASES) {
+    it(`${c.name} sends story — PRESENT, not omitted — for a project on today's walk`, async () => {
+      vi.mocked(resolvePlanningCadenceForJob).mockResolvedValue('story');
+      await c.run(ctx);
+      const context = vi.mocked(submitJob).mock.calls[0]![2] as Record<string, unknown>;
+      expect(context[WIRE_KEY]).toBe('story');
+      expect(Object.prototype.hasOwnProperty.call(context, WIRE_KEY)).toBe(true);
+    });
+
+    it(`${c.name} sends subtask when the project plans one step at a time`, async () => {
+      vi.mocked(resolvePlanningCadenceForJob).mockResolvedValue('subtask');
+      await c.run(ctx);
+      const context = vi.mocked(submitJob).mock.calls[0]![2] as Record<string, unknown>;
+      expect(context[WIRE_KEY]).toBe('subtask');
+      expect(resolvePlanningCadenceForJob).toHaveBeenCalledWith('pj_1', {
+        userId: 'user_1',
+        workspaceId: 'ws_1',
+      });
+    });
+  }
+
+  it('the exported constant IS the wire string', () => {
+    expect(PLANNING_CADENCE_CONTEXT_FIELD).toBe(WIRE_KEY);
+  });
+});
+
 // ─── ONE PLANNING KIND ON THE WIRE (MOTIR-4304 · ADR §6 step 2) ──────────────
 //
 // Every planning submit in the product sends `plan`. The five old kinds were
@@ -861,8 +924,9 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     // that says so is not what this guard forbids; a field that vanishes from a
     // refactor still is. `recordPlanningMistakes` was the first such amendment
     // (MOTIR-4343), `onboarding` the second (MOTIR-4736), `starterLibrary` the
-    // third (MOTIR-11041), `finalCheck` the fourth (MOTIR-11264) and `planSessionId`
-    // the fifth (MOTIR-11294). Amending the pin
+    // third (MOTIR-11041), `finalCheck` the fourth (MOTIR-11264), `planSessionId`
+    // the fifth (MOTIR-11294) and `planningCadence` the sixth (MOTIR-12204).
+    // Amending the pin
     // and silently loosening it to `toMatchObject` look similar and are opposite
     // in kind: the exact equality is the whole instrument, and it stays.
     expect(context).toEqual({
@@ -870,6 +934,7 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       generateExplanations: true,
       recordPlanningMistakes: false,
       finalCheck: false,
+      planningCadence: 'story',
       // `true`: the mocked project carries a null `onboardingRanAt` (above).
       onboarding: true,
       code: { repos: ['owner/repo'] },
@@ -903,6 +968,8 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
       recordPlanningMistakes: true,
       // Never conditional (MOTIR-11264): absent reads on the far side as ON.
       finalCheck: true,
+      // Never conditional (MOTIR-12204): absent reads on the far side as `story`.
+      planningCadence: 'story',
       onboarding: true,
       // Not conditional either (MOTIR-11041): `[]` is an answer, and a project with
       // no repositories is the case it is for.

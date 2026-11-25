@@ -189,6 +189,9 @@ describe('POST /api/ai/plan/generate', () => {
       generateExplanations: false,
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The project's planning cadence (MOTIR-12203) — `story` for a project
+      // that has never touched the setting, sent on every plan job.
+      planningCadence: 'story',
       // The generation's NEW session, allocated before the submit (MOTIR-11294).
       planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
@@ -236,6 +239,9 @@ describe('POST /api/ai/plan/generate', () => {
       generateExplanations: true,
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The project's planning cadence (MOTIR-12203) — `story` for a project
+      // that has never touched the setting, sent on every plan job.
+      planningCadence: 'story',
       // The generation's NEW session, allocated before the submit (MOTIR-11294).
       planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's

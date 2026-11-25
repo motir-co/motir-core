@@ -3790,7 +3790,21 @@
         "dataPracticeLink": "查看各服务商的公开说明",
         "finalCheckLabel": "运行最终检查",
         "finalCheckHint": "在提议计划之前，Motir AI 会按构建顺序重新阅读其工作项，检查每个工作项都能基于前面工作项交付的内容来构建，并修复所发现的缺陷。对于大型计划，这可能需要很多分钟。",
-        "finalCheckOff": "此项目的计划会在没有最终检查的情况下提议。每个计划的摘要都会说明它未经检查。"
+        "finalCheckOff": "此项目的计划会在没有最终检查的情况下提议。每个计划的摘要都会说明它未经检查。",
+        "cadenceLabel": "规划节奏",
+        "cadenceHint": "Motir AI 在把计划交给你审阅之前要规划到哪一步。",
+        "cadenceDefault": "默认",
+        "cadence": {
+          "story": {
+            "label": "故事",
+            "help": "一次规划整个故事：铺开工作并写好其中每一项，与目前的规划方式相同。"
+          },
+          "subtask": {
+            "label": "子任务",
+            "help": "规划一步后停下。其余部分只按标题铺开，以“待规划”状态等待之后的规划。"
+          }
+        },
+        "cadenceScopeNote": "更改适用于保存之后开始的计划。已在进行中的计划保持其开始时的节奏。"
       },
       "lessonCapture": {
         "title": "规划失误",
@@ -4925,6 +4939,15 @@
           "medium": "中型",
           "large": "大型"
         },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        },
         "total": "本期已扣额度",
         "footnote": "1 额度为 1 个 Linux 等效分钟。每天的用量在 UTC 午夜后扣费一次，向上取整到整数额度，因此今天的用量尚未计入总额。",
         "noRelease": "尚无用量。第一个发布上线后开始计算用量。",
@@ -4936,15 +4959,6 @@
           "bodyCannotSuspend": "此应用以无法暂停的 AWS 容器运行，因此会一直运行并持续消耗额度，直到余额充值。Motir 绝不会因为额度不足而停止或删除生产应用。",
           "topUp": "充值额度",
           "member": "组织所有者或管理员可以充值额度。"
-        },
-        "amount": {
-          "hours": "{value} h",
-          "gbSeconds": "{value} GB-s",
-          "count": "{value}",
-          "vcpuHours": "{value} vCPU-h",
-          "gbHours": "{value} GB-h",
-          "cuHours": "{value} CU-h",
-          "acuHours": "{value} ACU-h"
         }
       },
       "handover": {

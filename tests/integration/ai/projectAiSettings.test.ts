@@ -77,6 +77,8 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
       aiRecordPlanningMistakes: true,
       // ON the same way: a NULL column the mapper resolves (MOTIR-11264).
       aiFinalCheck: true,
+      // `story` the same way: a NULL column the mapper resolves (MOTIR-12204).
+      aiPlanningCadence: 'story',
     });
   });
 
@@ -97,6 +99,9 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
     expect(row.aiRecordPlanningMistakes).toBeNull();
     // MOTIR-11264: NULL on the row too, for the same reason.
     expect(row.aiFinalCheck).toBeNull();
+    // MOTIR-12204: NULL on the row too — the migration adds no default and
+    // updates no row.
+    expect(row.aiPlanningCadence).toBeNull();
   });
 
   it('the mapper projects the row (and the repository projection) to the same DTO', async () => {
@@ -125,6 +130,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
         aiGenerateExplanations: true,
         aiRecordPlanningMistakes: false,
         aiFinalCheck: false,
+        aiPlanningCadence: 'subtask',
       },
       ctxFor(fx),
     );
@@ -137,6 +143,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
       aiFinalCheck: false,
+      aiPlanningCadence: 'subtask',
     });
     // Committed, not just returned.
     const reread = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
@@ -290,6 +297,79 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
       ctxFor(fx),
     );
     expect(backOn.aiFinalCheck).toBe(true);
+  });
+
+  // ── MOTIR-12204 · the planning cadence ────────────────────────────────────────
+
+  it('the planning cadence: a row that predates the column reads as story', async () => {
+    const fx = await makeFixture();
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { aiPlanningCadence: null },
+    });
+
+    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
+    expect(settings.aiPlanningCadence).toBe('story');
+  });
+
+  it('the planning cadence: subtask persists, story persists in turn, and another field leaves it alone', async () => {
+    const fx = await makeFixture();
+    const cadenceOnRow = async () =>
+      (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })).aiPlanningCadence;
+
+    // Another field first: the column stays NULL rather than acquiring a story.
+    await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiSprintLengthDays: 4 },
+      ctxFor(fx),
+    );
+    expect(await cadenceOnRow()).toBeNull();
+
+    const subtask = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiPlanningCadence: 'subtask' },
+      ctxFor(fx),
+    );
+    expect(subtask.aiPlanningCadence).toBe('subtask');
+    expect(await cadenceOnRow()).toBe('subtask');
+
+    // A later patch of another field leaves the saved cadence as it was.
+    const still = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiAutoPlanEnabled: true },
+      ctxFor(fx),
+    );
+    expect(still.aiPlanningCadence).toBe('subtask');
+
+    const story = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiPlanningCadence: 'story' },
+      ctxFor(fx),
+    );
+    expect(story.aiPlanningCadence).toBe('story');
+    expect(await cadenceOnRow()).toBe('story');
+  });
+
+  it('the planning cadence: any other value is refused naming the field, and nothing is written', async () => {
+    const fx = await makeFixture();
+
+    for (const bad of ['epic', 'Subtask', '', null, 1] as unknown[]) {
+      const err = await projectAiSettingsService
+        .updateAiSettings(
+          fx.projectIdentifier,
+          { aiPlanningCadence: bad as 'story', aiAutoPlanEnabled: true },
+          ctxFor(fx),
+        )
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(InvalidAiSettingsError);
+      expect((err as InvalidAiSettingsError).field).toBe('aiPlanningCadence');
+    }
+
+    // Refused BEFORE the transaction: the valid field riding the same patch did
+    // not land either.
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(row.aiPlanningCadence).toBeNull();
+    expect(row.aiAutoPlanEnabled).toBe(false);
   });
 
   it('accepts the bound VALUES themselves (the range is inclusive)', async () => {
@@ -455,10 +535,21 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
       ),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
 
+    // MOTIR-12204: and the planning cadence — a member reads it, cannot save it.
+    expect(read.aiPlanningCadence).toBe('story');
+    await expect(
+      projectAiSettingsService.updateAiSettings(
+        fx.projectIdentifier,
+        { aiPlanningCadence: 'subtask' },
+        ctxFor(fx, member.id),
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
     const after = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
     expect(after.aiAutoPlanEnabled).toBe(false);
     expect(after.aiRecordPlanningMistakes).toBe(true);
     expect(after.aiFinalCheck).toBe(true);
+    expect(after.aiPlanningCadence).toBe('story');
   });
 
   it('names `ai:configure` on the refusal — not the umbrella, and not `ai:plan`', async () => {

@@ -142,7 +142,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the forty-six default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5643 + MOTIR-12174)', () => {
+  it('declares exactly the forty-eight default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5643 + MOTIR-12174 + MOTIR-12202)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -188,9 +188,9 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         // MOTIR-3003: built, waiting on checks. IN from the two states a card
         // can be in when its pull request opens; OUT to the five it can reach —
         // `in_review` is the one CI green performs, and the other four are
-        // rework, block, cancel and the no-review-gate close. Deliberately NOT
-        // from `todo` (a card nobody started has nothing built) and not from
-        // `in_review` (the promotion runs one way).
+        // rework, block, cancel and the no-review-gate close. Not from
+        // `in_review` (the promotion runs one way). (`todo` was deliberately
+        // left out here too, until MOTIR-12202 — below.)
         'in_progress>implemented',
         'blocked>implemented',
         'implemented>in_review',
@@ -222,16 +222,23 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'to_plan>planning',
         'to_plan>todo',
         'to_plan>cancelled',
+        // MOTIR-12202: a pull request delivering a card that still reads To Do.
+        // Linking or opening a ready one records it built; a green set takes it
+        // straight to review. Still NOT `todo>done` (the merge completes it from
+        // where those two left it) and NOT `blocked>in_review` (a person's block
+        // is never lifted by a pull request).
+        'todo>implemented',
+        'todo>in_review',
       ]),
     );
-    expect(EDGES).toHaveLength(46);
+    expect(EDGES).toHaveLength(48);
   });
 
-  it('partitions the 10×10 grid into 46 edges + 10 self-loops + 44 non-edges', () => {
+  it('partitions the 10×10 grid into 48 edges + 10 self-loops + 42 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(44);
+    expect(NON_EDGES).toHaveLength(42);
   });
 });
 

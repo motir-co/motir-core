@@ -3790,7 +3790,21 @@
         "dataPracticeLink": "各プロバイダーの方針",
         "finalCheckLabel": "最終確認を実行する",
         "finalCheckHint": "計画を提案する前に、Motir AI はその作業項目を構築順にもう一度読み、各項目がそれより前の項目の成果の上に構築できることを確認し、見つかった問題を修正します。大きな計画では何分もかかることがあります。",
-        "finalCheckOff": "このプロジェクトの計画は最終確認なしで提案されます。各計画の概要には、確認されていないことが記載されます。"
+        "finalCheckOff": "このプロジェクトの計画は最終確認なしで提案されます。各計画の概要には、確認されていないことが記載されます。",
+        "cadenceLabel": "計画の進め方",
+        "cadenceHint": "Motir AI がレビュー用に計画を渡す前に、どこまで計画するかを決めます。",
+        "cadenceDefault": "既定",
+        "cadence": {
+          "story": {
+            "label": "ストーリー",
+            "help": "ストーリー全体を一度に計画します。作業を並べ、そのすべてを書き上げます。現在の計画と同じ動作です。"
+          },
+          "subtask": {
+            "label": "サブタスク",
+            "help": "1 ステップを計画して止まります。残りはタイトルだけが並べられ、「計画待ち」として後の計画で扱われるのを待ちます。"
+          }
+        },
+        "cadenceScopeNote": "変更は、保存後に開始される計画に適用されます。すでに実行中の計画は、開始時の進め方のまま続きます。"
       },
       "lessonCapture": {
         "title": "計画のミス",
@@ -4925,6 +4939,15 @@
           "medium": "中",
           "large": "大"
         },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        },
         "total": "今期に請求されたクレジット",
         "footnote": "1 クレジットは Linux 換算で 1 分です。各日の使用量は UTC の午前 0 時以降に 1 回だけ、整数のクレジットに切り上げて請求されるため、今日の分はまだ合計に含まれていません。",
         "noRelease": "まだ使用量はありません。最初のリリースが公開されると使用量が発生します。",
@@ -4936,15 +4959,6 @@
           "bodyCannotSuspend": "このアプリは停止できない AWS コンテナとして動作しているため、常時稼働を続け、残高がチャージされるまでクレジットを消費し続けます。Motir がクレジット不足を理由に本番アプリを停止や削除することはありません。",
           "topUp": "クレジットをチャージ",
           "member": "クレジットをチャージできるのは組織のオーナーまたは管理者です。"
-        },
-        "amount": {
-          "hours": "{value} h",
-          "gbSeconds": "{value} GB-s",
-          "count": "{value}",
-          "vcpuHours": "{value} vCPU-h",
-          "gbHours": "{value} GB-h",
-          "cuHours": "{value} CU-h",
-          "acuHours": "{value} ACU-h"
         }
       },
       "handover": {

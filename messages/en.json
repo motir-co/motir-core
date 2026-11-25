@@ -3790,7 +3790,21 @@
         "dataPracticeLink": "What each provider states",
         "finalCheckLabel": "Run the final check",
         "finalCheckHint": "Before a plan is proposed, Motir AI reads its work items again in build order, checks that each can be built on what the items before it deliver, and fixes what it finds. On a large plan this can take many minutes.",
-        "finalCheckOff": "Plans for this project are proposed without the final check. Each plan’s summary says it was not checked."
+        "finalCheckOff": "Plans for this project are proposed without the final check. Each plan’s summary says it was not checked.",
+        "cadenceLabel": "Planning cadence",
+        "cadenceHint": "How far Motir AI plans before it hands a plan over for your review.",
+        "cadenceDefault": "Default",
+        "cadence": {
+          "story": {
+            "label": "Story",
+            "help": "Plans a whole story at a time: it lays the work out and writes every piece of it, as planning works today."
+          },
+          "subtask": {
+            "label": "Subtask",
+            "help": "Plans one step, then stops. The rest is laid out by title and waits as To plan for a later planning pass."
+          }
+        },
+        "cadenceScopeNote": "A change applies to plans started after you save it. A plan that is already running keeps the cadence it started with."
       },
       "lessonCapture": {
         "title": "Planning mistakes",

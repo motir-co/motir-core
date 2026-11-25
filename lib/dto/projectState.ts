@@ -1,6 +1,7 @@
 import type { MigrateIndexStatusDto, MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import type { SeedRegistryEntryDto } from '@/lib/dto/seedRegistry';
+import type { PlanningCadence } from '@/lib/ai/planningCadence';
 import type { Locale } from '@/lib/i18n/locales';
 
 // The project's PLANNING PRECONDITIONS as one read (MOTIR-1968) — the
@@ -145,4 +146,12 @@ export interface ProjectStateDto {
    * translated into it. A stored value that cannot be read answers `en`.
    */
   contentLanguage: Locale;
+  /**
+   * The project's PLANNING CADENCE (Story MOTIR-12203 · MOTIR-12204) — `story`
+   * (today's walk) or `subtask` (plan one step and stop), resolved through
+   * `resolvePlanningCadenceForJob`: the same value a hosted plan job is handed on
+   * its context as `planningCadence`, so plan.py reads it here, once, before its
+   * walk starts. A project that never set it answers `story`.
+   */
+  planningCadence: PlanningCadence;
 }

@@ -304,3 +304,37 @@ describe('plannabilityService.heldStoryIds', () => {
     },
   );
 });
+
+// THE TO PLAN STATUS (MOTIR-12234): a card a corrected decision moved into
+// `to_plan` (in the `in_progress` category) may already have children. The level
+// read computes `planHeld` for it by the same rule, so the canvas's Plan button,
+// its blocked tag and the Plan click's check agree about it.
+describe('a story in the To plan status', () => {
+  it(
+    'with children, is held by an open childless story and released by its first subtask — the check agrees',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await item('story', 'Export a sprint report');
+      await item('subtask', 'Render the PDF', card.id);
+      await setStatus(card, 'to_plan');
+      const blocker = await item('story', 'Store each sprint report as a snapshot');
+      await blockedBy(card, blocker);
+
+      const held = await rootNode(card);
+      expect(held.status).toBe('to_plan');
+      expect(held.statusCategory).toBe('in_progress');
+      expect(held.hasChildren).toBe(true);
+      expect(held.planHeld).toBe(true);
+      expect(
+        (await plannabilityService.checkPlannable(fx.projectId, card.identifier, fx.ctx)).plannable,
+      ).toBe(false);
+
+      await item('subtask', 'Write the snapshot table', blocker.id);
+      expect((await rootNode(card)).planHeld).toBe(false);
+      // The check does not refuse a card for being in the To plan status.
+      expect(
+        (await plannabilityService.checkPlannable(fx.projectId, card.identifier, fx.ctx)).plannable,
+      ).toBe(true);
+    },
+  );
+});
