@@ -7,6 +7,7 @@
 import type { GuideContext } from '@/lib/ai/guideWorkItem';
 import type { TranslateJobInput } from '@/lib/ai/translate';
 import type { Locale } from '@/lib/i18n/locales';
+import type { PlanningCadence } from '@/lib/ai/planningCadence';
 
 export const ENVELOPE_VERSION = 'v1' as const;
 
@@ -612,6 +613,19 @@ export interface JobContextBag {
   // plan edit, revise and resume). The KEY is spelled once, in
   // `FINAL_CHECK_CONTEXT_FIELD` (`lib/ai/finalCheck.ts`).
   finalCheck?: boolean;
+  // HOW FAR THIS PROJECT'S PLANS WALK (Story MOTIR-12203 · MOTIR-12204 producer
+  // ↔ the hosted planner's cadence walk) — the wire form of
+  // `Project.aiPlanningCadence`. `story` is today's walk (lay a level, author every
+  // child, drill the first child); `subtask` plans one step and stops, leaving the
+  // cards it laid and did not author to land at To plan on approve.
+  //
+  // Every planning producer sends it UNCONDITIONALLY, `story` included: ABSENT
+  // reads as `story` on the far side, and that fallback exists for version skew
+  // alone. Resolved at SUBMIT time and never stored on the plan, so a running plan
+  // keeps the value it was submitted with. Sent wherever `finalCheck` is sent. The
+  // KEY is spelled once, in `PLANNING_CADENCE_CONTEXT_FIELD`
+  // (`lib/ai/planningCadence.ts`).
+  planningCadence?: PlanningCadence;
   // Is this the project's FIRST plan? Mirrors `Project.onboardingRanAt == null`
   // (the immutable onboarding marker of Subtask 7.4 / MOTIR-1264, stamped by
   // `plansService.approvePlan`) — MOTIR-4736 producer ↔ MOTIR-4737 consumer.

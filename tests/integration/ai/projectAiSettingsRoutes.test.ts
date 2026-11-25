@@ -96,6 +96,8 @@ describe('GET /api/projects/[key]/ai-settings', () => {
       aiRecordPlanningMistakes: true,
       // MOTIR-11264 — ON by default the same way.
       aiFinalCheck: true,
+      // MOTIR-12204 — `story` by default the same way.
+      aiPlanningCadence: 'story',
     });
   });
 
@@ -143,6 +145,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
       aiFinalCheck: false,
+      aiPlanningCadence: 'subtask',
     });
 
     expect(res.status).toBe(200);
@@ -154,6 +157,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
       aiFinalCheck: false,
+      aiPlanningCadence: 'subtask',
     });
 
     // Read back through the service — the write really landed on the columns.
@@ -242,6 +246,11 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(tooLong.status).toBe(422);
     await expect(tooLong.json()).resolves.toMatchObject({ field: 'aiSprintLengthDays' });
 
+    // MOTIR-12204 — a cadence outside the two is refused the same way.
+    const badCadence = await patch(fx.projectIdentifier, { aiPlanningCadence: 'epic' });
+    expect(badCadence.status).toBe(422);
+    await expect(badCadence.json()).resolves.toMatchObject({ field: 'aiPlanningCadence' });
+
     // Nothing was written by either rejected patch.
     const settings = await projectAiSettingsService.getAiSettings(
       fx.projectIdentifier,
@@ -250,6 +259,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(settings).toMatchObject({
       aiAutoPlanThreshold: 5,
       aiSprintLengthDays: 2,
+      aiPlanningCadence: 'story',
     });
   });
 

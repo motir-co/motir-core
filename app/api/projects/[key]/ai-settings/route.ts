@@ -91,6 +91,10 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   if ('aiFinalCheck' in raw) {
     patch.aiFinalCheck = raw.aiFinalCheck as boolean;
   }
+  if ('aiPlanningCadence' in raw) {
+    patch.aiPlanningCadence =
+      raw.aiPlanningCadence as UpdateProjectAiSettingsInput['aiPlanningCadence'];
+  }
 
   try {
     const settings = await projectAiSettingsService.updateAiSettings(key, patch, ctx);

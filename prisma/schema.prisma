@@ -2306,6 +2306,19 @@ model Project {
   /// "predates the field" state is constructible in a test. Only an explicit
   /// `false` turns the final check off.
   aiFinalCheck                     Boolean?              @map("ai_final_check")
+  /// PLANNING CADENCE — how far the AI planner plans before it hands a plan over
+  /// for review (Story MOTIR-12203 · MOTIR-12204): `story` (today's walk — lay a
+  /// level, author every child, drill the first child) or `subtask` (plan one
+  /// step and stop). The value reaches motir-ai on every plan job's context as
+  /// `planningCadence`, and plan.py on `get_project_state` — core config is never
+  /// read across the repository boundary.
+  ///
+  /// NULLABLE WITH NO `@default`, for exactly the reasons `aiFinalCheck` directly
+  /// above gives: NULL means "never written", every reader resolves it through
+  /// {@link resolvePlanningCadence} to **story**, so every project that predates
+  /// the column plans as it did with no backfill, and the never-written state is
+  /// constructible in a test. Only an explicit `subtask` changes the walk.
+  aiPlanningCadence                AiPlanningCadence?    @map("ai_planning_cadence")
   /// WHO OWNS the project's repository set (`docs/decisions/project-repository-set.md`
   /// §3, MOTIR-1780) — `user` (created in the user's own account/org, theirs from
   /// the first commit) or `motir` (created under Motir's org, recorded as
@@ -2818,6 +2831,14 @@ model ProjectKeyAlias {
 /// The role-precedence composition + the access gate that reads this land in
 /// 6.10.4. Closed + stable set → a Postgres enum, the same shape as
 /// `WorkspaceRole`.
+/// The project AI planning setting "Planning cadence" (Story MOTIR-12203 ·
+/// MOTIR-12204) — see `Project.aiPlanningCadence`. `story` is today's walk and
+/// the default a NULL column resolves to; `subtask` plans one step and stops.
+enum AiPlanningCadence {
+  story
+  subtask
+}
+
 enum OrganizationRole {
   owner
   admin

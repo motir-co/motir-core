@@ -7,6 +7,10 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { FINAL_CHECK_CONTEXT_FIELD, resolveFinalCheckForJob } from '@/lib/ai/finalCheck';
+import {
+  PLANNING_CADENCE_CONTEXT_FIELD,
+  resolvePlanningCadenceForJob,
+} from '@/lib/ai/planningCadence';
 import { PLAN_SESSION_ID_CONTEXT_FIELD, allocatePlanSessionId } from '@/lib/ai/planSessionContext';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
@@ -272,6 +276,12 @@ async function buildPlanningJobContext(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // How far this plan walks (MOTIR-12204)? ALWAYS sent, resolved at THIS submit:
+  // a resume or revise carries the project's current value, never a stored one.
+  const planningCadence = await resolvePlanningCadenceForJob(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
   // The plan's SHARPENED requirement as the run's own (Task MOTIR-1101 · MOTIR-8450):
   // a submit that writes an existing plan carries what a Grill me session settled on
   // it as `requirement`, which satisfies PART 1 on the far side, so the run does not
@@ -285,6 +295,7 @@ async function buildPlanningJobContext(
       generateExplanations: ctx.project.aiGenerateExplanations,
       [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
       [FINAL_CHECK_CONTEXT_FIELD]: finalCheck,
+      [PLANNING_CADENCE_CONTEXT_FIELD]: planningCadence,
       // Is this the project's FIRST plan (MOTIR-4736)?
       [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
       ...(code ? { code } : {}),

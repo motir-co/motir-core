@@ -7,6 +7,8 @@
 // envelope (Story 7.4) and is MIRRORED here so the panel that edits the AI
 // settings group reads + writes all of them through ONE contract.
 
+import type { PlanningCadence } from '@/lib/ai/planningCadence';
+
 /**
  * A project's AI-planning configuration as the API returns it.
  *
@@ -25,6 +27,10 @@
  * - `aiFinalCheck` — whether this project's plans run the planner's final check
  *   before they are proposed (Story MOTIR-11262 · MOTIR-11264). Resolved the
  *   same way: the nullable column reads as `true` until a project turns it off.
+ * - `aiPlanningCadence` — how far the planner plans before it hands a plan over
+ *   for review (Story MOTIR-12203 · MOTIR-12204): `story` (today's walk) or
+ *   `subtask` (one step). Resolved the same way: the nullable column reads as
+ *   `story` until a project chooses `subtask`.
  */
 export interface ProjectAiSettingsDto {
   aiAutoPlanEnabled: boolean;
@@ -34,6 +40,7 @@ export interface ProjectAiSettingsDto {
   aiGenerateExplanations: boolean;
   aiRecordPlanningMistakes: boolean;
   aiFinalCheck: boolean;
+  aiPlanningCadence: PlanningCadence;
 }
 
 /**
@@ -53,4 +60,5 @@ export interface UpdateProjectAiSettingsInput {
   aiGenerateExplanations?: boolean;
   aiRecordPlanningMistakes?: boolean;
   aiFinalCheck?: boolean;
+  aiPlanningCadence?: PlanningCadence;
 }

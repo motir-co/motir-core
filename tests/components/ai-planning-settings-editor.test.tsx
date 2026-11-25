@@ -44,6 +44,7 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     aiRecordPlanningMistakes: true,
     // MOTIR-11264 — ON by default, resolved from a NULL column the same way.
     aiFinalCheck: true,
+    aiPlanningCadence: 'story',
     ...over,
   };
 }

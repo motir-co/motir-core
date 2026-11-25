@@ -77,3 +77,37 @@ export const AI_FINAL_CHECK_DEFAULT = true;
 export function resolveFinalCheck(value: boolean | null | undefined): boolean {
   return value ?? AI_FINAL_CHECK_DEFAULT;
 }
+
+// ── The "Planning cadence" default (Story MOTIR-12203 · MOTIR-12204) ──────────
+//
+// The same resolution as the final-check default above, for the same reason:
+// `Project.aiPlanningCadence` is nullable with no database default, NULL means
+// "never written", and EVERY reader — the mapper, the job-envelope producer, the
+// project-state report plan.py reads — resolves it here, so the "story when
+// unset" rule is stated ONCE and no reader can plan a project one step at a time
+// because it forgot the default.
+
+/** The two cadences a project can plan at. `story` is today's walk. */
+export const AI_PLANNING_CADENCES = ['story', 'subtask'] as const;
+
+/** A project's planning cadence, as every reader sees it once resolved. */
+export type AiPlanningCadenceValue = (typeof AI_PLANNING_CADENCES)[number];
+
+export const AI_PLANNING_CADENCE_DEFAULT: AiPlanningCadenceValue = 'story';
+
+/** Whether `value` is one of the two cadences — the write-side membership check. */
+export function isPlanningCadence(value: unknown): value is AiPlanningCadenceValue {
+  return (AI_PLANNING_CADENCES as readonly unknown[]).includes(value);
+}
+
+/**
+ * Resolve the stored `aiPlanningCadence` column to the effective setting.
+ *
+ * `null` / `undefined` (never written — including every row that predates the
+ * column) and any value outside the two cadences resolve to
+ * {@link AI_PLANNING_CADENCE_DEFAULT}, i.e. `story`. Only an explicit `subtask`
+ * changes the walk.
+ */
+export function resolvePlanningCadence(value: unknown): AiPlanningCadenceValue {
+  return isPlanningCadence(value) ? value : AI_PLANNING_CADENCE_DEFAULT;
+}

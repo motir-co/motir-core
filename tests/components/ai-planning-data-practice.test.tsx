@@ -33,6 +33,7 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     aiGenerateExplanations: false,
     aiRecordPlanningMistakes: true,
     aiFinalCheck: true,
+    aiPlanningCadence: 'story',
     ...over,
   };
 }
