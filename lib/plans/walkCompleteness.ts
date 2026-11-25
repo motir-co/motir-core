@@ -20,9 +20,20 @@
 // every such plan as incomplete and close none of them. Nothing walked it, so there is
 // no walk to be incomplete: it is complete by construction.
 //
+// ⚠️ A DELIBERATE END OWES NOTHING IT LEFT ON PURPOSE (Story MOTIR-12203 ·
+// MOTIR-12207). A walk the project's Planning cadence stopped, or the person's Stop
+// ended, closes with `walkEndedBy`: the close stamps every not-authored `add`
+// `leftLaid`, and the plan row keeps `walkEndedBy`. A `leftLaid` add (with no
+// `authorFinished`) is not owed — approve creates it at `to_plan` — and while
+// `walkEndedBy` is set a committed card the walk listed and never re-authored is not
+// owed either: it stays exactly as it stands. The rule lives HERE, once, so the
+// close, the gate's raise, the approvability read and approve all agree by
+// construction. Every close rewrites both stamps, so a later failed walk can never
+// read complete on a stale one.
+//
 // PURE: no DB, no `tx`. `planWalkCompletenessService` gathers the rows.
 
-import type { PlanItemDto } from '@/lib/dto/plans';
+import type { PlanItemDto, PlanWalkEndedByDto } from '@/lib/dto/plans';
 import {
   deriveAuthoringStates,
   deriveCommittedStates,
@@ -45,6 +56,8 @@ export interface WalkCompleteness {
   complete: boolean;
   /** What is still owed, proposals first then committed cards, in the plan's order. */
   unwritten: UnwrittenCard[];
+  /** The `add`s left laid on purpose (MOTIR-12207) — not owed, created at `to_plan`. */
+  leftLaid: UnwrittenCard[];
 }
 
 /** The facts the verdict reads, as the service gathers them. */
@@ -58,6 +71,15 @@ export interface WalkFacts {
   listed: readonly string[];
   /** The committed cards the walk re-authors, resolved to their keys and titles. */
   committed: readonly CommittedCard[];
+  /** The plan's stored deliberate end (MOTIR-12207); null or absent when there was none. */
+  walkEndedBy?: PlanWalkEndedByDto | null;
+}
+
+/** Whether a proposal carries the `leftLaid` stamp and no `authorFinished` (which wins). */
+export function isLeftLaid(item: Pick<PlanItemDto, 'op' | 'proposedFields'>): boolean {
+  if (item.op !== 'add') return false;
+  const fields = item.proposedFields as { leftLaid?: unknown; authorFinished?: unknown } | null;
+  return fields?.leftLaid === true && fields.authorFinished !== true;
 }
 
 /** Whether a driver walked this plan (see the header). */
@@ -76,10 +98,19 @@ export function planWasWalked(
  * Resume writes it.
  */
 export function judgeWalkCompleteness(facts: WalkFacts): WalkCompleteness {
-  if (!planWasWalked(facts)) return { walked: false, complete: true, unwritten: [] };
+  if (!planWasWalked(facts)) return { walked: false, complete: true, unwritten: [], leftLaid: [] };
   const unwritten: UnwrittenCard[] = [];
+  const leftLaid: UnwrittenCard[] = [];
+  const laidRefs = new Set(facts.items.filter(isLeftLaid).map((item) => `planItem:${item.id}`));
   for (const row of deriveAuthoringStates(facts.items, [])) {
-    if (row.state !== 'authored') unwritten.push({ ref: row.ref, key: null, title: row.title });
+    if (row.state === 'authored') continue;
+    const card = { ref: row.ref, key: null, title: row.title };
+    if (laidRefs.has(row.ref)) leftLaid.push(card);
+    else unwritten.push(card);
+  }
+  // A deliberate end leaves the committed cards it never re-authored as they stand.
+  if (facts.walkEndedBy != null) {
+    return { walked: true, complete: unwritten.length === 0, unwritten, leftLaid };
   }
   const committedRows = deriveCommittedStates(
     facts.items,
@@ -93,7 +124,7 @@ export function judgeWalkCompleteness(facts: WalkFacts): WalkCompleteness {
       unwritten.push({ ref: row.ref, key: row.key, title: row.title });
     }
   }
-  return { walked: true, complete: unwritten.length === 0, unwritten };
+  return { walked: true, complete: unwritten.length === 0, unwritten, leftLaid };
 }
 
 /** The plan record's `walkListed` ids; anything else in the record is not this read's. */

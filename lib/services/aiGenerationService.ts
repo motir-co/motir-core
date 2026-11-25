@@ -59,6 +59,7 @@ import type {
   PlanStepDto,
   PlanStepProviderWaitDto,
   PlanStepKindDto,
+  PlanWalkEndedByDto,
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
@@ -675,6 +676,11 @@ export const aiGenerationService = {
       walkIncomplete?: boolean;
       /** …because it RETURNED with a question (Bug MOTIR-11701): no failure is recorded. */
       walkReturned?: boolean;
+      /**
+       * …ON PURPOSE (Story MOTIR-12203 · MOTIR-12207): the Planning cadence or the
+       * person's Stop. Read on a FINAL append only; the close writes `planned`.
+       */
+      walkEndedBy?: PlanWalkEndedByDto;
     } = {},
   ): Promise<{
     planId: string;
@@ -761,6 +767,7 @@ export const aiGenerationService = {
         trailDiff: { proposalCount: createdIds.length },
         ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
         ...(opts.walkReturned ? { walkReturned: true } : {}),
+        ...(opts.walkEndedBy ? { walkEndedBy: opts.walkEndedBy } : {}),
       });
       return {
         planId: plan.id,
@@ -792,6 +799,7 @@ export const aiGenerationService = {
         authorModel: opts.authorModel ?? null,
         ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
         ...(opts.walkReturned ? { walkReturned: true } : {}),
+        ...(opts.walkEndedBy ? { walkEndedBy: opts.walkEndedBy } : {}),
       });
       planned = closed.status === 'planned';
       stopped = closed.status === 'stopped';

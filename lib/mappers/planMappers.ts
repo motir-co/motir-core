@@ -100,6 +100,8 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     // the review surface can tell a DISCARDED plan from one somebody reviewed
     // and rejected without re-deriving it from which timestamps are null.
     decisionReason: row.decisionReason,
+    // How the walk ended on purpose at the last close (MOTIR-12207); null otherwise.
+    walkEndedBy: row.walkEndedBy ?? null,
     // What a Sharpen session settled (Task MOTIR-1101 · MOTIR-8183). The column
     // is written only by `planSharpeningService` in the DTO's own shape, so it is
     // read back as that shape; null on every plan nobody sharpened.

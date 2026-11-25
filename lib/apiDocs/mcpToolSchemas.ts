@@ -595,6 +595,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Set true together with `final: true` when your walk ENDED BEFORE EVERY CARD WAS WRITTEN — the person stopped it, an author session failed, a limit or an interruption cut it short. The plan then closes `stopped` instead of `planned`: it keeps every proposal, offers Resume and never Approve, and no approval gate is raised. Without it the close still writes `stopped` when a walked plan holds a card that is not written yet. Ignored without `final`.',
       },
+      walkEndedBy: {
+        type: 'string',
+        enum: ['cadence', 'person_stop'],
+        description:
+          "Set together with `final: true` when your walk ENDED ON PURPOSE before every card was written: `cadence` — the project's Planning cadence (`planningCadence` on `get_project_state`) stopped it where it was meant to stop; `person_stop` — the person pressed Stop and you have already discarded your in-flight sessions' half-written changes (`update_plan_item` with `authorFinished: null` and the laid body; `withdraw_plan_proposal` for an unfinished `modify`). The plan then closes `planned` and approvable, never `stopped`: every `add` without `authorFinished` is stamped `leftLaid` and is created at the project's `to_plan` status on approve, and a committed card the walk listed but never re-authored is left as it stands. It GOVERNS over `walkIncomplete`. Refused without `final`.",
+      },
       revision: {
         type: 'boolean',
         description:
@@ -2112,6 +2118,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'boolean',
         description:
           "With `action: 'end'` only: `true` when your walk ended before every card was written (you stopped it, an author session failed, a limit was hit). The plan then closes `stopped` — Resume, never Approve — instead of back in front of a reviewer.",
+      },
+      walkEndedBy: {
+        type: 'string',
+        enum: ['cadence', 'person_stop'],
+        description:
+          "With `action: 'end'` only: the walk ended ON PURPOSE — `cadence` (the project's Planning cadence stopped it) or `person_stop` (the person pressed Stop and you already discarded your in-flight sessions' changes). The plan then closes `planned` in front of a reviewer, never `stopped`: every `add` without `authorFinished` is stamped `leftLaid` and is created at the project's `to_plan` status on approve. It governs over `walkIncomplete`. Refused with any other action.",
       },
     },
     required: ['planId', 'action'],
