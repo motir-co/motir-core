@@ -16,6 +16,7 @@ function row(over: Record<string, unknown> = {}) {
     number: 7,
     state: 'open',
     merged: false,
+    mergeOutcomeRef: null,
     mergeableState: null,
     mergeableStateHeadSha: null,
     repo: { owner: 'acme', name: 'web' },
