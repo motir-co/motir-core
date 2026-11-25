@@ -41,6 +41,7 @@ function row(headSha: string | null, checkRuns: ReturnType<typeof check>[]) {
     number: 42,
     state: 'open',
     merged: false,
+    mergeOutcomeRef: null,
     headSha,
     mergeableState: null,
     mergeableStateHeadSha: null,
