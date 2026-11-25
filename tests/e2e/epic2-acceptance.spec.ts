@@ -199,8 +199,10 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
     await page.reload();
   }
 
-  // From todo: in_progress is legal; Done + In Review are NOT (no skipping ahead).
-  await walk('In Progress', ['Done', 'In Review'], 'in_progress');
+  // From todo: in_progress is legal; Done is NOT (no skipping ahead). In Review is
+  // reachable from To Do since MOTIR-12202 (a pull request delivering a To Do card),
+  // so it is no longer an illegal-target probe here.
+  await walk('In Progress', ['Done'], 'in_progress');
   // From in_progress: in_review is legal. Done is DIRECTLY reachable too since
   // MOTIR-1625 (review is optional), so it is no longer an illegal-target probe
   // here — this journey walks the full review path deliberately.
