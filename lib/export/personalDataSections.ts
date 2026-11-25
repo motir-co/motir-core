@@ -875,6 +875,13 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'tier, not a record about the operator as a data subject — `PlatformFleetKindSwitch`’s ' +
     'argument; every save is recorded in the audit log (`fleet.ci_spot.update`) with the ' +
     'same actor.',
+  HostingTenantAccount:
+    'An organisation’s one AWS hosting account (MOTIR-9939), whose only User FK is the ' +
+    'organisation admin who started its takeover handover (MOTIR-12131), kept so the ' +
+    'handover’s repository transfers run under their GitHub identity and nulled when ' +
+    'that user is deleted. A platform-only record about the organisation’s hosting, ' +
+    'never on a DTO — `PlatformFleetOrgCi`’s argument: the actor column is how the ' +
+    'system acts, not a record about the admin as a data subject.',
   CapacityAlertSetting:
     'The single platform-wide provider-capacity alert share (MOTIR-9609), whose only ' +
     'User FK is the platform operator who last set it. Platform configuration written ' +

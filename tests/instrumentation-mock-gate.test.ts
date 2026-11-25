@@ -58,6 +58,7 @@ const githubPreview = vi.hoisted(() => ({ installGithubPreviewMock: vi.fn() }));
 const productionRelease = vi.hoisted(() => ({ installProductionReleaseMock: vi.fn() }));
 const githubAccounts = vi.hoisted(() => ({ installGithubAccountsMock: vi.fn() }));
 const githubFleetOrgCi = vi.hoisted(() => ({ installGithubFleetOrgCiMock: vi.fn() }));
+const githubTakeover = vi.hoisted(() => ({ installGithubTakeoverMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const codeGraphRead = vi.hoisted(() => ({ installCodeGraphReadBoundaryMock: vi.fn() }));
 const embeddings = vi.hoisted(() => ({ installEmbeddingsBoundaryMock: vi.fn() }));
@@ -82,6 +83,7 @@ vi.mock('@/lib/test-github-preview-mock', () => githubPreview);
 vi.mock('@/lib/test-production-release-mock', () => productionRelease);
 vi.mock('@/lib/test-github-accounts-mock', () => githubAccounts);
 vi.mock('@/lib/test-github-fleet-org-ci-mock', () => githubFleetOrgCi);
+vi.mock('@/lib/test-github-takeover-mock', () => githubTakeover);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-code-graph-read-mock', () => codeGraphRead);
 vi.mock('@/lib/test-embeddings-mock', () => embeddings);
@@ -127,6 +129,9 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   E2E_TEST_GITHUB_ACCOUNTS: [githubAccounts.installGithubAccountsMock],
   // MOTIR-8717 — the GitHub calls behind /admin/fleet-settings (Story MOTIR-8699).
   E2E_TEST_GITHUB_FLEET_ORG_CI: [githubFleetOrgCi.installGithubFleetOrgCiMock],
+  // MOTIR-12140 — a takeover's GitHub calls, from the webServer and the job worker
+  // (Story MOTIR-9800).
+  E2E_TEST_GITHUB_TAKEOVER: [githubTakeover.installGithubTakeoverMock],
   E2E_TEST_CODE_HEALTH: [codeHealth.installCodeHealthBoundaryMock],
   // MOTIR-7866 — the motir-ai code-graph READ seam (Story MOTIR-7858).
   E2E_TEST_CODE_GRAPH_READ: [codeGraphRead.installCodeGraphReadBoundaryMock],
