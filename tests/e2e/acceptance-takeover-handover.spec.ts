@@ -663,32 +663,30 @@ test('an administrator hands over AWS hosting with its apps running, and a Fly a
     });
     const dump = readFakeExportDump(stored.storageKey);
     expect(dump).not.toBeNull();
-    // The download answers with a short-lived signed link to the private bucket; the lane has no
-    // bucket to serve it, so the spec serves the stored object at that link.
-    await page.route(
-      (url) => decodeURIComponent(url.pathname).endsWith(stored.storageKey),
-      (route) =>
-        route.fulfill({
-          status: 200,
-          body: dump!,
-          headers: {
-            'content-type': 'application/octet-stream',
-            'content-disposition': 'attachment; filename="export.dump"',
-          },
-        }),
+    // The download answers with a short-lived signed link to the private bucket. The lane has no
+    // bucket, and a browser navigation that 302s to the `.invalid` store host and turns into a
+    // download leaves the page on Chromium's error page whether or not a route serves it (the CI
+    // run never even reached the route), so the walk follows the link the panel offers with the
+    // signed-in session's own request context instead: one recorded download, a 302 to a SIGNED
+    // URL for exactly this export as an attachment, and the stored object behind it is the dump.
+    const link = grace.getByTestId('production-export-download');
+    await link.hover();
+    const href = await link.getAttribute('href');
+    expect(href).toBe(
+      `/api/organizations/${seed.organizationId}/hosting/applications/${flyApp.id}` +
+        `/exports/${stored.id}/download`,
     );
-    const redirected = page.waitForResponse(
-      applicationRoute(flyApp.id, `/exports/${stored.id}/download`, 'GET'),
-    );
-    const download = page.waitForEvent('download');
-    await grace.getByTestId('production-export-download').click();
-    expect((await redirected).status()).toBe(302);
-    const saved = await (await download).createReadStream();
-    const chunks: Buffer[] = [];
-    for await (const chunk of saved) chunks.push(Buffer.from(chunk as Buffer));
-    const file = Buffer.concat(chunks);
-    expect(file.length).toBeGreaterThan(0);
-    expect(file.subarray(0, 5).toString('latin1')).toBe('PGDMP');
+    const redirected = await page.request.get(href!, { maxRedirects: 0 });
+    expect(redirected.status()).toBe(302);
+    const signed = new URL(redirected.headers()['location']!);
+    expect(decodeURIComponent(signed.pathname).endsWith(stored.storageKey)).toBe(true);
+    expect(signed.searchParams.get('X-Amz-Signature')).toBeTruthy();
+    expect(signed.searchParams.get('response-content-disposition')).toMatch(/^attachment;/);
+    expect(dump!.length).toBeGreaterThan(0);
+    expect(dump!.subarray(0, 5).toString('latin1')).toBe('PGDMP');
+    await expect
+      .poll(() => adminDb.hostedApplicationExportDownload.count({ where: { exportId: stored.id } }))
+      .toBe(1);
     await beat();
   });
 
