@@ -40,13 +40,18 @@ let source: { name: string; url: string };
 let target: { name: string; url: string };
 let scratch: string;
 
+// CREATE / DROP DATABASE each force a checkpoint; on a loaded CI cluster the
+// two drops below have run past the default 30 s hook timeout (core#4413), so
+// both hooks get a wider budget.
+const SCRATCH_HOOK_TIMEOUT_MS = 120_000;
+
 beforeAll(async () => {
   await truncateAuthTables();
   source = await fixtures.createScratchDatabase('export_restore_src');
   target = await fixtures.createScratchDatabase('export_restore_dst');
   await fixtures.seedTenantDatabase(source.url);
   scratch = mkdtempSync(join(tmpdir(), 'motir-export-'));
-});
+}, SCRATCH_HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
   rmSync(scratch, { recursive: true, force: true });
@@ -55,7 +60,7 @@ afterAll(async () => {
   await truncateAuthTables();
   await db.$disconnect();
   await adminDb.$disconnect();
-});
+}, SCRATCH_HOOK_TIMEOUT_MS);
 
 describe('a grace-window export', () => {
   it('has pg_dump and pg_restore to run with — a missing client fails here, it does not skip', () => {

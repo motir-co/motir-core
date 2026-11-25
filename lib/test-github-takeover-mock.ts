@@ -45,6 +45,7 @@
 // takeover call (the handover's failed-step retry is injected at the fake AWS tenant).
 
 import { createHash } from 'node:crypto';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { appendFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
@@ -79,7 +80,7 @@ const reply = (statusCode: number, data: object | string): MockReply => ({
 });
 
 function provisioningOrg(): string {
-  return (process.env['GITHUB_FALLBACK_ORG'] ?? '').trim().toLowerCase();
+  return (process.env['GITHUB_FALLBACK_ORG'] ?? '').trim();
 }
 
 /** The repository-scoped sub-resources this seam answers, by method. */
@@ -98,8 +99,7 @@ export function takeoverMockAnswers(method: string, path: string): boolean {
   if (method === 'GET' && /^\/users\/[^/]+$/.test(bare)) return true;
   const m = /^\/repos\/([^/]+)\/([^/]+)\/(.+)$/.exec(bare);
   if (!m) return false;
-  const org = provisioningOrg();
-  if (org.length === 0 || m[1]!.toLowerCase() !== org) return false;
+  if (!isMotirHostedOwner(m[1], provisioningOrg())) return false;
   return REPOSITORY_ROUTES.some((route) => route.method === method && route.sub.test(m[3]!));
 }
 

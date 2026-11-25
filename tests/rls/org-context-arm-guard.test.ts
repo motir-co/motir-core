@@ -127,6 +127,14 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'production apps run (Bug MOTIR-12166 · Decision MOTIR-12100 §9) — the org-manager read, ' +
       "under the charged organisation's own org, org_membership_visible_active_or_own",
   },
+  'lib/services/hostedApplicationGraceNotifier.ts#recipientsOf': {
+    tables: ['organization_membership'],
+    source: 'scan',
+    why:
+      "the organisation's Owner and Admins, emailed when a taken-over app's 30-day grace " +
+      'window opens, nears its end and stops (Story MOTIR-9800) — the org-manager read, ' +
+      "under the workspace's own org, org_membership_visible_active_or_own",
+  },
   'lib/services/projectMembersService.ts#previewAccessModeChange': {
     tables: ['organization_membership'],
     source: 'scan',
