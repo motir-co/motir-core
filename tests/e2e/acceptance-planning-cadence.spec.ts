@@ -371,7 +371,8 @@ test('a project plans a story at a time or a subtask at a time, and Stop propose
   // ── 1. The setting ──────────────────────────────────────────────────────
   await chapter('Planning cadence reads Story on a project that never saved one', async () => {
     await openSettings(page);
-    await expect(cadenceGroup(page)).toContainText(planner.cadenceLabel);
+    // The label sits above the group and names it through aria-labelledby.
+    await expect(cadenceGroup(page)).toHaveAccessibleName(planner.cadenceLabel);
     await expectCadence(page, planner.cadence.story.label);
     await expect(option(page, planner.cadence.subtask.label)).toHaveAttribute(
       'aria-checked',
@@ -388,16 +389,21 @@ test('a project plans a story at a time or a subtask at a time, and Stop propose
     await saveCadence(page, seed.projectKey, planner.cadence.subtask.label);
   });
 
-  await chapter('A member without ai:configure sees it read-only', async () => {
+  await chapter('A member without ai:configure cannot change it', async () => {
+    // The AI planning page is gated on `ai:configure` (the 2026-08-08 amendment
+    // retired its browse gate), so a member reaches the admins-only refusal, which
+    // names the cadence, and no control to change it. The editor's read-only
+    // rendering is pinned by the component suite.
     const member = await asSecondPerson(browser, baseURL!, seed.teammate.email);
     try {
-      await openSettings(member.page);
-      await expectCadence(member.page, planner.cadence.subtask.label);
-      for (const label of [planner.cadence.story.label, planner.cadence.subtask.label]) {
-        await expect(option(member.page, label)).toHaveAttribute('aria-disabled', 'true');
-      }
-      await option(member.page, planner.cadence.story.label).click({ force: true });
-      await expectCadence(member.page, planner.cadence.subtask.label);
+      await member.page.goto(SETTINGS);
+      await expect(
+        main(member.page).getByText(en.settings.noAccess.title, { exact: true }),
+      ).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await expect(
+        main(member.page).getByText(en.settings.noAccess.section['ai-planning']),
+      ).toBeVisible();
+      await expect(cadenceGroup(member.page)).toHaveCount(0);
       await expect(saveButton(member.page)).toHaveCount(0);
     } finally {
       await member.close();
@@ -408,8 +414,8 @@ test('a project plans a story at a time or a subtask at a time, and Stop propose
     const g = de.settings.aiPlanning.planner;
     await saveAccountLanguageInSettings(page, 'de');
     await openSettings(page);
-    await expect(cadenceGroup(page)).toContainText(g.cadenceLabel);
-    await expect(cadenceGroup(page)).not.toContainText(planner.cadenceLabel);
+    await expect(cadenceGroup(page)).toHaveAccessibleName(g.cadenceLabel);
+    await expect(cadenceGroup(page)).not.toHaveAccessibleName(planner.cadenceLabel);
     await expect(option(page, g.cadence.story.label)).toBeVisible();
     await expect(option(page, g.cadence.subtask.label)).toHaveAttribute('aria-checked', 'true');
     await beat();
