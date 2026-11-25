@@ -11,6 +11,7 @@ import {
   FAKE_ADMINISTRATOR_ACCESS_ARN,
   HANDOVER_DEPLOY_POLICY,
   HANDOVER_DEPLOY_ROLE,
+  HANDOVER_DEPLOY_UNSCOPED_ACTIONS,
   HANDOVER_DEPLOY_ROLE_PATH,
   HandoverInputInvalidError,
   HandoverPreviewDestroyError,
@@ -427,20 +428,63 @@ describe('createHandoverDeployRole', () => {
 
 describe('the handover deploy policy', () => {
   const policy = handoverDeployPolicy(ACCOUNT, REGION, [RID]);
-  const statements = policy.Statement as Array<{ Action: string[]; Resource: string[] }>;
+  const statements = policy.Statement as Array<{
+    Sid?: string;
+    Action: string[];
+    Resource: string[];
+  }>;
 
-  it('has no * resource and no iam:* action', () => {
-    for (const statement of statements) {
+  const scoped = statements.filter((s) => s.Sid !== 'ProductionDeployUnscoped');
+
+  it('has no * resource outside the one unscoped statement, and no iam:* action', () => {
+    for (const statement of scoped) {
       for (const resource of statement.Resource) {
         expect(resource).not.toBe('*');
         expect(resource).toContain(ACCOUNT);
       }
+    }
+    for (const statement of statements) {
       for (const action of statement.Action) expect(action).not.toMatch(/^iam:\*|^\*$/);
     }
   });
 
+  it('grants on * exactly the actions AWS authorises on nothing narrower, and no write that reaches a resource', () => {
+    const unscoped = statements.filter((s) => s.Resource.includes('*'));
+    expect(unscoped.map((s) => s.Sid)).toEqual(['ProductionDeployUnscoped']);
+    expect(unscoped[0]!.Resource).toEqual(['*']);
+    expect([...unscoped[0]!.Action].sort()).toEqual([
+      'ecr:GetAuthorizationToken',
+      'ecs:DescribeTaskDefinition',
+      'ecs:RegisterTaskDefinition',
+    ]);
+    expect(HANDOVER_DEPLOY_UNSCOPED_ACTIONS).toEqual(unscoped[0]!.Action);
+  });
+
+  it('lets the moved repository’s CI push a production image and deploy it', () => {
+    // The review of MOTIR-9800: the registry stack's production push role trusts
+    // the PRE-transfer owner, so after the move this role is the only one the
+    // repository's CI can assume — it must log in, push and register.
+    const registry = statements.find((s) => s.Sid === 'ProductionRegistry')!;
+    expect(registry.Action).toEqual(
+      expect.arrayContaining([
+        'ecr:BatchCheckLayerAvailability',
+        'ecr:InitiateLayerUpload',
+        'ecr:UploadLayerPart',
+        'ecr:CompleteLayerUpload',
+        'ecr:PutImage',
+      ]),
+    );
+    expect(registry.Resource).toEqual([
+      `arn:aws:ecr:${REGION}:${ACCOUNT}:repository/mh/${RID}/production`,
+    ]);
+    const all = statements.flatMap((s) => s.Action);
+    expect(all).toEqual(
+      expect.arrayContaining(['ecr:GetAuthorizationToken', 'ecs:RegisterTaskDefinition']),
+    );
+  });
+
   it('reaches only the repository’s production resources, never a preview', () => {
-    const resources = statements.flatMap((s) => s.Resource);
+    const resources = scoped.flatMap((s) => s.Resource);
     for (const resource of resources) expect(resource).toContain(RID);
     expect(resources.some((r) => /-pr\d|\/preview/.test(r))).toBe(false);
   });

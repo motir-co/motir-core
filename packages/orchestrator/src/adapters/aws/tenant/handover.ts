@@ -201,14 +201,31 @@ export function handoverDeployTrust(
   };
 }
 
+/** The actions AWS authorises only on `*` that a repository's own CI cannot
+ *  deploy without: the ECR login every image push starts with, and registering
+ *  (and reading back) the task definition a container release points its
+ *  service at. Neither reaches a resource on its own: an image lands only in a
+ *  repository `ProductionRegistry` grants, and a task definition runs only
+ *  through `ecs:UpdateService` on the repository's own service, passing only
+ *  its own roles. */
+export const HANDOVER_DEPLOY_UNSCOPED_ACTIONS: readonly string[] = [
+  'ecr:GetAuthorizationToken',
+  'ecs:RegisterTaskDefinition',
+  'ecs:DescribeTaskDefinition',
+];
+
 /**
  * The handover deploy role's policy: the actions the tenant deploy policies
  * grant over a repository's PRODUCTION release, database and registry stacks,
- * each scoped to the handed-over repositories' own resources in this account.
- * An action AWS authorises only on `*` (registering an ECS task definition, the
- * database and network reads) is left out rather than granted account-wide;
- * the owner widens the role once they hold root. `tests/ciFleet/` holds every
- * action here to the deploy policies' grant.
+ * each scoped to the handed-over repositories' own resources in this account,
+ * plus the production push role's image push on each production registry — so
+ * the repository's own CI can build, push and deploy once it has moved (the
+ * registry stack's push role trusts the PRE-transfer owner and stops matching).
+ * The only `*` resource is `ProductionDeployUnscoped`, holding exactly
+ * {@link HANDOVER_DEPLOY_UNSCOPED_ACTIONS}, which AWS authorises on nothing
+ * narrower (the review of MOTIR-9800). Database and network reads stay out; the
+ * owner widens the role once they hold root. `tests/ciFleet/` holds every
+ * action here to the deploy policies' or the push role's grant.
  */
 export function handoverDeployPolicy(
   accountId: string,
@@ -275,10 +292,23 @@ export function handoverDeployPolicy(
           'ecr:GetRepositoryPolicy',
           'ecr:BatchGetImage',
           'ecr:GetDownloadUrlForLayer',
+          // The production push role's push, which its pre-transfer trust no
+          // longer lets the moved repository's CI assume.
+          'ecr:BatchCheckLayerAvailability',
+          'ecr:InitiateLayerUpload',
+          'ecr:UploadLayerPart',
+          'ecr:CompleteLayerUpload',
+          'ecr:PutImage',
         ],
         Resource: each((rid) => [
           at('ecr', `repository/${registryNames(rid).repositories.production}`),
         ]),
+      },
+      {
+        Sid: 'ProductionDeployUnscoped',
+        Effect: 'Allow',
+        Action: [...HANDOVER_DEPLOY_UNSCOPED_ACTIONS],
+        Resource: ['*'],
       },
       {
         Sid: 'ProductionLogs',

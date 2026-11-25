@@ -6,10 +6,10 @@ import type { TenantHandoverStep } from '@/lib/ciFleet/hostingTenantAccounts';
 // carries an email address, a one-time code, a credential or a raw AWS payload:
 // each names ids, step names and codes only.
 
-/** A takeover of ONE AWS-target repository while the organisation's tenant
- *  account holds others: the account is one per organisation and leaves with
- *  all of them, so they are handed over together (MOTIR-12131). Names the
- *  others so the room can say which. */
+/** A takeover of ONE AWS-target repository outside the organisation's
+ *  handover: the account is one per organisation and leaves with all of them,
+ *  so they are handed over together (MOTIR-12131). Names the others so the
+ *  room can say which — none when the repository is the account's only one. */
 export class SharedTenantAccountError extends Error {
   readonly code = 'TAKEOVER_SHARED_AWS_ACCOUNT' as const;
   constructor(
@@ -17,8 +17,11 @@ export class SharedTenantAccountError extends Error {
     readonly repositories: readonly string[],
   ) {
     super(
-      `This repository shares its organisation's AWS account with ${repositories.join(', ')}; ` +
-        'hand the account over to take them over together.',
+      repositories.length > 0
+        ? `This repository shares its organisation's AWS account with ${repositories.join(', ')}; ` +
+            'hand the account over to take them over together.'
+        : "This repository runs in its organisation's AWS account; " +
+            'hand the account over to take it over.',
     );
     this.name = 'SharedTenantAccountError';
   }
