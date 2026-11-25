@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   CircleCheck,
   CircleDashed,
@@ -6,9 +6,7 @@ import {
   CircleQuestionMark,
   ExternalLink,
   FolderGit2,
-  GitMerge,
   GitPullRequestArrow,
-  GitPullRequestClosed,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Pill, type PillProps } from '@/components/ui/Pill';
@@ -29,7 +27,12 @@ import {
   type DevelopmentGateActions,
   type DevelopmentGateRead,
 } from './DevelopmentGateFrame';
-import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
+import {
+  MergeOutcomeSlot,
+  PersistedMergeOutcomes,
+  PullRequestStateGlyph,
+  PullRequestStatePill,
+} from './MergeOutcomeSlot';
 import { PreviewLine } from './PreviewLine';
 import { AccessLine } from './AccessLine';
 import { readerAccessView } from './readerAccessLine';
@@ -59,19 +62,11 @@ import { QueueExitAutoPart, type AutoQueueExits } from './QueueExitAutoPart';
 // deliberate mint+mint of a merged+passing row stays distinguishable by
 // glyph (the #108 two-green lesson).
 
-type PillTone = Pick<PillProps, 'status' | 'severity'>;
+// `PR_STATE_META` MOVED to `./prStateMeta` (Bug MOTIR-12232) — the row's state mark is
+// drawn by a client leaf now. Re-exported here for the explicit-link picker.
+export { PR_STATE_META } from './prStateMeta';
 
-/** State → glyph + Pill tone (the design's tone table), shared by the linked-PR
- *  rows here AND the explicit-link picker's option pills (MOTIR-1596) so both
- *  read from ONE mapping — no new token/variant. */
-export const PR_STATE_META: Record<
-  LinkedPullRequestDto['state'],
-  { icon: ComponentType<{ className?: string }>; pill: PillTone }
-> = {
-  open: { icon: GitPullRequestArrow, pill: { status: 'in-progress' } },
-  merged: { icon: GitMerge, pill: { status: 'done' } },
-  closed: { icon: GitPullRequestClosed, pill: { severity: 'danger' } },
-};
+type PillTone = Pick<PillProps, 'status' | 'severity'>;
 
 // `CI_STATE_META` MOVED to `./ciStateMeta` (MOTIR-5474) — the board card, the
 // `/items` rows and the Workbench row render the same verdict now, and a second
@@ -174,17 +169,16 @@ function PullRequestRow({
   action?: ReactNode;
 }) {
   const t = useTranslations('github');
-  const state = PR_STATE_META[pr.state];
   const ci = pr.ci ? CI_STATE_META[pr.ci] : null;
   const chipKey = githubReviewChipKey(pr.githubReview);
-  const StateGlyph = state.icon;
-  const PrPillGlyph = state.icon;
   // The READER's access (Story MOTIR-4881 · MOTIR-12116; design/github § 35): whether the
   // code link-out is drawn, and the access line under the preview line. Read, never derived.
   const access = readerAccessView(pr);
   return (
     <li className="mt-2 flex items-center gap-2.5 gap-y-1 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y) @max-[30rem]:flex-wrap">
-      <StateGlyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />
+      {/* The state glyph and pill are client leaves (Bug MOTIR-12232): a press the host
+          answered `merged` draws the row Merged at once, never Open beside a Merged pill. */}
+      <PullRequestStateGlyph repo={pr.repo} number={pr.number} state={pr.state} />
       <div className="min-w-0 flex-1 py-1">
         <div className="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
           {pr.title}
@@ -230,10 +224,7 @@ function PullRequestRow({
           its own line under the title, so the title keeps the first line instead
           of one or two characters. Indented 27px — the 17px glyph plus the row gap. */}
       <span className="flex shrink-0 items-center gap-1.5 @max-[30rem]:order-last @max-[30rem]:basis-full @max-[30rem]:flex-wrap @max-[30rem]:pb-1 @max-[30rem]:pl-[27px]">
-        <Pill {...state.pill}>
-          <PrPillGlyph className="h-3 w-3" aria-hidden />
-          {t(`development.prState.${pr.state}`)}
-        </Pill>
+        <PullRequestStatePill repo={pr.repo} number={pr.number} state={pr.state} />
         {strandedBase !== null ? (
           // BESIDE `Merged`, never replacing it — both facts are true and the
           // reader needs both: it did merge, and it did not reach the trunk.

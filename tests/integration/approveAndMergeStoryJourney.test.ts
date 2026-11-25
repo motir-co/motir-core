@@ -14,7 +14,18 @@ vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
   sendEvent: async () => undefined,
 }));
 
+import { createElement, type ComponentProps } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
 import { db } from '@/lib/db';
+import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
+import {
+  MergeOutcomeProvider,
+  rowKey,
+  type RowMergeOutcome,
+} from '@/components/github/MergeOutcomeSlot';
+import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import enMessages from '@/messages/en.json';
 import {
   ApprovalGateNotAuthorisedError,
   ApprovalGateSupersededError,
@@ -493,5 +504,79 @@ describe('§3 access', () => {
     );
     expect(approval.gate.state).toBe('approved');
     expect(approval.gate.decidedUnderAuthority).toBe('admin');
+  });
+});
+
+describe('§4 the row after the press — Merged once, whichever lands first (Bug MOTIR-12232)', () => {
+  // The press returns its outcome into the frame's CLIENT state and the page re-reads
+  // (`router.refresh()`); GitHub's `pull_request` closed delivery may be processed before or
+  // after that re-read. The re-read is the real Development read (`listLinkedPullRequests`),
+  // and the row is rendered from it inside the outcome the frame holds after the press.
+  const PR_STATE = enMessages.github.development.prState;
+  const OUTCOME = enMessages.approvalGate.pullRequestApproval.outcome;
+
+  /** The Development block the re-read draws, inside the frame's press outcome for #11. */
+  function drawRow(rows: LinkedPullRequestDto[], outcome: RowMergeOutcome): string {
+    const value = new Map([[rowKey('moooon/acme', 11), outcome]]);
+    const block = createElement(DevelopmentSectionBody, {
+      pullRequests: rows,
+      itemIdentifier: 'ACME-1',
+    });
+    const provider: ComponentProps<typeof MergeOutcomeProvider> = { value, children: block };
+    const intl: ComponentProps<typeof NextIntlClientProvider> = {
+      locale: 'en',
+      messages: enMessages,
+      children: createElement(MergeOutcomeProvider, provider),
+    };
+    return renderToStaticMarkup(createElement(NextIntlClientProvider, intl));
+  }
+  /** How many pills read exactly `label` — a pill is a glyph, then its label. */
+  const pills = (html: string, label: string) => html.split(`</svg>${label}</span>`).length - 1;
+
+  async function pressedCard(email: string) {
+    const s = await makeScenario(email);
+    const item = await cardWithPrs(s, [11]);
+    await ci('success', 'sha-a', 11);
+    const [gate] = await awaitingApproval(item.id);
+    const { members } = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, source: 'ui' },
+      s.ctx,
+    );
+    return { s, item, outcome: members[0]!.outcome };
+  }
+
+  it('the re-read BEFORE any merge delivery draws Merged once and no Open; the delivery, twice, changes nothing', async () => {
+    const { s, item, outcome } = await pressedCard('row-merged@example.com');
+    expect(outcome).toBe('merged');
+    // No merge delivery has been processed: the row's own columns still say open.
+    expect(await prRow(11)).toMatchObject({ state: 'open', merged: false });
+
+    const before = await workItemsService.listLinkedPullRequests(item.id, s.ctx);
+    expect(before.map((pr) => pr.state)).toEqual(['merged']);
+    const drawn = drawRow(before, { kind: 'merged' });
+    expect(pills(drawn, PR_STATE.merged)).toBe(1);
+    expect(pills(drawn, PR_STATE.open)).toBe(0);
+
+    // GitHub's closed delivery lands after the re-read — and is redelivered.
+    await mergedWebhook(item.identifier, 11);
+    await mergedWebhook(item.identifier, 11);
+    expect(await prRow(11)).toMatchObject({ state: 'closed', merged: true });
+    expect(await statusOf(item.id)).toBe('done');
+    const after = await workItemsService.listLinkedPullRequests(item.id, s.ctx);
+    expect(after).toEqual(before);
+    expect(drawRow(after, { kind: 'merged' })).toBe(drawn);
+  });
+
+  it('an enqueued press still draws Open with the Queued pill', async () => {
+    host.rules = [[{ type: 'merge_queue' }]];
+    const { s, item, outcome } = await pressedCard('row-queued@example.com');
+    expect(outcome).toBe('enqueued');
+
+    const rows = await workItemsService.listLinkedPullRequests(item.id, s.ctx);
+    expect(rows.map((pr) => pr.state)).toEqual(['open']);
+    const drawn = drawRow(rows, { kind: 'queued' });
+    expect(pills(drawn, PR_STATE.open)).toBe(1);
+    expect(pills(drawn, OUTCOME.queued)).toBe(1);
+    expect(pills(drawn, PR_STATE.merged)).toBe(0);
   });
 });

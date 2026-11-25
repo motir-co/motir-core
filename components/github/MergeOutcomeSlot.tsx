@@ -8,7 +8,6 @@ import {
   CircleX,
   Clock,
   GitBranch,
-  GitMerge,
   GitPullRequestArrow,
   ShieldAlert,
 } from 'lucide-react';
@@ -17,6 +16,8 @@ import { Pill } from '@/components/ui/Pill';
 import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
+import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import { PR_STATE_META } from './prStateMeta';
 
 // A PULL-REQUEST ROW'S SECOND PILL SLOT, after Approve and merge (Story MOTIR-4909 ·
 // MOTIR-5484; `design/github/design-notes.md` §20 *The verbs and their states*, decision
@@ -187,6 +188,59 @@ export function PersistedMergeOutcomes({
   return <MergeOutcomeProvider value={value}>{children}</MergeOutcomeProvider>;
 }
 
+/**
+ * The state a row DRAWS (Bug MOTIR-12232): a row still delivered `open` whose press the host
+ * answered `merged` is drawn **Merged**. The press outcome is the host's own answer, and it is
+ * in the frame's client state the moment the press returns — before `router.refresh()` lands,
+ * and before GitHub's merge delivery is processed. Read from the stored row, the state pill
+ * said **Open** beside the slot's **Merged** for that whole window. Only `open` yields: a
+ * `closed` or `merged` row is the host's later word and stands as delivered.
+ */
+export function useShownPullRequestState(
+  repo: string,
+  number: number,
+  state: LinkedPullRequestDto['state'],
+): LinkedPullRequestDto['state'] {
+  const outcome = useContext(MergeOutcomeContext)?.get(rowKey(repo, number)) ?? null;
+  return state === 'open' && outcome?.kind === 'merged' ? 'merged' : state;
+}
+
+/** The row's leading state glyph — a client leaf, so it follows the press (MOTIR-12232). */
+export function PullRequestStateGlyph({
+  repo,
+  number,
+  state,
+}: {
+  repo: string;
+  number: number;
+  state: LinkedPullRequestDto['state'];
+}) {
+  const Glyph = PR_STATE_META[useShownPullRequestState(repo, number, state)].icon;
+  return <Glyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />;
+}
+
+/** The row's state pill — a client leaf, so it follows the press (MOTIR-12232). */
+export function PullRequestStatePill({
+  repo,
+  number,
+  state,
+}: {
+  repo: string;
+  number: number;
+  state: LinkedPullRequestDto['state'];
+}) {
+  const t = useTranslations('github');
+  const shown = useShownPullRequestState(repo, number, state);
+  const meta = PR_STATE_META[shown];
+  const Glyph = meta.icon;
+  return (
+    <Pill {...meta.pill}>
+      <Glyph className="h-3 w-3" aria-hidden />
+      {t(`development.prState.${shown}`)}
+    </Pill>
+  );
+}
+
 export function MergeOutcomeSlot({
   repo,
   number,
@@ -195,7 +249,7 @@ export function MergeOutcomeSlot({
 }: {
   repo: string;
   number: number;
-  /** The host already says merged: the row's state pill reads *Merged*, and the slot empties. */
+  /** The row was delivered merged: its state pill reads *Merged*, and the slot empties. */
   merged: boolean;
   /** What the slot shows with nothing to report — the row's CI pill. */
   children?: ReactNode;
@@ -203,7 +257,12 @@ export function MergeOutcomeSlot({
   const t = useTranslations('approvalGate.pullRequestApproval.outcome');
   const outcome = useContext(MergeOutcomeContext)?.get(rowKey(repo, number)) ?? null;
   if (!outcome) return <>{children}</>;
-  if (merged) return null;
+  // ⚠️ A `merged` PRESS IS DRAWN BY THE STATE PILL, NEVER HERE (Bug MOTIR-12232). The row's
+  // state pill reads *Merged* for it (`useShownPullRequestState`) — before the re-read and
+  // before the host's delivery — so the slot empties exactly as it does for a row delivered
+  // merged. Drawing it here too said *Merged* twice, or *Open · Merged* while the row was
+  // still delivered open.
+  if (merged || outcome.kind === 'merged') return null;
 
   switch (outcome.kind) {
     case 'merging':
@@ -211,13 +270,6 @@ export function MergeOutcomeSlot({
         <Pill status="in-progress">
           <CircleEllipsis className="h-3 w-3" aria-hidden />
           {t('merging')}
-        </Pill>
-      );
-    case 'merged':
-      return (
-        <Pill status="done">
-          <GitMerge className="h-3 w-3" aria-hidden />
-          {t('merged')}
         </Pill>
       );
     case 'queued':
