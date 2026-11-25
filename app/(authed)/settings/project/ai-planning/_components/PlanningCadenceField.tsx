@@ -60,21 +60,23 @@ export function PlanningCadenceField({
     }
   }
 
-  const ink = disabled ? 'text-(--el-text-faint)' : 'text-(--el-text)';
-  const helpInk = disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-helper)';
-  // Faint is disabled text, so each faint element says so itself — the same
-  // `aria-disabled` the editor's dependent fields carry.
-  const disabledText = disabled ? { 'aria-disabled': true as const } : {};
+  // Faint is disabled text, so each faint element says so itself, inline — the
+  // same `aria-disabled` spread and ink ternary the editor's dependent fields
+  // carry, which is the shape the ink-contrast lint reads.
 
   return (
     <div data-testid="ai-planning-cadence">
-      <span {...disabledText} id={labelId} className={`block text-sm font-medium ${ink}`}>
+      <span
+        {...(disabled ? { 'aria-disabled': true } : {})}
+        id={labelId}
+        className={`block text-sm font-medium ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
+      >
         {t('aiPlanning.planner.cadenceLabel')}
       </span>
       <p
-        {...disabledText}
+        {...(disabled ? { 'aria-disabled': true } : {})}
         id={hintId}
-        className={`mt-0.5 max-w-[54ch] text-xs leading-relaxed ${helpInk}`}
+        className={`mt-0.5 max-w-[54ch] text-xs leading-relaxed ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-helper)'}`}
       >
         {t('aiPlanning.planner.cadenceHint')}
       </p>
@@ -123,8 +125,8 @@ export function PlanningCadenceField({
               </span>
               <span className="min-w-0 flex-1">
                 <span
-                  {...disabledText}
-                  className={`flex items-center gap-2 text-sm font-medium ${ink}`}
+                  {...(disabled ? { 'aria-disabled': true } : {})}
+                  className={`flex items-center gap-2 text-sm font-medium ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
                 >
                   {t(`aiPlanning.planner.cadence.${option}.label`)}
                   {option === 'story' ? (
@@ -132,8 +134,8 @@ export function PlanningCadenceField({
                   ) : null}
                 </span>
                 <span
-                  {...disabledText}
-                  className={`mt-0.5 block text-xs leading-relaxed ${helpInk}`}
+                  {...(disabled ? { 'aria-disabled': true } : {})}
+                  className={`mt-0.5 block text-xs leading-relaxed ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-helper)'}`}
                 >
                   {t(`aiPlanning.planner.cadence.${option}.help`)}
                 </span>
