@@ -102,13 +102,37 @@
 // settles that row when it is newer (`changeRequestCiFeedback.applyOneCiDelivery`).
 // Successes from an earlier attempt are left alone: "Re-run failed jobs" carries
 // them into the new attempt rather than running them again.
+//
+// ── AND A RED ROLL-UP A NEWER ATTEMPT HAS REPLACED IS NOT A VOTE (MOTIR-12200) ─
+// The green arm above has a red twin that the webhook never closes on its own.
+// When attempt N fails, GitHub completes the suite red and we record that roll-up.
+// When attempt N+1 starts, GitHub reopens the SAME suite, but it sends the
+// `requested` / `rerequested` actions of `check_suite` only to the App that OWNS
+// the suite (GitHub Actions) — an App watching someone else's suite hears only
+// `completed`. So nothing reopens our roll-up row: attempt N's `failure` stays on
+// it until attempt N+1 completes, and the fold ranks failure above pending, so
+// the pull request read "Checks failing" for the whole re-run (motir-infra#167,
+// run 45511434917, suite 123146961591: attempt 1 cancelled at 23:50:53, roll-up
+// red at 23:50:55, attempt 2's `checks` pending from 23:52:29).
+//
+// A suite's roll-up is formed when its attempt ENDS, after every one of that
+// attempt's checks has finished. A check row in the same suite whose own time is
+// LATER than the red roll-up therefore belongs to an attempt the roll-up does not
+// describe, and the roll-up is retired. Its information is not lost: the failing
+// checks of the attempt it summarised still vote at their own rows until the new
+// attempt re-reports them, and the new attempt's own roll-up, when it lands,
+// votes in its place. A red roll-up with no newer row in its suite, or with no
+// time on it, keeps its vote — that is the current attempt's verdict. Only the
+// suite's OWN rows decide, so a CI re-run never retires CodeQL's red roll-up
+// (MOTIR-6274).
 
 /** The row fields the supersession rule reads — a slice both call sites have. */
 export interface SuiteScopedCheckRow {
   checkName: string;
   /** The normalized conclusion (`success` · `failure` · `pending` · `neutral`).
    *  Read by the attempt rule (MOTIR-11827): only a `failure` is retired by a
-   *  green roll-up, and only a `success` roll-up retires anything. */
+   *  green roll-up, and only a `success` roll-up retires a check. A `failure`
+   *  roll-up is itself retired by a newer check in its suite (MOTIR-12200). */
   conclusion: string;
   /** WHEN, by the provider's clock, the row reached `conclusion` — its finish for
    *  a terminal row, its start for a pending one (MOTIR-10456). `null` = unknown:
@@ -180,36 +204,46 @@ function liveSuites<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
 }
 
 /**
- * The attempt-level rule (MOTIR-11827): inside a suite whose OWN roll-up is a
- * green it reached at a known time, a `failure` row that finished no later than
- * that roll-up is an EARLIER ATTEMPT's, and it does not vote.
+ * The attempt-level rule, both arms, applied per suite to the suites `liveSuites`
+ * kept — never across suites: a roll-up speaks for its own workflow run and
+ * nothing else, so CodeQL's red is never retired by CI's green (MOTIR-6274).
  *
- * Applied to the suites `liveSuites` kept, never across suites: a roll-up speaks
- * for its own workflow run and nothing else, so CodeQL's red is never retired by
- * CI's green (MOTIR-6274). A row that cannot be ordered — no time on it, or none
- * on the roll-up — keeps its vote, which is the behaviour before this rule.
+ *  - green arm (MOTIR-11827): inside a suite whose OWN roll-up is a green it
+ *    reached at a known time, a `failure` row that finished no later than that
+ *    roll-up is an EARLIER ATTEMPT's, and it does not vote;
+ *  - red arm (MOTIR-12200): a `failure` roll-up older than a check row of its own
+ *    suite describes an attempt a newer one has replaced, and it does not vote.
+ *
+ * A row that cannot be ordered — no time on it, or none on the roll-up — keeps
+ * its vote, which is the behaviour before this rule.
  */
 function withoutEarlierAttempts<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
   const greenAt = new Map<string, number>();
+  const newestCheckAt = new Map<string, number>();
   for (const row of rows) {
-    if (
-      row.suiteAggregate === true &&
-      row.checkSuiteId !== '' &&
-      row.conclusion === 'success' &&
-      row.conclusionAt != null
-    ) {
-      const at = row.conclusionAt.getTime();
+    if (row.checkSuiteId === '' || row.conclusionAt == null) continue;
+    const at = row.conclusionAt.getTime();
+    if (row.suiteAggregate === true) {
+      if (row.conclusion !== 'success') continue;
       const known = greenAt.get(row.checkSuiteId);
       if (known === undefined || at > known) greenAt.set(row.checkSuiteId, at);
+    } else {
+      const known = newestCheckAt.get(row.checkSuiteId);
+      if (known === undefined || at > known) newestCheckAt.set(row.checkSuiteId, at);
     }
   }
-  if (greenAt.size === 0) return rows;
+  if (greenAt.size === 0 && newestCheckAt.size === 0) return rows;
 
   const kept = rows.filter((row) => {
-    if (row.suiteAggregate === true || row.conclusion !== 'failure') return true;
-    if (row.conclusionAt == null) return true;
+    if (row.conclusion !== 'failure' || row.conclusionAt == null) return true;
+    const at = row.conclusionAt.getTime();
+    if (row.suiteAggregate === true) {
+      // The red arm: a newer check in this suite means a newer attempt.
+      const newest = newestCheckAt.get(row.checkSuiteId);
+      return newest === undefined || at >= newest;
+    }
     const green = greenAt.get(row.checkSuiteId);
-    return green === undefined || row.conclusionAt.getTime() > green;
+    return green === undefined || at > green;
   });
   return kept.length === rows.length ? rows : kept;
 }
