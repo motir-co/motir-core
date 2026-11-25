@@ -45,6 +45,7 @@ function row(headSha: string | null, checkRuns: ReturnType<typeof check>[]) {
     headSha,
     mergeableState: null,
     mergeableStateHeadSha: null,
+    mergeOutcomeRef: null,
     repo: { owner: 'acme', name: 'web' },
     checkRuns,
   } as unknown as Parameters<typeof toLinkedPullRequestDto>[0];
