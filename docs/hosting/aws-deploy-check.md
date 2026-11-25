@@ -18,10 +18,10 @@ and no step needs a person's laptop to hold Motir's management role: that role
 trusts only core's task roles, so the steps that act as Motir run in a core task.
 It runs in two places, because a Fargate task cannot run Docker:
 
-| where                                            | what runs there                                                                                                             | as whom                                                                    |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **a task of `motir-core-worker`**, over ECS Exec | every step that acts as Motir: `no-shape`, `converge`, `app`, `deploy`, `page`, `release2`, `rollback`, `status`, `destroy` | the worker's task role, `motir-core-worker-task`, and the roles it assumes |
-| **AWS CloudShell in the tenant account**         | building the fixture image twice and pushing both to the app's registry — what `push` does on a machine with Docker         | the person's console session in the tenant account                         |
+| where                                            | what runs there                                                                                                                           | as whom                                                                    |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **a task of `motir-core-worker`**, over ECS Exec | every step that acts as Motir: `repository`, `no-shape`, `converge`, `app`, `deploy`, `page`, `release2`, `rollback`, `status`, `destroy` | the worker's task role, `motir-core-worker-task`, and the roles it assumes |
+| **AWS CloudShell in the tenant account**         | building the fixture image twice and pushing both to the app's registry — what `push` does on a machine with Docker                       | the person's console session in the tenant account                         |
 
 The worker task is the one `fleet-admin` runs in on AWS (MOTIR-10264): it serves
 no traffic, ECS Exec is enabled on it, its task definition injects the database
@@ -38,10 +38,11 @@ and no profile.
 
 ## What must be true first
 
-- **A repository made for the check.** The app is `mh-<repository id>` — the
-  tenant app of a real Motir repository in the staging organisation, not a
-  customer's. `destroy` acts on that repository's production app, so never point
-  it at a repository anyone uses. Note its id and its organisation's id.
+- **The staging organisation's id and one of its projects' keys.** Nothing else
+  is made by hand: the check's first step, `repository` (MOTIR-12243), creates the
+  Motir repository whose tenant app `mh-<repository id>` the check deploys — see
+  [The check's repository](#the-checks-repository). The organisation needs a paid
+  AI plan, as any Motir-created repository does.
 - **The worker task carries the hosting values.** The adapter reads
   `MOTIR_HOSTING_ORIGIN_SECRET_KEY` (a secret) when it is built, for every step,
   and `MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN`. The plain value is given on
@@ -87,6 +88,30 @@ grant, the database login, the RDS CA bundle, ECS Exec and outbound HTTPS (the
 container `page` reaches the tenant load balancer through the services account's
 NAT gateways) are already on the task.
 
+## The check's repository
+
+The AWS adapter deploys the tenant app OF a repository row: it reads the row's
+organisation, binds the push roles' trust to its GitHub ids, and refuses a
+customer repository (`HOSTING_CUSTOMER_REPOSITORY_REFUSED`) — and every
+repository a production organisation holds is a customer one. So the check makes
+its own, through the same door Motir creates a Motir-hosted repository with
+(`projectRepoCreationService`), acting as the Motir system account:
+
+- **One per shape**, named `motir-deploy-check-aws-function` and
+  `motir-deploy-check-aws-container`, role `other`, on an empty base. It is a real
+  GitHub repository in Motir's hosted organisation, which gives it the GitHub ids
+  the push roles need.
+- **Idempotent.** Running `repository` again answers the same id
+  (`outcome: already_settled`); a failed attempt (`outcome: failed`, with the
+  reason) is retried by running it again. It never leaves a second repository.
+- **Visible while it lives.** It shows in the project's Repositories room, beside
+  the project's own repositories, until `destroy` removes it.
+- **`destroy` removes it** after the app: its GitHub repository and its row,
+  through the Repositories room's own delete, printing
+  `repository … outcome: removed`. A repository whose name does not start with
+  `motir-deploy-check-aws-` is never removed (`outcome: kept`), so `destroy`
+  handed a real repository's id deletes only its app.
+
 ## The caller
 
 Run the ECS Exec commands from **AWS CloudShell in the services account**
@@ -113,13 +138,16 @@ export TASK="$(aws ecs list-tasks --region us-east-1 --cluster motir-core \
   --service-name motir-core-worker --desired-status RUNNING \
   --query 'taskArns[0]' --output text)"
 export HOSTING="MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN=arn:aws:iam::944842271421:role/motir-core-worker-task"
-export CHECK="--target aws --repository <repository id> --organization <organization id>"
+export ORG="<organization id>"
+export PROJECT="<project key>"
 check() {
   aws ecs execute-command --region us-east-1 --cluster motir-core --task "$TASK" \
     --container worker --interactive \
     --command "sh -c '$HOSTING node /app/hosting/deploy-check.mjs $* $CHECK'"
 }
 ```
+
+`CHECK` is set per shape, by step 1, from the id `repository` prints.
 
 `check <step> [flags]` runs one step in the task. ECS Exec does not return the
 remote exit code, so **read the last line**: `deploy-check exit 0` is success,
@@ -129,7 +157,26 @@ adapter creates admit the `page` read the same task signs.
 
 Then, for each shape (`function` first, then `container`):
 
-### 1. `no-shape` — in the task
+### 1. `repository` — in the task
+
+```sh
+CHECK="--target aws --organization $ORG" check repository --project "$PROJECT" --shape function
+```
+
+Creates the check's repository for the shape, or finds the one an earlier run
+made, and prints `repository` (its id), `name`, `outcome` (`created`, or
+`already_settled` on a re-run), `state: created` and `github` (the
+`owner/name` of its GitHub repository). Then point every later step at it:
+
+```sh
+export CHECK="--target aws --repository <the printed repository id> --organization $ORG"
+```
+
+`outcome: failed` ends `deploy-check exit 1` with its `failureCode` and
+`failureReason`; run the step again once the cause is fixed. Needs: the database,
+the Motir system account and GitHub (the creation door's own needs).
+
+### 2. `no-shape` — in the task
 
 ```sh
 check no-shape
@@ -139,7 +186,7 @@ Must end `deploy-check exit 1` with `error: HOSTING_SHAPE_REQUIRED`, and
 `releases: none`. Nothing is created: the adapter refuses before it touches the
 account. Needs: the database (the repository row) and the management role.
 
-### 2. `converge` — in the task
+### 3. `converge` — in the task
 
 ```sh
 check converge
@@ -149,7 +196,7 @@ Prints `outcome: changed` or `unchanged`. Reads the organisation's tenant accoun
 row from the database, then brings its deploy role onto today's policy through
 the management role.
 
-### 3. `app` — in the task
+### 4. `app` — in the task
 
 ```sh
 check app --shape function
@@ -161,7 +208,7 @@ will push as, `mh-<id>-production-push`, which trusts only GitHub OIDC from the
 repository) and the two tags to push, `release1` and `release2`. Needs: the
 database (the repository's organisation and GitHub ids) and the management role.
 
-### 4. The images — in CloudShell in the tenant account
+### 5. The images — in CloudShell in the tenant account
 
 Open CloudShell in the **tenant account** (`us-east-1`, a default environment, not
 a VPC one), signed in to it through the console — an IAM Identity Center
@@ -201,7 +248,7 @@ The password is piped, never an argument and never printed. The two digests
 differ: the release number is baked in at build. Leave the tenant account's
 CloudShell open; the next steps run in the services account's again.
 
-### 5. `deploy`, `page`, `release2`, `rollback` — in the task
+### 6. `deploy`, `page`, `release2`, `rollback` — in the task
 
 ```sh
 check deploy --shape function
@@ -234,16 +281,18 @@ function's 403s come from the front door, which never invokes the app for them
 them; the front door's, `/aws/lambda/mh-<id>-front-door`, shows all three).
 `page` after it shows the request the front door admitted reaching the app.
 
-### 6. `destroy` — in the task
+### 7. `destroy` — in the task
 
 ```sh
 check destroy --shape function
 ```
 
 Prints the usage, its `compute` (`lambda` GB-seconds or `fargate` vCPU- and
-GB-seconds), then no releases. Needs the database and the management role.
+GB-seconds), then no releases, then `repository … outcome: removed` — the
+check's repository and its GitHub repository are gone. Needs the database, the
+management role and GitHub.
 
-Repeat from step 3 with `--shape container`. State lives in the account, not in
+Repeat from step 1 with `--shape container`. State lives in the account, not in
 the task, so any running worker task can take any step.
 
 ## What to look at in the console
