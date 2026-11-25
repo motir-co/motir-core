@@ -384,7 +384,7 @@ test('an administrator hands over AWS hosting with its apps running, and a Fly a
   await releaseLive(page, seed.api, commit(2));
   await releaseLive(page, seed.fly, commit(3));
   const flyApp = await applicationOf(seed.fly);
-  expect(fakeDatabaseExists(flyApp.id)).toBe(true);
+  expect(fakeDatabaseExists(seed.fly.id)).toBe(true);
   const accountBefore = readTenantAccount(ACCOUNT)!;
   expect(accountBefore.stacks.map((s) => s.name)).toContain(
     `motir-release-mh-${seed.shop.id}-pr${PREVIEW_PR}`,
@@ -710,7 +710,7 @@ test('an administrator hands over AWS hosting with its apps running, and a Fly a
 
       expect((await applicationOf(seed.fly)).state).toBe('handed_over');
       expect(previewHostingFake('fly').app(`mh-${seed.fly.id}`)).toBeUndefined();
-      expect(fakeDatabaseExists(flyApp.id)).toBe(false);
+      expect(fakeDatabaseExists(seed.fly.id)).toBe(false);
       await expectSharedNotFound(page, seed.fly.address!);
       await beat();
     },

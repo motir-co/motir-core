@@ -21,7 +21,9 @@ function requiredPath(name: string): string {
 }
 
 /** Whether the lane's fake database port still holds a database for the
- *  application `applicationRef` (the hosted application's id). */
+ *  application `applicationRef` — the PROJECT REPOSITORY id, the reference
+ *  `productionDatabaseService` creates and `productionTeardownService` deletes
+ *  the database under (not the hosted application's own id). */
 export function fakeDatabaseExists(applicationRef: string, provider = 'neon'): boolean {
   requiredPath(FAKE_DATABASE_STATE_PATH_ENV);
   const slice = readFakeDatabaseSlice(provider);
