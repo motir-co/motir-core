@@ -369,12 +369,20 @@ test.describe('board-ui @smoke', () => {
     // the same phrase in a longer "Notification Move not allowed…" string.
     await expect(page.getByText('Move not allowed', { exact: true })).toBeVisible();
     await expect(
-      page.getByTestId(`board-column-${implementedCol.id}`).getByTestId(cardTid(card.identifier)),
+      page
+        .getByRole('main')
+        .getByTestId(`board-column-${implementedCol.id}`)
+        .getByTestId(cardTid(card.identifier)),
     ).toBeVisible();
     await expect(
-      page.getByTestId(`board-column-${todoCol.id}`).getByTestId(cardTid(card.identifier)),
+      page
+        .getByRole('main')
+        .getByTestId(`board-column-${todoCol.id}`)
+        .getByTestId(cardTid(card.identifier)),
     ).toHaveCount(0);
-    await expect(page.getByTestId(`board-count-${implementedCol.id}`)).toHaveText('1');
+    await expect(page.getByRole('main').getByTestId(`board-count-${implementedCol.id}`)).toHaveText(
+      '1',
+    );
     await expect(page.getByTestId(`board-count-${todoCol.id}`)).toHaveText('0');
 
     // The status is untouched on re-fetch — the snap-back was visual only.
