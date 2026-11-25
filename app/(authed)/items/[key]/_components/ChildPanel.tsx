@@ -9,6 +9,7 @@ import { ContentSectionCard } from './ContentSectionCard';
 import { Pill } from '@/components/ui/Pill';
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
+import type { CardNextActionsOption } from '@/lib/planning/canvasNextActions';
 
 // The Children section on the work-item detail page (Story MOTIR-2284 /
 // MOTIR-2288), drawn in `design/work-items/child-panel-graph.*`. It owns the
@@ -54,6 +55,11 @@ export interface ChildPanelProps {
   projectKey: string;
   /** The server-rendered rows (`ChildList`), shown in list mode. */
   children: ReactNode;
+  /** The graph cards' hover next-action button (MOTIR-12233) — Plan on a To plan
+   *  child, copy `motir run` / `review` / `fix` / `guide` on the rest — resolved by
+   *  the page through `canvasNextActionsFor`, the roadmap page's own gate. `null`
+   *  (a Visitor) or absent draws no button. */
+  nextActions?: CardNextActionsOption | null;
 }
 
 export function ChildPanel({
@@ -62,6 +68,7 @@ export function ChildPanel({
   itemIdentifier,
   projectKey,
   children,
+  nextActions = null,
 }: ChildPanelProps) {
   const t = useTranslations('issueViews');
   const pathname = usePathname();
@@ -143,6 +150,10 @@ export function ChildPanel({
             fullScreenable
             searchable={false}
             locatable={false}
+            // The cards' next-action button, gated exactly as on the roadmap
+            // (MOTIR-12233): the Plan click opens the authed shell's planning
+            // overlay over this page, the same overlay the roadmap opens.
+            nextActions={nextActions}
             emptyRoot={
               // The ONLY reachable "nothing to draw" state: this section renders at
               // all only when the server read returned children, and

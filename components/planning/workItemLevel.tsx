@@ -87,9 +87,10 @@ export function isNotInEpicRow(item: { parentId: string | null; kind: string }):
 export interface BuildWorkItemLevelOptions {
   /** Mark the in-progress frontier node "you are here" (the roadmap consumer). */
   markActive?: boolean;
-  /** The cards' hover next-action button (MOTIR-10509) — the roadmap page's, and a
-   *  member's only. Absent / `null` draws none: every other canvas that builds a
-   *  level (onboarding, a run's pane, the plan review) keeps its cards as they were. */
+  /** The cards' hover next-action button (MOTIR-10509) — a member's only, passed
+   *  by the roadmap page and the item page's child graph (MOTIR-12233). Absent /
+   *  `null` draws none: onboarding, a run's pane and the plan review build their
+   *  levels without it on purpose, and each says why at its call. */
   nextActions?: CardNextActionsOption | null;
   /** Pin the planning-origin cluster at the road's start (the ROOT level only). */
   includeOrigin?: boolean;

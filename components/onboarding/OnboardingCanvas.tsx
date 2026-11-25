@@ -44,6 +44,16 @@ import {
 // a PRODUCED tier station opens its doc in the tier-doc viewer (TierDocModal,
 // MOTIR-1355); a drilled work-item node opens the shared quick-view peek
 // (MOTIR-1352). Selecting a station only HIGHLIGHTS it — View opens the doc.
+//
+// NO NEXT-ACTION BUTTON (MOTIR-12233), deliberately. Every member-facing canvas of
+// committed work items turns the card's hover button on (`canvasNextActionsFor`);
+// this one does not, for two reasons. The hub IS a planning conversation — its
+// right pane is the planner — so a Plan button on a drilled card would open a
+// second planning workspace over the one the reader is in. And the hub renders
+// in the `(onboarding)` route group, outside the authed shell that mounts the
+// planning overlay a Plan click writes its address for, so the click would land
+// nowhere. The copy rows (`motir run` / …) belong to a project being worked,
+// which an onboarding project is not yet.
 
 const ROOT_KEY = '__root__';
 // The synthetic top-level node that stands in for the whole produced plan — a

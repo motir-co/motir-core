@@ -109,6 +109,13 @@ function withChangeKeys(level: RoadmapLevel, items: PlanReviewItemDto[]): Roadma
 // `version` bumps `reloadKey` so the "live while generating" poll re-renders the
 // current level as new PlanItems arrive.
 //
+// NO NEXT-ACTION BUTTON on the committed cards (MOTIR-12233), deliberately. This
+// canvas is the review PREVIEW of a plan, drawn inside the planning workspace: its
+// committed cards are context for the proposal, and a click on one picks it as a
+// planning target. A hover Plan button would open planning from inside planning,
+// and a copy `motir run` button would offer to build a card the open plan may
+// be about to change. The member-facing canvases (`canvasNextActionsFor`) carry it.
+//
 // ── BEFORE THERE IS A PLAN (bug MOTIR-11513) ─────────────────────────────────
 // The planning surface mounts THIS canvas from the moment it opens, before any
 // plan exists, and keeps the same instance when the plan's first read lands. It

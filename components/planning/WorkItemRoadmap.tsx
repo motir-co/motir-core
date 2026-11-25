@@ -89,9 +89,9 @@ export interface WorkItemRoadmapProps {
    */
   showPlanningOrigin?: boolean;
   /** The card's hover next-action button (MOTIR-10509; design MOTIR-10508): copy
-   *  `motir run` / `review` / `fix`, or open planning on a To plan story. Absent or
-   *  `null` draws no button — a Visitor's canvas, and every surface that is not the
-   *  roadmap page. */
+   *  `motir run` / `review` / `fix` / `guide`, or open planning on a To plan card.
+   *  Absent or `null` draws no button — a Visitor's canvas. The roadmap page and
+   *  the item page's child graph pass `canvasNextActionsFor`'s answer (MOTIR-12233). */
   nextActions?: CardNextActionsOption | null;
   positions?: Record<string, { x: number; y: number }>;
   onNodeMove?: (id: string, x: number, y: number) => void;

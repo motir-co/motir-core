@@ -87,6 +87,7 @@ import { IssueQuickViewController } from '../_components/IssueQuickViewControlle
 import { parseActivityTab } from '@/lib/activity/tab';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
+import { canvasNextActionsFor } from '@/lib/planning/canvasNextActions';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -929,6 +930,13 @@ export default async function ItemView({
                         itemId={item.id}
                         itemIdentifier={item.identifier}
                         projectKey={ctx.project.identifier}
+                        // The graph cards' next-action button (MOTIR-12233): the
+                        // roadmap page's gate, so a Visitor gets none and a project
+                        // without AI gets no Plan.
+                        nextActions={canvasNextActionsFor({
+                          visitor: isVisitor,
+                          aiConfigured: isMotirAiConfigured(),
+                        })}
                       >
                         <ChildList
                           items={detail.children}

@@ -24,6 +24,13 @@ import { runLegLabel } from '@/lib/runs/legLabel';
 // blank, it was INVISIBLE.* So the level goes through `fetchRoadmapLevel` +
 // `buildWorkItemLevel` like every other consumer, and the run's own facts ride on
 // the builder's `runLegs` option.
+//
+// NO NEXT-ACTION BUTTON (MOTIR-12233), deliberately — the card asks this canvas to
+// say why. It is a read-only picture of ONE RUN's set inside the run modal: a
+// click selects a work item so the log pane beside it follows. A hover button
+// that copies `motir run` for a card the run is already working, or opens the
+// planning overlay over the run modal, would act on the run from its own
+// record. The member-facing canvases (`canvasNextActionsFor`) carry the button.
 
 /** The synthetic parent every member of the run's level is given. */
 const RUN_LEVEL_PARENT = '__run-level__';
