@@ -1068,6 +1068,9 @@ describe('the work-loop payloads', () => {
       // WHEN an approve claimed the plan (MOTIR-9006) — MCP's own field, null
       // unless the plan is `approving`.
       approvingAt: null,
+      // HOW a walk ended early on purpose (MOTIR-12207) — null on a plan whose
+      // walk ran to its end, the plan DTO always carries it.
+      walkEndedBy: null,
       createdById: 'requester-1',
       // WHO asked and WHO authored (MOTIR-2986) — MCP's own fields, extended here
       // beside `decidedById` for the same reason and deliberately NOT added to
@@ -1118,6 +1121,9 @@ describe('the work-loop payloads', () => {
       decidedAt: null,
       decidedById: null,
       approvingAt: null,
+      // HOW a walk ended early on purpose (MOTIR-12207) — null on a plan whose
+      // walk ran to its end, the plan DTO always carries it.
+      walkEndedBy: null,
       createdById: null,
       authorSource: 'mcp' as const,
       authorHarness: null,
