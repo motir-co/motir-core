@@ -355,6 +355,11 @@ export interface SubmittedJob {
   /** An `ask_project` submit's `context.conversationTurns` (MOTIR-9442) — the earlier
    *  turns core sent, oldest first. Absent on a conversation's first turn. */
   conversationTurns?: AskConversationTurn[];
+  /** A `plan` submit's `context.planningCadence` (Story MOTIR-12203 · MOTIR-12216) — how
+   *  far the run walks before it stops for review, recorded as sent and only when it
+   *  is one of the two cadences, so a spec reads which cadence the person's run left
+   *  with rather than which one the project holds now. */
+  planningCadence?: 'story' | 'subtask';
 }
 
 /**
@@ -471,6 +476,9 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
         : {}),
       ...(kind === 'plan' && requirementConfirmedOf(rawBody)
         ? { requirementConfirmed: requirementConfirmedOf(rawBody)! }
+        : {}),
+      ...(kind === 'plan' && planningCadenceOf(rawBody)
+        ? { planningCadence: planningCadenceOf(rawBody)! }
         : {}),
       ...(kind === 'ask_project' && conversationTurnsOf(rawBody)
         ? { conversationTurns: conversationTurnsOf(rawBody)! }
@@ -595,6 +603,19 @@ function contextObjectOf(rawBody: string, key: string): Record<string, unknown> 
 /** The `context.requirement` a `plan` submit carried (MOTIR-9436), or null. */
 function requirementOf(rawBody: string): SubmittedRequirement | null {
   return contextObjectOf(rawBody, 'requirement') as SubmittedRequirement | null;
+}
+
+/** The `context.planningCadence` a `plan` submit carried (MOTIR-12216), or null. Read
+ *  off the wire string motir-ai reads, `planningCadence`, and only for its two values. */
+function planningCadenceOf(rawBody: string): 'story' | 'subtask' | null {
+  try {
+    const value = (JSON.parse(rawBody) as { context?: Record<string, unknown> }).context?.[
+      'planningCadence'
+    ];
+    return value === 'story' || value === 'subtask' ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The `context.requirementConfirmed` a `plan` submit carried (MOTIR-10091), or null. */
