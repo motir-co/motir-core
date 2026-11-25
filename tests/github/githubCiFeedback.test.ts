@@ -624,7 +624,11 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
       { workItemId: item.id, commentId: comments[0]!.id },
     ]);
     expect(await ciStateOf(item.id)).toBe('passing');
-  });
+    // Its own budget: 34 webhook events through the full ingest path, and since
+    // MOTIR-12202 the To Do card is also promoted (→ Implemented on the link, →
+    // In Review with its approve-to-merge gate on green). It measured 10.8–15 s on
+    // CI's shards against the 15 s default, and timed out once.
+  }, 60_000);
 
   it('a check still PENDING keeps the comment INTERIM — no terminal verdict is asserted', async () => {
     const s = await makeScenario('interim@example.com');
