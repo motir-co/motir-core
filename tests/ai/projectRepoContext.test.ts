@@ -376,6 +376,8 @@ describe('the planning-job ENVELOPE', () => {
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The project's planning cadence (MOTIR-12203), sent on every plan job.
+      planningCadence: 'story',
       // The generation's NEW session, allocated before the submit (MOTIR-11294).
       planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
@@ -446,6 +448,8 @@ describe('the planning-job ENVELOPE', () => {
       generateExplanations: false,
       recordPlanningMistakes: true,
       finalCheck: true,
+      // The project's planning cadence (MOTIR-12203), sent on every plan job.
+      planningCadence: 'story',
       // The generation's NEW session, allocated before the submit (MOTIR-11294).
       planSessionId: expect.any(String),
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's

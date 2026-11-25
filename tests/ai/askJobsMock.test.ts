@@ -190,6 +190,31 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
     expect(bare).not.toHaveProperty('requirementConfirmed');
   });
 
+  it('journals a plan submit’s planning cadence, and only its two values (MOTIR-12216)', async () => {
+    declare([]);
+
+    await submitJob('plan', tenant, { planningCadence: 'subtask' }, { userId: 'user-1' });
+    await submitJob('plan', tenant, { planningCadence: 'story' }, { userId: 'user-1' });
+    // A value off the wire that the type forbids: the mock must drop it, not journal it.
+    await submitJob(
+      'plan',
+      tenant,
+      { planningCadence: 'sprint' as unknown as 'story' },
+      { userId: 'user-1' },
+    );
+    await submitJob('plan', tenant, {}, { userId: 'user-1' });
+    await submitJob('ask_project', tenant, { planningCadence: 'subtask' }, { userId: 'user-1' });
+
+    const [subtask, story, unknown, bare, asked] = submitted();
+    expect(subtask).toMatchObject({ kind: 'plan', planningCadence: 'subtask' });
+    expect(story).toMatchObject({ kind: 'plan', planningCadence: 'story' });
+    expect(unknown).not.toHaveProperty('planningCadence');
+    expect(bare).not.toHaveProperty('planningCadence');
+    // Read off a PLAN submit only.
+    expect(asked).toMatchObject({ kind: 'ask_project' });
+    expect(asked).not.toHaveProperty('planningCadence');
+  });
+
   it('journals an ask submit’s conversation turns, and none on a first turn', async () => {
     declare([{ intent: 'ask', answer: 'One.' }]);
     const turns: AskConversationTurn[] = [

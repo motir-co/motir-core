@@ -292,6 +292,7 @@ import type {
   PlanStepDto,
   PlanStepKindDto,
   PlanStepProviderWaitDto,
+  PlanWalkEndedByDto,
 } from '@/lib/dto/plans';
 import {
   PLAN_ITEM_REASON_MAX,
@@ -316,7 +317,8 @@ import {
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planWalkCompletenessService } from '@/lib/services/planWalkCompletenessService';
-import type { WalkCompleteness } from '@/lib/plans/walkCompleteness';
+import { isLeftLaid, type WalkCompleteness } from '@/lib/plans/walkCompleteness';
+import { TO_PLAN_STATUS_KEY } from '@/lib/services/decisionCorrectionMarkService';
 import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
@@ -892,6 +894,15 @@ function validateProposal(p: ProposalInput): void {
         `${proposalLabel({ op: p.op, title: p.proposedFields.title })}: \`authorFinished\` cannot be ` +
           'set on an `add`. It says an author session finished the card, which only that ' +
           "session's driver can say, through `update_plan_item` — omit it from the append.",
+      );
+    }
+    // Nor `leftLaid` (MOTIR-12207): only a deliberate CLOSE stamps it, under the plan
+    // lock, from what the walk actually left unwritten.
+    if (Object.prototype.hasOwnProperty.call(p.proposedFields, 'leftLaid')) {
+      throw new InvalidProposalError(
+        `${proposalLabel({ op: p.op, title: p.proposedFields.title })}: \`leftLaid\` cannot be ` +
+          'set on an `add`. Motir stamps it when a walk ends on purpose (`walkEndedBy` on the ' +
+          'close) — omit it from the append.',
       );
     }
     validateProposedSizing(p.proposedFields);
@@ -3548,6 +3559,42 @@ async function assertNoRevisionInFlight(
 }
 
 /**
+ * REWRITE THE `leftLaid` STAMPS FOR A CLOSE (Story MOTIR-12203 · MOTIR-12207), in the
+ * close's transaction and under its plan lock.
+ *
+ * A deliberate close (`walkEndedBy` set) stamps `leftLaid: true` on exactly the
+ * `add`s that carry no `authorFinished`, and drops it from the authored ones; any
+ * other close drops it from every proposal. Only a row whose stamp actually changes
+ * is written, so an ordinary close over a plan that never had a stamp writes
+ * nothing. The stamp is planner state about the card, like `authorFinished`, so it
+ * is written into the proposal's `proposedFields` and approve carries nothing of it
+ * onto the work item.
+ */
+async function rewriteLeftLaidStamps(
+  proposals: readonly PlanItem[],
+  walkEndedBy: PlanWalkEndedByDto | null,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  for (const item of proposals) {
+    if (item.op !== 'add' || item.proposedFields == null) continue;
+    const fields = item.proposedFields as unknown as PlanItemProposedFields;
+    const want = walkEndedBy != null && fields.authorFinished !== true;
+    const has = fields.leftLaid === true;
+    if (want === has && (want || !Object.prototype.hasOwnProperty.call(fields, 'leftLaid'))) {
+      continue;
+    }
+    const next: PlanItemProposedFields = { ...fields };
+    if (want) next.leftLaid = true;
+    else delete next.leftLaid;
+    await planItemRepository.update(
+      item.id,
+      { proposedFields: next as unknown as Prisma.InputJsonValue },
+      tx,
+    );
+  }
+}
+
+/**
  * A PLAN THAT PROPOSES NOTHING CANNOT BE APPROVED (MOTIR-4146).
  *
  * One line, given a name because `approvePlan` asks the question TWICE — once
@@ -4275,9 +4322,70 @@ async function materialize(
   // never mean something different from "not ready" there. It is a snapshot of
   // that predicate at creation, not a second source of truth for it: readiness
   // stays computed, and it is what dispatch reads.
+  // Pass 2a — A CARD LEFT LAID ON PURPOSE IS BORN `to_plan` (Story MOTIR-12203 ·
+  // MOTIR-12207). A walk the project's Planning cadence stopped, or the person's
+  // Stop ended, stamped every not-authored `add` `leftLaid` at its close: the card
+  // is laid out by title and boundary and waits for a later planning pass, which is
+  // exactly what `to_plan` says (an in_progress-category status both claim doors
+  // refuse). Its blocked_by edges were written in Pass 2 like any card's; only its
+  // FIRST status differs, and it is taken out of the blocked derivation below so a
+  // waiting edge never overrides it. The status is resolved, never assumed, and a
+  // restricted workflow must declare initial → `to_plan`, the same two checks the
+  // blocked pass makes: either failing leaves the card to today's initial / derived
+  // status. Nothing is read when the plan left nothing laid — approve's round-trip
+  // budget (MOTIR-3396) is unchanged for every other plan.
+  const toPlanIds = new Set<string>();
+  const laidIds = adds
+    .filter((item) =>
+      isLeftLaid({
+        op: item.op,
+        proposedFields: item.proposedFields as PlanItemProposedFields | null,
+      }),
+    )
+    .map((item) => planItemToWorkItem.get(item.id)!);
+  if (laidIds.length > 0) {
+    const toPlanStatus = await workflowsRepository.findStatusByKey(
+      plan.projectId,
+      TO_PLAN_STATUS_KEY,
+      ctx.workspaceId,
+      tx,
+    );
+    const initialStatus = await workflowsRepository.findStatusByKey(
+      plan.projectId,
+      statusKey,
+      ctx.workspaceId,
+      tx,
+    );
+    const legal =
+      toPlanStatus != null &&
+      initialStatus != null &&
+      (project.workflowPolicyMode === 'open' ||
+        (await workflowsRepository.findTransition(
+          plan.projectId,
+          initialStatus.id,
+          toPlanStatus.id,
+          ctx.workspaceId,
+          tx,
+        )) !== null);
+    if (legal) {
+      for (const id of laidIds) {
+        const updated = await workItemRepository.update(id, { status: toPlanStatus.key }, tx);
+        // Fed back to Pass 3, which records the ONE `created` revision at this status.
+        const entry = createdAdds.find((c) => c.created.id === id);
+        if (entry) entry.created = updated;
+        toPlanIds.add(id);
+      }
+    }
+  }
+
   if (createdAdds.length > 0) {
-    const createdIds = createdAdds.map(({ created }) => created.id);
-    const blockerRows = await workItemLinkRepository.findBlockerStatesForItems(createdIds, tx);
+    const createdIds = createdAdds
+      .map(({ created }) => created.id)
+      .filter((id) => !toPlanIds.has(id));
+    const blockerRows =
+      createdIds.length > 0
+        ? await workItemLinkRepository.findBlockerStatesForItems(createdIds, tx)
+        : [];
     if (blockerRows.length > 0) {
       // A blocker may live in ANOTHER project (a cross-project edge), so
       // "terminal" is resolved per blocker-project — the same batched read
@@ -7720,6 +7828,17 @@ export const plansService = {
        * and writes what is owed — Resume would refuse that turn.
        */
       walkReturned?: boolean;
+      /**
+       * The walk ended ON PURPOSE (Story MOTIR-12203 · MOTIR-12207): `cadence` — the
+       * project's Planning cadence stopped it where it was meant to stop;
+       * `person_stop` — the person pressed Stop and the planner already discarded
+       * its in-flight sessions' changes. It GOVERNS over `walkIncomplete`: the plan
+       * closes `planned` and approvable, every not-authored `add` is stamped
+       * `leftLaid` (approve creates it at `to_plan`), and the session records no
+       * failure. Absent, every `leftLaid` stamp is cleared and the plan's
+       * `walkEndedBy` nulled, so a stale stamp never makes a later walk read complete.
+       */
+      walkEndedBy?: PlanWalkEndedByDto;
     } = {},
   ): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -7896,8 +8015,24 @@ export const plansService = {
         // longer a question), and the plan's session records a resumable failure with
         // reason `stopped`, which is what offers the person Resume — the failed
         // attempt's own Resume (MOTIR-7905), continuing the SAME plan.
-        const walk = await planWalkCompletenessService.readWithin(fresh, tx);
-        if (opts.walkIncomplete === true || !walk.complete) {
+        // ⚠️ EVERY CLOSE REWRITES THE DELIBERATE-END STAMPS (MOTIR-12207), BEFORE the
+        // verdict reads them and before the gate's digest is taken: a deliberate
+        // close stamps exactly the not-authored `add`s `leftLaid` and stores
+        // `walkEndedBy`; any other close clears both, so a plan re-opened and closed
+        // again is judged on THIS walk's end, never on an earlier one's.
+        const walkEndedBy = opts.walkEndedBy ?? null;
+        await rewriteLeftLaidStamps(proposals, walkEndedBy, tx);
+        const judged =
+          (fresh.walkEndedBy ?? null) === walkEndedBy
+            ? fresh
+            : await planRepository.update(planId, { walkEndedBy }, tx);
+        const walk = await planWalkCompletenessService.readWithin(judged, tx);
+        // A deliberate end GOVERNS (`walkIncomplete` is the producer's word that the
+        // walk did not write everything, which a deliberate end also is): it closes
+        // planned unless the verdict still owes a card it did NOT leave on purpose.
+        const stop =
+          walkEndedBy != null ? !walk.complete : opts.walkIncomplete === true || !walk.complete;
+        if (stop) {
           const stopped = await planRepository.update(
             planId,
             {
@@ -7976,6 +8111,9 @@ export const plansService = {
           },
           tx,
         );
+        // A deliberately ended walk has no session running, exactly as a stopped
+        // one: a step it left behind would read its card as being written forever.
+        if (walkEndedBy != null) await planStepRepository.deleteForPlan(planId, tx);
         const n = await planItemRepository.countByPlan(planId, tx);
         // THE QUESTION IS ASKED WITH THE STATUS (MOTIR-6036; ADR approval-gates.md
         // §11.7): the plan's `awaiting` gate, in this transaction and under the
@@ -8000,6 +8138,7 @@ export const plansService = {
             ...generationActor(fresh, ctx),
             diff: {
               itemCount: n,
+              ...(walkEndedBy != null ? { walkEndedBy, leftLaidCount: walk.leftLaid.length } : {}),
               ...(productName != null ? { productName } : {}),
               ...(updated.summary != null ? { summary: updated.summary } : {}),
             },
@@ -10754,7 +10893,13 @@ export const plansService = {
    * rather than as a status. A READ: the claim re-asks it under the plan lock.
    */
   async readWalkCompleteness(
-    plan: { id: string; workspaceId: string; projectId: string; plannerRecord: unknown },
+    plan: {
+      id: string;
+      workspaceId: string;
+      projectId: string;
+      plannerRecord: unknown;
+      walkEndedBy?: PlanWalkEndedByDto | null;
+    },
     ctx: ServiceContext,
   ): Promise<WalkCompleteness> {
     return withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -10898,6 +11043,8 @@ export const plansService = {
       walkIncomplete?: boolean;
       /** …by returning with a question (Bug MOTIR-11701), for `markPlanned`. */
       walkReturned?: boolean;
+      /** …on purpose — cadence or the person's Stop (MOTIR-12207), for `markPlanned`. */
+      walkEndedBy?: PlanWalkEndedByDto;
     } = {},
   ): Promise<{ planId: string; released: boolean; planned: boolean; status: string }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -10919,6 +11066,7 @@ export const plansService = {
           revision: true,
           ...(opts.walkIncomplete ? { walkIncomplete: true } : {}),
           ...(opts.walkReturned ? { walkReturned: true } : {}),
+          ...(opts.walkEndedBy ? { walkEndedBy: opts.walkEndedBy } : {}),
         });
         status = closed.status;
       } catch (err) {

@@ -3777,7 +3777,21 @@
         "dataPracticeLink": "Cosa dichiara ciascun provider",
         "finalCheckLabel": "Esegui la verifica finale",
         "finalCheckHint": "Prima che un piano venga proposto, Motir AI rilegge i suoi elementi di lavoro in ordine di costruzione, verifica che ciascuno possa essere costruito su ciò che consegnano gli elementi precedenti e corregge ciò che trova. Su un piano grande può richiedere molti minuti.",
-        "finalCheckOff": "I piani di questo progetto vengono proposti senza la verifica finale. Il riepilogo di ogni piano indica che non è stato verificato."
+        "finalCheckOff": "I piani di questo progetto vengono proposti senza la verifica finale. Il riepilogo di ogni piano indica che non è stato verificato.",
+        "cadenceLabel": "Ritmo di pianificazione",
+        "cadenceHint": "Fin dove Motir AI pianifica prima di consegnarti un piano da rivedere.",
+        "cadenceDefault": "Predefinito",
+        "cadence": {
+          "story": {
+            "label": "Storia",
+            "help": "Pianifica un’intera storia alla volta: organizza il lavoro e ne scrive ogni parte, come funziona la pianificazione oggi."
+          },
+          "subtask": {
+            "label": "Sottoattività",
+            "help": "Pianifica un passo, poi si ferma. Il resto viene impostato per titolo e attende come «Da pianificare» un passaggio di pianificazione successivo."
+          }
+        },
+        "cadenceScopeNote": "Una modifica si applica ai piani avviati dopo che l’hai salvata. Un piano già in corso mantiene il ritmo con cui è partito."
       },
       "lessonCapture": {
         "title": "Errori di pianificazione",
@@ -4912,6 +4926,15 @@
           "medium": "media",
           "large": "grande"
         },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        },
         "total": "Crediti addebitati nel periodo",
         "footnote": "1 credito è un minuto equivalente Linux. Il consumo di ogni giorno viene addebitato una volta, dopo la mezzanotte UTC, arrotondato al credito intero, quindi quello di oggi non è ancora nel totale.",
         "noRelease": "Nessun consumo finora. Il consumo inizia con il primo rilascio online.",
@@ -4923,15 +4946,6 @@
           "bodyCannotSuspend": "Questa app gira come container AWS, che non può essere sospeso, quindi resta sempre attiva e continua a consumare crediti finché il saldo non viene ricaricato. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
           "topUp": "Ricarica crediti",
           "member": "Un proprietario o amministratore dell’organizzazione può ricaricare i crediti."
-        },
-        "amount": {
-          "hours": "{value} h",
-          "gbSeconds": "{value} GB-s",
-          "count": "{value}",
-          "vcpuHours": "{value} vCPU-h",
-          "gbHours": "{value} GB-h",
-          "cuHours": "{value} CU-h",
-          "acuHours": "{value} ACU-h"
         }
       }
     },

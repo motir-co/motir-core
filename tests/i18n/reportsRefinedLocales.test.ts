@@ -86,6 +86,10 @@ const USAGE_AMOUNTS = ['hours', 'gbSeconds', 'vcpuHours', 'gbHours', 'cuHours', 
   (k) => `settings.production.usage.amount.${k}`,
 );
 const USAGE_CREDITS = 'settings.production.usage.col.credits';
+// The Planning cadence's « Story » option (MOTIR-12206): the glossary keeps the
+// work-item kind as « Story » in de, fr and nl, so the option label is the same word.
+const CADENCE_STORY = 'settings.aiPlanning.planner.cadence.story.label';
+
 const SAME_WORD: Record<string, string[]> = {
   zh: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
   ko: [...USAGE_AMOUNTS, ...FINDINGS_NAMES],
@@ -101,6 +105,7 @@ const SAME_WORD: Record<string, string[]> = {
     IDLE_SHAPE_CONTAINER,
   ],
   fr: [
+    CADENCE_STORY,
     ...USAGE_AMOUNTS,
     LIVE_OPS_RANGE,
     LIVE_OPS_APP,
@@ -159,6 +164,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.attribution.corpus',
   ],
   de: [
+    CADENCE_STORY,
     ...USAGE_AMOUNTS,
     USAGE_CREDITS,
     LIVE_OPS_RELEASE,
@@ -174,6 +180,7 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.plannerFindings.triage.title',
   ],
   nl: [
+    CADENCE_STORY,
     ...USAGE_AMOUNTS,
     USAGE_CREDITS,
     LIVE_OPS_RELEASE,

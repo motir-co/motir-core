@@ -2306,6 +2306,19 @@ model Project {
   /// "predates the field" state is constructible in a test. Only an explicit
   /// `false` turns the final check off.
   aiFinalCheck                     Boolean?              @map("ai_final_check")
+  /// PLANNING CADENCE — how far the AI planner plans before it hands a plan over
+  /// for review (Story MOTIR-12203 · MOTIR-12204): `story` (today's walk — lay a
+  /// level, author every child, drill the first child) or `subtask` (plan one
+  /// step and stop). The value reaches motir-ai on every plan job's context as
+  /// `planningCadence`, and plan.py on `get_project_state` — core config is never
+  /// read across the repository boundary.
+  ///
+  /// NULLABLE WITH NO `@default`, for exactly the reasons `aiFinalCheck` directly
+  /// above gives: NULL means "never written", every reader resolves it through
+  /// {@link resolvePlanningCadence} to **story**, so every project that predates
+  /// the column plans as it did with no backfill, and the never-written state is
+  /// constructible in a test. Only an explicit `subtask` changes the walk.
+  aiPlanningCadence                AiPlanningCadence?    @map("ai_planning_cadence")
   /// WHO OWNS the project's repository set (`docs/decisions/project-repository-set.md`
   /// §3, MOTIR-1780) — `user` (created in the user's own account/org, theirs from
   /// the first commit) or `motir` (created under Motir's org, recorded as
@@ -2805,6 +2818,14 @@ model ProjectKeyAlias {
   @@unique([workspaceId, identifier])
   @@index([projectId])
   @@map("project_key_alias")
+}
+
+/// The project AI planning setting "Planning cadence" (Story MOTIR-12203 ·
+/// MOTIR-12204) — see `Project.aiPlanningCadence`. `story` is today's walk and
+/// the default a NULL column resolves to; `subtask` plans one step and stops.
+enum AiPlanningCadence {
+  story
+  subtask
 }
 
 /// The org-scoped role a user holds in an `Organization` (Story 6.10), DISTINCT
@@ -7602,6 +7623,15 @@ model ApiToken {
   @@map("api_token")
 }
 
+/// How a walk ended on purpose (Story MOTIR-12203 · MOTIR-12207) — see
+/// `Plan.walkEndedBy`.
+enum PlanWalkEndedBy {
+  cadence
+  person_stop
+
+  @@map("plan_walk_ended_by")
+}
+
 /// The lifecycle state of an AI-planning proposal bundle (Story 7.21).
 /// `generating` — the producer (7.4 generation / 7.11 re-planning) has opened
 /// the plan and is still appending proposals. `planned` — the generation
@@ -7883,6 +7913,16 @@ model Plan {
   /// reads null, so a consumer treats it as "not recorded" and falls back to the
   /// status. Never set on `approved` — an approval has one history.
   decisionReason       PlanDecisionReason?     @map("decision_reason")
+  /// HOW a walk that left cards laid ENDED ON PURPOSE (Story MOTIR-12203 ·
+  /// MOTIR-12207): `cadence` — the project's Planning cadence stopped the walk
+  /// where it was meant to stop; `person_stop` — the person pressed Stop and the
+  /// planner discarded its in-flight sessions' changes. Written by every close:
+  /// a deliberate close stores it, any other close nulls it. While set, the walk
+  /// verdict owes neither a `leftLaid` proposal nor a committed card the walk
+  /// listed and never re-authored, so the plan closes `planned` and approvable.
+  /// A column rather than a proposal stamp because a committed walk card has no
+  /// proposal to carry one. NULL on every row written before it.
+  walkEndedBy          PlanWalkEndedBy?        @map("walk_ended_by")
   /// WHEN an approve CLAIMED this plan (Bug MOTIR-9006) — set with
   /// `status = approving`, cleared by the `approved` write or by a release back
   /// to `planned`. It is also the claim's TOKEN: the materializing transaction

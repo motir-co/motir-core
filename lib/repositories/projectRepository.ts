@@ -1,5 +1,6 @@
 import {
   Prisma,
+  type AiPlanningCadence,
   type EstimationStatistic,
   type PointScale,
   type PrMergeMode,
@@ -903,6 +904,7 @@ export const projectRepository = {
     aiGenerateExplanations: boolean;
     aiRecordPlanningMistakes: boolean | null;
     aiFinalCheck: boolean | null;
+    aiPlanningCadence: AiPlanningCadence | null;
   } | null> {
     const client = tx ?? dbRead;
     return client.project.findUnique({
@@ -915,6 +917,7 @@ export const projectRepository = {
         aiGenerateExplanations: true,
         aiRecordPlanningMistakes: true,
         aiFinalCheck: true,
+        aiPlanningCadence: true,
       },
     });
   },
@@ -1323,6 +1326,7 @@ export const projectRepository = {
       aiGenerateExplanations?: boolean;
       aiRecordPlanningMistakes?: boolean;
       aiFinalCheck?: boolean;
+      aiPlanningCadence?: AiPlanningCadence;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {

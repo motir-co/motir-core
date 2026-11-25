@@ -155,6 +155,8 @@ const MATERIALIZED: PlanWithItemsDto = {
   id: 'plan-1',
   projectId: 'proj_1',
   status: 'approved',
+  // How the walk ended (MOTIR-12207): only a deliberate close records one.
+  walkEndedBy: null,
   title: null,
   summary: null,
   sourceJobId: 'job-1',

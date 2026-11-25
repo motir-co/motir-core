@@ -1,4 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
+import type { PlanWalkEndedByDto } from '@/lib/dto/plans';
 import { toPlanItemDto } from '@/lib/mappers/planMappers';
 import { committedWalkSet, type CommittedCard } from '@/lib/plans/authoringState';
 import {
@@ -29,6 +30,8 @@ export interface WalkedPlanRow {
   workspaceId: string;
   projectId: string;
   plannerRecord: unknown;
+  /** The plan's stored deliberate end (MOTIR-12207) — read by the verdict. */
+  walkEndedBy?: PlanWalkEndedByDto | null;
 }
 
 export const planWalkCompletenessService = {
@@ -50,7 +53,14 @@ export const planWalkCompletenessService = {
     const committed: CommittedCard[] = found
       .filter((w) => w.projectId === plan.projectId)
       .map((w) => ({ id: w.id, key: w.identifier, title: w.title }));
-    return judgeWalkCompleteness({ items, liveSteps, sessions: sessionFacts, listed, committed });
+    return judgeWalkCompleteness({
+      items,
+      liveSteps,
+      sessions: sessionFacts,
+      listed,
+      committed,
+      walkEndedBy: plan.walkEndedBy ?? null,
+    });
   },
 
   /** {@link readWithin} for a caller holding only the plan's id — it reads the row too.
@@ -61,7 +71,7 @@ export const planWalkCompletenessService = {
     tx: Prisma.TransactionClient,
   ): Promise<WalkCompleteness> {
     const plan = await planRepository.findById(planId, workspaceId, tx);
-    if (!plan) return { walked: false, complete: true, unwritten: [] };
+    if (!plan) return { walked: false, complete: true, unwritten: [], leftLaid: [] };
     return planWalkCompletenessService.readWithin(plan, tx);
   },
 };

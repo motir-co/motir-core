@@ -277,6 +277,56 @@ describe('a project that turned the final check OFF sends `finalCheck: false` on
   });
 });
 
+// The planning cadence (MOTIR-12204) crosses the same way: absent reads on the
+// far side as `story`. It is asserted on the three bypassing entrances, and so is
+// the RESOLVED-AT-SUBMIT rule — a job already submitted keeps the cadence it was
+// handed when the setting is saved afterwards, and the next job carries the new
+// one.
+describe('every plan job carries the planning cadence it was submitted with', () => {
+  it('story on a never-written project, subtask once saved, and a submitted job keeps its value', async () => {
+    const fx = await makeFixture();
+    const c = projectCtx(fx);
+    const settingsCtx = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+
+    async function driveAll(): Promise<Record<string, Record<string, unknown>>> {
+      bodies.length = 0;
+      await aiGenerationService.startRoutingRun(c);
+      const routing = bodies[0]!;
+      bodies.length = 0;
+      await aiGenerationService.startGeneration(c, { prompt: 'build a thing' });
+      const generation = bodies[0]!;
+      const planId = await plannedPlan(fx);
+      bodies.length = 0;
+      await aiPlanEditsService.submitRevise(planId, 'split the second story', c);
+      const revise = bodies[0]!;
+      return { routing, generation, revise };
+    }
+
+    const before = await driveAll();
+    for (const [name, body] of Object.entries(before)) {
+      const context = ctxOf(body);
+      expect(
+        Object.prototype.hasOwnProperty.call(context, 'planningCadence'),
+        `${name} did not send planningCadence at all`,
+      ).toBe(true);
+      expect(context['planningCadence'], `${name} sent the wrong value`).toBe('story');
+    }
+
+    await projectAiSettingsService.updateAiSettings(
+      fx.project.identifier,
+      { aiPlanningCadence: 'subtask' },
+      settingsCtx,
+    );
+    // The jobs submitted BEFORE the save keep the value they were handed.
+    for (const [name, body] of Object.entries(before)) {
+      expect(ctxOf(body)['planningCadence'], `${name} changed after the save`).toBe('story');
+    }
+    for (const [name, body] of Object.entries(await driveAll())) {
+      expect(ctxOf(body)['planningCadence'], `${name} sent the wrong value`).toBe('subtask');
+    }
+  });
+});
+
 describe('submitPlanEditJob, submitRevise and submitResume each send the always-present fields', () => {
   it('generateExplanations, the consent flag and the onboarding marker, on every one', async () => {
     const fx = await makeFixture();

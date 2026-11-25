@@ -655,7 +655,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   get_project_state: {
     summary:
       "A project's planning preconditions — established, code connected, indexed, repo set, the active starter library — and its organisation's content language, before you plan.",
-    descriptionFingerprint: 'e950be2adcc8',
+    // Re-pinned for MOTIR-12204's summary re-read: the description gained the
+    // planning cadence; the summary above stays true as written.
+    descriptionFingerprint: '2e33c1c5ddcf',
   },
   get_code_health: {
     summary:

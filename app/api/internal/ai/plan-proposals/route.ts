@@ -20,7 +20,8 @@ import {
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
-import type { PlanProposalCorrection, ProposalInput } from '@/lib/dto/plans';
+import type { PlanProposalCorrection, PlanWalkEndedByDto, ProposalInput } from '@/lib/dto/plans';
+import { isPlanWalkEndedBy, PLAN_WALK_ENDED_BY } from '@/lib/dto/plans';
 import {
   contentPatchFrom,
   correctionFrom,
@@ -192,6 +193,25 @@ export async function POST(req: Request): Promise<Response> {
   // The plan still closes `stopped` when owed cards, but no failure is recorded on
   // its session — the person's answer is the next turn, which revises the plan.
   const walkReturned = final && (body as { walkReturned?: unknown })?.walkReturned === true;
+  // …and `walkEndedBy` (Story MOTIR-12203 · MOTIR-12207): the walk ended ON PURPOSE —
+  // `cadence` (the project's Planning cadence stopped it) or `person_stop` (the
+  // person pressed Stop, in-flight sessions discarded). It closes the plan `planned`
+  // with its not-authored cards stamped `leftLaid`, landing `to_plan` on approve.
+  // Only a FINAL append closes, so it is refused anywhere else, and any value but
+  // the two is refused by name rather than read as "not deliberate".
+  const rawWalkEndedBy = (body as { walkEndedBy?: unknown })?.walkEndedBy ?? null;
+  if (rawWalkEndedBy !== null && (!final || !isPlanWalkEndedBy(rawWalkEndedBy))) {
+    return NextResponse.json(
+      {
+        code: 'PROPOSALS_INVALID',
+        error: final
+          ? `\`walkEndedBy\` must be one of: ${PLAN_WALK_ENDED_BY.join(', ')}.`
+          : '`walkEndedBy` is read only on a final append (`final: true`).',
+      },
+      { status: 400 },
+    );
+  }
+  const walkEndedBy = rawWalkEndedBy as PlanWalkEndedByDto | null;
   const rawTitle = (body as { title?: unknown })?.title;
   const trimmedTitle = typeof rawTitle === 'string' ? rawTitle.trim() : '';
   const title = trimmedTitle.length > 0 ? trimmedTitle.slice(0, PLAN_TITLE_MAX).trim() : null;
@@ -240,6 +260,7 @@ export async function POST(req: Request): Promise<Response> {
         ...(final && authorModel !== null ? { authorModel } : {}),
         ...(walkIncomplete ? { walkIncomplete: true } : {}),
         ...(walkReturned ? { walkReturned: true } : {}),
+        ...(walkEndedBy ? { walkEndedBy } : {}),
         ...(actor ? { actor } : {}),
       },
     );
