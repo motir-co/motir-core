@@ -23,6 +23,10 @@ import { fetchPlannability } from '@/lib/planning/plannabilityClient';
 //
 // `check(key)` takes the key so the alert's per-line Plan goes through this SAME
 // path for a blocker — the blocker is checked too, never opened unchecked.
+//
+// `hasPlan` (MOTIR-12234) is the launcher's plan-vs-re-plan split: a card in the
+// To plan status that already has children opens as a RE-PLAN of that card. It
+// defaults to `false`, the fresh plan a childless To plan story opens.
 
 export interface PlanCheckAlert {
   /** The card the alert is about — the one whose Plan was pressed. */
@@ -30,10 +34,15 @@ export interface PlanCheckAlert {
   reasons: PlanBlockReasonDto[];
 }
 
+export interface PlanCheckOptions {
+  /** Open the overlay as a RE-PLAN of the card (it already has children). */
+  hasPlan?: boolean;
+}
+
 export interface PlanCheck {
   checking: boolean;
   alert: PlanCheckAlert | null;
-  check: (key: string) => Promise<void>;
+  check: (key: string, options?: PlanCheckOptions) => Promise<void>;
   closeAlert: () => void;
 }
 
@@ -46,7 +55,8 @@ export function usePlanCheck(): PlanCheck {
   const inFlight = useRef(false);
 
   const check = useCallback(
-    (key: string): Promise<void> => {
+    (key: string, options: PlanCheckOptions = {}): Promise<void> => {
+      const hasPlan = options.hasPlan === true;
       // Named, so the toast's Retry can run the same check again — and goes on
       // as a click would.
       const run = async (target: string): Promise<void> => {
@@ -57,7 +67,7 @@ export function usePlanCheck(): PlanCheck {
         try {
           const answer = await fetchPlannability(target);
           if (answer.plannable) {
-            openLater({ kind: 'work-item', itemKey: target, hasPlan: false, confirmStart: true });
+            openLater({ kind: 'work-item', itemKey: target, hasPlan, confirmStart: true });
           } else {
             setAlert({ key: target, reasons: answer.reasons });
           }

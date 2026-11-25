@@ -10,6 +10,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { TO_PLAN_STATUS_KEY } from '@/lib/workItems/statusSlot';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DECISION-CORRECTION MARK (Subtask MOTIR-12175, story MOTIR-10139).
@@ -46,7 +47,9 @@ export const CORRECTING_SUPERSEDE_CAUSES: ReadonlySet<string> = new Set([
   'head_moved',
 ]);
 
-export const TO_PLAN_STATUS_KEY = 'to_plan';
+// The key lives with the status slot's rule, which the client canvas imports too
+// (MOTIR-12234); re-exported here for this service's callers.
+export { TO_PLAN_STATUS_KEY };
 const PLANNING_KEYS: ReadonlySet<string> = new Set(['planning', TO_PLAN_STATUS_KEY]);
 
 /** What the mark did to one work item it reached. */
