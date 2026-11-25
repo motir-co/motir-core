@@ -55,8 +55,15 @@ export interface TakeoverTenantSeed {
  *  `motir-database-<rid>[-pr<n>]`). */
 function stacksOf(app: TakeoverTenantApp): Record<string, SeedTenantStack> {
   const appRef = `mh-${app.repositoryId}`;
+  // `shapeOfReleaseStack` reads a release's shape off the parameter only that
+  // shape's template declares (`TaskCpu` / `InvokePrincipalArn`); without it a
+  // preview teardown reads the release as absent and leaves its stack standing.
+  const shapeParameter: Record<string, string> =
+    app.shape === 'container'
+      ? { TaskCpu: '256' }
+      : { InvokePrincipalArn: `arn:aws:iam::${'0'.repeat(12)}:role/motir-edge-invoke` };
   const release = (ref: string): SeedTenantStack => ({
-    parameters: { AppRef: ref, Shape: app.shape, OriginAccess: 'secret' },
+    parameters: { AppRef: ref, Shape: app.shape, OriginAccess: 'secret', ...shapeParameter },
     tags: { 'motir:app': ref },
   });
   const stacks: Record<string, SeedTenantStack> = {
