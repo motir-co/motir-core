@@ -891,3 +891,114 @@ control (the switch) and one link (the callout's), in that tab order.
 - **The console page** that now holds the choice — `design/platform-admin/` (MOTIR-7222).
 - **The hosted-agent model** (`Hosted agent` room, MOTIR-6989) — the tenant chooses and pays for
   that model; it is not a secret and is untouched.
+
+# AMENDMENT 2026-11 — the planning cadence (story at a time, or one subtask at a time)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
+**Verdict: the project is on Motir Design**, so the delta is drawn from that system's `--el-*` /
+shape tokens and the shipped primitives. Nothing the package lacks is needed.
+
+**Mock (a DELTA):** [`ai-planning-settings--planning-cadence.mock.html`](ai-planning-settings--planning-cadence.mock.html),
+rendered by `renderMock` from the real `AiPlanningSettingsEditor` with the new field mounted, every
+panel in a light and a dark frame. **Amends:** the Planner card of `ai-planning-settings.mock.html`
+(§4 and §6 of this file), as it stands after the 2026-10 amendment above
+(`ai-planning-settings--no-model.mock.html`). The older mocks are records and are not edited.
+
+**Access path.** Project settings › the **AI planning** row of the Automation group in the settings
+rail › the **Planner** card. No new route, no new rail row, no new card.
+
+**Why.** A project chooses how far Motir AI plans before it hands a plan over: a whole story at a
+time (how planning works today, and the default), or one subtask at a time, with the rest of the
+story laid out by title and waiting as To plan for a later pass. It is one stored setting beside the
+final check, so it lives on the same card and saves through the same footer.
+
+## What is added
+
+ONE field on the Planner card, **directly after the final-check switch** and before the
+data-practice callout (which stays the card's foot):
+
+1. A **label** and a **hint** line above the options.
+2. A **two-option radio-card group**: **Story** (with a neutral `Pill` reading "Default") and
+   **Subtask**, each a card-shaped option with its own one-line help.
+3. A **scope note** under the pair, with an `Info` glyph: a change only reaches plans started after
+   the save.
+
+Nothing else on the page changes. The shared Save/Cancel footer, the lock banners, the not-connected
+banner and both toasts are the page's own, reused as shipped.
+
+**Why radio cards, not a switch or a select.** The two values are named modes, not on and off, and
+each needs a sentence to be understood; a select would hide the sentence of the option not chosen.
+Two options side by side (stacked below `sm`) keep both explanations visible at the moment of
+choosing, the pattern mature settings pages use for a small set of described modes.
+
+## Copy (English source; all 11 locales ship with the build)
+
+Keys live under `settings.aiPlanning.planner`.
+
+| key                     | English                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `cadenceLabel`          | Planning cadence                                                                                                       |
+| `cadenceHint`           | How far Motir AI plans before it hands a plan over for your review.                                                    |
+| `cadenceDefault`        | Default                                                                                                                |
+| `cadence.story.label`   | Story                                                                                                                  |
+| `cadence.story.help`    | Plans a whole story at a time: it lays the work out and writes every piece of it, as planning works today.             |
+| `cadence.subtask.label` | Subtask                                                                                                                |
+| `cadence.subtask.help`  | Plans one step, then stops. The rest is laid out by title and waits as To plan for a later planning pass.              |
+| `cadenceScopeNote`      | A change applies to plans started after you save it. A plan that is already running keeps the cadence it started with. |
+
+"To plan" is the status's own name and stays as the product names it in every locale.
+
+## Tokens and primitives
+
+| element                   | resting                                                            | selected                              | read-only / not connected                            |
+| ------------------------- | ------------------------------------------------------------------ | ------------------------------------- | ---------------------------------------------------- |
+| label · option title      | `--el-text`, `text-sm font-medium`                                 | same                                  | `--el-text-faint` (disabled text, exempt)            |
+| hint · option help        | `--el-text-helper`, `text-xs`                                      | same                                  | `--el-text-faint` (disabled text, exempt)            |
+| option card               | border `--el-border`, `--radius-card`, `--spacing-card-padding-12` | border `--el-accent` (no tint fill)   | border `--el-border`, no hover                       |
+| option card hover         | border `--el-border-strong`                                        | —                                     | —                                                    |
+| radio ring (decorative)   | `--el-border-strong`, `rounded-full`                               | ring `--el-accent`, dot `--el-accent` | ring `--el-border-strong`, dot `--el-text-secondary` |
+| "Default" chip            | `Pill` tone `neutral` (`--radius-badge`)                           | same                                  | same                                                 |
+| scope note + `Info` glyph | `--el-text-secondary`, `text-xs` (glyph `aria-hidden`)             | same                                  | same — it stays true while read-only                 |
+| focus                     | `ring-2 ring-(--focus-ring-color)`                                 | same                                  | not focusable                                        |
+
+No new token. The selected option is marked by its accent border and the filled radio, never by a
+tinted fill: a tint under the helper ink would take it under AA. The scope note is
+`--el-text-secondary` because it sits on the card and must clear AA in every palette.
+
+## States (the mock's panels)
+
+| panel | state                                                                                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | Editable, default: Story selected, nothing dirty, Save disabled. The whole page, so the field is seen in place.                                                     |
+| B     | Changed: Subtask picked, the footer reads "Unsaved changes" and Cancel / Save enable. Cancel returns the field to Story.                                            |
+| C     | Saving: the footer's Save shows its loading state; the field keeps the pick.                                                                                        |
+| D     | Saved: the page's existing success toast; the field reads Subtask, and does after a reload.                                                                         |
+| E     | Failed save: the page's existing error toast. The saved value stays Story; the pick is kept, so the page is dirty again and Save can be retried. No new error copy. |
+| F     | Read-only (no `ai:configure`): both options present and disabled, the current one still selected; the page's lock banner says why. No footer.                       |
+| G     | Read-only with Subtask selected, so a reader can tell which cadence the project uses.                                                                               |
+| H     | Not connected: the field is locked exactly as the other Planner controls are, under the card's not-connected banner.                                                |
+
+**A 422 naming the cadence field** can only come from a stale or hand-built client (the radio cannot
+send another value). The radio has no free-text slot, so it shows as the page's existing error toast.
+
+## A11y
+
+- The group is `role="radiogroup"`, `aria-labelledby` the label and `aria-describedby` the hint and
+  the scope note. Each option is `role="radio"` with `aria-checked`.
+- **Roving tabindex:** Tab lands on the selected option only; Arrow Right/Down and Left/Up move the
+  selection and the focus, wrapping. Space/Enter on a focused option selects it.
+- Read-only: the group and both options carry `aria-disabled`, neither is in the tab order, and the
+  selected one keeps `aria-checked="true"`, so assistive technology still announces the value.
+- The radio rings and the `Info` glyph are decorative (`aria-hidden`); the meaning is in the text.
+
+## Viewport
+
+Two columns from `sm`; stacked, Story first, below it. The help lines wrap inside their card.
+
+## Out of scope for this amendment
+
+- How a plan behaves under each cadence (what is laid out, what lands To plan on approve, what Stop
+  proposes) — the planner's and the review surface's work, not this page's.
+- Any per-plan override of the cadence. The setting is per project, and a running plan keeps the
+  cadence it started with.
