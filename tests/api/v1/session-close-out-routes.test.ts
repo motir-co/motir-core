@@ -73,7 +73,7 @@ async function makeItem(caller: V1ProjectCaller, title: string) {
   );
 }
 
-/** An item moved to `in_progress`, the only status `implemented` is legal from. */
+/** An item moved to `in_progress`, the status a run integrates from. */
 async function readyToIntegrate(caller: V1ProjectCaller, title: string) {
   const item = await makeItem(caller, title);
   await workItemsService.updateStatus(item.id, 'in_progress', caller.ctx);
@@ -166,17 +166,20 @@ describe('POST /api/v1/work-items/{key}/integration', () => {
   });
 
   it('refuses an item with no legal path to implemented, leaving the branch unset', async () => {
-    // The workflow decides, not this route: `todo → implemented` is illegal on
-    // the default workflow. The error has a deliberate row in the v1 status map.
+    // The workflow decides, not this route: `planning → implemented` is illegal on
+    // the default workflow (`todo → implemented` is legal since MOTIR-12202, for a
+    // pull request delivering a card nobody moved). The error has a deliberate row
+    // in the v1 status map.
     const caller = await createV1ProjectCaller({ scopes: ['integration'] });
-    const item = await makeItem(caller, 'still todo');
+    const item = await makeItem(caller, 'being re-planned');
+    await workItemsService.updateStatus(item.id, 'planning', caller.ctx);
 
     const res = await integrate(caller, item.identifier, { sessionBranch: 'session/MOTIR-1' });
 
     expect(res.status).toBe(422);
     expect(((await res.json()) as { code: string }).code).toBe('ILLEGAL_TRANSITION');
     expect(DOMAIN_ERROR_STATUS['ILLEGAL_TRANSITION']).toBe(422);
-    expect(await stateOf(caller, item.id)).toEqual({ status: 'todo', sessionBranch: null });
+    expect(await stateOf(caller, item.id)).toEqual({ status: 'planning', sessionBranch: null });
   });
 
   it('matches the MCP tool’s payload for the fields both publish', async () => {

@@ -180,8 +180,9 @@ describe('a choice the plan PARKED (an MCP plan)', () => {
       expect(hops).toEqual(
         expect.arrayContaining([
           { fromStatusKey: 'planning', toStatusKey: 'todo' },
-          { fromStatusKey: 'todo', toStatusKey: 'in_progress' },
-          { fromStatusKey: 'in_progress', toStatusKey: 'in_review' },
+          // `todo → in_review` is a declared default edge since MOTIR-12202, so the
+          // walk takes it directly rather than passing through In Progress.
+          { fromStatusKey: 'todo', toStatusKey: 'in_review' },
         ]),
       );
     },

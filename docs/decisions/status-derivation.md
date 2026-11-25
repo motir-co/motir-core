@@ -434,7 +434,10 @@ Notes that are decisions, not detail:
 done` is not an edge and must not become one (see below), so the parent sat in `todo`
   permanently. Exactly MOTIR-1623's stranding, in the one shape its fallback could not
   reach. The walk subsumes the fallback: it lands on the wanted rung whenever any ladder
-  path exists, and as far up it as the graph allows otherwise.)_
+  path exists, and as far up it as the graph allows otherwise. MOTIR-12202 later declared
+  `todo → in_review` in the default workflow, for a pull request delivering a card that
+  still reads To Do, so MOTIR-1623's example now needs a graph without that edge; the walk
+  is unchanged, and on the default graph it takes the direct hop.)_
 
   **"You configure your workflow, the derivation respects it" is untouched, and the third
   rejected alternative is why the walk is the fix.** Every hop is a real `workflow_transition`

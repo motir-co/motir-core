@@ -190,13 +190,26 @@ describe('the transitions in and out are legal without an admin editing anything
     });
   });
 
-  it('but NOT todo → implemented — a card nobody started has nothing built', async () => {
-    // Enumerated, not generated: an edge nobody could justify from a user story
-    // does not get added just because it would be symmetric.
+  it('todo → implemented IS legal now — a pull request can deliver a card nobody moved (MOTIR-12202)', async () => {
+    // Enumerated, not generated: this edge was refused until a user story justified
+    // it. One pull request often delivers more than one card, and a card linked to an
+    // open, ready pull request while it still read To Do stayed there through the
+    // merge (MOTIR-12189). `tests/workflows/todo-delivery-edges.test.ts` owns the edge.
     const item = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'never started' },
+      { projectId: fx.projectId, kind: 'task', title: 'delivered while To Do' },
       fx.ctx,
     );
+    await expect(
+      workItemsService.updateStatus(item.id, 'implemented', fx.ctx),
+    ).resolves.toMatchObject({ status: 'implemented' });
+  });
+
+  it('but NOT planning → implemented — a card being re-planned has nothing approved to build', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'being re-planned' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'planning', fx.ctx);
     await expect(
       workItemsService.updateStatus(item.id, 'implemented', fx.ctx),
     ).rejects.toBeInstanceOf(IllegalTransitionError);

@@ -23,7 +23,13 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 // card at In Progress OR Implemented is green and landable, the card moves to In Review
 // and its approve-to-merge question is raised — on BOTH triggers, CI turning green and a
 // green pull request being linked (or the last red one unlinked), with no run involved
-// and no reconcile tick. A card at To do, Blocked or Planning is never promoted.
+// and no reconcile tick. A card at Blocked or Planning is never promoted.
+//
+// ⚠️ AMENDED BY Bug MOTIR-12202: a card at TO DO is a source too. One pull request
+// often delivers more than one card, and a run does not always move every card first;
+// such a card used to stay To Do through the green build and the merge (MOTIR-12189).
+// Linking or opening a ready pull request on it now records it Implemented, a green set
+// takes it straight to In Review with its question, and the merge completes it.
 //
 // Real Postgres, the real webhook seam and the real link doors. Stubbed only ABOVE the
 // code under test, as the reconcile suites do: `fetch` (GitHub's REST reads) and the
@@ -252,13 +258,13 @@ async function greenThenUnlinked(s: Scenario, status: string, number: number) {
   return item;
 }
 
-const NEVER = ['todo', 'blocked', 'planning'] as const;
-const SOURCES = ['in_progress', 'implemented'] as const;
+const NEVER = ['blocked', 'planning'] as const;
+const SOURCES = ['todo', 'in_progress', 'implemented'] as const;
 
 describe('the source set', () => {
-  it('is In Progress and Implemented, and nothing else', () => {
+  it('is To Do, In Progress and Implemented, and nothing else (MOTIR-12202 adds To Do)', () => {
     for (const s of SOURCES) expect(isPromotableSourceStatus(s)).toBe(true);
-    for (const s of [...NEVER, 'in_review', 'approved', 'done', 'cancelled'])
+    for (const s of [...NEVER, 'to_plan', 'in_review', 'approved', 'done', 'cancelled'])
       expect(isPromotableSourceStatus(s)).toBe(false);
   });
 });
@@ -633,6 +639,119 @@ describe('nothing is promoted while any member cannot land — on either trigger
     await ci(46, 'success');
 
     expect(await statusOf(item.id)).toBe('in_progress');
+  });
+});
+
+/** The `closed` delivery of a MERGED pull request into the default branch. */
+async function mergedInto(number: number) {
+  await githubWebhookService.handleEvent('pull_request', {
+    action: 'closed',
+    installation: { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } },
+    repository: { id: Number(REPO_PROVIDER_ID) },
+    pull_request: {
+      number,
+      state: 'closed',
+      merged: true,
+      draft: false,
+      title: `A change (${number})`,
+      head: { ref: branchOf(number), sha: SHA },
+      base: { ref: 'main' },
+      user: { id: 4242 },
+    },
+  });
+}
+
+describe('Bug MOTIR-12202 — a pull request delivering a card that still reads To Do', () => {
+  it('linking a ready pull request whose checks are still running moves it to Implemented and asks nobody', async () => {
+    const s = await makeScenario('todo-running@example.com');
+    const item = await card(s, 'delivered while still To Do');
+    await opened(61);
+    hostVerdict(null);
+
+    await link(item.identifier, 61);
+
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect((await statusMoves(item.id)).at(-1)).toEqual({ from: 'todo', to: 'implemented' });
+    expect(await awaitingKinds(item.id)).toEqual([]);
+  });
+
+  it('a pull request OPENED after the link moves it to Implemented', async () => {
+    const s = await makeScenario('todo-opened-later@example.com');
+    const item = await card(s, 'linked before any delivery');
+
+    // The host is unreachable, so the link only writes its placeholder row.
+    await link(item.identifier, 62);
+    expect(await statusOf(item.id)).toBe('todo');
+
+    await opened(62);
+
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect((await statusMoves(item.id)).at(-1)).toEqual({ from: 'todo', to: 'implemented' });
+  });
+
+  it('moves to In Review when the running pull request turns green, and raises its question', async () => {
+    const s = await makeScenario('todo-then-green@example.com');
+    const item = await card(s, 'green later');
+    await opened(63);
+    hostVerdict(null);
+    await link(item.identifier, 63);
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    await ci(63, 'success');
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingKinds(item.id)).toEqual(['pull_request_approval']);
+  });
+
+  it('a DRAFT pull request moves a To Do card nowhere, and its green build asks nobody', async () => {
+    const s = await makeScenario('todo-draft@example.com');
+    const item = await card(s, 'delivered by a draft');
+    await opened(64, true);
+
+    await link(item.identifier, 64);
+    expect(await statusOf(item.id)).toBe('todo');
+
+    await ci(64, 'success');
+
+    expect(await statusOf(item.id)).toBe('todo');
+    expect(await awaitingKinds(item.id)).toEqual([]);
+  });
+
+  it('a member of UNKNOWN draft-ness holds a To Do card at the green build, as it holds In Progress', async () => {
+    const s = await makeScenario('todo-null-draft@example.com');
+    const item = await linkedThenParked(s, 'todo', 65);
+    await adminDb.githubPullRequest.updateMany({ where: { number: 65 }, data: { draft: null } });
+
+    await ci(65, 'success');
+
+    expect(await statusOf(item.id)).toBe('todo');
+    expect(await awaitingKinds(item.id)).toEqual([]);
+  });
+
+  it('the merge completes it through Implemented, with no hand move', async () => {
+    const s = await makeScenario('todo-merge-implemented@example.com');
+    const item = await card(s, 'merged from Implemented');
+    await opened(66);
+    hostVerdict(null);
+    await link(item.identifier, 66);
+
+    await mergedInto(66);
+
+    expect(await statusOf(item.id)).toBe('done');
+    expect((await statusMoves(item.id)).map((m) => `${m.from}→${m.to}`)).toEqual(
+      expect.arrayContaining(['todo→implemented', 'implemented→done']),
+    );
+  });
+
+  it('the merge completes it through In Review when its build was green, with no hand move', async () => {
+    const s = await makeScenario('todo-merge-in-review@example.com');
+    const item = await greenThenUnlinked(s, 'todo', 67);
+    await link(item.identifier, 67);
+    expect(await statusOf(item.id)).toBe('in_review');
+
+    await mergedInto(67);
+
+    expect(await statusOf(item.id)).toBe('done');
   });
 });
 

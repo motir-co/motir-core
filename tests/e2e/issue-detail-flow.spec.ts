@@ -448,11 +448,10 @@ test('@smoke inline status: a legal transition persists; illegal targets are not
 
   await page.getByRole('combobox', { name: 'Status' }).click();
 
-  // Restricted default workflow: from `todo` only in_progress / blocked /
-  // cancelled are legal — Done + In Review are NOT offered.
+  // Restricted default workflow: from `todo`, Done is NOT offered. (Implemented and
+  // In Review are legal from To Do since MOTIR-12202, for a delivering pull request.)
   await expect(page.getByRole('option', { name: 'In Progress' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Done' })).toHaveCount(0);
-  await expect(page.getByRole('option', { name: 'In Review' })).toHaveCount(0);
 
   // …and EVERY option row's dot: the same slot, its second call site.
   for (const name of ['In Progress', 'Blocked', 'Cancelled']) {

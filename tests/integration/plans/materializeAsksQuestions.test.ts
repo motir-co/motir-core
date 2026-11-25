@@ -143,11 +143,12 @@ describe('materialize asks a new choice its question (MOTIR-12145)', () => {
       .filter(Boolean);
     expect(walked).toEqual(
       expect.arrayContaining([
-        { from: 'todo', to: 'in_progress' },
-        { from: 'in_progress', to: 'in_review' },
+        // `todo → in_review` is a declared default edge since MOTIR-12202, so the
+        // walk takes it in one hop rather than passing through In Progress.
+        { from: 'todo', to: 'in_review' },
       ]),
     );
-    expect(walked).toHaveLength(2);
+    expect(walked).toHaveLength(1);
     const events = await adminDb.jobEvent.findMany({
       where: {
         name: 'work-item/transitioned',
@@ -156,7 +157,7 @@ describe('materialize asks a new choice its question (MOTIR-12145)', () => {
     });
     // One announcement per hop, carrying the revision that recorded it.
     const announced = events.map((e) => e.data as { toStatusKey: string; revisionId: string });
-    expect(announced.map((e) => e.toStatusKey).sort()).toEqual(['in_progress', 'in_review']);
+    expect(announced.map((e) => e.toStatusKey).sort()).toEqual(['in_review']);
     expect(announced.map((e) => e.revisionId).sort()).toEqual(
       statusRevisions.map((row) => row.id).sort(),
     );

@@ -253,10 +253,10 @@ describe('the upward ladder, end to end through the real transition path', () =>
       data: { autoRollupParentStatus: true },
     });
     await transitionAndDrain(fx, children[0]!.id, 'in_review');
-    // The in-review rung matches, but `todo → in_review` is not an edge — so the
-    // forward WALK crosses `todo → in_progress → in_review`, both real edges of
-    // this project's own graph, and the parent lands on the rung the recompute
-    // actually named. (Before MOTIR-2901 it stopped one rung short, at
+    // The in-review rung matches, and the parent lands on it over this project's
+    // own graph (`todo → in_review` directly since MOTIR-12202; before it, the
+    // forward WALK crossed `todo → in_progress → in_review`) — the rung the
+    // recompute actually named. (Before MOTIR-2901 it stopped one rung short, at
     // `in_progress`, and waited for an event that in this shape never comes.)
     expect(await statusOf(story.id)).toBe('in_review');
   });
@@ -1005,9 +1005,9 @@ describe('the child finished FASTER than derivation ran (MOTIR-2901)', () => {
 
     // The walk wrote one revision per HOP — the honest record of the edges it
     // crossed, each a status the item genuinely held — and took the SHORTEST
-    // path, trying the highest stone first at every step: `todo → in_progress`
-    // (in_review is illegal from todo), then straight over MOTIR-1625's
-    // `in_progress → done`. It never stands on In Review here.
+    // path, trying the highest stone first at every step: `todo → in_review`
+    // (MOTIR-12202's edge; `todo → done` is illegal), then `in_review → done`.
+    // Before MOTIR-12202 the same rule took `todo → in_progress → done`.
     const storyStatusRevs = (
       await adminDb.workItemRevision.findMany({
         where: { workItemId: story.id },
@@ -1017,8 +1017,8 @@ describe('the child finished FASTER than derivation ran (MOTIR-2901)', () => {
       .map((r) => (r.diff as Record<string, { from: string; to: string }>)['status'])
       .filter(Boolean);
     expect(storyStatusRevs).toEqual([
-      { from: 'todo', to: 'in_progress' },
-      { from: 'in_progress', to: 'done' },
+      { from: 'todo', to: 'in_review' },
+      { from: 'in_review', to: 'done' },
     ]);
     // ...and emitted ONCE, for the NET move. An event is a notification: a
     // watcher must not be told twice about one derivation, and the epic above
@@ -1084,9 +1084,12 @@ describe('the child finished FASTER than derivation ran (MOTIR-2901)', () => {
     expect(await workflowsService.canTransition(fx.projectId, 'todo', 'done', fx.workspaceId)).toBe(
       false,
     );
+    // `todo → in_review` IS an edge since MOTIR-12202 (a pull request delivering a
+    // To Do card), declared by the seed rather than written by the derivation —
+    // the edge count above is what proves the derivation added nothing.
     expect(
       await workflowsService.canTransition(fx.projectId, 'todo', 'in_review', fx.workspaceId),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('a graph with no PATH still strands nothing — it is a logged no-op', async () => {

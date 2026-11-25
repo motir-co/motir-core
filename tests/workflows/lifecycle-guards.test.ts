@@ -85,7 +85,10 @@ describe('transition totality — no status is a dead end, and none is unreachab
     // NOT the shortcut: In Review is CI's to write, so nothing may jump there
     // from where an unfinished run leaves a card.
     expect(edge('in_progress', 'in_review')).toBe(true); // the pre-existing manual path
-    expect(edge('todo', 'implemented')).toBe(false);
+    // A pull request delivering a card nobody moved records it built (MOTIR-12202);
+    // that is the link's move, not a run's shortcut past In Progress.
+    expect(edge('todo', 'implemented')).toBe(true);
+    expect(edge('todo', 'done')).toBe(false);
     expect(TERMINAL.has('done') && TERMINAL.has('cancelled')).toBe(true);
   });
 });
@@ -188,6 +191,9 @@ describe('the seed and the backfill migration AGREE', () => {
       // status deletion above cascades away and only this backfill restores. Its
       // presence in the CHAIN is what proves that backfill complete.
       '20260920090000_add_planning_parking_edges',
+      // MOTIR-12202's `todo → implemented` is cascaded away with the status too,
+      // and only its own backfill restores it.
+      '20261125000000_add_todo_delivery_default_edges',
     ]) {
       await adminDb.$executeRawUnsafe(
         readFileSync(join(ROOT, `prisma/migrations/${migration}/migration.sql`), 'utf8'),

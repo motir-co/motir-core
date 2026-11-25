@@ -248,11 +248,12 @@ describe('DECLINE re-asks a parked question', () => {
       expect(hops).toEqual(
         expect.arrayContaining([
           { fromStatusKey: PLANNING_STATUS_KEY, toStatusKey: 'todo' },
-          { fromStatusKey: 'todo', toStatusKey: 'in_progress' },
-          { fromStatusKey: 'in_progress', toStatusKey: 'in_review' },
+          // `todo → in_review` is a declared default edge since MOTIR-12202, so the
+          // walk takes it directly rather than passing through In Progress.
+          { fromStatusKey: 'todo', toStatusKey: 'in_review' },
         ]),
       );
-      expect(hops).toHaveLength(3);
+      expect(hops).toHaveLength(2);
     },
     DB_TEST_TIMEOUT_MS,
   );
