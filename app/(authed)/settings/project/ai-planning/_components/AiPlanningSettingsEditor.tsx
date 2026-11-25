@@ -23,6 +23,7 @@ import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 import { SettingsCard } from '@/components/settings/SettingsCard';
 import { SwitchRow } from '@/components/settings/SwitchRow';
 import { FinalCheckSettingAnchor } from './FinalCheckSettingAnchor';
+import { PlanningCadenceField } from './PlanningCadenceField';
 import { useToast } from '@/components/ui/Toast';
 import {
   AI_AUTO_PLAN_THRESHOLD_MAX,
@@ -31,6 +32,7 @@ import {
   AI_SPRINT_LENGTH_DAYS_MIN,
 } from '@/lib/projectAiSettings/limits';
 import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
+import type { PlanningCadence } from '@/lib/ai/planningCadence';
 
 // AiPlanningSettingsEditor (Story 7.13 · Subtask MOTIR-919) — the AI-planning
 // project settings panel, per design/ai-settings/ai-planning-settings.mock.html
@@ -109,6 +111,8 @@ interface WorkingSettings {
   generateExplanations: boolean;
   recordPlanningMistakes: boolean;
   finalCheck: boolean;
+  /** How far the planner plans before it hands a plan over (MOTIR-12206). */
+  planningCadence: PlanningCadence;
 }
 
 /** The persisted DTO → the panel's working state. */
@@ -124,6 +128,7 @@ function toWorking(dto: ProjectAiSettingsDto): WorkingSettings {
     // never has to know the default.
     recordPlanningMistakes: dto.aiRecordPlanningMistakes,
     finalCheck: dto.aiFinalCheck,
+    planningCadence: dto.aiPlanningCadence,
   };
 }
 
@@ -136,7 +141,8 @@ export function aiSettingsEqual(a: WorkingSettings, b: WorkingSettings): boolean
     a.sprintLengthDays === b.sprintLengthDays &&
     a.generateExplanations === b.generateExplanations &&
     a.recordPlanningMistakes === b.recordPlanningMistakes &&
-    a.finalCheck === b.finalCheck
+    a.finalCheck === b.finalCheck &&
+    a.planningCadence === b.planningCadence
   );
 }
 
@@ -259,6 +265,7 @@ export function AiPlanningSettingsEditor({
         aiGenerateExplanations: next.generateExplanations,
         aiRecordPlanningMistakes: next.recordPlanningMistakes,
         aiFinalCheck: next.finalCheck,
+        aiPlanningCadence: next.planningCadence,
       }),
     })
       .then(async (res) => {
@@ -478,6 +485,17 @@ export function AiPlanningSettingsEditor({
             )}
           </SwitchRow>
         </FinalCheckSettingAnchor>
+
+        {/* THE PLANNING CADENCE (MOTIR-12206; design/ai-settings/design-notes.md
+            § AMENDMENT 2026-11). Directly after the final-check switch and
+            before the data-practice callout, which stays the card's foot. One
+            more key on the shared working state: the page's one footer saves
+            it, and `locked` makes it read-only as it does the switch above. */}
+        <PlanningCadenceField
+          value={working.planningCadence}
+          onChange={(v) => patch({ planningCadence: v })}
+          disabled={locked}
+        />
 
         {/* THE DATA-PRACTICE PROMISE (Story MOTIR-3665 · MOTIR-3670; design
             §D2-D4, panel 7). At the FOOT of this card and nowhere else: the

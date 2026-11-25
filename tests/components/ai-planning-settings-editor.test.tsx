@@ -342,6 +342,7 @@ describe('AiPlanningSettingsEditor — save', () => {
       aiGenerateExplanations: false,
       aiRecordPlanningMistakes: true, // ON, and sent on every save
       aiFinalCheck: true, // ON, and sent on every save (MOTIR-11264)
+      aiPlanningCadence: 'story', // sent on every save (MOTIR-12206)
     });
     // Optimistic + reconciled: the footer settles back to not-dirty.
     await waitFor(() => expect(saveButton().disabled).toBe(true));
@@ -677,7 +678,7 @@ describe('the planner model has left the copy, in both locales (MOTIR-7228)', ()
 
   it('deletes the six picker keys and rewrites the sub-copy', () => {
     for (const [lang, messages] of catalogs) {
-      const planner = messages.settings.aiPlanning.planner as Record<string, string>;
+      const planner = messages.settings.aiPlanning.planner as Record<string, unknown>;
       for (const key of [
         'modelLabel',
         'modelHint',
@@ -790,5 +791,127 @@ describe('AiPlanningSettingsEditor — the final check row is the dialog link’
     expect(row.className).toContain('scroll-mt-6');
     expect(row.className).toContain('-m-2');
     expect(row.className).toContain('p-2');
+  });
+});
+
+// ─── The planning cadence (MOTIR-12206; design/ai-settings/design-notes.md
+// § AMENDMENT 2026-11, mock ai-planning-settings--planning-cadence.mock.html) ──
+describe('AiPlanningSettingsEditor — the planning cadence (MOTIR-12206)', () => {
+  const group = () => screen.getByRole('radiogroup', { name: 'Planning cadence' });
+  const story = () => screen.getByRole('radio', { name: /^Story/ });
+  const subtask = () => screen.getByRole('radio', { name: /^Subtask/ });
+  const sentBody = (call = 0) =>
+    JSON.parse((fetchMock.mock.calls[call]![1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >;
+
+  it('sits in the Planner card after the final check, Story selected by default, with its copy', () => {
+    mount();
+    const field = screen.getByTestId('ai-planning-cadence');
+    // After the final-check row, in document order.
+    const row = screen.getByTestId('ai-planning-final-check-row');
+    expect(row.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(story().getAttribute('aria-checked')).toBe('true');
+    expect(subtask().getAttribute('aria-checked')).toBe('false');
+    // Roving tabindex: Tab lands on the selected option only.
+    expect(story().tabIndex).toBe(0);
+    expect(subtask().tabIndex).toBe(-1);
+    const copy = enMessages.settings.aiPlanning.planner;
+    expect(field.textContent).toContain(copy.cadenceHint);
+    expect(field.textContent).toContain(copy.cadence.story.help);
+    expect(field.textContent).toContain(copy.cadence.subtask.help);
+    expect(field.textContent).toContain(copy.cadenceScopeNote);
+    expect(story().textContent).toContain(copy.cadenceDefault);
+    expect(group().getAttribute('aria-describedby')!.split(' ')).toHaveLength(2);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('switching to Subtask makes the page dirty and Save sends it; back to Story sends `story`', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(dto({ aiPlanningCadence: 'subtask' })));
+    mount();
+
+    fireEvent.click(subtask());
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('ai-planning-footer-hint').textContent).toBe('Unsaved changes');
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sentBody(0)['aiPlanningCadence']).toBe('subtask');
+    // Saved: the control keeps the pick, the page is clean, and the saved toast shows.
+    await waitFor(() => expect(saveButton().disabled).toBe(true));
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(story());
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(sentBody(1)['aiPlanningCadence']).toBe('story');
+  });
+
+  it('Cancel returns the pick to the saved value', () => {
+    mount({ aiPlanningCadence: 'subtask' });
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(story());
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('the arrow keys move the selection and the focus, wrapping', () => {
+    mount();
+    story().focus();
+    fireEvent.keyDown(story(), { key: 'ArrowRight' });
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(subtask());
+    fireEvent.keyDown(subtask(), { key: 'ArrowDown' });
+    expect(story().getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(story(), { key: 'ArrowLeft' });
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(subtask(), { key: 'ArrowUp' });
+    expect(story().getAttribute('aria-checked')).toBe('true');
+    // Any other key leaves the selection where it is.
+    fireEvent.keyDown(story(), { key: 'Tab' });
+    expect(story().getAttribute('aria-checked')).toBe('true');
+  });
+
+  it.each([
+    ['a non-2xx answer', () => fetchMock.mockResolvedValue(errorResponse(500))],
+    ['a network error', () => fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))],
+  ])('on %s the save keeps the saved value, so Save can be retried', async (_how, fail) => {
+    fail();
+    mount();
+
+    fireEvent.click(subtask());
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    // The committed value is still Story: the pick stays and the page is dirty again.
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
+    expect(screen.getByTestId('ai-planning-footer-hint').textContent).toBe('Unsaved changes');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(story().getAttribute('aria-checked')).toBe('true');
+  });
+
+  it.each([
+    ['a member without ai:configure', { isAdmin: false }],
+    ['a project with Motir AI not connected', { aiConfigured: false }],
+  ])('for %s it shows the saved value, disabled, and sends nothing', (_who, props) => {
+    mount({ aiPlanningCadence: 'subtask' }, props);
+    expect(group().getAttribute('aria-disabled')).toBe('true');
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    for (const option of [story(), subtask()]) {
+      expect(option.getAttribute('aria-disabled')).toBe('true');
+      expect(option.tabIndex).toBe(-1);
+    }
+    fireEvent.click(story());
+    fireEvent.keyDown(subtask(), { key: 'ArrowLeft' });
+    expect(subtask().getAttribute('aria-checked')).toBe('true');
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Faint ink is disabled text, and the element says so (the 1.4.3 exemption).
+    expect(screen.getByText('Planning cadence').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('carries its copy in every shipped locale (zh shown)', () => {
+    const zh = zhMessages.settings.aiPlanning.planner;
+    expect(zh.cadenceLabel).toBeTruthy();
+    expect(zh.cadence.subtask.help).toContain('待规划');
   });
 });

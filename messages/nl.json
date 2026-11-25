@@ -3777,7 +3777,21 @@
         "dataPracticeLink": "Wat elke provider verklaart",
         "finalCheckLabel": "De eindcontrole uitvoeren",
         "finalCheckHint": "Voordat een plan wordt voorgesteld, leest Motir AI de werkitems opnieuw in bouwvolgorde, controleert dat elk item kan voortbouwen op wat de items ervoor opleveren, en herstelt wat het vindt. Bij een groot plan kan dit vele minuten duren.",
-        "finalCheckOff": "Plannen voor dit project worden voorgesteld zonder de eindcontrole. De samenvatting van elk plan vermeldt dat het niet is gecontroleerd."
+        "finalCheckOff": "Plannen voor dit project worden voorgesteld zonder de eindcontrole. De samenvatting van elk plan vermeldt dat het niet is gecontroleerd.",
+        "cadenceLabel": "Planningsritme",
+        "cadenceHint": "Hoe ver Motir AI plant voordat het je een plan ter beoordeling overdraagt.",
+        "cadenceDefault": "Standaard",
+        "cadence": {
+          "story": {
+            "label": "Story",
+            "help": "Plant telkens een hele story: zet het werk uit en schrijft elk onderdeel ervan uit, zoals de planning nu werkt."
+          },
+          "subtask": {
+            "label": "Subtaak",
+            "help": "Plant één stap en stopt dan. De rest wordt op titel uitgezet en wacht als ‘Te plannen’ op een latere planningsronde."
+          }
+        },
+        "cadenceScopeNote": "Een wijziging geldt voor plannen die na het opslaan starten. Een plan dat al loopt, houdt het ritme waarmee het begon."
       },
       "lessonCapture": {
         "title": "Planningsfouten",
@@ -4912,6 +4926,15 @@
           "medium": "middel",
           "large": "groot"
         },
+        "amount": {
+          "hours": "{value} h",
+          "gbSeconds": "{value} GB-s",
+          "count": "{value}",
+          "vcpuHours": "{value} vCPU-h",
+          "gbHours": "{value} GB-h",
+          "cuHours": "{value} CU-h",
+          "acuHours": "{value} ACU-h"
+        },
         "total": "In deze periode afgerekende credits",
         "footnote": "1 credit is één Linux-equivalente minuut. Het gebruik van elke dag wordt één keer afgerekend, na middernacht UTC, afgerond op een hele credit, dus dat van vandaag zit nog niet in het totaal.",
         "noRelease": "Nog niets gebruikt. Het gebruik begint met de eerste live release.",
@@ -4923,15 +4946,6 @@
           "bodyCannotSuspend": "Deze app draait als AWS-container, die niet gepauzeerd kan worden. Hij blijft dus altijd aan en verbruikt credits tot het saldo is aangevuld. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
           "topUp": "Credits aanvullen",
           "member": "Een eigenaar of beheerder van de organisatie kan credits aanvullen."
-        },
-        "amount": {
-          "hours": "{value} h",
-          "gbSeconds": "{value} GB-s",
-          "count": "{value}",
-          "vcpuHours": "{value} vCPU-h",
-          "gbHours": "{value} GB-h",
-          "cuHours": "{value} CU-h",
-          "acuHours": "{value} ACU-h"
         }
       }
     },

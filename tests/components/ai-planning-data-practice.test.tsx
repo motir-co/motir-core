@@ -186,9 +186,9 @@ describe('⚠️ no provider fact appears in the component', () => {
       ['en', enMessages],
       ['zh', zhMessages],
     ] as const) {
-      const planner = messages.settings.aiPlanning.planner as Record<string, string>;
+      const planner = messages.settings.aiPlanning.planner as Record<string, unknown>;
       for (const key of ['dataPracticeCommitment', 'dataPracticeReport', 'dataPracticeLink']) {
-        const value = (planner[key] ?? '').toLowerCase();
+        const value = String(planner[key] ?? '').toLowerCase();
         expect(
           value.length,
           `${lang}.${key} is missing — zh parity is a release gate`,

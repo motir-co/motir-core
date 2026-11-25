@@ -282,6 +282,30 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(write.status).toBe(403);
   });
 
+  // MOTIR-12206 — the Settings › AI planning cadence control sends the cadence
+  // ALONE when it is the only change; the route forwards it, a reload reads it
+  // back, and a member without `ai:configure` cannot move it.
+  it('persists `aiPlanningCadence` sent alone, reads it back on a reload, and 403s a member', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
+    signInAs(fx);
+
+    const res = await patch(fx.projectIdentifier, { aiPlanningCadence: 'subtask' });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ aiPlanningCadence: 'subtask' });
+    const reload = await get(fx.projectIdentifier);
+    await expect(reload.json()).resolves.toMatchObject({ aiPlanningCadence: 'subtask' });
+
+    const member = await createTestUser({ email: 'member-cadence@example.com' });
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    });
+    signInAs(fx, member.id);
+    const refused = await patch(fx.projectIdentifier, { aiPlanningCadence: 'story' });
+    expect(refused.status).toBe(403);
+    const after = await get(fx.projectIdentifier);
+    await expect(after.json()).resolves.toMatchObject({ aiPlanningCadence: 'subtask' });
+  });
+
   it('404s a cross-workspace key (no existence leak on the write path either)', async () => {
     const mine = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
     const theirs = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
