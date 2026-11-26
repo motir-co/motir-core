@@ -4957,6 +4957,7 @@
           "body": "Ta aplikacja nadal działa. Jeśli {date} saldo nadal będzie poniżej zera, Motir przełączy ją na „Usypiaj przy bezczynności”, aby usypiała, gdy nic jej nie wywołuje. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
           "bodySuspended": "Ta aplikacja nadal działa i usypia, gdy nic jej nie wywołuje. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
           "bodyCannotSuspend": "Ta aplikacja działa jako kontener AWS, którego nie można uśpić, więc działa bez przerwy i zużywa kredyty, dopóki saldo nie zostanie doładowane. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
+          "bodyGrace": "Ta aplikacja jest w okresie przejściowym przekazania, więc Motir nie przełącza jej na „Usypiaj przy bezczynności”: działa bez zmian do {date}, a jej użycie jest nadal naliczane. Motir nigdy nie zatrzymuje ani nie usuwa aplikacji produkcyjnej z powodu braku kredytów.",
           "topUp": "Doładuj kredyty",
           "member": "Właściciel lub administrator organizacji może doładować kredyty."
         }

@@ -118,17 +118,23 @@ export function ProductionUsage({
                 : t('exhausted.title', { balance: format.number(exhausted.balance) })}
             </p>
             <p className="font-sans text-sm text-(--el-text-strong)">
-              {!exhausted.canSuspend
-                ? t('exhausted.bodyCannotSuspend')
-                : exhausted.suspendsAt
-                  ? t('exhausted.body', {
-                      date: format.dateTime(new Date(exhausted.suspendsAt), {
-                        day: 'numeric',
-                        month: 'short',
-                        timeZone: 'UTC',
-                      }),
-                    })
-                  : t('exhausted.bodySuspended')}
+              {exhausted.graceStopsAt
+                ? t('exhausted.bodyGrace', {
+                    date: format.dateTime(new Date(exhausted.graceStopsAt), {
+                      dateStyle: 'medium',
+                    }),
+                  })
+                : !exhausted.canSuspend
+                  ? t('exhausted.bodyCannotSuspend')
+                  : exhausted.suspendsAt
+                    ? t('exhausted.body', {
+                        date: format.dateTime(new Date(exhausted.suspendsAt), {
+                          day: 'numeric',
+                          month: 'short',
+                          timeZone: 'UTC',
+                        }),
+                      })
+                    : t('exhausted.bodySuspended')}
             </p>
             {isAdministrator ? (
               <div>

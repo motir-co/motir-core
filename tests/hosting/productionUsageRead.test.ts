@@ -227,6 +227,36 @@ describe('credits exhausted', () => {
     });
   });
 
+  it('promises no switch to an app in its takeover grace window, and names when the window ends (MOTIR-12248)', async () => {
+    const live = await below();
+    const stopsAt = new Date('2026-12-24T09:30:00Z');
+    await adminDb.hostedApplication.update({
+      where: { id: live.app.id },
+      data: { state: 'grace', stopsAt },
+    });
+    balance = -12;
+
+    expect(await usage.getCurrentPeriod(live.app.id, { now: NOW })).toMatchObject({
+      state: 'credits_exhausted',
+      exhausted: {
+        since: since.toISOString(),
+        balance: -12,
+        canSuspend: true,
+        suspendsAt: null,
+        graceStopsAt: stopsAt.toISOString(),
+      },
+    });
+  });
+
+  it('names no window end for an app that is not in one', async () => {
+    const live = await below();
+    balance = -12;
+
+    expect((await usage.getCurrentPeriod(live.app.id, { now: NOW })).exhausted).toMatchObject({
+      graceStopsAt: null,
+    });
+  });
+
   it('reads a top-up at once, before the meter’s next pass', async () => {
     const live = await below();
     balance = 20;

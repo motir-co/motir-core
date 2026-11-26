@@ -4957,6 +4957,7 @@
           "body": "Deze app blijft draaien. Staat het saldo op {date} nog onder nul, dan zet Motir hem op ‘Pauzeren bij inactiviteit’, zodat hij slaapt als niets erom vraagt. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
           "bodySuspended": "Deze app blijft draaien en slaapt als niets erom vraagt. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
           "bodyCannotSuspend": "Deze app draait als AWS-container, die niet gepauzeerd kan worden. Hij blijft dus altijd aan en verbruikt credits tot het saldo is aangevuld. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
+          "bodyGrace": "Deze app zit in de overgangsperiode van de overdracht, dus Motir zet hem niet op ‘Pauzeren bij inactiviteit’: hij blijft ongewijzigd draaien tot {date}, en zijn gebruik wordt nog steeds in rekening gebracht. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
           "topUp": "Credits aanvullen",
           "member": "Een eigenaar of beheerder van de organisatie kan credits aanvullen."
         }

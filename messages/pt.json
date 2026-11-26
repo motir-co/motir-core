@@ -4957,6 +4957,7 @@
           "body": "Este app continua em execução. Se o saldo ainda estiver abaixo de zero em {date}, o Motir o muda para “Suspender quando ocioso”, para que entre em repouso quando nada o solicitar. O Motir nunca para nem exclui um app em produção por falta de créditos.",
           "bodySuspended": "Este app continua em execução e entra em repouso quando nada o solicita. O Motir nunca para nem exclui um app em produção por falta de créditos.",
           "bodyCannotSuspend": "Este app roda como contêiner AWS, que não pode ser suspenso, então continua sempre ativo e consumindo créditos até o saldo ser recarregado. O Motir nunca para nem exclui um app em produção por falta de créditos.",
+          "bodyGrace": "Este app está no período de carência da transferência, então o Motir não o muda para “Suspender quando ocioso”: ele continua em execução como está até {date}, e seu uso continua sendo cobrado. O Motir nunca para nem exclui um app em produção por falta de créditos.",
           "topUp": "Recarregar créditos",
           "member": "Um proprietário ou administrador da organização pode recarregar créditos."
         }

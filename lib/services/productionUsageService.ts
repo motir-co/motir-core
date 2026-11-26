@@ -72,17 +72,20 @@ async function getCurrentPeriod(
       app.creditsExhaustedSince,
     );
     if (below) {
-      const suspends = productionCreditBalanceService.canSuspend(app);
+      // The date is promised only where the 7-day switch will act: the same
+      // selection the meter switches by, so a takeover grace window (exempt,
+      // MOTIR-12143) and a target that cannot suspend are never given one
+      // (MOTIR-12248).
+      const switched =
+        productionCreditBalanceService.takesOutOfCreditsAction(app) && app.idleMode === 'always_on';
       exhausted = {
         since: app.creditsExhaustedSince.toISOString(),
         balance,
-        canSuspend: suspends,
-        suspendsAt:
-          suspends && app.idleMode === 'always_on'
-            ? new Date(
-                app.creditsExhaustedSince.getTime() + EXHAUSTED_SUSPEND_AFTER_MS,
-              ).toISOString()
-            : null,
+        canSuspend: productionCreditBalanceService.canSuspend(app),
+        suspendsAt: switched
+          ? new Date(app.creditsExhaustedSince.getTime() + EXHAUSTED_SUSPEND_AFTER_MS).toISOString()
+          : null,
+        graceStopsAt: app.state === 'grace' && app.stopsAt ? app.stopsAt.toISOString() : null,
       };
     }
   }

@@ -651,7 +651,44 @@ describe('GET …/production/usage (MOTIR-12108)', () => {
 
     expect(await (await readUsage('ACME', id)).json()).toMatchObject({
       state: 'credits_exhausted',
-      exhausted: { since: since.toISOString(), balance: -12, canSuspend: true, suspendsAt: null },
+      exhausted: {
+        since: since.toISOString(),
+        balance: -12,
+        canSuspend: true,
+        suspendsAt: null,
+        graceStopsAt: null,
+      },
+    });
+  });
+
+  it('promises no Suspend-when-idle date to an always-on app in its takeover grace window (MOTIR-12248)', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    await release(id, 1);
+    const since = new Date(Date.now() - 86_400_000);
+    const stopsAt = new Date(Date.now() + 20 * 86_400_000);
+    await adminDb.hostedApplication.update({
+      where: { projectRepositoryId: id },
+      data: {
+        creditsExhaustedSince: since,
+        idleMode: 'always_on',
+        idleSeconds: null,
+        state: 'grace',
+        stopsAt,
+      },
+    });
+    stubBalance(-12);
+    s.asAdmin();
+
+    expect(await (await readUsage('ACME', id)).json()).toMatchObject({
+      state: 'credits_exhausted',
+      exhausted: {
+        since: since.toISOString(),
+        balance: -12,
+        canSuspend: true,
+        suspendsAt: null,
+        graceStopsAt: stopsAt.toISOString(),
+      },
     });
   });
 

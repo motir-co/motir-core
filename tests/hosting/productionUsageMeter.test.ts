@@ -1053,6 +1053,54 @@ describe('the administrators are told when the credits run out (MOTIR-12166)', (
     ]);
   });
 
+  it('names no switch date when every running app is in its takeover grace window (MOTIR-12248)', async () => {
+    const live = await liveApp();
+    await adminDb.hostedApplication.update({
+      where: { id: live.appId },
+      data: { state: 'grace', stopsAt: new Date(Date.now() + 20 * DAY) },
+    });
+    releaseUsage(live.liveAt);
+    balance = -40;
+    const now = new Date();
+
+    await meter.accrue({ now: () => now });
+
+    const rows = await notices();
+    expect(rows).toHaveLength(1);
+    // The grace app is still named — its credits still pay — but no date is
+    // promised for a switch that is never made.
+    expect(rows[0]!.data).toEqual({
+      kind: TYPE,
+      apps: [{ repositoryName: 'repo-web', projectKey: 'ACME' }],
+      exhaustedSince: now.toISOString(),
+      suspendFrom: '',
+    });
+  });
+
+  it('keeps the switch date when one of the row’s apps is switched, beside one in its grace window', async () => {
+    const live = await liveApp();
+    const graceId = await secondLiveApp(live);
+    await adminDb.hostedApplication.update({
+      where: { id: graceId },
+      data: { state: 'grace', stopsAt: new Date(Date.now() + 20 * DAY) },
+    });
+    releaseUsage(live.liveAt);
+    balance = -40;
+    const now = new Date();
+
+    await meter.accrue({ now: () => now });
+
+    const rows = await notices();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.data).toMatchObject({
+      apps: [
+        { repositoryName: 'repo-web', projectKey: 'ACME' },
+        { repositoryName: 'repo-api', projectKey: 'ACME' },
+      ],
+      suspendFrom: new Date(now.getTime() + 7 * DAY).toISOString(),
+    });
+  });
+
   it('writes a row into every workspace that holds a running app, so each workspace’s bell shows it', async () => {
     const { a, b } = await twoWorkspaces();
     releaseUsage(a.liveAt);

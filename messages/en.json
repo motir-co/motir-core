@@ -4957,6 +4957,7 @@
           "body": "This app keeps running. If the balance is still below zero on {date}, Motir switches it to Suspend when idle, so it sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
           "bodySuspended": "This app keeps running and sleeps when nothing asks for it. Motir never stops or deletes a production app for being out of credits.",
           "bodyCannotSuspend": "This app runs as an AWS container, which can’t be suspended, so it keeps running always on and keeps using credits until the balance is topped up. Motir never stops or deletes a production app for being out of credits.",
+          "bodyGrace": "This app is in its takeover grace window, so Motir doesn’t switch it to Suspend when idle: it keeps running as it is until {date}, and its usage is still charged. Motir never stops or deletes a production app for being out of credits.",
           "topUp": "Top up credits",
           "member": "An organisation owner or admin can top up credits."
         }

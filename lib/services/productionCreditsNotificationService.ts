@@ -4,7 +4,10 @@ import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { notificationFanInService } from '@/lib/services/notificationFanInService';
-import { EXHAUSTED_SUSPEND_AFTER_MS } from '@/lib/services/productionCreditBalanceService';
+import {
+  EXHAUSTED_SUSPEND_AFTER_MS,
+  productionCreditBalanceService,
+} from '@/lib/services/productionCreditBalanceService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
 // THE ADMINISTRATORS ARE TOLD WHEN THE CREDITS RUN OUT (MOTIR-12166 · Decision
@@ -80,6 +83,13 @@ export const productionCreditsNotificationService = {
       const admins = [...new Set(recipients)].sort();
       let written = 0;
       for (const [workspaceId, apps] of byWorkspace) {
+        // The 7-day switch's date, only when it will act on one of the row's
+        // apps: an app in its takeover grace window is exempt (MOTIR-12143), and
+        // one whose target cannot suspend has nothing to be switched to. An empty
+        // date draws no excerpt (MOTIR-12248), never a date nothing acts on.
+        const switches = apps.some((a) =>
+          productionCreditBalanceService.takesOutOfCreditsAction(a),
+        );
         for (const recipientUserId of admins) {
           const ok = await notificationFanInService.notifyProjectEvent({
             workspaceId,
@@ -95,7 +105,7 @@ export const productionCreditsNotificationService = {
                 projectKey: a.projectKey,
               })),
               exhaustedSince,
-              suspendFrom,
+              suspendFrom: switches ? suspendFrom : '',
             },
           });
           if (ok) written += 1;

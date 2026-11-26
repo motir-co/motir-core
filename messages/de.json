@@ -4957,6 +4957,7 @@
           "body": "Diese App läuft weiter. Liegt das Guthaben am {date} noch unter null, stellt Motir sie auf „Bei Leerlauf pausieren“ um, sodass sie schläft, wenn nichts sie anfragt. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
           "bodySuspended": "Diese App läuft weiter und schläft, wenn nichts sie anfragt. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
           "bodyCannotSuspend": "Diese App läuft als AWS-Container, der nicht pausiert werden kann. Sie läuft daher dauerhaft weiter und verbraucht Credits, bis das Guthaben aufgeladen ist. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
+          "bodyGrace": "Diese App ist in der Übergangsfrist der Übergabe, daher stellt Motir sie nicht auf „Bei Leerlauf pausieren“ um: Sie läuft unverändert bis zum {date} weiter, und ihre Nutzung wird weiterhin berechnet. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
           "topUp": "Credits aufladen",
           "member": "Ein Inhaber oder Administrator der Organisation kann Credits aufladen."
         }

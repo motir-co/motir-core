@@ -770,3 +770,55 @@ same destination as the Usage section's **Top up credits** button.
 - No notification on the 7-day switch itself: the excerpt names its date, and the Production panel's
   Usage section and **When idle** control show the switched state.
 - No email; no change to the drawer's layout, the bell, or any other row.
+
+## Amendment 2026-11-26 — out of credits in the takeover grace window (MOTIR-12248 · MOTIR-12143 · Decision MOTIR-9802)
+
+**Delta mock:** `production--credits-exhausted-grace.mock.html` (2 panels). It **amends** §
+_Amendment 2026-11-23 — live app operations_ above, whose panels 20 and 21 of
+`production--live-app-ops.mock.html` draw the Usage section's credits-exhausted box for an app that can
+suspend and for an AWS container. That mock stays as drawn.
+
+An application in its takeover grace window is exempt from the out-of-credits actions (Decision
+MOTIR-9802, MOTIR-12143): it is never switched to Suspend when idle and never refused Always on, and it
+runs until the window ends at `stopsAt`. Its usage is still accrued and charged. Panel 20's body promised
+such an app a switch date that never comes. This amendment gives the box a third body for it. The box,
+its title, its tint, Top up credits and the member note are unchanged; only the sentence differs.
+
+### Panels
+
+| #   | Panel                                                                                               | Composes        |
+| --- | --------------------------------------------------------------------------------------------------- | --------------- |
+| 1   | Out of credits in the grace window, an organisation admin: no switch date, the window's end, Top up | ProductionUsage |
+| 2   | The same, a project member who is not an organisation admin: the member note in place of Top up     | ProductionUsage |
+
+### Copy — final English (under `settings.production`)
+
+| Key                         | English                                                                                                                                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `usage.exhausted.bodyGrace` | This app is in its takeover grace window, so Motir doesn’t switch it to Suspend when idle: it keeps running as it is until {date}, and its usage is still charged. Motir never stops or deletes a production app for being out of credits. |
+
+- `{date}` is the window's end (`stopsAt`) as a medium date in the reader's calendar, the same format the
+  Grace panel's `Runs until` and its body use, so the two read as one date.
+- **Which body.** The grace body wins over the other three: an app in its grace window reads it whatever its
+  target. Otherwise an app whose target cannot suspend reads `bodyCannotSuspend`, an app the 7-day switch
+  will act on reads `body` with its date, and an app already suspending reads `bodySuspended`. The read
+  (`GET …/production/usage`) carries `exhausted.graceStopsAt` for the first and gives `suspendsAt` only
+  where the switch will act.
+
+### Tokens and parts
+
+- Unchanged from panels 20 and 21: the box `--el-tint-peach` + `--el-border`, `--radius-card`,
+  `--spacing-card-padding-12`; title and body `--el-text-strong`; `CreditCard` and `Zap` glyphs; the primary
+  small button.
+
+### The notification
+
+The out-of-credits notification (§ _Amendment 2026-11-23 — the credits-exhausted notification_) still
+names a grace-window app among the running apps: its credits still pay. A row whose apps the 7-day switch
+acts on **none** of (each in its grace window, or on a target that cannot suspend) carries no
+`suspendFrom`, and so draws no excerpt, the case that section already draws ("a payload without the date
+draws no excerpt at all"). No new panel.
+
+### What this amendment does not draw
+
+- No change to the Grace panel, the Grace notice banner, When idle or any other section.
