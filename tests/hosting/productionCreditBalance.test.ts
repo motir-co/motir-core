@@ -5,6 +5,7 @@
 // registry with only a placeholder `DATABASE_URL`, and `@/lib/auth` throws at
 // module scope without `BETTER_AUTH_SECRET`.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { OUT_OF_CREDITS_EXEMPT_APPLICATION_STATES } from '@/lib/hosting/vocabulary';
 import {
   EXHAUSTED_SUSPEND_AFTER_MS,
   productionCreditBalanceService as credits,
@@ -97,6 +98,28 @@ describe('suspend when idle', () => {
 
   it('switches an always-on application after 7 days below zero', () => {
     expect(EXHAUSTED_SUSPEND_AFTER_MS).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+});
+
+// MOTIR-12143 — the one selection the out-of-credits actions read through.
+describe('which applications the out-of-credits actions act on', () => {
+  const fly = { target: 'fly', hostingShape: 'container' } as const;
+
+  it('leaves an application in its takeover grace window out (Decision MOTIR-9802)', () => {
+    expect(OUT_OF_CREDITS_EXEMPT_APPLICATION_STATES).toEqual(['grace']);
+    expect(credits.takesOutOfCreditsAction({ ...fly, state: 'grace' })).toBe(false);
+  });
+
+  it('acts on a live or handing-over application whose target can suspend', () => {
+    for (const state of ['live', 'handing_over'] as const) {
+      expect(credits.takesOutOfCreditsAction({ ...fly, state })).toBe(true);
+    }
+  });
+
+  it('acts on no application whose target cannot suspend', () => {
+    expect(
+      credits.takesOutOfCreditsAction({ target: 'aws', hostingShape: 'container', state: 'live' }),
+    ).toBe(false);
   });
 });
 

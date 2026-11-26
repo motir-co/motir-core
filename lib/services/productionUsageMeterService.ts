@@ -78,7 +78,10 @@ import type { ProductionUsageUnit } from '@/generated/prisma/client';
 //     records the transition below zero on the organisation's applications, and
 //     clears it once the balance is zero or above; after 7 days still below zero,
 //     an always-on application whose target can suspend is switched to suspend
-//     when idle through the idle-policy path. Nothing here ever stops an app.
+//     when idle through the idle-policy path. Nothing here ever stops an app,
+//     and an application in its takeover grace window is never switched: it is
+//     still sliced and charged, but `takesOutOfCreditsAction` leaves it out
+//     (Decision MOTIR-9802; MOTIR-12143).
 //     The organisation's transition below zero notifies its owners and admins
 //     once (`productionCreditsNotificationService`, MOTIR-12166).
 //   · STOP RULES (§8). A customer repository is never metered or charged; an
@@ -416,7 +419,7 @@ async function enforceCredits(
     if (
       !app?.creditsExhaustedSince ||
       app.idleMode !== 'always_on' ||
-      !productionCreditBalanceService.canSuspend(app) ||
+      !productionCreditBalanceService.takesOutOfCreditsAction(app) ||
       now.getTime() - app.creditsExhaustedSince.getTime() < EXHAUSTED_SUSPEND_AFTER_MS
     ) {
       continue;

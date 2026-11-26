@@ -57,6 +57,9 @@ export interface HostedApplicationMeterTarget {
   projectId: string;
   projectRepositoryId: string;
   target: HostingTarget;
+  /** The takeover handover state (MOTIR-12126): a `grace` application is exempt
+   *  from the out-of-credits actions (MOTIR-12143). */
+  state: HostedApplicationState;
   idleMode: HostedIdleMode;
   creditsExhaustedSince: Date | null;
   databaseProjectId: string | null;
@@ -684,6 +687,7 @@ export const hostedApplicationRepository = {
         projectId: true,
         projectRepositoryId: true,
         target: true,
+        state: true,
         idleMode: true,
         creditsExhaustedSince: true,
         databaseProjectId: true,
