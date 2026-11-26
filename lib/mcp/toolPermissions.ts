@@ -477,12 +477,6 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner's own `code_grep` shows every `ai:plan` holder these lines, which
   // `read_file` already shows them file by file.
   code_grep: 'ai:plan',
-  // MOTIR-11647 — the name record the hosted planner writes and asks. Both are planning
-  // reads and writes over Motir's own record; `nameOccurrencesService` asserts `ai:plan`
-  // itself before anything is read. The record is an additive write, as `expand_item`
-  // shows a write on `ai:plan` is established.
-  record_name_occurrences: 'ai:plan',
-  lookup_name_occurrences: 'ai:plan',
 
   // ── ai:view_plan — the plan AUTHOR write that has a door ─────────────────
   // `plansService.addProposals` (and `markPlanned`, which `final: true` also

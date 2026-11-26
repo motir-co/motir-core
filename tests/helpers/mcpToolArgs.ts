@@ -75,14 +75,6 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     code_explore: { projectKey: t.projectKey, query: 'readFile' },
     code_search: { projectKey: t.projectKey, query: 'readFile' },
     code_grep: { projectKey: t.projectKey, pattern: 'readFile' },
-    // MOTIR-11647 — the name record, project-keyed: a non-member reads A's key as
-    // not-found before any repository set is read or motir-ai is called.
-    record_name_occurrences: {
-      projectKey: t.projectKey,
-      repo: 'motir-core',
-      occurrences: [{ blob: 'a'.repeat(40), name: 'readFile', startLine: 1, endLine: 1 }],
-    },
-    lookup_name_occurrences: { projectKey: t.projectKey, repo: 'motir-core', names: ['readFile'] },
     // The ORIENTING read (MOTIR-3100) — project-keyed, so a non-member must
     // read tenant A's tree as not-found rather than receive its SHAPE. A
     // partial skeleton would be the worst possible leak here: it names every

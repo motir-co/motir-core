@@ -4,9 +4,10 @@ import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // MOTIR-11649 (story MOTIR-11497) — NO CODE-GRAPH CREDENTIAL IS READ OR HELD IN
-// motir-core. `record_name_occurrences` / `lookup_name_occurrences` reach the
-// organisation-wide name record only through motir-ai's two forwarding routes; the
-// service's credential lives in motir-ai alone. That is true today and stops being true
+// motir-core. The code-graph MCP reads (`code_explore`, `code_search`, `code_grep`)
+// reach the service only through motir-ai's `POST /v1/code-graph/read`; the service's
+// credential lives in motir-ai alone. (The guard was written for the name record's two
+// tools; they were removed with the record in MOTIR-12265, and the rule still holds.) That is true today and stops being true
 // the first time someone wires a tool straight to the service — an edit no runtime test
 // can see, because a runtime test drives only the paths it knows. A scan of the tree can.
 //
@@ -91,7 +92,7 @@ describe('no code-graph credential name appears in motir-core (MOTIR-11649)', ()
     expect(
       scan.hits.map((h) => `${h.path}:${String(h.line)} ${h.text}`),
       'motir-core must reach the code-graph service only through motir-ai’s ' +
-        '/v1/code-graph/name-occurrences routes; it never reads or holds the service credential.',
+        '/v1/code-graph/* routes; it never reads or holds the service credential.',
     ).toEqual([]);
   });
 
@@ -104,8 +105,8 @@ describe('no code-graph credential name appears in motir-core (MOTIR-11649)', ()
     const report = `read ${String(scan.read)} files; could not read ${String(scan.unread.length)} (binary or over ${String(MAX_BYTES)} bytes): ${scan.unread.join(', ')}`;
     expect(scan.unread.length, report).toBeLessThan(scan.read);
     for (const path of [
-      'lib/mcp/tools/nameOccurrences.ts',
-      'lib/services/nameOccurrencesService.ts',
+      'lib/mcp/tools/codeGraphRead.ts',
+      'lib/services/codeGraphReadService.ts',
       'lib/ai/motirAiClient.ts',
     ]) {
       expect(scan.unread, path).not.toContain(path);
