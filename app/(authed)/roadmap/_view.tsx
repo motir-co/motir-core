@@ -10,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { foldersService } from '@/lib/services/foldersService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
+import { canvasNextActionsFor } from '@/lib/planning/canvasNextActions';
 import { RoadmapView } from '@/components/planning/RoadmapView';
 import {
   folderNodeId,
@@ -236,7 +237,8 @@ export default async function RoadmapPageView({
         showPlanningOrigin={ctx.project.onboardingRanAt != null}
         // The card's next-action button (MOTIR-10509): a member's commands only —
         // a Visitor has nothing to copy and may not plan (design MOTIR-6641 panel 3).
-        nextActions={ctx.visitor ? null : { plan: aiConfigured }}
+        // The same gate the item page's child graph reads (MOTIR-12233).
+        nextActions={canvasNextActionsFor({ visitor: Boolean(ctx.visitor), aiConfigured })}
       />
     </SurfaceTitleTranslationProvider>
   );

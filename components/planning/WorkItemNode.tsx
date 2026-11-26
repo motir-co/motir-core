@@ -55,6 +55,7 @@ import {
   WorkItemStateTags,
 } from '@/components/workItems/WorkItemStateTags';
 import { isInToPlanStatus, isToPlanItem, statusSlotOf } from '@/lib/workItems/statusSlot';
+import type { CardNextActionsOption } from '@/lib/planning/canvasNextActions';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
 // MOTIR-1194) — the card the reusable `ProjectRoadmapCanvas` renders for an epic /
@@ -174,15 +175,14 @@ export interface RunLegBadge {
 
 /**
  * The card's NEXT-ACTION button, opted into by a consumer (MOTIR-10509; design
- * MOTIR-10508 § "The next-action button"). Only the roadmap page passes it, and
- * never for a Visitor: the button copies an agent command or opens planning, and
- * a reader with no commands to run must not be offered either.
+ * MOTIR-10508 § "The next-action button"). Every member-facing canvas passes it —
+ * the roadmap page and the item page's child graph (MOTIR-12233) — and never for
+ * a Visitor: the button copies an agent command or opens planning, and a reader
+ * with no commands to run must not be offered either. The one gate both pages
+ * read is `canvasNextActionsFor` (`lib/planning/canvasNextActions.ts`), which
+ * owns the type; it is re-exported here for the canvas modules that import it.
  */
-export interface CardNextActionsOption {
-  /** May the reader open the planning overlay (the project's AI is configured and
-   *  the reader is a member)? `false` draws no Plan button on a To plan card. */
-  plan: boolean;
-}
+export type { CardNextActionsOption };
 
 /** WHAT the next-action button does on one card (design table, checked top to
  *  bottom). `null` draws no button. */
