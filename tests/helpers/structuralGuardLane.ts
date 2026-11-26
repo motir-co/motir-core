@@ -451,6 +451,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `trackServerWork`. It opens no database; its scanner imports only
   // `typescript` and `node:*`.
   'tests/mcp/mcp-route-tracked-guard.test.ts',
+  // ── tests/mcp/ — the code-graph credential guard (MOTIR-11649) ─────────────
+  // Lists the tree with `git ls-files` and reads every tracked text file for the two
+  // code-graph credential names, so motir-core never reads or holds the service's
+  // credential. It opens no database and imports only `node:*`.
+  'tests/mcp/codegraph-credential-guard.test.ts',
   // ── tests/architecture/ — no route refresh on a live path (MOTIR-8578) ─────
   // Walks the static import graph from the Workbench, approval and planning
   // live-update roots (~540 files) and parses each through the compiler API. It
