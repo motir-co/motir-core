@@ -21,7 +21,9 @@
 //
 // `--target aws` (MOTIR-10011) drives the AWS adapter on a staging tenant
 // account: the app is the tenant app `mh-<repositoryId>` of a `--repository`
-// made for the check, each release is the fixture app
+// the check makes for itself — `repository` (MOTIR-12243) creates a Motir-created
+// repository per shape in the given organisation and project, and `destroy`
+// removes it again after the app — each release is the fixture app
 // (`tests/fixtures/hosting/aws-fixture-app`) pushed by `push` under the
 // operator's own AWS profile, `page` reads its `/health` and its database row
 // with the release's origin credential, and `no-shape` proves the adapter
@@ -137,6 +139,7 @@ export const DEPLOY_CHECK_STEPS = [
   'push',
   'page',
   'no-shape',
+  'repository',
 ] as const;
 
 /** The steps only the serverless target has (MOTIR-9975). */
@@ -152,6 +155,7 @@ export const AWS_ONLY_STEPS: readonly DeployCheckStep[] = [
   'push',
   'page',
   'no-shape',
+  'repository',
 ];
 
 /** `page` tries a cold release this many times, this far apart, before it
@@ -222,6 +226,16 @@ export class DeployCheckConvergeFailedError extends Error {
   }
 }
 
+/** The creation door attempted the check's repository and it failed; the row is
+ *  `failed` and a re-run of `repository` retries it. */
+export class DeployCheckRepositoryFailedError extends Error {
+  readonly code = 'DEPLOY_CHECK_REPOSITORY_FAILED' as const;
+  constructor(name: string, detail: string) {
+    super(`The check's repository ${name} was not created: ${detail}.`);
+    this.name = 'DeployCheckRepositoryFailedError';
+  }
+}
+
 /** The command line did not say what to do. */
 export class DeployCheckUsageError extends Error {
   readonly code = 'DEPLOY_CHECK_USAGE' as const;
@@ -233,6 +247,7 @@ export class DeployCheckUsageError extends Error {
 
 export const DEPLOY_CHECK_USAGE = [
   'Usage: pnpm hosting:deploy-check <step> [--manifest <path>] [--name <app>] [--image <ref>]',
+  '       pnpm hosting:deploy-check repository --target aws --organization <id> --project <key> --shape <function|container>',
   '       pnpm hosting:deploy-check <step> --target aws --repository <id> [--shape <function|container>]',
   '                                 [--organization <id>] [--aws-profile <profile>] [--image <ref>]',
   '       pnpm hosting:deploy-check <step> --target serverless [--manifest <path>] [--name <app>]',
@@ -245,7 +260,9 @@ export const DEPLOY_CHECK_USAGE = [
   `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST} (aws: ${DEPLOY_CHECK_AWS_MANIFEST}; serverless: ${SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST})`,
   `  --name      defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX} (fly and serverless)`,
   `  --image     defaults to ${DEPLOY_CHECK_IMAGE} (aws: the pushed release-1 / release-2 tag)`,
-  '  --repository    aws: the Motir repository the check app is mh-<id> of (required)',
+  "  repository  aws: creates the check's own Motir repository for --shape in --project and prints its id",
+  '  --repository    aws: the Motir repository the check app is mh-<id> of (every step but repository)',
+  "  --project       aws, repository: the key of the organisation's project the repository is made in",
   '  --shape         aws: function or container; absent, the port refuses the deploy',
   '  --organization  aws: the organisation converge brings onto the deploy policy',
   '  --aws-profile   aws: the operator profile push logs Docker in to the registry with',
@@ -256,7 +273,10 @@ export const DEPLOY_CHECK_USAGE = [
 
 /** What `--target aws` adds. */
 export interface DeployCheckAwsOptions {
-  readonly repositoryId: string;
+  /** `--repository`; null only for the `repository` step, which creates it. */
+  readonly repositoryId: string | null;
+  /** `--project`: the project `repository` creates the check's repository in. */
+  readonly projectKey: string | null;
   /** Absent: the check sends none, and the port refuses by name. */
   readonly shape: ReleaseShape | null;
   readonly organizationId: string | null;
@@ -322,6 +342,10 @@ export interface DeployCheckDeps {
   /** What only the serverless target needs; absent, `--target serverless` is
    *  refused as not configured. */
   readonly serverless?: ServerlessDeployCheckDeps;
+  /** The check's own repository (MOTIR-12243): `ensure` creates it for a shape
+   *  when absent and answers it, `remove` deletes it when it is the check's. Used
+   *  by the AWS `repository` and `destroy` steps alone. */
+  readonly checkRepository?: DeployCheckRepositoryDeps;
   /** A repository's stored environment in the deploy port's shape
    *  (`lib/environmentConfig/resolveEnvironment.ts`); called only with `stored`. */
   readonly resolveEnvironment?: (
@@ -331,11 +355,33 @@ export interface DeployCheckDeps {
   ) => Promise<readonly ReleaseEnvVar[]>;
 }
 
+/** The check repository as the creation door left it. */
+export interface DeployCheckRepository {
+  readonly repositoryId: string;
+  readonly name: string;
+  /** `created`, `adopted`, `already_settled` or `failed`. */
+  readonly outcome: string;
+  readonly state: string;
+  /** `owner/name`, or null when no GitHub repository was realized. */
+  readonly githubRepository: string | null;
+  readonly failureCode: string | null;
+  readonly failureReason: string | null;
+}
+
+export interface DeployCheckRepositoryDeps {
+  readonly ensure: (args: {
+    organizationId: string;
+    projectKey: string;
+    shape: ReleaseShape;
+  }) => Promise<DeployCheckRepository>;
+  /** `removed`, `absent` (no such row) or `kept` (not the check's own). */
+  readonly remove: (repositoryId: string) => Promise<'removed' | 'absent' | 'kept'>;
+}
+
 /** The injected dependency a step needs, or a refusal naming it. */
-function wired<K extends 'exec' | 'converge' | 'signedFetch' | 'resolveEnvironment'>(
-  deps: DeployCheckDeps,
-  key: K,
-): NonNullable<DeployCheckDeps[K]> {
+function wired<
+  K extends 'exec' | 'converge' | 'signedFetch' | 'resolveEnvironment' | 'checkRepository',
+>(deps: DeployCheckDeps, key: K): NonNullable<DeployCheckDeps[K]> {
   const dep = deps[key];
   if (!dep) throw new Error(`The deploy check was started without its ${key}.`);
   return dep as NonNullable<DeployCheckDeps[K]>;
@@ -384,10 +430,16 @@ export function deployCheckAwsApp(repositoryId: string): { repositoryId: string;
   return { repositoryId, appRef };
 }
 
+/** `--repository`, which every AWS step but `repository` needs. */
+function awsRepositoryId(aws: DeployCheckAwsOptions): string {
+  if (!aws.repositoryId) throw new DeployCheckUsageError('--target aws needs --repository.');
+  return aws.repositoryId;
+}
+
 /** The check's app for its target. Pure: no port call. */
 function checkApp(options: DeployCheckOptions): { repositoryId: string; appRef: string } {
   return options.aws
-    ? deployCheckAwsApp(options.aws.repositoryId)
+    ? deployCheckAwsApp(awsRepositoryId(options.aws))
     : deployCheckApp(options.appName);
 }
 
@@ -490,7 +542,7 @@ async function deployAwsRelease(
   release: 1 | 2,
 ): Promise<void> {
   const manifest = readManifest(deps, options.manifestPath);
-  const { repositoryId, appRef } = deployCheckAwsApp(aws.repositoryId);
+  const { repositoryId, appRef } = deployCheckAwsApp(awsRepositoryId(aws));
   const port = deps.port('aws');
   // With no shape the port refuses the deploy before it does anything, so the
   // check does not ask for the app first — that would make the tenant account
@@ -671,6 +723,41 @@ async function destroy(deps: DeployCheckDeps, options: DeployCheckOptions): Prom
     usage: JSON.stringify(remaining),
     releases: JSON.stringify(listing),
   });
+  if (options.aws) {
+    // The app is gone; now the repository it was the app of — only when it is
+    // the one `repository` made (the remover keeps any other).
+    const repositoryId = awsRepositoryId(options.aws);
+    const outcome = await wired(deps, 'checkRepository').remove(repositoryId);
+    deps.print('repository', { repository: repositoryId, outcome });
+  }
+}
+
+/** `repository` (MOTIR-12243): the check's own Motir-created repository for the
+ *  shape, in the organisation's project, created when absent — through the door
+ *  Motir creates a Motir-hosted repository with — and its id printed for every
+ *  later step's `--repository`. A re-run answers the same row. */
+async function repository(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
+  const aws = awsOptions('repository', options);
+  const organizationId = requireFlag(aws.organizationId, 'repository', 'organization');
+  const projectKey = requireFlag(aws.projectKey, 'repository', 'project');
+  const shape = requireFlag(aws.shape, 'repository', 'shape') as ReleaseShape;
+  const made = await wired(deps, 'checkRepository').ensure({ organizationId, projectKey, shape });
+  deps.print('repository', {
+    repository: made.repositoryId,
+    name: made.name,
+    outcome: made.outcome,
+    state: made.state,
+    github: made.githubRepository ?? 'none',
+    ...(made.outcome === 'failed'
+      ? { failureCode: made.failureCode, failureReason: made.failureReason }
+      : {}),
+  });
+  if (made.outcome === 'failed') {
+    throw new DeployCheckRepositoryFailedError(
+      made.name,
+      made.failureReason ?? made.failureCode ?? 'no reason given',
+    );
+  }
 }
 
 /** The AWS options, or a refusal: the step is the AWS target's alone. */
@@ -704,7 +791,7 @@ async function ensureAwsApp(
   deps: DeployCheckDeps,
   aws: DeployCheckAwsOptions,
 ): Promise<{ repositoryId: string; appRef: string; pushNamespace: string; pushesInCiAs: string }> {
-  const { repositoryId, appRef } = deployCheckAwsApp(aws.repositoryId);
+  const { repositoryId, appRef } = deployCheckAwsApp(awsRepositoryId(aws));
   const port = deps.port('aws');
   const app = await port.ensureApp({ repositoryId, environment: ENVIRONMENT });
   const credential = await port.mintDeployCredential({ pushNamespace: app.pushNamespace });
@@ -871,7 +958,7 @@ async function noShape(deps: DeployCheckDeps, options: DeployCheckOptions): Prom
   const aws = awsOptions('no-shape', options);
   if (aws.shape) throw new DeployCheckUsageError('no-shape runs without --shape.');
   const manifest = readManifest(deps, options.manifestPath);
-  const { repositoryId, appRef } = deployCheckAwsApp(aws.repositoryId);
+  const { repositoryId, appRef } = deployCheckAwsApp(awsRepositoryId(aws));
   const port = deps.port('aws');
   let refusal: unknown = null;
   try {
@@ -920,6 +1007,8 @@ export async function runDeployCheckStep(
       return page(deps, options);
     case 'no-shape':
       return noShape(deps, options);
+    case 'repository':
+      return repository(deps, options);
     case 'deploy':
       return deployRelease(deps, options, 1);
     case 'release2':
@@ -965,6 +1054,7 @@ async function allAws(
   readManifest(deps, options.manifestPath);
   requireFlag(aws.organizationId, 'all', 'organization');
   requireFlag(aws.awsProfile, 'all', 'aws-profile');
+  wired(deps, 'checkRepository');
   await converge(deps, options);
   await push(deps, options);
   await deployRelease(deps, options, 1);
@@ -989,6 +1079,7 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
     | 'target'
     | 'shape'
     | 'repository'
+    | 'project'
     | 'organization'
     | 'aws-profile'
     | 'workspace'
@@ -997,7 +1088,7 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
     const flag =
-      /^--(manifest|name|image|target|shape|repository|organization|aws-profile|workspace|environment)(?:=(.*))?$/.exec(
+      /^--(manifest|name|image|target|shape|repository|project|organization|aws-profile|workspace|environment)(?:=(.*))?$/.exec(
         arg,
       );
     if (flag) {
@@ -1027,18 +1118,29 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
       if (flags[only]) throw new DeployCheckUsageError(`--${only} is for --target fly only.`);
     }
     if (flags.name) throw new DeployCheckUsageError('--name is refused with --target aws.');
-    if (!flags.repository) throw new DeployCheckUsageError('--target aws needs --repository.');
     if (flags.shape && !SHAPES.includes(flags.shape)) {
       throw new DeployCheckUsageError(`--shape is ${SHAPES.join(' or ')}.`);
+    }
+    // `repository` makes the repository every other step is handed.
+    const repositoryId = flags.repository ?? null;
+    if (step === 'repository') {
+      if (repositoryId) {
+        throw new DeployCheckUsageError('repository creates the repository; drop --repository.');
+      }
+    } else {
+      if (!repositoryId) throw new DeployCheckUsageError('--target aws needs --repository.');
+      if (flags.project)
+        throw new DeployCheckUsageError('--project is for the repository step only.');
     }
     return {
       step,
       options: {
         manifestPath: flags.manifest ?? DEPLOY_CHECK_AWS_MANIFEST,
-        appName: `${AWS_APP_PREFIX}${flags.repository}`,
-        image: flags.image ?? awsReleaseImage(flags.repository, 1),
+        appName: repositoryId ? `${AWS_APP_PREFIX}${repositoryId}` : '',
+        image: flags.image ?? (repositoryId ? awsReleaseImage(repositoryId, 1) : ''),
         aws: {
-          repositoryId: flags.repository,
+          repositoryId,
+          projectKey: flags.project ?? null,
           shape: (flags.shape as ReleaseShape | undefined) ?? null,
           organizationId: flags.organization ?? null,
           awsProfile: flags['aws-profile'] ?? null,
@@ -1047,7 +1149,7 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
       },
     };
   }
-  for (const only of ['shape', 'organization', 'aws-profile'] as const) {
+  for (const only of ['shape', 'project', 'organization', 'aws-profile'] as const) {
     if (flags[only]) throw new DeployCheckUsageError(`--${only} is for --target aws only.`);
   }
   const serverless = target === 'serverless';

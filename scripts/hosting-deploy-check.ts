@@ -22,6 +22,10 @@
  * `--target aws --repository <id>` (MOTIR-10011) drives the AWS adapter on the
  * tenant app `mh-<id>` instead, with `--shape <function|container>` and these
  * steps besides (docs/hosting/aws-deploy-check.md is the operator's run order):
+ *   repository  `--organization <id> --project <key> --shape <shape>`, no
+ *             `--repository`: create the check's own Motir-created repository
+ *             `motir-deploy-check-aws-<shape>` in that project when absent, and
+ *             print its id — the `--repository` of every later step (MOTIR-12243)
  *   converge  bring `--organization`'s tenant deploy role onto today's policy
  *   app       ensure the tenant app and print the release-1 and release-2 tags,
  *             building nothing — `push`'s first half, for the run inside AWS
@@ -35,6 +39,8 @@
  *             run it too
  *   no-shape  deploy with no shape, which the port must refuse, and list the
  *             app's releases, which must be none
+ *   destroy   as above, then remove the check's repository (and its GitHub
+ *             repository); a repository the check did not make is kept
  *   all       converge, push, deploy, page, release2, rollback, destroy
  *
  * Flags: `--manifest <path>` (default: the committed fixture), `--name <app>`
@@ -221,6 +227,22 @@ async function converge(organizationId: string): Promise<string> {
   return (await hostingTenantAccountService.convergeDeployPolicy(organizationId)).outcome;
 }
 
+/** The check's own repository (MOTIR-12243), through the doors Motir creates and
+ *  deletes a Motir-hosted repository with; loaded only by the steps that use it,
+ *  since `@/lib/db` needs DATABASE_URL at import. */
+const checkRepository: NonNullable<DeployCheckDeps['checkRepository']> = {
+  ensure: async (args) => {
+    const { awsDeployCheckRepositoryService } =
+      await import('@/lib/services/awsDeployCheckRepositoryService');
+    return awsDeployCheckRepositoryService.ensure(args);
+  },
+  remove: async (repositoryId) => {
+    const { awsDeployCheckRepositoryService } =
+      await import('@/lib/services/awsDeployCheckRepositoryService');
+    return awsDeployCheckRepositoryService.remove(repositoryId);
+  },
+};
+
 const signedFetch = createSigV4Fetch({ region: DEPLOY_CHECK_AWS_REGION });
 
 /** Runs one deploy-check command line and answers the process exit code. The
@@ -246,6 +268,7 @@ export async function runHostingDeployCheck(argv: readonly string[]): Promise<nu
     serverless: serverlessDeps(),
     exec,
     converge,
+    checkRepository,
     signedFetch: (url) => signedFetch(url),
     // Loaded only when a step resolves a stored environment: `@/lib/db` needs
     // DATABASE_URL at import, and the plain check runs without one.

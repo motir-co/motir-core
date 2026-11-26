@@ -36,6 +36,8 @@ const MEASURED = [
   'lib/orchestrator/provider.ts',
   // MOTIR-9805 — the operator deploy check.
   'lib/hosting/deployCheck.ts',
+  // MOTIR-12243 — the AWS deploy check's own repository.
+  'lib/services/awsDeployCheckRepositoryService.ts',
   // MOTIR-9947 — the guard image's server. Its process entry (`main.ts`) runs
   // only in a child process the guard suite spawns, out of v8's reach here.
   'packages/hosting-guard/src/guard.ts',
@@ -158,6 +160,8 @@ export default defineConfig({
       'tests/hosting/serverlessDeployCheck.test.ts',
       // MOTIR-10011 — the deploy check on the AWS target.
       'tests/hosting/deployCheckAws.test.ts',
+      // MOTIR-12243 — the check's own repository, over real Postgres.
+      'tests/hosting/awsDeployCheckRepositoryService.test.ts',
       'tests/hosting/hostingGuard.test.ts',
       'tests/hosting/deployPortCoverageLane.test.ts',
       'tests/projectRepos/projectRepoHosting.test.ts',

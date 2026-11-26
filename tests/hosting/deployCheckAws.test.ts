@@ -36,6 +36,8 @@ const REGISTRY = `${ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com`;
 const PUSH_ROLE = `arn:aws:iam::${ACCOUNT}:role/${APP}-production-push`;
 const PASSWORD = 'ECR_PASSWORD_never_printed';
 const ORG = 'org-check-1';
+const PROJECT = 'MOTIR';
+const KEPT = 'cmreal1';
 
 type Block = { label: string; fields: Record<string, unknown> };
 type Exec = { command: string; args: readonly string[]; stdin?: string };
@@ -67,7 +69,13 @@ interface HarnessOptions {
   /** Describe every release `aws_sigv4`, as a function stack applied before its
    *  front door (MOTIR-10129) still is. */
   readonly legacySigV4?: boolean;
+  /** Fail the creation door's establish of the check repository. */
+  readonly failRepository?: boolean;
 }
+
+/** The check repository's name prefix — `awsDeployCheckRepositoryService`'s,
+ *  repeated here so this suite stays free of the database modules. */
+const CHECK_PREFIX = 'motir-deploy-check-aws-';
 
 function harness(options: HarnessOptions = {}) {
   const fake = createFakeHostingDeployPort({ target: 'aws' });
@@ -113,6 +121,14 @@ function harness(options: HarnessOptions = {}) {
   const signed: string[] = [];
   const plain: Array<{ url: string; headers: Record<string, string> }> = [];
   const sleeps: number[] = [];
+  // The creation and removal doors as rows by id: `RID` is a repository the check
+  // made (so `base()`'s `destroy` removes it), `KEPT` one it did not.
+  const repositories = new Map<string, string>([
+    [RID, `${CHECK_PREFIX}function`],
+    [KEPT, 'billing-api'],
+  ]);
+  const ensured: Array<{ organizationId: string; projectKey: string; shape: ReleaseShape }> = [];
+  const removed: string[] = [];
 
   /** The fixture app's answer, from the image the app's live release runs. */
   const fixture = async (url: string): Promise<Response> => {
@@ -170,6 +186,33 @@ function harness(options: HarnessOptions = {}) {
     sleep: async (ms) => {
       sleeps.push(ms);
     },
+    checkRepository: {
+      ensure: async (args) => {
+        ensured.push(args);
+        const name = `${CHECK_PREFIX}${args.shape}`;
+        const found = [...repositories].find(([, n]) => n === name)?.[0];
+        const repositoryId = found ?? `cmrepo${repositories.size + 1}`;
+        repositories.set(repositoryId, name);
+        const failed = options.failRepository === true;
+        return {
+          repositoryId,
+          name,
+          outcome: failed ? 'failed' : found ? 'already_settled' : 'created',
+          state: failed ? 'failed' : 'created',
+          githubRepository: failed ? null : `motir-projects/${name}`,
+          failureCode: failed ? 'REPO_CREATE_FAILED' : null,
+          failureReason: failed ? 'GitHub refused the repository' : null,
+        };
+      },
+      remove: async (repositoryId) => {
+        removed.push(repositoryId);
+        const name = repositories.get(repositoryId);
+        if (name === undefined) return 'absent';
+        if (!name.startsWith(CHECK_PREFIX)) return 'kept';
+        repositories.delete(repositoryId);
+        return 'removed';
+      },
+    },
   };
   const run = (...argv: string[]) => runDeployCheck(argv, deps);
   const block = (label: string) => out.findLast((b) => b.label === label)?.fields;
@@ -184,6 +227,9 @@ function harness(options: HarnessOptions = {}) {
     signed,
     plain,
     sleeps,
+    repositories,
+    ensured,
+    removed,
     deps,
     run,
     block,
@@ -271,6 +317,7 @@ describe.each([
       'page',
       'destroy',
       'destroyApp',
+      'repository',
     ]);
     expect(h.converged).toEqual([ORG]);
 
@@ -328,6 +375,8 @@ describe.each([
     });
     expect(h.block('destroyApp')).toEqual({ app: APP, usage: '[]', releases: '[]' });
     expect(h.fake.app(APP)).toBeUndefined();
+    expect(h.block('repository')).toEqual({ repository: RID, outcome: 'removed' });
+    expect(h.repositories.has(RID)).toBe(false);
   });
 
   it('rolls back to release 1 with no push and no build', async () => {
@@ -375,6 +424,201 @@ describe('destroy', () => {
       compute: 'none',
     });
     expect(h.block('destroyApp')).toEqual({ app: APP, usage: '[]', releases: '[]' });
+    expect(h.block('repository')).toEqual({ repository: RID, outcome: 'removed' });
+  });
+
+  it('removes the check repository only after the app is gone', async () => {
+    const h = harness();
+    expect(await h.run('deploy', ...base('function'))).toBe(0);
+    expect(await h.run('destroy', ...base('function'))).toBe(0);
+    expect(h.out.slice(-3).map((b) => b.label)).toEqual(['destroy', 'destroyApp', 'repository']);
+    expect(h.removed).toEqual([RID]);
+    expect(h.fake.app(APP)).toBeUndefined();
+  });
+
+  it('keeps a repository the check did not make, and says so', async () => {
+    const h = harness();
+    const flags = ['--target', 'aws', '--repository', KEPT, '--shape', 'function'];
+    expect(await h.run('destroy', ...flags)).toBe(0);
+    expect(h.block('repository')).toEqual({ repository: KEPT, outcome: 'kept' });
+    expect(h.repositories.get(KEPT)).toBe('billing-api');
+  });
+
+  it('a second destroy finds the repository already gone', async () => {
+    const h = harness();
+    expect(await h.run('destroy', ...base('function'))).toBe(0);
+    expect(await h.run('destroy', ...base('function'))).toBe(0);
+    expect(h.blocks('repository').map((b) => b['outcome'])).toEqual(['removed', 'absent']);
+  });
+
+  it('with the removal door not wired, names it', async () => {
+    const h = harness();
+    const { checkRepository: _unwired, ...deps } = h.deps;
+    expect(await runDeployCheck(['destroy', ...base('function')], deps)).toBe(1);
+    expect(h.block('refused')).toMatchObject({
+      message: 'The deploy check was started without its checkRepository.',
+    });
+  });
+});
+
+describe('repository — the check makes its own (MOTIR-12243)', () => {
+  const make = (shape: ReleaseShape) => [
+    'repository',
+    '--target',
+    'aws',
+    '--organization',
+    ORG,
+    '--project',
+    PROJECT,
+    '--shape',
+    shape,
+  ];
+
+  it.each(['function', 'container'] as const)(
+    'creates the %s repository, prints its id, and every later step takes that id',
+    async (shape) => {
+      const h = harness();
+      h.repositories.clear();
+      expect(await h.run(...make(shape))).toBe(0);
+      expect(h.ensured).toEqual([{ organizationId: ORG, projectKey: PROJECT, shape }]);
+      const made = h.block('repository')!;
+      expect(made).toEqual({
+        repository: 'cmrepo1',
+        name: `${CHECK_PREFIX}${shape}`,
+        outcome: 'created',
+        state: 'created',
+        github: `motir-projects/${CHECK_PREFIX}${shape}`,
+      });
+      // `repository` touches no port: the app is `app`'s and `deploy`'s to make.
+      expect(h.calls).toEqual([]);
+
+      const id = String(made['repository']);
+      const app = `mh-${id}`;
+      const flags = ['--target', 'aws', '--repository', id, '--shape', shape];
+      for (const step of ['app', 'deploy', 'page', 'release2', 'rollback', 'probe']) {
+        expect(await h.run(step, ...flags)).toBe(0);
+      }
+      expect(h.block('app')).toMatchObject({ app, pushNamespace: `mh/${id}/production` });
+      expect(h.blocks('page').map((p) => p['release'])).toEqual([1, 2, 1]);
+      expect(h.block('refused')).toBeUndefined();
+
+      expect(await h.run('destroy', ...flags)).toBe(0);
+      expect(h.fake.app(app)).toBeUndefined();
+      expect(h.block('repository')).toEqual({ repository: id, outcome: 'removed' });
+      expect(h.repositories.size).toBe(0);
+    },
+  );
+
+  it('a re-run answers the same repository and leaves no second one behind', async () => {
+    const h = harness();
+    h.repositories.clear();
+    expect(await h.run(...make('function'))).toBe(0);
+    expect(await h.run(...make('function'))).toBe(0);
+    const [first, second] = h.blocks('repository');
+    expect(second!['repository']).toBe(first!['repository']);
+    expect(second!['outcome']).toBe('already_settled');
+    expect(h.repositories.size).toBe(1);
+
+    // The other shape is its own repository.
+    expect(await h.run(...make('container'))).toBe(0);
+    expect(h.block('repository')!['repository']).not.toBe(first!['repository']);
+    expect(h.repositories.size).toBe(2);
+  });
+
+  it('fails by name when the creation door could not create it', async () => {
+    const h = harness({ failRepository: true });
+    expect(await h.run(...make('function'))).toBe(1);
+    expect(h.block('repository')).toMatchObject({
+      outcome: 'failed',
+      github: 'none',
+      failureCode: 'REPO_CREATE_FAILED',
+      failureReason: 'GitHub refused the repository',
+    });
+    expect(h.block('refused')).toEqual({
+      error: 'DEPLOY_CHECK_REPOSITORY_FAILED',
+      message: `The check's repository ${CHECK_PREFIX}function was not created: GitHub refused the repository.`,
+    });
+  });
+
+  it('with no reason given, says so', async () => {
+    const h = harness();
+    const deps = {
+      ...h.deps,
+      checkRepository: {
+        ...h.deps.checkRepository!,
+        ensure: async () => ({
+          repositoryId: 'cmrepo9',
+          name: `${CHECK_PREFIX}function`,
+          outcome: 'failed',
+          state: 'failed',
+          githubRepository: null,
+          failureCode: null,
+          failureReason: null,
+        }),
+      },
+    };
+    expect(await runDeployCheck(make('function'), deps)).toBe(1);
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/was not created: no reason given/),
+    });
+  });
+
+  it.each([
+    [
+      ['repository', '--target', 'aws', '--project', PROJECT, '--shape', 'function'],
+      /repository needs --organization/,
+    ],
+    [
+      ['repository', '--target', 'aws', '--organization', ORG, '--shape', 'function'],
+      /repository needs --project/,
+    ],
+    [
+      ['repository', '--target', 'aws', '--organization', ORG, '--project', PROJECT],
+      /repository needs --shape/,
+    ],
+    [
+      ['repository', ...base('function'), '--organization', ORG],
+      /repository creates the repository; drop --repository/,
+    ],
+    [
+      ['deploy', ...base('function'), '--project', PROJECT],
+      /--project is for the repository step only/,
+    ],
+    [['repository', '--project', PROJECT], /--project is for --target aws only/],
+    [['repository'], /repository runs with --target aws only/],
+  ])('%j is refused by name and creates nothing', async (argv, message) => {
+    const h = harness();
+    expect(await h.run(...argv)).toBe(1);
+    expect(h.block('refused')).toMatchObject({ message: expect.stringMatching(message) });
+    expect(h.ensured).toEqual([]);
+  });
+
+  it('with the creation door not wired, names it', async () => {
+    const h = harness();
+    const { checkRepository: _unwired, ...deps } = h.deps;
+    expect(await runDeployCheck(make('function'), deps)).toBe(1);
+    expect(h.block('refused')).toMatchObject({
+      message: 'The deploy check was started without its checkRepository.',
+    });
+  });
+
+  it('parses the repository step with no --repository', () => {
+    expect(parseDeployCheckArgs(make('container'))).toEqual({
+      step: 'repository',
+      options: {
+        manifestPath: DEPLOY_CHECK_AWS_MANIFEST,
+        appName: '',
+        image: '',
+        aws: {
+          repositoryId: null,
+          projectKey: PROJECT,
+          shape: 'container',
+          organizationId: ORG,
+          awsProfile: null,
+          image: null,
+        },
+      },
+    });
   });
 });
 
@@ -657,6 +901,17 @@ describe('refusals', () => {
     });
   });
 
+  it('all with no repository door is refused before its first call', async () => {
+    const h = harness();
+    const { checkRepository: _unwired, ...deps } = h.deps;
+    expect(await runDeployCheck(['all', ...full('function')], deps)).toBe(1);
+    expect(h.block('refused')).toMatchObject({
+      message: 'The deploy check was started without its checkRepository.',
+    });
+    expect(h.calls).toEqual([]);
+    expect(h.converged).toEqual([]);
+  });
+
   it('parses the AWS options, defaulting the manifest and the image', () => {
     expect(parseDeployCheckArgs(['all', ...full('container')])).toEqual({
       step: 'all',
@@ -666,6 +921,7 @@ describe('refusals', () => {
         image: `${NAMESPACE}:release-1`,
         aws: {
           repositoryId: RID,
+          projectKey: null,
           shape: 'container',
           organizationId: ORG,
           awsProfile: 'staging-tenant',
