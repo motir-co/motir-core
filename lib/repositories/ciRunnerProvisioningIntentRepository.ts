@@ -94,8 +94,12 @@ export const FINISHED_WORK_CONCLUSIONS = ['success', 'skipped'] as const;
  *  re-run was asked for (or is being asked for) — see `findCarriedSpotInterruptions`. */
 const RERUN_CARRIES_COUNT: readonly CiRunnerRerunState[] = ['pending', 'requested'];
 
-/** The job a runner took, as the `in_progress` delivery names it (MOTIR-11728). */
+/** The job a runner took, as the `in_progress` delivery names it (MOTIR-11728),
+ *  with its OWN repository (MOTIR-12266) — not necessarily the one the runner's
+ *  intent was booted for. */
 export interface CiRunnerTakenJob {
+  repoOwner: string;
+  repoName: string;
   runId: string;
   runAttempt: number;
   jobId: string;
@@ -164,6 +168,26 @@ function foldCiSpotWindow(groups: readonly CiSpotWindowGroup[]): CiSpotWindowCou
     if (group.teardownReason === SPOT_INTERRUPTED_REASON) counts.interrupted += n;
   }
   return counts;
+}
+
+/**
+ * The rows whose TAKEN job is in this repository (MOTIR-12266): the taken job's
+ * own repository where it was recorded, and — for a row written before those
+ * columns existed — the intent's own repository, which is what such a row was
+ * always read as. `insensitive` compares as GitHub logins and names do.
+ */
+function takenInRepository(
+  repo: { repoOwner: string; repoName: string },
+  insensitive: boolean,
+): Prisma.CiRunnerProvisioningIntentWhereInput {
+  const eq = (value: string) =>
+    insensitive ? { equals: value, mode: 'insensitive' as const } : value;
+  return {
+    OR: [
+      { takenRepoOwner: eq(repo.repoOwner), takenRepoName: eq(repo.repoName) },
+      { takenRepoOwner: null, repoOwner: eq(repo.repoOwner), repoName: eq(repo.repoName) },
+    ],
+  };
 }
 
 export const ciRunnerProvisioningIntentRepository = {
@@ -430,7 +454,8 @@ export const ciRunnerProvisioningIntentRepository = {
 
   /**
    * Whether a runner has TAKEN a later run attempt of this job (MOTIR-11732):
-   * an intent whose taken job is the same repository, run and job NAME at an
+   * an intent whose taken job is the same repository (the taken job's own —
+   * MOTIR-12266), run and job NAME at an
    * attempt after `afterAttempt`. A re-run is a new attempt with a new job id,
    * so the name is the key, exactly as the interruption count is carried.
    */
@@ -441,8 +466,7 @@ export const ciRunnerProvisioningIntentRepository = {
   ): Promise<boolean> {
     const taken = await tx.ciRunnerProvisioningIntent.findFirst({
       where: {
-        repoOwner: { equals: job.repoOwner, mode: 'insensitive' },
-        repoName: { equals: job.repoName, mode: 'insensitive' },
+        ...takenInRepository(job, true),
         takenRunId: job.runId,
         takenJobName: job.jobName,
         takenRunAttempt: { gt: afterAttempt },
@@ -908,8 +932,8 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
-   * Store the job a runner TOOK on its intent (MOTIR-11728) — run id, attempt,
-   * job id and name — keyed on the runner id alone, exactly as
+   * Store the job a runner TOOK on its intent (MOTIR-11728) — its repository
+   * (MOTIR-12266), run id, attempt, job id and name — keyed on the runner id alone, exactly as
    * {@link markJobPickedUpByRunner} is, and WRITE-ONCE: an ephemeral runner runs
    * one job, so a later delivery naming the same runner never moves it.
    */
@@ -921,6 +945,8 @@ export const ciRunnerProvisioningIntentRepository = {
     const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
       where: { githubRunnerId, takenJobId: null },
       data: {
+        takenRepoOwner: job.repoOwner,
+        takenRepoName: job.repoName,
         takenRunId: job.runId,
         takenRunAttempt: job.runAttempt,
         takenJobId: job.jobId,
@@ -933,7 +959,7 @@ export const ciRunnerProvisioningIntentRepository = {
   /**
    * The Spot-interruption count a newly queued job carries (MOTIR-11728): the
    * taken-job count of the latest intent, at an EARLIER run attempt of the same
-   * repository, run and job NAME, whose runner was reclaimed while working it
+   * repository (the TAKEN job's own, MOTIR-12266), run and job NAME, whose runner was reclaimed while working it
    * and whose re-run was asked for. A re-run gives the job a new id but keeps
    * its name, so the name is the key. 0 when there is none, or no name.
    *
@@ -953,8 +979,7 @@ export const ciRunnerProvisioningIntentRepository = {
     if (!job.jobName) return 0;
     const earlier = await tx.ciRunnerProvisioningIntent.findFirst({
       where: {
-        repoOwner: job.repoOwner,
-        repoName: job.repoName,
+        ...takenInRepository(job, false),
         takenRunId: job.runId,
         takenJobName: job.jobName,
         takenRunAttempt: { lt: job.runAttempt },
