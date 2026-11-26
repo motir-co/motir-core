@@ -109,6 +109,7 @@
     "prepare": "husky",
     "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build && pnpm --filter @motir/orchestrator build && pnpm --filter @motir/pages build",
     "build:worker": "node scripts/build-worker.mjs",
+    "test:live:codegraph": "node tests/live/codegraph/lane.mjs",
     "build:relay": "node scripts/build-relay.mjs",
     "build:fleet-admin": "node scripts/build-fleet-admin.mjs",
     "build:deploy-check": "node scripts/build-deploy-check.mjs",
