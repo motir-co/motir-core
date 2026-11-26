@@ -12037,6 +12037,14 @@ model CiRunnerProvisioningIntent {
   takenRunAttempt Int?    @map("taken_run_attempt")
   takenJobId      String? @map("taken_job_id")
   takenJobName    String? @map("taken_job_name")
+  /// The REPOSITORY of the job this intent's runner took (MOTIR-12266), from the
+  /// same `in_progress` delivery and written once with the columns above. A
+  /// fleet runner is org-level, so the job it takes may be in another repository
+  /// than `repoOwner` / `repoName`, the one it was booted for; a Spot re-run of
+  /// the taken job is asked for HERE. NULL = written before these columns
+  /// existed: such a row is read as the intent's own repository.
+  takenRepoOwner  String? @map("taken_repo_owner")
+  takenRepoName   String? @map("taken_repo_name")
 
   /// How many Spot interruptions the job this intent was BOOTED FOR has already
   /// had (MOTIR-11728): copied at queue time from the earlier run attempt whose
@@ -12121,6 +12129,9 @@ model CiRunnerProvisioningIntent {
   /// The queued delivery's look-up of an earlier attempt's interrupted runner,
   /// by the job it took (MOTIR-11728).
   @@index([repoOwner, repoName, takenRunId, takenJobName])
+  /// The same look-up by the taken job's OWN repository (MOTIR-12266); the index
+  /// above still serves the rows written before it, read as their own repository.
+  @@index([takenRepoOwner, takenRepoName, takenRunId, takenJobName])
   /// The reconcile pass's read of re-runs still to request (MOTIR-11728).
   @@index([rerunState, settledAt])
   @@map("ci_runner_provisioning_intent")

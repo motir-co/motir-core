@@ -370,6 +370,10 @@ export const ciRunnerProvisioningService = {
         await ciRunnerProvisioningIntentRepository.markTakenJobByRunner(
           event.runnerId,
           {
+            // The delivery's OWN repository (MOTIR-12266): an org-level runner
+            // may have been booted for a job in another one.
+            repoOwner: event.repoOwner,
+            repoName: event.repoName,
             runId: event.runId,
             runAttempt: event.runAttempt,
             jobId: event.jobId,

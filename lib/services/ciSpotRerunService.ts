@@ -21,7 +21,9 @@ import {
 // the runner had TAKEN a job, that job is re-run on GitHub — once at any
 // capacity, a second time with the re-run's intent booted on-demand, and never
 // a third time. The count crosses the re-run by repository + run id + job NAME,
-// because a re-run is a new run attempt with new job ids.
+// because a re-run is a new run attempt with new job ids. The repository is the
+// TAKEN job's own (MOTIR-12266): a fleet runner is org-level, so it may have
+// been booted for a job in another repository than the one it took.
 //
 //   1 · {@link planSpotRerun}, read BEFORE the supervisor's settle, decides the
 //       taken job's count and the re-run's starting state. The settle writes it
@@ -67,6 +69,8 @@ type RerunIntent = Pick<
   | 'repoOwner'
   | 'repoName'
   | 'installationId'
+  | 'takenRepoOwner'
+  | 'takenRepoName'
   | 'takenRunId'
   | 'takenRunAttempt'
   | 'takenJobId'
@@ -113,8 +117,7 @@ export async function planSpotRerun(
   }
   const prior = await intents.findCarriedSpotInterruptions(
     {
-      repoOwner: intent.repoOwner,
-      repoName: intent.repoName,
+      ...takenRepositoryOf(intent),
       runId: intent.takenRunId,
       jobName: intent.takenJobName,
       runAttempt: intent.takenRunAttempt,
@@ -149,10 +152,15 @@ export async function requestSpotRerun(
   }
   let answer: Awaited<ReturnType<typeof actionsRunsClient.rerunJob>>;
   try {
+    const taken = takenRepositoryOf(intent);
     answer = await actionsRunsClient.rerunJob(
       {
-        owner: intent.repoOwner,
-        repo: intent.repoName,
+        // The TAKEN job's repository (MOTIR-12266), never the one the runner was
+        // booted for: the run and job ids are the taken job's. The org — and so
+        // the installation and the target — is the same, since a fleet runner is
+        // org-level.
+        owner: taken.repoOwner,
+        repo: taken.repoName,
         target: fleetRunnerTargetFor(intent),
       },
       intent.takenJobId,
@@ -302,8 +310,7 @@ async function pinAndWithdraw(intent: RerunIntent, now: Date): Promise<'clear' |
       pins.open(
         {
           sourceIntentId: intent.id,
-          repoOwner: intent.repoOwner,
-          repoName: intent.repoName,
+          ...takenRepositoryOf(intent),
           runId: intent.takenRunId!,
           runAttempt: intent.takenRunAttempt!,
           jobName: intent.takenJobName!,
@@ -397,10 +404,26 @@ async function recordOutcome(
   }
 }
 
+/**
+ * The repository of the job the runner TOOK (MOTIR-12266) — where its re-run is
+ * asked for, its count carried and its on-demand pin keyed. A row written before
+ * the taken repository was recorded reads as the intent's own repository, which
+ * is what it was always read as.
+ */
+export function takenRepositoryOf(
+  intent: Pick<RerunIntent, 'repoOwner' | 'repoName' | 'takenRepoOwner' | 'takenRepoName'>,
+): { repoOwner: string; repoName: string } {
+  if (intent.takenRepoOwner !== null && intent.takenRepoName !== null) {
+    return { repoOwner: intent.takenRepoOwner, repoName: intent.takenRepoName };
+  }
+  return { repoOwner: intent.repoOwner, repoName: intent.repoName };
+}
+
 /** The job, named for a log line — ids and the name, never a body. */
 function jobLabel(intent: RerunIntent) {
+  const taken = takenRepositoryOf(intent);
   return {
-    repo: `${intent.repoOwner}/${intent.repoName}`,
+    repo: `${taken.repoOwner}/${taken.repoName}`,
     runId: intent.takenRunId,
     runAttempt: intent.takenRunAttempt,
     jobId: intent.takenJobId,

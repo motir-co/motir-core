@@ -234,6 +234,9 @@ beforeEach(async () => {
           encoded_jit_config: 'ZW5jb2RlZC1qaXQ=',
         });
       }
+      // The re-run (MOTIR-12266) reaches here only where a test restores the
+      // real client; GitHub answers an accepted re-run 201.
+      if (href.endsWith('/rerun')) return new Response(null, { status: 201 });
       return new Response(null, { status: 204 });
     }),
   );
@@ -444,6 +447,179 @@ describe('the count crosses the re-run, then forces on-demand, then stops', () =
 
     const second = await queue(2);
     expect((await read(second.intentId)).spotInterruptionCount).toBe(0);
+  });
+});
+
+// A CROSS-REPOSITORY TAKE (MOTIR-12266). Fleet runners are org-level, so the
+// runner an intent was booted for in repository A may take a queued job of
+// repository B. A Spot reclaim then re-runs job B IN B — the re-run's URL, the
+// count carried to B's next attempt and the on-demand pin all name B. Here the
+// re-run goes through the REAL `actionsRunsClient` to the stubbed `fetch`, so
+// the assertion is on the URL GitHub would have been sent.
+describe('a runner booted for one repository that took another’s job', () => {
+  const B_REPO = 'sibling-api';
+  const B_PROVIDER_REPO_ID = '99903';
+  const B_RUN_ID = '8802';
+  const B_JOB_NAME = 'Coverage (group c)';
+
+  /** Connect repository B beside A — same installation, same org, same project. */
+  async function seedRepoB(fx: Awaited<ReturnType<typeof seedTenant>>) {
+    const a = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: fx.githubRepoId } });
+    const b = await adminDb.githubRepo.create({
+      data: {
+        installationId: a.installationId,
+        workspaceId: a.workspaceId,
+        organizationId: a.organizationId,
+        repoId: B_PROVIDER_REPO_ID,
+        owner: MOTIR_ORG,
+        name: B_REPO,
+        defaultBranch: 'main',
+      },
+    });
+    const link = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: fx.projectRepoId } });
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: link.workspaceId,
+        projectId: link.projectId,
+        role: 'api',
+        name: B_REPO,
+        seedSource: link.seedSource,
+        position: 'a1',
+        githubRepoId: b.id,
+      },
+    });
+  }
+
+  /** A `workflow_job.queued` delivery of B's job, at `runAttempt`. */
+  async function queueB(runAttempt: number) {
+    jobSeq += 1;
+    const event: NormalizedWorkflowJobEvent = {
+      providerRepoId: B_PROVIDER_REPO_ID,
+      runId: B_RUN_ID,
+      runAttempt,
+      jobId: String(jobSeq),
+      jobName: B_JOB_NAME,
+      workflowName: 'CI',
+      repoOwner: MOTIR_ORG,
+      repoName: B_REPO,
+      requestedLabels: [MOTIR_RUNNER_LABEL],
+      queuedAt: new Date(Date.now() - 5_000),
+    };
+    const outcome = await ciRunnerProvisioningService.recordQueuedJob(event, INSTALLATION_ID);
+    if (outcome.outcome !== 'recorded') throw new Error(`queueB: ${outcome.outcome}`);
+    return { intentId: outcome.intentId, job: event };
+  }
+
+  /** Every re-run POST the real client sent, by URL. */
+  function rerunUrls(): string[] {
+    return vi
+      .mocked(fetch)
+      .mock.calls.map(([url]) => String(url))
+      .filter((href) => href.endsWith('/rerun'));
+  }
+
+  /** A's runner takes B's job, and Spot reclaims it mid-job. */
+  async function aTakesBAndIsReclaimed(bJob: NormalizedWorkflowJobEvent) {
+    const a = await queue(1);
+    const session = await boot(a.intentId);
+    await takes(session, bJob);
+    containerEnds({ reclaimed: true, started: true });
+    await superviseToEnd(session);
+    vi.mocked(fakeOrchestrator.describe).mockRestore();
+    return a;
+  }
+
+  it('records the taken job’s repository and re-runs job B in repository B', async () => {
+    const fx = await seedTenant();
+    await seedRepoB(fx);
+    rerunJob.mockRestore();
+
+    const b = await queueB(1);
+    const a = await aTakesBAndIsReclaimed(b.job);
+
+    expect(await read(a.intentId)).toMatchObject({
+      repoName: REPO_NAME,
+      takenRepoOwner: MOTIR_ORG,
+      takenRepoName: B_REPO,
+      takenRunId: B_RUN_ID,
+      takenJobId: b.job.jobId,
+      teardownReason: 'spot_interrupted',
+      takenJobSpotInterruptions: 1,
+      rerunState: 'requested',
+    });
+    expect(rerunUrls()).toEqual([
+      `https://api.github.com/repos/${MOTIR_ORG}/${B_REPO}/actions/jobs/${b.job.jobId}/rerun`,
+    ]);
+    expect(logged()).toContain(`${MOTIR_ORG}/${B_REPO}`);
+  });
+
+  it('carries the count to B’s next attempt and pins B’s second re-run to on-demand', async () => {
+    const fx = await seedTenant();
+    await seedRepoB(fx);
+    await spotSetting(true);
+
+    // Attempt 1 of B's job, taken by A's runner and reclaimed.
+    const b1 = await queueB(1);
+    await aTakesBAndIsReclaimed(b1.job);
+    expect(rerunJob).toHaveBeenLastCalledWith(
+      expect.objectContaining({ owner: MOTIR_ORG, repo: B_REPO }),
+      b1.job.jobId,
+      B_RUN_ID,
+    );
+
+    // Attempt 2's queued delivery — from B — carries the count A's row holds.
+    const b2 = await queueB(2);
+    expect((await read(b2.intentId)).spotInterruptionCount).toBe(1);
+
+    // A runner booted for A takes attempt 2 and is reclaimed too: the second
+    // re-run is counted 2 and pinned on B's job.
+    const a2 = await aTakesBAndIsReclaimed(b2.job);
+    expect(await read(a2.intentId)).toMatchObject({
+      takenRepoName: B_REPO,
+      takenJobSpotInterruptions: 2,
+      rerunState: 'requested',
+    });
+    expect(rerunJob).toHaveBeenLastCalledWith(
+      expect.objectContaining({ owner: MOTIR_ORG, repo: B_REPO }),
+      b2.job.jobId,
+      B_RUN_ID,
+    );
+    const pin = await adminDb.ciSpotRerunPin.findFirstOrThrow({
+      where: { sourceIntentId: a2.intentId },
+    });
+    expect(pin).toMatchObject({ repoName: B_REPO, runId: B_RUN_ID, jobName: B_JOB_NAME });
+
+    // Attempt 3 from B boots on-demand, and B's in-progress delivery closes the pin.
+    const b3 = await queueB(3);
+    expect((await read(b3.intentId)).spotInterruptionCount).toBe(2);
+    const s3 = await boot(b3.intentId);
+    expect((await read(b3.intentId)).capacity).toBe('on_demand');
+    await takes(s3, b3.job);
+    expect(
+      (await adminDb.ciSpotRerunPin.findUniqueOrThrow({ where: { id: pin.id } })).closedAt,
+    ).not.toBeNull();
+  });
+
+  it('a row written before the taken repository existed is re-run in its own repository', async () => {
+    await seedTenant();
+    const a = await queue(1);
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: a.intentId },
+      data: {
+        takenRunId: RUN_ID,
+        takenRunAttempt: 1,
+        takenJobId: a.job.jobId,
+        takenJobName: JOB_NAME,
+      },
+    });
+    const row = await read(a.intentId);
+    expect(row.takenRepoName).toBeNull();
+    expect(await requestSpotRerun(row)).toBe('requested');
+    expect(rerunJob).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: MOTIR_ORG, repo: REPO_NAME }),
+      a.job.jobId,
+      RUN_ID,
+    );
   });
 });
 
@@ -690,6 +866,8 @@ describe('the re-run asks through the runner’s installation', () => {
       repoOwner: 'acme',
       repoName: 'web',
       installationId: '313',
+      takenRepoOwner: null,
+      takenRepoName: null,
       takenRunId: '1',
       takenRunAttempt: 1,
       takenJobId: '2',
@@ -715,6 +893,8 @@ describe('the re-run asks through the runner’s installation', () => {
       repoOwner: 'acme',
       repoName: 'web',
       installationId: '313',
+      takenRepoOwner: null,
+      takenRepoName: null,
       takenRunId: null,
       takenRunAttempt: null,
       takenJobId: null,

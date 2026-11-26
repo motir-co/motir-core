@@ -1048,6 +1048,8 @@ describe('the pure parts', () => {
       repoOwner: 'acme',
       repoName: 'web',
       installationId: '313',
+      takenRepoOwner: null,
+      takenRepoName: null,
       takenRunId: '1',
       takenRunAttempt: 2,
       takenJobId: '2',
