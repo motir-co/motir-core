@@ -14,9 +14,10 @@
 //
 //   motir-core → motir-ai        REAL. `MOTIR_AI_URL` on motir-core's app server and
 //                                job worker points at the motir-ai the lane started.
-//   motir-ai → motir-codegraph   REAL. motir-ai's own `MOTIR_CODEGRAPH_*` settings,
-//                                with credentials minted through codegraph's
-//                                operator calls.
+//   motir-ai → motir-codegraph   REAL. motir-ai's own code-graph settings, which
+//                                its `serve-with-local-codegraph` script mints
+//                                through codegraph's operator calls; this lane
+//                                never holds them.
 //   the three worker processes   REAL. motir-core's job worker (`.worker/worker.mjs`,
 //                                the shipped bundle) runs the delivery, handoff and
 //                                forward jobs; motir-ai's worker runs in its server
@@ -259,7 +260,22 @@ async function codegraphScope() {
     [REPO_REF],
   );
   expect(found, `motir-ai registered ${REPO_REF} with motir-codegraph`).toHaveLength(1);
-  scope = found[0] as { tenantId: string; repositoryId: string };
+  const found0 = found[0] as { tenantId: string; repositoryId: string };
+  // The suite reads as its own client (the lane minted it); grant it the tenant motir-ai
+  // registered, through the operator call, before the first read.
+  const grant = await fetch(`${CODEGRAPH}/v1/operator/grants`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env('LIVE_CODEGRAPH_OPERATOR_TOKEN')}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      clientId: env('LIVE_CODEGRAPH_READ_CLIENT_ID'),
+      tenantId: found0.tenantId,
+    }),
+  });
+  expect(grant.status, `granting the suite's reader: ${await grant.text()}`).toBe(200);
+  scope = found0;
   return scope;
 }
 

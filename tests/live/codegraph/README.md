@@ -43,8 +43,10 @@ certificate — the lane makes for the run.
 
 The suite itself reads what the lane hands it (`playwright.config.ts` lists them): the three
 service addresses (`LIVE_CORE_URL`, `LIVE_CODEGRAPH_URL`), the three databases
-(`LIVE_CORE_DATABASE_URL`, `LIVE_AI_DATABASE_URL`, `LIVE_CODEGRAPH_DATABASE_URL`), motir-ai's
-read-client token on motir-codegraph (`LIVE_CODEGRAPH_READ_TOKEN`), the codegraph worker's log
+(`LIVE_CORE_DATABASE_URL`, `LIVE_AI_DATABASE_URL`, `LIVE_CODEGRAPH_DATABASE_URL`), the
+suite's own read client on motir-codegraph (`LIVE_CODEGRAPH_READ_TOKEN`,
+`LIVE_CODEGRAPH_READ_CLIENT_ID`) and the operator token it grants that client with
+(`LIVE_CODEGRAPH_OPERATOR_TOKEN`), the codegraph worker's log
 (`LIVE_CODEGRAPH_WORKER_LOG`), the scratch repository file (`LIVE_SCENARIO`), the GitHub journal
 (`LIVE_GITHUB_LOG`), the archive host (`LIVE_ARCHIVE_ORIGIN`), the windows, and the commits.
 
@@ -62,16 +64,21 @@ not see an agent's markers (it rewrites `CLAUDE.md` when it does).
    `DEFAULT_BRANCH_RETENTION_WINDOW_MS=120000`, `REF_RETENTION_WINDOW_MS=600000`,
    `RETENTION_SWEEP_INTERVAL_MS=30000`. It trusts the lane's certificate (`NODE_EXTRA_CA_CERTS`)
    and may fetch from `127.0.0.1` (`FETCH_ALLOWED_HOSTS`).
-3. **motir-ai's credentials** — an operator and a read client, each made with
-   `POST /v1/operator/clients` and `POST /v1/operator/clients/<id>/credentials`, as motir-ai's
-   [lane doc](https://github.com/motir-co/motir-ai/blob/main/docs/codegraph-client-lane.md#bringing-the-service-up)
-   describes.
+3. **The suite's read client** — `live-suite-reader`, made with `POST /v1/operator/clients` and
+   `POST /v1/operator/clients/<id>/credentials`. The suite grants it the tenant motir-ai registers
+   (`POST /v1/operator/grants`) before its first read. motir-ai's own credentials are never made
+   here (step 5).
 4. **The archive host** (`archiveHost.mjs`) — HTTPS on `127.0.0.1` with a certificate the lane
    mints with `openssl`, serving each commit of the scratch repository as GitHub's archive does
    (one top-level directory, gzipped tar). motir-codegraph's worker downloads from it.
 5. **motir-ai** — `prisma generate`, `prisma migrate deploy`, then its server, whose job worker
-   runs in the same process. Its `MOTIR_CODEGRAPH_*` settings name the service and credentials
-   above.
+   runs in the same process, started through motir-ai's `scripts/serve-with-local-codegraph.ts`.
+   The lane hands that script the service only (`LOCAL_CODEGRAPH_ORIGIN`,
+   `LOCAL_CODEGRAPH_BOOTSTRAP_TOKEN`); it mints motir-ai's operator and read client itself, as
+   motir-ai's
+   [lane doc](https://github.com/motir-co/motir-ai/blob/main/docs/codegraph-client-lane.md#bringing-the-service-up)
+   describes, and drops the bootstrap token before serving. motir-core never holds motir-ai's
+   code-graph credential (the MOTIR-11649 guard).
 6. **motir-core** — `scripts/migrate-deploy.mjs`, `pnpm build:worker`, `next dev`, then the job
    worker bundle with the GitHub preload:
    `node --import tests/live/codegraph/githubFake.preload.mjs .worker/worker.mjs`. Both have
@@ -83,7 +90,7 @@ not see an agent's markers (it rewrites `CLAUDE.md` when it does).
 | Boundary                                                                       | Seam                                                                                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | motir-core → motir-ai                                                          | real, `MOTIR_AI_URL`                                                                                                              |
-| motir-ai → motir-codegraph                                                     | real, motir-ai's `MOTIR_CODEGRAPH_*`                                                                                              |
+| motir-ai → motir-codegraph                                                     | real, the settings motir-ai's `serve-with-local-codegraph` script mints                                                           |
 | background work                                                                | three real worker processes: motir-core's job worker, motir-ai's (in its server), motir-codegraph's                               |
 | GitHub: installation token, pull-request head, changed paths, archive redirect | `githubFake.preload.mjs` in motir-core's job worker, answering `api.github.com` from the scratch repository file (`scenario.mjs`) |
 | GitHub: the source archive                                                     | `archiveHost.mjs`, fetched by motir-codegraph's worker                                                                            |

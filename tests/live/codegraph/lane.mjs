@@ -483,7 +483,10 @@ async function main() {
     { entry: cgWorker, timeoutMs: 120_000 },
   );
 
-  // 5. motir-ai's two credentials, through the operator calls (motir-ai's lane doc).
+  // 5. the suite's own read client. motir-ai mints ITS credentials itself when it
+  // starts (step 7); this lane never holds them (motir-core's MOTIR-11649 guard). The
+  // suite reads the graph as a client of its own, which it grants the tenant motir-ai
+  // registers once that tenant exists.
   const operator = async (p, body) => {
     const res = await fetch(`${cgOrigin}/v1/operator${p}`, {
       method: 'POST',
@@ -494,13 +497,11 @@ async function main() {
     if (!res.ok) fail(`codegraph operator ${p} answered ${res.status}: ${JSON.stringify(json)}`);
     return json;
   };
-  const credentialFor = async (kind) => {
-    const { clientId } = await operator('/clients', { name: `motir-ai-${kind}`, kind });
-    const { token } = await operator(`/clients/${clientId}/credentials`, {});
-    return { clientId, token };
-  };
-  const aiOperator = await credentialFor('operator');
-  const aiReader = await credentialFor('client');
+  const { clientId: suiteClientId } = await operator('/clients', {
+    name: 'live-suite-reader',
+    kind: 'client',
+  });
+  const { token: suiteToken } = await operator(`/clients/${suiteClientId}/credentials`, {});
 
   // 6. the archive host and the scratch repository
   const archivePort = await freePort();
@@ -530,10 +531,6 @@ async function main() {
     DATABASE_URL: pg.url('motir_ai', 'motir_ai'),
     PORT: String(aiPort),
     MOTIR_AI_SERVICE_TOKEN: serviceToken,
-    MOTIR_CODEGRAPH_URL: cgOrigin,
-    MOTIR_CODEGRAPH_OPERATOR_TOKEN: aiOperator.token,
-    MOTIR_CODEGRAPH_CLIENT_TOKEN: aiReader.token,
-    MOTIR_CODEGRAPH_CLIENT_ID: aiReader.clientId,
     MOTIR_CORE_URL: coreOrigin,
   });
   run('motir-ai prisma generate', 'pnpm', ['exec', 'prisma', 'generate'], {
@@ -546,10 +543,22 @@ async function main() {
     env: aiEnv,
     capture: true,
   });
-  const aiServer = start('motir-ai', process.execPath, ['--import', 'tsx', 'src/index.ts'], {
-    cwd: ai.dir,
-    env: aiEnv,
-  });
+  // motir-ai's own script mints its operator and read client on the service, then
+  // serves (motir-ai's docs/codegraph-client-lane.md). The lane hands it the service
+  // only: the origin and the bootstrap operator, which the script drops before serving.
+  const aiServer = start(
+    'motir-ai',
+    process.execPath,
+    ['--import', 'tsx', 'scripts/serve-with-local-codegraph.ts'],
+    {
+      cwd: ai.dir,
+      env: {
+        ...aiEnv,
+        LOCAL_CODEGRAPH_ORIGIN: cgOrigin,
+        LOCAL_CODEGRAPH_BOOTSTRAP_TOKEN: bootstrapToken,
+      },
+    },
+  );
   await waitFor('motir-ai', healthy(`${aiOrigin}/health`), { entry: aiServer });
 
   // 8. motir-core
@@ -630,7 +639,9 @@ async function main() {
     LIVE_AI_DATABASE_URL: aiEnv.DATABASE_URL,
     LIVE_CODEGRAPH_URL: cgOrigin,
     LIVE_CODEGRAPH_DATABASE_URL: cgEnv.DATABASE_URL,
-    LIVE_CODEGRAPH_READ_TOKEN: aiReader.token,
+    LIVE_CODEGRAPH_READ_TOKEN: suiteToken,
+    LIVE_CODEGRAPH_READ_CLIENT_ID: suiteClientId,
+    LIVE_CODEGRAPH_OPERATOR_TOKEN: bootstrapToken,
     LIVE_CODEGRAPH_WORKER_LOG: path.join(logDir, 'codegraph-worker.log'),
     LIVE_SCENARIO: scenarioPath,
     LIVE_GITHUB_LOG: githubLog,
