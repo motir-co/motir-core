@@ -1,0 +1,61 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hostedApplicationGraceEmail > the one_day notice names the repository, its date and the panel 1`] = `
+{
+  "subject": "shop-web stops running on Motir tomorrow",
+  "text": "Hi Ana,
+
+The app of shop-web stops running on Motir on December 1, 2026, tomorrow. If your new host does not have your latest data yet, download a fresh database export now.
+
+Open the Production panel: https://app.example.test/production?repository=repo-1
+
+You are receiving this because you are the Owner or an Admin of the organization.
+
+— Motir",
+}
+`;
+
+exports[`hostedApplicationGraceEmail > the seven_days notice names the repository, its date and the panel 1`] = `
+{
+  "subject": "shop-web stops running on Motir in 7 days",
+  "text": "Hi Ana,
+
+The app of shop-web stops running on Motir on December 1, 2026, in 7 days. Before then, deploy the repository on your own host, restore a database export there and point your domains at it.
+
+Open the Production panel: https://app.example.test/production?repository=repo-1
+
+You are receiving this because you are the Owner or an Admin of the organization.
+
+— Motir",
+}
+`;
+
+exports[`hostedApplicationGraceEmail > the stopped notice names the repository, its date and the panel 1`] = `
+{
+  "subject": "shop-web has stopped running on Motir",
+  "text": "Hi Ana,
+
+The app of shop-web has stopped running on Motir, and its app and database have been deleted. The final database export, taken after the app stopped, can be downloaded from the Production panel for 30 days.
+
+Open the Production panel: https://app.example.test/production?repository=repo-1
+
+You are receiving this because you are the Owner or an Admin of the organization.
+
+— Motir",
+}
+`;
+
+exports[`hostedApplicationGraceEmail > the transferred notice names the repository, its date and the panel 1`] = `
+{
+  "subject": "shop-web keeps running on Motir until December 1, 2026",
+  "text": "Hi Ana,
+
+shop-web has moved to your own GitHub account. Its app keeps running on Motir until December 1, 2026, so you have time to deploy it on your own host. From the Production panel you can download a database export at any time, and stop the app early when you are ready.
+
+Open the Production panel: https://app.example.test/production?repository=repo-1
+
+You are receiving this because you are the Owner or an Admin of the organization.
+
+— Motir",
+}
+`;

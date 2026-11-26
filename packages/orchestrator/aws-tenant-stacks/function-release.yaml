@@ -17,7 +17,9 @@ Description: >-
   reaches: a small function on a public URL that admits a request only when it
   carries the app's X-Motir-Origin-Secret, strips the header and invokes `live`
   with the same event, so the edge presents one credential kind for every
-  release and no tenant-account credential leaves this account.
+  release and no tenant-account credential leaves this account. Under
+  OriginAccess=open (MOTIR-12128, a taken-over app) the front door passes every
+  request to `live` without checking the header, and holds no secret.
 
 Parameters:
   OrganizationId:
@@ -81,13 +83,23 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      A hash of the origin secret and this template, from the caller; a change
-      publishes a new front door version, so a rotated key reaches `live`.
+      A hash of the origin secret, the origin access and this template, from
+      the caller; a change publishes a new front door version, so a rotated key
+      or a change of mode reaches `live`.
+  OriginAccess:
+    Type: String
+    Default: motir_edge
+    AllowedValues: [motir_edge, open]
+    Description: >-
+      Who the front door admits. motir_edge: only a request carrying the origin
+      secret (Motir's edge). open: every request, so the app answers without
+      Motir at its FrontDoorUrl. A deploy resends the stack's current value.
 
 Conditions:
   AlwaysOn: !Equals [!Ref IdlePolicy, always_on]
   Published: !Not [!Equals [!Ref ConfigHash, '']]
   HasDatabase: !Not [!Equals [!Ref DatabaseSecretArn, '']]
+  Open: !Equals [!Ref OriginAccess, open]
 
 Resources:
   # The release's variables as one JSON object; the caller writes the value.
@@ -285,7 +297,9 @@ Resources:
   # retry, so a request is never run twice) with the same function URL event,
   # whose answer is the response. A failed invoke is a 502. The comparison is
   # constant-time over SHA-256 digests, as the hosting guard's is; the secret is
-  # never logged.
+  # never logged. The check is skipped ONLY when MOTIR_FRONT_DOOR_MODE is `open`
+  # (an empty secret still answers 403, so dropping the secret alone would close
+  # the app, not open it); the header is removed in both modes.
   FrontDoorFunction:
     Type: AWS::Lambda::Function
     Condition: Published
@@ -301,7 +315,8 @@ Resources:
         LogGroup: !Ref FrontDoorLogGroup
       Environment:
         Variables:
-          MOTIR_FRONT_DOOR_SECRET: !Ref OriginSecret
+          MOTIR_FRONT_DOOR_MODE: !If [Open, open, motir_edge]
+          MOTIR_FRONT_DOOR_SECRET: !If [Open, !Ref AWS::NoValue, !Ref OriginSecret]
           MOTIR_FRONT_DOOR_TARGET: !Ref LiveAlias
       Code:
         ZipFile: |
@@ -316,7 +331,8 @@ Resources:
             const headers = { ...(event.headers || {}) };
             const given = headers[HEADER];
             const secret = process.env.MOTIR_FRONT_DOOR_SECRET || '';
-            if (typeof given !== 'string' || !secret || !timingSafeEqual(digest(given), digest(secret))) {
+            const open = process.env.MOTIR_FRONT_DOOR_MODE === 'open';
+            if (!open && (typeof given !== 'string' || !secret || !timingSafeEqual(digest(given), digest(secret)))) {
               return empty(403);
             }
             delete headers[HEADER];
@@ -364,7 +380,8 @@ Resources:
         - ProvisionedConcurrentExecutions: 1
         - !Ref AWS::NoValue
 
-  # Public: the origin secret is the credential, checked by the handler. A
+  # Public: the origin secret is the credential, checked by the handler (or,
+  # under Open, no credential at all). A
   # public URL created since October 2025 needs both actions granted to `*`.
   FrontDoorUrl:
     Type: AWS::Lambda::Url

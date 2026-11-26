@@ -4,6 +4,7 @@
 
 import type { HostedIdlePolicy } from '@/lib/hosting/idlePolicy';
 import type {
+  HostedApplicationState,
   HostedReleaseCause,
   HostedReleaseState,
   HostingTarget,
@@ -52,5 +53,18 @@ export interface HostedApplicationDto {
   idlePolicy: HostedIdlePolicy;
   /** Whether a production database has been provisioned. */
   hasDatabase: boolean;
+  /** Where the app stands in a takeover (MOTIR-9800): `live`, `handing_over`,
+   *  in `grace` until `stopsAt`, or `handed_over` to the organisation's own
+   *  account. */
+  state: HostedApplicationState;
+  /** When a grace period ends and the app is stopped; null outside grace. */
+  stopsAt: string | null;
+  /** When the app was handed over; null until it is. */
+  handedOverAt: string | null;
+  /** The app's own address that answers without Motir, once the handover
+   *  opened it; null before. */
+  upstreamAddress: string | null;
+  /** The AWS account the app was handed over in; null until it is. */
+  handedOverAccountId: string | null;
   createdAt: string;
 }

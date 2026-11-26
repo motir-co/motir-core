@@ -1091,6 +1091,19 @@
       "renew": "Renouveler le forfait IA avant le {date} annule la suppression. D’ici là, vos agents ne peuvent être ni créés ni réveillés, et leur stockage reste facturé chaque jour.",
       "openBilling": "Renouveler le forfait IA",
       "footer": "Vous recevez cet e-mail parce que vous possédez des agents dans cette organisation."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} continue de tourner sur Motir jusqu’au {date}} seven_days {{repository} s’arrête sur Motir dans 7 jours} one_day {{repository} s’arrête sur Motir demain} other {{repository} ne tourne plus sur Motir}}",
+      "preview": "{kind, select, stopped {Téléchargez l’export final de la base de données de {repository} sous 30 jours} other {{repository} s’arrête sur Motir le {date}}}",
+      "greeting": "Bonjour {name},",
+      "lede": {
+        "transferred": "{repository} a été transféré vers votre propre compte GitHub. Son application continue de tourner sur Motir jusqu’au {date}, ce qui vous laisse le temps de la déployer chez votre propre hébergeur. Depuis le panneau Production, vous pouvez télécharger un export de la base de données à tout moment et arrêter l’application plus tôt lorsque vous êtes prêt.",
+        "seven_days": "L’application de {repository} s’arrête sur Motir le {date}, dans 7 jours. D’ici là, déployez le dépôt chez votre propre hébergeur, restaurez-y un export de la base de données et faites pointer vos domaines vers lui.",
+        "one_day": "L’application de {repository} s’arrête sur Motir le {date}, c’est-à-dire demain. Si votre nouvel hébergeur n’a pas encore vos données les plus récentes, téléchargez dès maintenant un nouvel export de la base de données.",
+        "stopped": "L’application de {repository} ne tourne plus sur Motir : l’application et sa base de données ont été supprimées. L’export final de la base de données, réalisé après l’arrêt de l’application, peut être téléchargé depuis le panneau Production pendant 30 jours."
+      },
+      "openProduction": "Ouvrir le panneau Production",
+      "footer": "Vous recevez cet e-mail parce que vous êtes propriétaire ou administrateur de l’organisation."
     }
   },
   "auth": {
@@ -4946,6 +4959,105 @@
           "bodyCannotSuspend": "Cette application tourne en conteneur AWS, qui ne peut pas être mis en veille : elle reste toujours active et consomme des crédits jusqu’à ce que le solde soit rechargé. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
           "topUp": "Recharger des crédits",
           "member": "Un propriétaire ou un administrateur de l’organisation peut recharger des crédits."
+        }
+      },
+      "handover": {
+        "notice": {
+          "title": "Cette app est en cours de transfert",
+          "body": "{organization} reprend son hébergement AWS. Motir ne la déploie plus, ne la redéploie plus et ne la restaure plus ; l’app continue de tourner pendant tout ce temps.",
+          "link": "Suivre le transfert dans Dépôts",
+          "memberNote": "Vous voyez la production. Seuls les administrateurs de l’organisation reprennent l’hébergement."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} a rejoint votre GitHub — elle continue de tourner ici jusqu’au {date}",
+            "body": "Déployez-la sur votre propre hébergeur d’ici là. Téléchargez un export de la base de données à tout moment, et arrêtez l’app plus tôt quand vous êtes prêt."
+          },
+          "sevenDays": {
+            "title": "{name} cesse de tourner sur Motir dans 7 jours, le {date}",
+            "body": "Restaurez un export de la base de données sur votre nouvel hébergeur et pointez-y vos domaines."
+          },
+          "oneDay": {
+            "title": "{name} cesse de tourner sur Motir demain, le {date}",
+            "body": "Si votre nouvel hébergeur n’a pas encore vos dernières données, téléchargez un export récent maintenant."
+          }
+        },
+        "grace": {
+          "memberNote": "Vous voyez la production. Seuls les administrateurs de l’organisation peuvent télécharger des exports ou arrêter l’app plus tôt.",
+          "runsUntil": "Tourne jusqu’au",
+          "body": "Motir continue de servir {name} à {address} jusque-là. Ensuite l’app s’arrête et sa base de données est supprimée ; un export final est conservé 30 jours.",
+          "bodyNoAddress": "Motir continue de servir {name} jusque-là. Ensuite l’app s’arrête et sa base de données est supprimée ; un export final est conservé 30 jours.",
+          "pill": "Période de grâce"
+        },
+        "exports": {
+          "title": "Exports de la base de données",
+          "download": "Télécharger un export",
+          "busy": "Export en cours…",
+          "busyStatus": "L’export est en cours — cela peut prendre quelques minutes. Il apparaît ici dès qu’il est prêt.",
+          "help": "Un dump complet de la base de données de production (pg_dump, format personnalisé) à restaurer sur votre nouvel hébergeur. Chaque export peut être téléchargé jusqu’à la date indiquée à côté.",
+          "empty": "Aucun export pour l’instant.",
+          "row": "{size} · par {name} · conservé jusqu’au {date}",
+          "rowUnnamed": "{size} · conservé jusqu’au {date}",
+          "downloadLink": "Télécharger",
+          "downloadAria": "Télécharger l’export du {date}",
+          "failed": "L’export ne s’est pas terminé. Rien n’a changé dans la base de données — <retry>réessayez</retry>."
+        },
+        "refusal": {
+          "forbidden": "Seuls les administrateurs de l’organisation peuvent faire cela.",
+          "notInGrace": "Cette app n’est plus dans sa période de grâce, donc rien n’a changé.",
+          "notFound": "Cette app ne vous est plus accessible."
+        },
+        "stop": {
+          "title": "L’arrêter plus tôt",
+          "body": "Quand votre nouvel hébergeur sert l’app, arrêtez {name} maintenant au lieu d’attendre le {date}.",
+          "button": "Arrêter maintenant",
+          "failed": {
+            "stop_serving": "L’arrêt ne s’est pas terminé pendant la mise hors ligne de {name}. Rien n’a été supprimé. Réessayer reprend à partir de là.",
+            "final_export": "L’arrêt ne s’est pas terminé pendant l’export final. L’app n’est plus servie, et rien n’a été supprimé. Réessayer reprend à partir de là.",
+            "delete_database": "L’arrêt ne s’est pas terminé pendant la suppression de la base de données. Ce qui est déjà fait le reste — l’app n’est plus servie et l’export final est conservé. Réessayer reprend à partir de là.",
+            "record": "L’arrêt ne s’est pas terminé pendant l’enregistrement de l’arrêt. L’app et sa base de données sont supprimées et l’export final est conservé. Réessayer reprend à partir de là.",
+            "unknown": "L’arrêt ne s’est pas terminé. Ce qui est déjà fait le reste. Réessayer reprend à partir de là."
+          }
+        },
+        "dialog": {
+          "title": "Arrêter {name} maintenant ?",
+          "body": "Motir cesse de servir {name} aujourd’hui au lieu du {date}. Ensuite il supprime :",
+          "deleteApp": "l’app et son adresse {address}",
+          "deleteAppNoAddress": "l’app",
+          "deleteDatabase": "la base de données de production",
+          "finalExport": "Un export final de la base de données est d’abord réalisé et conservé 30 jours, pour que vous puissiez encore le télécharger ici. Cette action est irréversible.",
+          "cancel": "Annuler",
+          "confirm": "Arrêter {name} maintenant",
+          "busy": "Arrêt en cours…",
+          "retry": "Réessayer"
+        },
+        "handedOver": {
+          "copy": "Copier",
+          "copied": "Copié",
+          "aws": {
+            "title": "Transférée",
+            "body": "{organization} fait tourner {name} sur son propre compte AWS depuis le {date}. Motir ne la déploie et ne la sert plus.",
+            "pill": "Transférée",
+            "account": "Compte AWS",
+            "copyAccount": "Copier l’identifiant du compte AWS",
+            "upstream": "Adresse d’origine",
+            "copyUpstream": "Copier l’adresse d’origine"
+          },
+          "stopped": {
+            "title": "Arrêtée",
+            "body": "{name} a rejoint votre GitHub, et son app sur le compte {target, select, fly {Fly} other {serverless}} de Motir s’est arrêtée. Son app, son adresse et sa base de données sont supprimées. Motir ne la déploie et ne la sert plus.",
+            "pill": "Arrêtée"
+          },
+          "final": {
+            "title": "Export final de la base de données",
+            "taken": "Réalisé à l’arrêt, {date}",
+            "meta": "{size} · conservé jusqu’au {date}",
+            "download": "Télécharger",
+            "downloadAria": "Télécharger l’export final de la base de données",
+            "memberNote": "Vous voyez la production. Seuls les administrateurs de l’organisation peuvent télécharger l’export final.",
+            "expired": "L’export final a été conservé jusqu’au {date} et a été supprimé. Les exports que vous avez téléchargés ne sont pas concernés.",
+            "none": "Aucun export final n’est conservé pour cette app."
+          }
         }
       }
     },
@@ -10733,6 +10845,154 @@
       "stateUnfinishedYours": "Le retrait n’a pas abouti",
       "unfinishedDetailYours": "Motir s’est arrêté en cours d’arrêt de ce qu’il exécute à partir de ce dépôt. Le dépôt lui-même reste dans votre compte GitHub, et réessayer termine le reste.",
       "retryDelete": "Réessayer"
+    },
+    "awsHandover": {
+      "takeOver": "Reprendre l’hébergement AWS",
+      "takeOverLabel": "Reprendre l’hébergement AWS de {repo}",
+      "rowHelperMember": "S’exécute sur le compte AWS de {org}, qui quitte Motir en entier — un administrateur de l’organisation le transmet.",
+      "refusalTitle": "{repo} est déplacé avec {count, plural, one {un autre dépôt} other {# autres dépôts}}",
+      "refusalLead": "Son application s’exécute sur le compte AWS de {org}, tout comme celles-ci. Un compte AWS quitte Motir en entier — un compte par organisation — ils ne peuvent donc être repris qu’ensemble.",
+      "startLead": "L’application de ce dépôt s’exécute sur le propre compte AWS de {org} au sein de Motir. Ce compte quitte Motir en entier, ses applications toujours en marche — sur AWS, vous reprenez donc l’hébergement, et les dépôts suivent.",
+      "refusalOthersLabel": "Les autres dépôts du compte",
+      "oneAccountTitle": "Un compte AWS par organisation",
+      "oneAccountBody": "Chaque dépôt de {org} qui s’exécute sur AWS est transmis en même temps, en une étape que vous pouvez suivre et reprendre.",
+      "nothingChanged": "Rien n’a changé.",
+      "stillHosted": "{repo} est toujours hébergé par Motir, tout comme les autres.",
+      "askAnAdmin": "Un administrateur de l’organisation peut reprendre l’hébergement AWS de tous ensemble.",
+      "cancel": "Annuler",
+      "close": "Fermer",
+      "back": "Retour",
+      "continue": "Continuer",
+      "stepEyebrow": "Reprendre l’hébergement AWS · étape {step} sur 2",
+      "stepTitle": "Transmettre le compte AWS de {org}",
+      "stepLead": "Le compte quitte Motir avec toutes ses applications toujours en marche. Indiquez qui en sera propriétaire et où vont les dépôts.",
+      "ownerEmailLabel": "E-mail du propriétaire",
+      "ownerEmailPlaceholder": "nom@example.com",
+      "ownerEmailHelp": "L’adresse qui sera propriétaire du compte AWS. AWS y envoie un code à usage unique.",
+      "ownerEmailInvalid": "Saisissez une adresse e-mail, comme nom@example.com.",
+      "githubOwnerLabel": "Propriétaire GitHub",
+      "githubOwnerPlaceholder": "votre-organisation",
+      "githubOwnerHelp": "Le compte ou l’organisation GitHub qui reçoit les dépôts.",
+      "githubOwnerInvalid": "Saisissez le nom d’un compte ou d’une organisation GitHub : lettres, chiffres et tirets simples.",
+      "handedOverTogether": "Transmis ensemble",
+      "noAwsRepositories": "{org} n’a aucun dépôt qui s’exécute sur AWS : il n’y a rien à transmettre.",
+      "awsStepsNote": "Quelques étapes se font dans AWS même — se connecter en tant qu’utilisateur root, ajouter un moyen de paiement. Motir ne collecte jamais de données de paiement ni de mot de passe root.",
+      "confirmTitle": "Démarrer la transmission ?",
+      "confirmNewOwner": "Nouveau propriétaire du compte AWS",
+      "confirmRepositoriesGoTo": "Les dépôts vont à",
+      "consequencePreviews": "{count, plural, one {Les aperçus de ce dépôt sont supprimés, et Motir cesse de le déployer.} other {Les aperçus de ces # dépôts sont supprimés, et Motir cesse de les déployer.}}",
+      "consequenceRunning": "Les applications continuent de tourner. Vous pointez vos domaines vers leurs propres adresses avant la fin de l’accès de Motir.",
+      "consequenceIrreversible": "Une fois que le compte a quitté l’AWS Organization de Motir, c’est irréversible.",
+      "start": "Démarrer la transmission",
+      "starting": "Démarrage…",
+      "startRefused": {
+        "notReady": "La transmission n’a pas pu démarrer : le compte AWS de {org} n’est pas encore prêt à être transmis. Rien n’a été modifié — réessayez dans quelques minutes.",
+        "alreadyStarted": "La transmission n’a pas pu démarrer : elle a déjà été lancée pour le compte AWS de {org}. Rien n’a été modifié — rechargez la page pour la suivre.",
+        "githubIdentity": "La transmission n’a pas pu démarrer : connectez d’abord votre compte GitHub, afin que les dépôts puissent être transférés. Rien n’a été modifié.",
+        "input": "La transmission n’a pas pu démarrer : vérifiez l’e-mail du propriétaire et le propriétaire GitHub. Rien n’a été modifié.",
+        "failed": "La transmission n’a pas pu démarrer. Rien n’a été modifié — réessayez dans un instant."
+      },
+      "checklistEyebrow": "Transmission de l’hébergement AWS",
+      "checklistTitle": "Compte AWS de {org}",
+      "accountLabel": "Compte",
+      "repositoryCount": "{count, plural, one {# dépôt} other {# dépôts}}",
+      "checklistLoading": "Lecture de la transmission…",
+      "checklistError": "La transmission n’a pas pu être lue",
+      "checklistErrorBody": "Rien n’a changé. Réessayez dans un instant.",
+      "tryAgain": "Réessayer",
+      "stepsLabel": "Étapes de la transmission",
+      "stepFailedUnknown": "Cette étape a échoué. Rien après elle n’a été exécuté.",
+      "retry": "Relancer",
+      "status": {
+        "pending": "En attente",
+        "running": "En cours",
+        "waitingOnYou": "Attend votre action",
+        "done": "Terminé",
+        "failed": "Échec"
+      },
+      "overall": {
+        "inProgress": "En cours",
+        "waiting": "Attend votre action",
+        "failed": "À relancer",
+        "done": "Transmis"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Aperçus supprimés",
+          "body": "{count, plural, one {Les environnements d’aperçu du dépôt sont supprimés.} other {Les environnements d’aperçu des # dépôts sont supprimés.}}"
+        },
+        "create_deploy_role": {
+          "label": "Rôle de déploiement créé pour votre CI",
+          "body": "Les workflows de vos dépôts déploient désormais avec lui."
+        },
+        "open_upstream": {
+          "label": "Applications joignables sans Motir",
+          "body": "Chaque application répond à sa propre adresse, indiquée ci-dessous."
+        },
+        "move_email": {
+          "label": "E-mail du compte changé",
+          "body": "L’e-mail du compte AWS devient celui du nouveau propriétaire."
+        },
+        "await_standalone": {
+          "label": "Étapes côté AWS",
+          "body": "Connexion root, moyen de paiement, coordonnées et accords, faits dans AWS."
+        },
+        "remove_access": {
+          "label": "Accès de Motir retiré",
+          "body": "Les rôles de Motir dans le compte sont supprimés ; les adresses motir.site cessent de répondre."
+        },
+        "leave_organization": {
+          "label": "Compte sorti de l’AWS Organization de Motir",
+          "body": "Le compte est désormais un compte AWS autonome."
+        },
+        "transfer_repositories": {
+          "label": "Chaque dépôt transféré",
+          "body": "GitHub transfère chaque dépôt à son nouveau propriétaire.",
+          "bodyOwner": "GitHub transfère chaque dépôt à {owner}."
+        }
+      },
+      "codeLabel": "Code d’AWS",
+      "confirmCode": "Confirmer le code",
+      "codeRefused": "AWS n’a pas accepté ce code.",
+      "codeEmpty": "Saisissez le code reçu par e-mail d’AWS.",
+      "codeHelp": "AWS a envoyé un code à usage unique à {email}. Motir le transmet à AWS et ne le conserve jamais.",
+      "codeHelpUnknown": "AWS a envoyé un code à usage unique au nouveau propriétaire. Motir le transmet à AWS et ne le conserve jamais.",
+      "codeRefusedHelp": "Vérifiez le dernier e-mail d’AWS à {email} — un nouveau code remplace l’ancien — puis réessayez.",
+      "codeRefusedHelpUnknown": "Vérifiez le dernier e-mail d’AWS au nouveau propriétaire — un nouveau code remplace l’ancien — puis réessayez.",
+      "standaloneIntro": "{email} fait ceci dans AWS :",
+      "standaloneIntroUnknown": "Le nouveau propriétaire fait ceci dans AWS :",
+      "standalone": {
+        "rootSignIn": "Se connecter au compte en tant qu’utilisateur root et définir un mot de passe",
+        "payment": "Ajouter un moyen de paiement",
+        "contact": "Confirmer les coordonnées",
+        "agreement": "Accepter le contrat client d’AWS"
+      },
+      "standaloneNote": "Cela se fait dans AWS, pas ici. Motir ne collecte jamais de données de paiement ni de mot de passe root.",
+      "checkAgain": "Vérifier à nouveau",
+      "signIn": "Ouvrir la page de connexion AWS (s’ouvre dans un nouvel onglet)",
+      "notReady": "Pas encore prêt — AWS a encore besoin de :",
+      "missing": {
+        "wait_period": "temps : AWS retient un nouveau compte quelques jours avant qu’il puisse partir",
+        "delegated_administrator": "que le compte ne soit plus administrateur délégué",
+        "payment_method": "un moyen de paiement",
+        "support_plan": "un plan de support",
+        "contact_information": "les coordonnées du compte"
+      },
+      "actionFailed": "Cela n’a pas abouti. Rien n’a été modifié — réessayez dans un instant.",
+      "upstreamsTitle": "Où vos applications répondent sans Motir",
+      "upstreamsLead": "Les adresses de Motir (…motir.site) cessent de répondre quand l’accès de Motir est retiré. Pointez chaque domaine vers son adresse avant cela.",
+      "upstreamsLoading": "Lecture des adresses…",
+      "upstreamsEmpty": "Aucune application à afficher pour l’instant.",
+      "upstreamsError": "Les adresses n’ont pas pu être lues",
+      "upstreamsErrorBody": "La transmission n’est pas affectée. Réessayez dans un instant.",
+      "ownAddress": "Sa propre adresse",
+      "upstreamNotOpen": "Pas encore ouverte",
+      "noDomains": "Aucun domaine personnalisé — rien à repointer.",
+      "pointAt": "pointe vers",
+      "copy": "Copier",
+      "copied": "Copié",
+      "copyOwnLabel": "Copier l’adresse de {app}",
+      "copyDomainLabel": "Copier la cible de {host}"
     }
   },
   "apiDocs": {
@@ -15567,14 +15827,22 @@
           "creating": "En création",
           "bootstrapping": "Bootstrap en cours",
           "ready": "Prêt",
-          "refused": "Refusé"
+          "refused": "Refusé",
+          "handing_over": "Transfert en cours",
+          "awaiting_standalone": "En attente d’autonomie",
+          "removing": "Départ en cours",
+          "handed_over": "Transféré"
         },
         "notReady": {
           "requested": "Les quotas sont lus une fois le compte prêt. Le compte n’a pas encore été créé.",
           "creating": "Les quotas sont lus une fois le compte prêt. AWS est en train de créer le compte.",
           "bootstrapping": "Les quotas sont lus une fois le compte prêt. Le bootstrap configure son rôle de déploiement, ses tags et ses relèvements de quota.",
           "refused": "{count, plural, one {AWS a refusé de créer le compte une fois, {age}.} other {AWS a refusé de créer le compte # fois, la dernière {age}.}} La réconciliation réessaie après son délai ; les quotas sont lus une fois le compte prêt.",
-          "refusedNever": "Les quotas sont lus une fois le compte prêt. AWS a refusé de créer le compte ; la réconciliation réessaie après son délai."
+          "refusedNever": "Les quotas sont lus une fois le compte prêt. AWS a refusé de créer le compte ; la réconciliation réessaie après son délai.",
+          "handing_over": "Les quotas ne sont pas lus pendant un transfert. Le compte est transféré à son organisation.",
+          "awaiting_standalone": "Les quotas ne sont pas lus pendant un transfert. L’organisation doit ajouter ses informations de facturation et un plan de support avant que le compte puisse partir.",
+          "removing": "Les quotas ne sont pas lus pendant un transfert. Le compte quitte l’organisation AWS de Motir.",
+          "handed_over": "Le compte a quitté Motir et appartient à son organisation. Ses quotas ne sont plus lus."
         },
         "col": {
           "quota": "Quota",
@@ -18921,6 +19189,14 @@
       "title": "Il n’y a aucun aperçu ici",
       "body": "Cette adresse n’appartient à aucun aperçu en cours d’exécution. Il a peut-être été arrêté, ou le lien est mal saisi.",
       "home": "Aller sur Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Transférée. L’application continue de tourner sur Motir jusqu’au {date}.",
+      "seven_days": "L’application s’arrête sur Motir dans 7 jours, le {date}.",
+      "one_day": "L’application s’arrête sur Motir demain, le {date}.",
+      "stopped": "L’application s’est arrêtée sur Motir le {date}. Téléchargez l’export final de la base de données sous 30 jours."
     }
   }
 }

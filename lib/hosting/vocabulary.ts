@@ -49,6 +49,51 @@ export function isHostingShape(value: string): value is HostingShape {
   return (HOSTING_SHAPES as readonly string[]).includes(value);
 }
 
+// ── The application's takeover handover (Story MOTIR-9800 · MOTIR-12126) ─────
+// The Prisma enum `HostedApplicationState` carries the same values; a test pins
+// the lists together.
+
+/**
+ * Where a hosted application stands at takeover: `live` (Motir serves and
+ * deploys it), `handing_over` (a takeover removed its deploy credentials and is
+ * moving it), `grace` (a serverless or Fly app Motir still serves until its
+ * `stopsAt`) and `handed_over` (Motir no longer serves it; the record is kept).
+ */
+export const HOSTED_APPLICATION_STATES = ['live', 'handing_over', 'grace', 'handed_over'] as const;
+export type HostedApplicationState = (typeof HOSTED_APPLICATION_STATES)[number];
+
+/** The application states a takeover handover owns: nothing Motir runs deploys
+ *  an application in one of them (MOTIR-12127). */
+export const HANDOVER_APPLICATION_STATES = [
+  'handing_over',
+  'grace',
+  'handed_over',
+] as const satisfies readonly HostedApplicationState[];
+
+/** How long a serverless or Fly application keeps running after its repository
+ *  is transferred (decision MOTIR-9802): `stopsAt` is the transfer time plus
+ *  these days (MOTIR-12132). */
+export const HOSTED_APPLICATION_GRACE_DAYS = 30;
+
+/** The notices a grace window sends: at the transfer, seven and one day before
+ *  the stop, and at the stop (MOTIR-12132 enqueues `transferred`). */
+export const GRACE_NOTICE_KINDS = ['transferred', 'seven_days', 'one_day', 'stopped'] as const;
+export type GraceNoticeKind = (typeof GRACE_NOTICE_KINDS)[number];
+
+/** An application database export: an admin's `on_demand` download during the
+ *  grace window, or the `final` one the stop takes before deleting the
+ *  database. */
+export const HOSTED_APPLICATION_EXPORT_KINDS = ['on_demand', 'final'] as const;
+export type HostedApplicationExportKind = (typeof HOSTED_APPLICATION_EXPORT_KINDS)[number];
+
+export function isHostedApplicationState(value: string): value is HostedApplicationState {
+  return (HOSTED_APPLICATION_STATES as readonly string[]).includes(value);
+}
+
+export function isHostedApplicationExportKind(value: string): value is HostedApplicationExportKind {
+  return (HOSTED_APPLICATION_EXPORT_KINDS as readonly string[]).includes(value);
+}
+
 // ── Production releases (Story MOTIR-9797 · MOTIR-10026) ─────────────────────
 // The Prisma enums `HostedReleaseState` / `HostedReleaseCause` carry the same
 // values; a test pins the lists together, as it does the targets above.

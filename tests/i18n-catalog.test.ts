@@ -409,6 +409,10 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
       'button verb — opens the dated confirm for a workspace rename (MOTIR-9514)',
     'settings.public.copy': 'clipboard verb — copies the public project URL',
     'settings.production.address.copy': 'clipboard verb — copies the production address',
+    'settings.production.handover.handedOver.copy':
+      'clipboard verb — copies the AWS account id or upstream address of a handed-over app (MOTIR-12138)',
+    'repositoryTakeover.awsHandover.copy':
+      'clipboard verb — copies an upstream address in the AWS hosting handover (MOTIR-12137)',
     // Named inside an explicit frame on a surface with no type chip.
     'codeHealth.convention.defaultRepo':
       'repo fallback name on Code health — the card header where a repoKey would sit',

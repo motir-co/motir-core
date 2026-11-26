@@ -142,6 +142,7 @@
     "@aws-sdk/client-sesv2": "^3.1157.0",
     "@aws-sdk/client-ssm": "^3.1157.0",
     "@aws-sdk/client-sts": "^3.1157.0",
+    "@aws-sdk/lib-storage": "^3.1104.0",
     "@aws-sdk/s3-request-presigner": "^3.1104.0",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/oauth-provider": "1.7.7",

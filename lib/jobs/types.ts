@@ -35,6 +35,9 @@ import type {
 } from '@/lib/services/previewLifecycleService';
 import type { MergeReleaseRequestedData } from '@/lib/services/productionMergeReleaseService';
 import type { ReleaseStatusRequestedData } from '@/lib/services/releaseDeploymentStatusService';
+import type { TenantHandoverAdvanceData } from '@/lib/services/tenantAccountHandoverService';
+import type { HostedApplicationExportRequestedData } from '@/lib/services/hostedApplicationExportService';
+import type { GraceNoticeKind } from '@/lib/hosting/vocabulary';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
@@ -807,6 +810,19 @@ export interface JobEventDataMap {
    *  deletes each archive's blob once its seven-day window has run out and
    *  moves the row to `expired`. Cross-tenant by design. */
   'system.data-export-expiry-sweep': SystemScheduledData;
+  /** The database-export expiry sweep (Story MOTIR-9800 · MOTIR-12134) —
+   *  deletes each grace-window export's dump, then its row, once `expires_at`
+   *  has passed. Cross-tenant by design: it visits every workspace holding a
+   *  serverless or Fly application. */
+  'system.hosted-application-export-expire': SystemScheduledData;
+  /** The grace-window stop sweep (Story MOTIR-9800 · MOTIR-12135) — stops each
+   *  `grace` serverless or Fly application whose `stopsAt` has passed, one step
+   *  per application. Cross-tenant by design. */
+  'system.hosting-application-grace-stop': SystemScheduledData;
+  /** The grace-window reminder sweep (Story MOTIR-9800 · MOTIR-12136) —
+   *  enqueues the 7-day and 1-day notice of each `grace` application whose
+   *  `stopsAt` is that close. Cross-tenant by design. */
+  'system.hosted-application-grace-notice-sweep': SystemScheduledData;
   /** The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509) — deletes the
    *  public-hostname reservations whose hold has lapsed. Cross-tenant by design. */
   'system.public-hostname-reservation-sweep': SystemScheduledData;
@@ -936,6 +952,22 @@ export interface JobEventDataMap {
    *  MOTIR-10033): post its GitHub deployment status. Emitted by
    *  `hostedApplicationService` after the change commits; ids only. */
   'hosted-release.status': ReleaseStatusRequestedData;
+  /** One turn of an AWS account's takeover handover (Story MOTIR-9800 ·
+   *  MOTIR-12131): run its next step. Emitted by `tenantAccountHandoverService`
+   *  on a start, an answer, a retry and each finished step; the account id only. */
+  'hosting.tenant-handover.advance': TenantHandoverAdvanceData;
+  /** A serverless or Fly application's grace-window notice (Story MOTIR-9800):
+   *  `transferred` is enqueued by `hostedApplicationHandoverService.startGrace`
+   *  when the repository's transfer is recorded (MOTIR-12132), `stopped` by
+   *  `stopApplication` once the stop is recorded (MOTIR-12135), the reminders by
+   *  the hourly reminder sweep; sent by `hostedApplicationGraceNotifier`
+   *  (MOTIR-12136). Ids only; keyed per application and kind. */
+  'hosting.application-grace.notice': ApplicationGraceNoticeData;
+  /** An organisation admin's on-demand export of a grace-window application's
+   *  database (Story MOTIR-9800 · MOTIR-12134): the dump, which outlives a
+   *  request. Emitted by `hostedApplicationExportService.requestExport`; ids
+   *  only, keyed by the export's id. */
+  'hosting.application-export': HostedApplicationExportRequestedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -957,6 +989,18 @@ export interface JobEventDataMap {
    *  one storage day per agent per UTC day on which it existed. Cross-tenant by
    *  design: it walks every instance that stood in its window. */
   'system.agent-instance-storage-charge': SystemScheduledData;
+}
+
+/** The `hosting.application-grace.notice` event payload (MOTIR-12132). */
+export interface ApplicationGraceNoticeData {
+  /** The application's workspace — the run's tenant. */
+  workspaceId: string;
+  /** The `hosted_application` row the notice is about. */
+  applicationId: string;
+  kind: GraceNoticeKind;
+  /** `<applicationId>:<kind>` — one notice of each kind per application, across
+   *  retries and redeliveries. */
+  idempotencyKey: string;
 }
 
 /**

@@ -483,6 +483,8 @@ model User {
   hostedReleasesRestored           HostedRelease[]                     @relation("HostedReleaseRestoredBy")
   /// Production releases of a ref this user asked for (MOTIR-10103). SetNull on delete.
   hostedReleasesRequested          HostedRelease[]                     @relation("HostedReleaseRequestedBy")
+  /// Tenant-account takeover handovers this user started (MOTIR-12131). SetNull on delete.
+  hostingTenantHandoversStarted    HostingTenantAccount[]              @relation("HostingTenantHandoverStartedBy")
 
   /// Agent review verdicts this user submitted (MOTIR-10333).
   reviewVerdictRecords ReviewVerdictRecord[]
@@ -1787,221 +1789,224 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberships                 WorkspaceMembership[]
-  projects                    Project[]
+  organization                     Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships                      WorkspaceMembership[]
+  projects                         Project[]
   /// Staff "View as" sessions pinned to this workspace (MOTIR-749).
-  impersonationSessions       ImpersonationSession[]
-  workItems                   WorkItem[]
-  workItemLinks               WorkItemLink[]
-  jobRuns                     JobRun[]
-  jobRunDlqs                  JobRunDlq[]
-  jobEvents                   JobEvent[]
-  jobQueueRuns                JobQueueRun[]
-  jobSteps                    JobStep[]
-  jobSupervisions             JobSupervision[]
-  emailDeliveries             EmailDelivery[]
-  workflowStatuses            WorkflowStatus[]
-  workflowTransitions         WorkflowTransition[]
-  attachments                 Attachment[]
-  acceptanceEvidences         AcceptanceEvidence[]
+  impersonationSessions            ImpersonationSession[]
+  workItems                        WorkItem[]
+  workItemLinks                    WorkItemLink[]
+  jobRuns                          JobRun[]
+  jobRunDlqs                       JobRunDlq[]
+  jobEvents                        JobEvent[]
+  jobQueueRuns                     JobQueueRun[]
+  jobSteps                         JobStep[]
+  jobSupervisions                  JobSupervision[]
+  emailDeliveries                  EmailDelivery[]
+  workflowStatuses                 WorkflowStatus[]
+  workflowTransitions              WorkflowTransition[]
+  attachments                      Attachment[]
+  acceptanceEvidences              AcceptanceEvidence[]
   // Published design results (Story MOTIR-2664 · MOTIR-2666). Cascade with the
   // workspace, like every other tenanted lifecycle row.
-  designEvidences             DesignEvidence[]
-  designAssets                DesignAsset[]
+  designEvidences                  DesignEvidence[]
+  designAssets                     DesignAsset[]
   // How-to-test records (Story MOTIR-4906 · MOTIR-5328). Cascade with the workspace.
-  testInstructions            TestInstructions[]
-  testInstructionsRepos       TestInstructionsRepo[]
+  testInstructions                 TestInstructions[]
+  testInstructionsRepos            TestInstructionsRepo[]
   // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
-  repoDeployments             RepoDeployment[]
+  repoDeployments                  RepoDeployment[]
   // Motir's own previews of pull requests (MOTIR-5772). Cascade.
-  previewDeployments          PreviewDeployment[]
+  previewDeployments               PreviewDeployment[]
   // Production hosting (Story MOTIR-9797 · MOTIR-10026).
-  hostedApplications          HostedApplication[]          @relation("HostedApplicationWorkspace")
-  hostedReleases              HostedRelease[]
-  hostedApplicationHealths    HostedApplicationHealth[]
-  hostedApplicationEvents     HostedApplicationEvent[]
-  productionUsageSlices       ProductionUsageSlice[]
-  defaultApplication          HostedApplication?           @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
+  hostedApplications               HostedApplication[]               @relation("HostedApplicationWorkspace")
+  hostedApplicationExports         HostedApplicationExport[]         @relation("HostedApplicationExportWorkspace")
+  hostedApplicationExportDownloads HostedApplicationExportDownload[] @relation("HostedApplicationExportDownloadWorkspace")
+  hostedApplicationNotices         HostedApplicationNotice[]         @relation("HostedApplicationNoticeWorkspace")
+  hostedReleases                   HostedRelease[]
+  hostedApplicationHealths         HostedApplicationHealth[]
+  hostedApplicationEvents          HostedApplicationEvent[]
+  productionUsageSlices            ProductionUsageSlice[]
+  defaultApplication               HostedApplication?                @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
-  approvalGates               ApprovalGate[]
+  approvalGates                    ApprovalGate[]
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
-  designAutoReruns            DesignAutoRerun[]
-  dispatchRunHeldGates        DispatchRunHeldGate[]
-  gateResumes                 GateResume[]
-  boards                      Board[]
-  boardColumns                BoardColumn[]
-  boardColumnStatuses         BoardColumnStatus[]
-  sprints                     Sprint[]
-  projectMemberships          ProjectMembership[]
-  workspaceRoleDefinitions    WorkspaceRoleDefinition[]
-  roleMigrationReports        RoleMigrationReport[]
+  designAutoReruns                 DesignAutoRerun[]
+  dispatchRunHeldGates             DispatchRunHeldGate[]
+  gateResumes                      GateResume[]
+  boards                           Board[]
+  boardColumns                     BoardColumn[]
+  boardColumnStatuses              BoardColumnStatus[]
+  sprints                          Sprint[]
+  projectMemberships               ProjectMembership[]
+  workspaceRoleDefinitions         WorkspaceRoleDefinition[]
+  roleMigrationReports             RoleMigrationReport[]
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
   // Cascade with the workspace (a deleted workspace frees its keys).
-  projectKeyAliases           ProjectKeyAlias[]
+  projectKeyAliases                ProjectKeyAlias[]
   /// Every public address in this workspace (Story MOTIR-3878) — its subdomain,
   /// its retained aliases, and every customer domain of every project under it.
   /// `workspaceId` is denormalized onto every row so the RLS tenancy gate is a
   /// direct comparison with no join, the same pattern `project_key_alias` uses.
-  publicAddresses             PublicAddress[]
+  publicAddresses                  PublicAddress[]
   /// The workspace's subdomain change ledger — one row, the last rename or
   /// release (§8 Amendment 3 rule 4, MOTIR-9506).
-  publicSubdomainChange       PublicSubdomainChange?
-  comments                    Comment[]
+  publicSubdomainChange            PublicSubdomainChange?
+  comments                         Comment[]
   // Work-item to-do rows (Story MOTIR-3808 · MOTIR-3813). Tenanted on the ROW,
   // the `comments` shape — a direct child of `work_item` carries its own
   // `workspace_id` because RLS does not traverse foreign keys.
-  workItemTodos               WorkItemTodo[]
+  workItemTodos                    WorkItemTodo[]
   // Kept work-item translations (Story MOTIR-7735 · MOTIR-8114) — tenanted on
   // the ROW for the same reason as `workItemTodos`.
-  workItemTranslations        WorkItemTranslation[]
-  labels                      Label[]
-  components                  Component[]
-  customFieldDefinitions      CustomFieldDefinition[]
-  customFieldValues           CustomFieldValue[]
-  savedFilters                SavedFilter[]
-  savedFilterSubscriptions    SavedFilterSubscription[]
-  automationRules             AutomationRule[]
+  workItemTranslations             WorkItemTranslation[]
+  labels                           Label[]
+  components                       Component[]
+  customFieldDefinitions           CustomFieldDefinition[]
+  customFieldValues                CustomFieldValue[]
+  savedFilters                     SavedFilter[]
+  savedFilterSubscriptions         SavedFilterSubscription[]
+  automationRules                  AutomationRule[]
   // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
-  dashboards                  Dashboard[]
+  dashboards                       Dashboard[]
   // In-app notifications (Story 5.7 · Subtask 5.7.2) — workspace-scoped per
   // the finding-#26 tenancy gate (every notification read filters on it).
   // Cascade with the workspace, the comments pattern.
-  notifications               Notification[]
-  sprintReportEntries         SprintReportEntry[]
+  notifications                    Notification[]
+  sprintReportEntries              SprintReportEntry[]
   // Plan-tree embeddings (Story MOTIR-2694 · MOTIR-2696) — the RLS axis of the
   // semantic-search sidecar. Derived tenant data; cascade with the workspace.
-  workItemEmbeddings          WorkItemEmbedding[]
+  workItemEmbeddings               WorkItemEmbedding[]
   // Page embeddings (Story MOTIR-9490 · MOTIR-9570) — the RLS axis of the page
   // semantic index. Derived tenant data; cascade with the workspace.
-  pageEmbeddings              PageEmbedding[]
+  pageEmbeddings                   PageEmbedding[]
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
-  apiTokens                   ApiToken[]
+  apiTokens                        ApiToken[]
   // In-flight `motir login` grants BOUND to this workspace (Subtask MOTIR-1865).
   // The row is not tenant data (it is identity-scoped, no RLS — see DeviceCode);
   // the edge exists because the pending grant names the workspace its PAT would be
   // minted into, so it must go with the workspace. Cascade.
-  deviceCodes                 DeviceCode[]
+  deviceCodes                      DeviceCode[]
   // AI-planning proposal bundles + their proposed-operation items (Story 7.21).
   // Workspace-scoped tenant data — cascade with the workspace.
-  plans                       Plan[]
-  planItems                   PlanItem[]
+  plans                            Plan[]
+  planItems                        PlanItem[]
   // GitHub App installations on this workspace (Story 7.10 · MOTIR-891) — "Grant
   // 2" of the GitHub integration (repo access). Cascade with the workspace.
   // A workspace's OWN installation only — Motir's shared provisioning
   // installation is bound to NO workspace (MOTIR-1931); its repos are tenanted
   // through `githubRepos` below, not through here.
-  githubInstallations         GithubInstallation[]
+  githubInstallations              GithubInstallation[]
   /// The account links connected FROM this workspace (MOTIR-8218).
-  githubInstallationOrgLinks  GithubInstallationOrgLink[]
+  githubInstallationOrgLinks       GithubInstallationOrgLink[]
   // Connected/created repositories owned by this workspace (MOTIR-1931). Tenancy
   // is a property of the REPO, not of the installation: one shared provisioning
   // installation holds every tenant's created repos, so the repo row is what says
   // whose they are. Cascade with the workspace.
-  githubRepos                 GithubRepo[]
+  githubRepos                      GithubRepo[]
   // Error-monitor GRANTS installed by this workspace, and the project↔monitored-
   // project BINDINGS made on them (Story MOTIR-4926 · MOTIR-5258). The grant is
   // the workspace's own, so unlike `githubInstallations` there is no shared-
   // provisioning case; both cascade with the workspace, and both are modelled on
   // BOTH sides per the FK-`@relation` rule.
-  monitorInstallations        MonitorInstallation[]
-  monitorConnections          MonitorConnection[]
+  monitorInstallations             MonitorInstallation[]
+  monitorConnections               MonitorConnection[]
   // The provider issues those bindings have ingested (MOTIR-4929 · MOTIR-5576).
-  monitorIssues               MonitorIssue[]
+  monitorIssues                    MonitorIssue[]
   // Issue-import runs + their external-id → work-item map (Story 7.16 · MOTIR-939).
   // Workspace-scoped tenant data — cascade with the workspace.
-  imports                     Import[]
-  importedIssues              ImportedIssue[]
+  imports                          Import[]
+  importedIssues                   ImportedIssue[]
   // Per-user import OAuth identities scoped to this workspace (Story 7.16 ·
   // MOTIR-1653) — the encrypted vendor-token store. Cascade with the workspace.
-  importSourceIdentities      ImportSourceIdentity[]
+  importSourceIdentities           ImportSourceIdentity[]
   // Migrate-existing-codebase onboarding runs (Workflow B, Story 7.15 ·
   // MOTIR-1499). Cascade with the workspace.
-  migrateOnboardings          MigrateOnboarding[]
+  migrateOnboardings               MigrateOnboarding[]
   // Plan-change conversations + their turns (Story 7.30 · MOTIR-1728).
   // Workspace-scoped tenant data — cascade with the workspace.
-  planChangeSessions          PlanChangeSession[]
-  planChangeTurns             PlanChangeTurn[]
+  planChangeSessions               PlanChangeSession[]
+  planChangeTurns                  PlanChangeTurn[]
   // Sharpen sessions + their turns (Task MOTIR-1101 · MOTIR-8182). Cascade.
-  sharpenSessions             SharpenSession[]
-  sharpenTurns                SharpenTurn[]
+  sharpenSessions                  SharpenSession[]
+  sharpenTurns                     SharpenTurn[]
   // Conversation jobs' notes (MOTIR-10235). Cascade.
-  conversationNotes           ConversationNote[]
+  conversationNotes                ConversationNote[]
   // The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what a user typed
   // while a planning job was running, and the stop that ends it.
   // Workspace-scoped tenant data; cascade with the workspace.
-  planChangeMailboxEntries    PlanChangeMailboxEntry[]
+  planChangeMailboxEntries         PlanChangeMailboxEntry[]
   // The planner's mid-run PAUSES (Story MOTIR-7990 · MOTIR-8007). Workspace-scoped
   // tenant data; cascade with the workspace.
-  planChangeRunPauses         PlanChangeRunPause[]
+  planChangeRunPauses              PlanChangeRunPause[]
   // The planning-target leases held in this workspace (Story MOTIR-2786 ·
   // MOTIR-2787). Workspace-scoped tenant data — cascade with the workspace.
-  planTargetLocks             PlanTargetLock[]
+  planTargetLocks                  PlanTargetLock[]
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
-  projectRepos                ProjectRepo[]
+  projectRepos                     ProjectRepo[]
   // A Motir repository's environment configuration and its change record (Story
   // MOTIR-9795 · MOTIR-9960). Workspace-scoped tenant data — cascade with the workspace.
-  environmentConfigEntries    EnvironmentConfigEntry[]
-  environmentConfigChanges    EnvironmentConfigChange[]
-  workItemRepos               WorkItemRepo[]
-  workItemDeliveries          WorkItemDelivery[]
+  environmentConfigEntries         EnvironmentConfigEntry[]
+  environmentConfigChanges         EnvironmentConfigChange[]
+  workItemRepos                    WorkItemRepo[]
+  workItemDeliveries               WorkItemDelivery[]
   /// The per-member collaborator records on this workspace's repositories
   /// (MOTIR-1910). Cascade: they are tenant-scoped rows with no life of their own.
-  projectRepoCollaborators    ProjectRepoCollaborator[]
+  projectRepoCollaborators         ProjectRepoCollaborator[]
   // Metered CI consumption — the per-run audit rows and the per-period rollup
   // (Story MOTIR-1775 · MOTIR-1896). Workspace-scoped tenant data (the
   // workspace_id + RLS contract) even though the POOL is resolved per org, so a
   // tenant can never read another's consumption. Cascade with the workspace.
-  ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  ciWorkflowRunUsages              CiWorkflowRunUsage[]
   // Preview usage slices charged to the CI pool (MOTIR-5777). Cascade.
-  previewUsages               PreviewUsage[]
-  ciPeriodUsages              CiPeriodUsage[]
-  ciLiveAccruals              CiLiveAccrual[]
+  previewUsages                    PreviewUsage[]
+  ciPeriodUsages                   CiPeriodUsage[]
+  ciLiveAccruals                   CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
   // workspace_id + RLS contract as the two metering tables above.
-  ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
+  ciRunnerProvisioningIntents      CiRunnerProvisioningIntent[]
   // The fleet's COST rows (Story MOTIR-1916 · MOTIR-1924) — same workspace_id +
   // RLS contract again: what a tenant's CI cost Motir is commercially sensitive
   // in both directions, so it is tenant data with a system-admin escape for the
   // orchestrator, never an untenanted operator table.
-  ciContainerUsages           CiContainerUsage[]
+  ciContainerUsages                CiContainerUsage[]
   /// MOTIR-3255 — what a multi-repo handle's seconds were spent on.
-  ciContainerUsageSlices      CiContainerUsageSlice[]
-  ciContainerPeriodCosts      CiContainerPeriodCost[]
+  ciContainerUsageSlices           CiContainerUsageSlice[]
+  ciContainerPeriodCosts           CiContainerPeriodCost[]
   /// Public-changelog followers (Story 8.9 · Subtask 8.9.3). The `workspace_id`
   /// is denormalized from the project so RLS gates the table the ordinary way —
   /// see `docs/decisions/public-follow-and-changelog.md` §1 AMENDMENT 1 for why
   /// the `public_request_vote` shape (no workspace, an anonymous read arm) is
   /// the wrong precedent for a table holding rows with no acting user.
-  publicFollows               PublicFollow[]
+  publicFollows                    PublicFollow[]
   /// Every CLI run reported against this workspace (Story MOTIR-1789).
-  dispatchRuns                DispatchRun[]
-  dispatchRunCards            DispatchRunCard[]
-  dispatchRunEvents           DispatchRunEvent[]
-  runDiscrepancyRecords       RunDiscrepancyRecord[]
-  runDiscrepancyEntries       RunDiscrepancyEntry[]
-  dispatchRunGitCredentials   DispatchRunGitCredential[]
+  dispatchRuns                     DispatchRun[]
+  dispatchRunCards                 DispatchRunCard[]
+  dispatchRunEvents                DispatchRunEvent[]
+  runDiscrepancyRecords            RunDiscrepancyRecord[]
+  runDiscrepancyEntries            RunDiscrepancyEntry[]
+  dispatchRunGitCredentials        DispatchRunGitCredential[]
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
-  folders                     Folder[]
-  pages                       Page[]
-  pageVersions                PageVersion[]
-  pageComments                PageComment[]
-  projectAutoTranslateChanges ProjectAutoTranslateChange[]
-  decisionPagePublications    DecisionPagePublication[]
-  pageWorkItemLinks           PageWorkItemLink[]
+  folders                          Folder[]
+  pages                            Page[]
+  pageVersions                     PageVersion[]
+  pageComments                     PageComment[]
+  projectAutoTranslateChanges      ProjectAutoTranslateChange[]
+  decisionPagePublications         DecisionPagePublication[]
+  pageWorkItemLinks                PageWorkItemLink[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
-  agentInstances              AgentInstance[]
-  agentInstanceIntervals      AgentInstanceInterval[]
-  agentInstanceStorageCharges AgentInstanceStorageCharge[]
+  agentInstances                   AgentInstance[]
+  agentInstanceIntervals           AgentInstanceInterval[]
+  agentInstanceStorageCharges      AgentInstanceStorageCharge[]
   /// An agent's boot attempts and their steps (`agent-instances.md` AMENDMENT 6,
   /// MOTIR-7397). Cascade.
-  agentInstanceBootAttempts   AgentInstanceBootAttempt[]
-  agentInstanceBootSteps      AgentInstanceBootStep[]
+  agentInstanceBootAttempts        AgentInstanceBootAttempt[]
+  agentInstanceBootSteps           AgentInstanceBootStep[]
   /// The agent terminal's tickets and connection records (MOTIR-6940). Cascade.
-  agentTerminalTickets        AgentTerminalTicket[]
-  agentTerminalConnections    AgentTerminalConnection[]
+  agentTerminalTickets             AgentTerminalTicket[]
+  agentTerminalConnections         AgentTerminalConnection[]
 
   reviewVerdictRecords ReviewVerdictRecord[]
   reviewDismissals     ReviewDismissal[]
@@ -13161,28 +13166,73 @@ model HostAccountAttempt {
 /// column holds a credential or the member email (`hostingTenantAccountPlan`
 /// derives the email on demand). Platform-only, as `fleet_shard`.
 model HostingTenantAccount {
-  id              String       @id @default(cuid())
-  organizationId  String       @unique @map("organization_id")
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                      String                      @id @default(cuid())
+  organizationId          String                      @unique @map("organization_id")
+  organization            Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// Null until the create-or-find step finds or creates the account.
-  awsAccountId    String?      @map("aws_account_id")
-  /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`
-  /// (`HostingTenantAccountState`, `lib/ciFleet/hostingTenantAccounts.ts`).
-  state           String       @default("requested")
+  awsAccountId            String?                     @map("aws_account_id")
+  /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`, then the
+  /// takeover handover's `handing_over` | `awaiting_standalone` | `removing` |
+  /// `handed_over` (MOTIR-12126) (`HostingTenantAccountState`,
+  /// `lib/ciFleet/hostingTenantAccounts.ts`).
+  state                   String                      @default("requested")
   /// Consecutive `CreateAccount` refusals — the reconcile's backoff reads it, so
   /// a restart never resets the wait.
-  refusedCount    Int          @default(0) @map("refused_count")
-  lastRefusedAt   DateTime?    @map("last_refused_at")
+  refusedCount            Int                         @default(0) @map("refused_count")
+  lastRefusedAt           DateTime?                   @map("last_refused_at")
   /// The `Tenants` organisational unit the account sits under, once known.
-  ouId            String?      @map("ou_id")
+  ouId                    String?                     @map("ou_id")
   /// When the reconcile last brought a `ready` account's quota targets to target
   /// or a raise (MOTIR-12011); null until the first check, which is then due.
-  quotasCheckedAt DateTime?    @map("quotas_checked_at")
-  region          String
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
+  quotasCheckedAt         DateTime?                   @map("quotas_checked_at")
+  region                  String
+  /// The takeover handover (Story MOTIR-9800 · MOTIR-12126): the email address
+  /// the administrator names to own the account, and the GitHub owner that
+  /// receives its repositories. Typed by a person and kept so a restarted
+  /// `move_email` step can resume; no column holds the account's derived member
+  /// email, a credential, a payment detail or a root credential. Never on a DTO.
+  handoverOwnerEmail      String?                     @map("handover_owner_email")
+  handoverGithubOwner     String?                     @map("handover_github_owner")
+  /// The organisation admin who started the handover (MOTIR-12131): its
+  /// repository transfers run as them, with their GitHub identity. Null before a
+  /// handover, or once that user is deleted.
+  handoverStartedByUserId String?                     @map("handover_started_by_user_id")
+  handoverStartedBy       User?                       @relation("HostingTenantHandoverStartedBy", fields: [handoverStartedByUserId], references: [id], onDelete: SetNull)
+  createdAt               DateTime                    @default(now()) @map("created_at")
+  updatedAt               DateTime                    @updatedAt @map("updated_at")
+  handoverSteps           HostingTenantHandoverStep[]
 
   @@map("hosting_tenant_account")
+}
+
+/// One step of a tenant account's takeover handover (Story MOTIR-9800 ·
+/// MOTIR-12126): one row per `(tenant_account_id, step)`, its status, attempts,
+/// last error and the lease a worker holds while it runs the step, so a handover
+/// cut off at any step resumes at that step after a restart. `step` is one of
+/// `TENANT_HANDOVER_STEPS` and `status` one of `TENANT_HANDOVER_STEP_STATUSES`
+/// (`lib/ciFleet/hostingTenantAccounts.ts`). Platform-only, as its parent:
+/// `hosting_tenant_handover_step_system_only` on `app.system_admin`.
+model HostingTenantHandoverStep {
+  id              String               @id @default(cuid())
+  tenantAccountId String               @map("tenant_account_id")
+  tenantAccount   HostingTenantAccount @relation(fields: [tenantAccountId], references: [id], onDelete: Cascade)
+  step            String
+  status          String               @default("pending")
+  attempts        Int                  @default(0)
+  lastError       String?              @map("last_error")
+  /// What the step waits on the new owner for, while it is `waiting_on_you`
+  /// (MOTIR-12131): AWS's standalone requirements not yet met, or AWS's reason
+  /// for refusing the account's removal. Empty otherwise.
+  missing         String[]             @default([])
+  leaseHolder     String?              @map("lease_holder")
+  leaseExpiresAt  DateTime?            @map("lease_expires_at")
+  startedAt       DateTime?            @map("started_at")
+  completedAt     DateTime?            @map("completed_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  @@unique([tenantAccountId, step])
+  @@map("hosting_tenant_handover_step")
 }
 
 /// Where a Host organisation's ask for more capacity stands (MOTIR-9583). Whether
@@ -13249,6 +13299,21 @@ enum HostingTarget {
 /// The life of one production release (Story MOTIR-9797 · MOTIR-10026). Mirrors
 /// `HOSTED_RELEASE_STATES` in `lib/hosting/vocabulary.ts`, whose edge table says
 /// which moves are legal.
+/// Where a hosted application stands at takeover (Story MOTIR-9800 ·
+/// MOTIR-12126). Mirrors `HOSTED_APPLICATION_STATES`.
+enum HostedApplicationState {
+  /// Motir serves it and deploys it.
+  live
+  /// A takeover is moving it off Motir: its deploy credentials are gone.
+  handing_over
+  /// A serverless or Fly app still served by Motir until `stopsAt`.
+  grace
+  /// Motir no longer serves it; the record is kept for the Production panel.
+  handed_over
+
+  @@map("hosted_application_state")
+}
+
 enum HostedReleaseState {
   building
   releasing
@@ -13282,54 +13347,68 @@ enum HostedReleaseCause {
 /// write from webhooks and jobs under `withSystemContext`, a member's session
 /// reads its own workspace's rows.
 model HostedApplication {
-  id                      String         @id @default(cuid())
-  workspaceId             String         @map("workspace_id")
-  projectId               String         @map("project_id")
-  projectRepositoryId     String         @unique @map("project_repository_id")
+  id                      String                 @id @default(cuid())
+  workspaceId             String                 @map("workspace_id")
+  projectId               String                 @map("project_id")
+  projectRepositoryId     String                 @unique @map("project_repository_id")
   target                  HostingTarget
   /// The application's label in its host, `<slug>--<workspace label>`; unique in
   /// the workspace (ADR public-tenant-addresses §8 AMENDMENT 4).
   slug                    String
   /// The production host without scheme, e.g. `shop--acme.motir.site`. Stored
   /// and looked up, never parsed; null while the workspace has no claimed label.
-  productionAddress       String?        @unique @map("production_address")
-  currentReleaseId        String?        @unique @map("current_release_id")
-  previousReleaseId       String?        @unique @map("previous_release_id")
+  productionAddress       String?                @unique @map("production_address")
+  currentReleaseId        String?                @unique @map("current_release_id")
+  previousReleaseId       String?                @unique @map("previous_release_id")
   /// The production database (written by the database card, MOTIR-10028). The
   /// URL is stored only encrypted, and no DTO carries it.
-  databaseProjectId       String?        @map("database_project_id")
-  databaseUrlCiphertext   String?        @map("database_url_ciphertext")
+  databaseProjectId       String?                @map("database_project_id")
+  databaseUrlCiphertext   String?                @map("database_url_ciphertext")
   /// Production switched on (MOTIR-10027): the Fly app (`mh-<rid>`), when it was
   /// first enabled, and when its deploy token was last minted (re-minted when
   /// fewer than 14 of its 90 days remain, ADR MOTIR-5769 §4). The token itself is
   /// never stored.
-  productionAppName       String?        @map("production_app_name")
-  productionEnabledAt     DateTime?      @map("production_enabled_at")
-  productionTokenMintedAt DateTime?      @map("production_token_minted_at")
+  productionAppName       String?                @map("production_app_name")
+  productionEnabledAt     DateTime?              @map("production_enabled_at")
+  productionTokenMintedAt DateTime?              @map("production_token_minted_at")
+  /// Its takeover handover (Story MOTIR-9800 · MOTIR-12126). `state` has a
+  /// database default, so the raw insert reads `live`. `stopsAt` is when a
+  /// `grace` app stops; `handedOverAt` when Motir stopped serving it; for an AWS
+  /// app, the address its own front door answers on without Motir
+  /// (`upstreamAddress`) and the account it left with (`handedOverAccountId`).
+  state                   HostedApplicationState @default(live)
+  stopsAt                 DateTime?              @map("stops_at")
+  handedOverAt            DateTime?              @map("handed_over_at")
+  upstreamAddress         String?                @map("upstream_address")
+  handedOverAccountId     String?                @map("handed_over_account_id")
   /// The IDLE POLICY its production release runs (MOTIR-12107): always on, or
   /// suspend after `idleSeconds` without a request. Set exactly when the mode is
   /// `suspend` (CHECK `hosted_application_idle_seconds_iff_suspend`). Rows that
   /// existed before the column are `always_on`, the policy they ran; a new row is
   /// seeded by its target's shape in `hostedApplicationService`.
-  idleMode                HostedIdleMode @default(always_on) @map("idle_mode")
-  idleSeconds             Int?           @map("idle_seconds")
+  idleMode                HostedIdleMode         @default(always_on) @map("idle_mode")
+  idleSeconds             Int?                   @map("idle_seconds")
   /// Since when its organisation's credit balance has been BELOW ZERO, as the
   /// production meter last saw it (MOTIR-12108; Decision MOTIR-12100 §9). Set
   /// on the transition into exhaustion, cleared once the balance is zero or
   /// above; the 7-day switch of an `always_on` app to `suspend` counts from it.
-  creditsExhaustedSince   DateTime?      @map("credits_exhausted_since") @db.Timestamptz(3)
-  createdAt               DateTime       @default(now()) @map("created_at")
-  updatedAt               DateTime       @updatedAt @map("updated_at")
+  creditsExhaustedSince   DateTime?              @map("credits_exhausted_since") @db.Timestamptz(3)
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
 
-  workspace         Workspace                @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
-  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectRepository ProjectRepo              @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
-  currentRelease    HostedRelease?           @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
-  previousRelease   HostedRelease?           @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
-  releases          HostedRelease[]          @relation("HostedApplicationReleases")
-  defaultOf         Workspace?               @relation("WorkspaceDefaultApplication")
+  workspace         Workspace                 @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo               @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  currentRelease    HostedRelease?            @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
+  previousRelease   HostedRelease?            @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
+  releases          HostedRelease[]           @relation("HostedApplicationReleases")
+  defaultOf         Workspace?                @relation("WorkspaceDefaultApplication")
   /// The customer domains bound to this application (ADR MOTIR-9521 §1).
-  customDomains     PublicAddress[]          @relation("HostedApplicationCustomDomains")
+  customDomains     PublicAddress[]           @relation("HostedApplicationCustomDomains")
+  /// Every database export taken of it (MOTIR-12126).
+  exports           HostedApplicationExport[]
+  /// Every grace-window notice sent about it (MOTIR-12136).
+  notices           HostedApplicationNotice[]
   /// Its one health state and its crash events (MOTIR-12106).
   health            HostedApplicationHealth?
   events            HostedApplicationEvent[]
@@ -13339,6 +13418,93 @@ model HostedApplication {
   @@unique([workspaceId, slug])
   @@index([projectId])
   @@map("hosted_application")
+}
+
+/// One database export of a hosted application (Story MOTIR-9800 ·
+/// MOTIR-12126): an organisation admin's `on_demand` download during the grace
+/// window, or the `final` one the stop takes before it deletes the database.
+/// `requested_by_user_id` is a plain id, not a foreign key, so a user's erasure
+/// is never blocked; null means a system export. The dump itself lives at
+/// `storage_key` in private storage until `expires_at`.
+///
+/// RLS: `hosted_application_export_active_workspace` (FOR ALL); system code
+/// writes it under `withWorkspaceServiceContext`.
+model HostedApplicationExport {
+  id                String   @id @default(cuid())
+  workspaceId       String   @map("workspace_id")
+  applicationId     String   @map("application_id")
+  /// `on_demand` | `final` (`HOSTED_APPLICATION_EXPORT_KINDS`).
+  kind              String
+  requestedByUserId String?  @map("requested_by_user_id")
+  storageKey        String   @map("storage_key")
+  sizeBytes         BigInt   @map("size_bytes")
+  createdAt         DateTime @default(now()) @map("created_at")
+  expiresAt         DateTime @map("expires_at")
+
+  workspace   Workspace                         @relation("HostedApplicationExportWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication                 @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /// Every signed download link minted for it (MOTIR-12134).
+  downloads   HostedApplicationExportDownload[]
+
+  @@index([workspaceId])
+  @@index([applicationId, createdAt])
+  @@map("hosted_application_export")
+}
+
+/// One download of a database export (Story MOTIR-9800 · MOTIR-12134): a row per
+/// signed link minted, so every download is traceable to who asked and when.
+/// `user_id` is a plain id, not a foreign key, as on the export itself, so a
+/// user's erasure is never blocked. The rows go with their export (CASCADE),
+/// which the expiry sweep deletes.
+///
+/// RLS: `hosted_application_export_download_active_workspace` (FOR ALL).
+model HostedApplicationExportDownload {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  exportId    String   @map("export_id")
+  userId      String   @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace               @relation("HostedApplicationExportDownloadWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  export    HostedApplicationExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([exportId, createdAt])
+  @@map("hosted_application_export_download")
+}
+
+/// One grace-window notice sent to an organisation's Owner and Admins about a
+/// hosted application (Story MOTIR-9800 · MOTIR-12136): at the transfer, 7 and
+/// 1 day before `stops_at`, and at the stop. One row per `(application_id,
+/// kind)`, written AFTER the notice's emails are enqueued, so each notice goes
+/// out once; the newest row is the banner the Production panel shows.
+///
+/// RLS: `hosted_application_notice_active_workspace` (FOR ALL); system code
+/// writes it under `withWorkspaceServiceContext`.
+model HostedApplicationNotice {
+  id            String                      @id @default(cuid())
+  workspaceId   String                      @map("workspace_id")
+  applicationId String                      @map("application_id")
+  kind          HostedApplicationNoticeKind
+  sentAt        DateTime                    @default(now()) @map("sent_at")
+
+  workspace   Workspace         @relation("HostedApplicationNoticeWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, kind])
+  @@index([workspaceId])
+  @@map("hosted_application_notice")
+}
+
+/// Which grace-window notice a `hosted_application_notice` row records
+/// (`GRACE_NOTICE_KINDS`).
+enum HostedApplicationNoticeKind {
+  transferred
+  seven_days
+  one_day
+  stopped
+
+  @@map("hosted_application_notice_kind")
 }
 
 /// One release of a commit on a hosted application. A config redeploy of the

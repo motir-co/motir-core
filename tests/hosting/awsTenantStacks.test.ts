@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse, type ScalarTag, type CollectionTag, type YAMLMap, type YAMLSeq } from 'yaml';
-import { AWS_TENANT_STACKS_DIR } from '@motir/orchestrator';
+import { AWS_TENANT_STACKS_DIR, deriveOriginSecret } from '@motir/orchestrator';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Obj = { [key: string]: Json };
@@ -279,6 +279,7 @@ describe('network.yaml', () => {
         'AlbListenerArn',
         'AlbDnsName',
         'FrontDoorDomainName',
+        'FrontDoorVpcOriginId',
       ].sort(),
     );
   });
@@ -338,6 +339,10 @@ describe('network.yaml', () => {
     expect(config['ViewerCertificate']).toEqual({ CloudFrontDefaultCertificate: true });
     expect(t.Outputs!['FrontDoorDomainName']).toEqual({
       Value: { 'Fn::GetAtt': ['FrontDoor', 'DomainName'] },
+    });
+    // An open container release's own distribution reuses it (MOTIR-12128).
+    expect(t.Outputs!['FrontDoorVpcOriginId']).toEqual({
+      Value: { 'Fn::GetAtt': ['FrontDoorOrigin', 'Id'] },
     });
   });
 });
@@ -497,7 +502,11 @@ describe('function-release.yaml', () => {
       Handler: 'index.handler',
       Environment: {
         Variables: {
-          MOTIR_FRONT_DOOR_SECRET: { Ref: 'OriginSecret' },
+          // The secret only under motir_edge; the mode explicit (MOTIR-12128).
+          MOTIR_FRONT_DOOR_MODE: { 'Fn::If': ['Open', 'open', 'motir_edge'] },
+          MOTIR_FRONT_DOOR_SECRET: {
+            'Fn::If': ['Open', { Ref: 'AWS::NoValue' }, { Ref: 'OriginSecret' }],
+          },
           MOTIR_FRONT_DOOR_TARGET: { Ref: 'LiveAlias' },
         },
       },
@@ -576,7 +585,12 @@ describe('container-release.yaml', () => {
     expect(resourcesOf(t, 'AWS::ElasticLoadBalancingV2::LoadBalancer')).toEqual([]);
     expect(resourcesOf(t, 'AWS::ElasticLoadBalancingV2::Listener')).toEqual([]);
     one(t, 'AWS::ElasticLoadBalancingV2::TargetGroup');
-    const rule = one(t, 'AWS::ElasticLoadBalancingV2::ListenerRule').Properties!;
+    // The open rule is MOTIR-12128's, and only under Open (below).
+    const rules = resourcesOf(t, 'AWS::ElasticLoadBalancingV2::ListenerRule').filter(
+      (r) => r['Condition'] === undefined,
+    );
+    expect(rules).toHaveLength(1);
+    const rule = rules[0]!.Properties!;
     expect(rule['ListenerArn']).toEqual({ Ref: 'AlbListenerArn' });
     expect(rule['Conditions']).toEqual([
       {
@@ -598,5 +612,235 @@ describe('container-release.yaml', () => {
     expect(service['DesiredCount']).toBeGreaterThanOrEqual(1);
     expect(service['ServiceName']).toEqual({ Ref: 'AppRef' });
     expect(t.Parameters!['IdlePolicy']!['AllowedValues']).toEqual(['always_on']);
+  });
+});
+
+// MOTIR-12128 — the open mode, rendered: the templates' conditions evaluated for
+// a parameter set, the resources and outputs that set creates, and their
+// properties with every `!If` and parameter `!Ref` resolved.
+describe('the open mode (MOTIR-12128)', () => {
+  const APP = 'mh-cmrepo1';
+  const SECRET = deriveOriginSecret('origin-key-do-not-leak', APP);
+
+  function render(t: Template, given: Record<string, string>) {
+    const params: Record<string, string> = {};
+    for (const [name, p] of Object.entries(t.Parameters ?? {})) {
+      if (name in given) params[name] = given[name]!;
+      else if ('Default' in p) params[name] = String(p['Default']);
+    }
+    const NO_VALUE = Symbol('NoValue');
+    const condition = (name: string): boolean => test(t.Conditions![name]!);
+    function test(expr: Json): boolean {
+      const [op, args] = Object.entries(expr as Obj)[0]!;
+      const list = args as Json[];
+      if (op === 'Condition') return condition(args as string);
+      if (op === 'Fn::Equals') return resolve(list[0]!) === resolve(list[1]!);
+      if (op === 'Fn::Not') return !test(list[0]!);
+      if (op === 'Fn::And') return list.every(test);
+      if (op === 'Fn::Or') return list.some(test);
+      throw new Error(`unknown condition ${op}`);
+    }
+    function resolve(value: Json): Json | typeof NO_VALUE {
+      if (Array.isArray(value)) {
+        return value.map(resolve).filter((v): v is Json => v !== NO_VALUE);
+      }
+      if (value === null || typeof value !== 'object') return value;
+      const keys = Object.keys(value);
+      if (keys.length === 1 && keys[0] === 'Ref') {
+        const ref = value['Ref'] as string;
+        if (ref === 'AWS::NoValue') return NO_VALUE;
+        return ref in params ? params[ref]! : value;
+      }
+      if (keys.length === 1 && keys[0] === 'Fn::If') {
+        const [name, yes, no] = value['Fn::If'] as [string, Json, Json];
+        return resolve(condition(name) ? yes : no);
+      }
+      const out: Obj = {};
+      for (const [k, v] of Object.entries(value)) {
+        const r = resolve(v);
+        if (r !== NO_VALUE) out[k] = r;
+      }
+      return out;
+    }
+    const kept = (entries: Record<string, Obj>) =>
+      Object.entries(entries)
+        .filter(([, r]) => r['Condition'] === undefined || condition(r['Condition'] as string))
+        .map(([name]) => name)
+        .sort();
+    return {
+      resources: kept(t.Resources),
+      outputs: kept(t.Outputs ?? {}),
+      properties: (name: string) => resolve(t.Resources[name]!.Properties!) as Obj,
+      output: (name: string) => resolve(t.Outputs![name]!) as Obj,
+    };
+  }
+
+  const FUNCTION_RESOURCES = [
+    'EnvironmentSecret',
+    'LogGroup',
+    'ExecutionRole',
+    'Function',
+    'Version',
+    'LiveAlias',
+    'FunctionUrl',
+    'ForwarderInvoke',
+    'ForwarderInvokeFunction',
+    'FrontDoorLogGroup',
+    'FrontDoorRole',
+    'FrontDoorFunction',
+    'FrontDoorVersion',
+    'FrontDoorAlias',
+    'FrontDoorUrl',
+    'FrontDoorPublicUrl',
+    'FrontDoorPublicInvoke',
+  ].sort();
+  const FUNCTION_OUTPUTS = [
+    'FunctionName',
+    'FunctionArn',
+    'EnvironmentSecretArn',
+    'FunctionUrl',
+    'LiveVersion',
+    'FrontDoorUrl',
+  ].sort();
+  const CONTAINER_RESOURCES = [
+    'EnvironmentSecret',
+    'LogGroup',
+    'Cluster',
+    'ExecutionRole',
+    'TaskRole',
+    'TaskDefinition',
+    'TargetGroup',
+    'ListenerRule',
+    'Service',
+  ].sort();
+  const CONTAINER_OUTPUTS = [
+    'ClusterArn',
+    'ServiceArn',
+    'ServiceName',
+    'TaskDefinitionArn',
+    'TargetGroupArn',
+    'EnvironmentSecretArn',
+  ].sort();
+
+  const published = { AppRef: APP, ConfigHash: 'h'.repeat(64), OriginSecret: SECRET };
+  const containerOpen = {
+    ...published,
+    OriginAccess: 'open',
+    OpenListenerRulePriority: '4242',
+    FrontDoorVpcOriginId: 'vo_tenant',
+    AlbDnsName: 'internal-motir-tenant-1.us-east-1.elb.amazonaws.com',
+  };
+
+  it.each(['function-release.yaml', 'container-release.yaml'] as const)(
+    '%s takes OriginAccess, motir_edge or open, defaulting to motir_edge',
+    (file) => {
+      expect(T[file].Parameters!['OriginAccess']).toMatchObject({
+        Type: 'String',
+        Default: 'motir_edge',
+        AllowedValues: ['motir_edge', 'open'],
+      });
+      expect(T[file].Conditions!['Open']).toEqual({
+        'Fn::Equals': [{ Ref: 'OriginAccess' }, 'open'],
+      });
+    },
+  );
+
+  it('creates, without OriginAccess, exactly what each release stack created before it', () => {
+    for (const [file, resources, outputs] of [
+      ['function-release.yaml', FUNCTION_RESOURCES, FUNCTION_OUTPUTS],
+      ['container-release.yaml', CONTAINER_RESOURCES, CONTAINER_OUTPUTS],
+    ] as const) {
+      const t = T[file];
+      const bare = render(t, published);
+      expect(bare.resources, file).toEqual(resources);
+      expect(bare.outputs, file).toEqual(outputs);
+      // `motir_edge` said out loud is the same stack, and no resource or output
+      // conditioned on Open is in it.
+      const edge = render(t, { ...published, OriginAccess: 'motir_edge' });
+      expect(edge.resources, file).toEqual(bare.resources);
+      expect(edge.outputs, file).toEqual(bare.outputs);
+      const open = Object.entries({ ...t.Resources, ...t.Outputs })
+        .filter(([, r]) => r['Condition'] === 'Open')
+        .map(([name]) => name);
+      for (const name of open) expect(bare.resources).not.toContain(name);
+      expect(
+        bare.properties('Function' in t.Resources ? 'FrontDoorFunction' : 'ListenerRule'),
+      ).toEqual(edge.properties('Function' in t.Resources ? 'FrontDoorFunction' : 'ListenerRule'));
+    }
+  });
+
+  it('opens a function release by its front door alone: the same resources, a mode and no secret', () => {
+    const t = T['function-release.yaml'];
+    const edge = render(t, published);
+    const open = render(t, { ...published, OriginAccess: 'open' });
+    expect(open.resources).toEqual(FUNCTION_RESOURCES);
+    expect(open.outputs).toEqual(FUNCTION_OUTPUTS);
+    const variables = (r: ReturnType<typeof render>) =>
+      (r.properties('FrontDoorFunction')['Environment'] as Obj)['Variables'] as Obj;
+    expect(variables(edge)).toEqual({
+      MOTIR_FRONT_DOOR_MODE: 'motir_edge',
+      MOTIR_FRONT_DOOR_SECRET: SECRET,
+      MOTIR_FRONT_DOOR_TARGET: { Ref: 'LiveAlias' },
+    });
+    expect(variables(open)).toEqual({
+      MOTIR_FRONT_DOOR_MODE: 'open',
+      MOTIR_FRONT_DOOR_TARGET: { Ref: 'LiveAlias' },
+    });
+    expect(JSON.stringify(open.properties('FrontDoorFunction'))).not.toContain(SECRET);
+    // The app's own URL stays IAM-only in both modes.
+    expect(open.properties('FunctionUrl')['AuthType']).toBe('AWS_IAM');
+    expect(open.properties('FrontDoorUrl')).toEqual(edge.properties('FrontDoorUrl'));
+  });
+
+  it('opens a container release with a second rule on X-Motir-App and its own distribution, the secret rule unchanged', () => {
+    const t = T['container-release.yaml'];
+    const edge = render(t, published);
+    const open = render(t, containerOpen);
+    expect(open.resources).toEqual(
+      [...CONTAINER_RESOURCES, 'OpenFrontDoor', 'OpenListenerRule'].sort(),
+    );
+    expect(open.outputs).toEqual([...CONTAINER_OUTPUTS, 'OpenUpstreamUrl'].sort());
+    expect(open.properties('ListenerRule')).toEqual(edge.properties('ListenerRule'));
+    expect(open.properties('OpenListenerRule')).toEqual({
+      ListenerArn: { Ref: 'AlbListenerArn' },
+      Priority: '4242',
+      Conditions: [
+        {
+          Field: 'http-header',
+          HttpHeaderConfig: { HttpHeaderName: 'X-Motir-App', Values: [APP] },
+        },
+      ],
+      Actions: [{ Type: 'forward', TargetGroupArn: { Ref: 'TargetGroup' } }],
+    });
+
+    const config = open.properties('OpenFrontDoor')['DistributionConfig'] as Obj;
+    expect(config['Origins']).toEqual([
+      {
+        Id: 'load-balancer',
+        DomainName: containerOpen.AlbDnsName,
+        OriginCustomHeaders: [{ HeaderName: 'X-Motir-App', HeaderValue: APP }],
+        VpcOriginConfig: {
+          VpcOriginId: 'vo_tenant',
+          OriginReadTimeout: 60,
+          OriginKeepaliveTimeout: 60,
+        },
+      },
+    ]);
+    // Cached and forwarded exactly as the network's own front door.
+    const network = (
+      one(T['network.yaml'], 'AWS::CloudFront::Distribution').Properties![
+        'DistributionConfig'
+      ] as Obj
+    )['DefaultCacheBehavior'];
+    expect(config['DefaultCacheBehavior']).toEqual(network);
+    expect(config['ViewerCertificate']).toEqual({ CloudFrontDefaultCertificate: true });
+    expect(open.output('OpenUpstreamUrl')).toEqual({
+      Condition: 'Open',
+      Value: { 'Fn::Sub': 'https://${OpenFrontDoor.DomainName}' },
+    });
+    // No value derived from the origin-secret key is on the open path.
+    expect(
+      JSON.stringify([open.properties('OpenFrontDoor'), open.properties('OpenListenerRule')]),
+    ).not.toContain(SECRET);
   });
 });

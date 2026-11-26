@@ -466,6 +466,7 @@ describe('the repositories', () => {
       productionAppName: null,
       currentReleaseId: null,
       productionAddress: 'shop-app--acme.motir.site',
+      state: 'live',
       access: null,
     });
     expect(

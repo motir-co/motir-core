@@ -1243,14 +1243,16 @@ cluster bought nothing. The why is
 
 **Hourly**
 
-| job                                 | cron         |
-| ----------------------------------- | ------------ |
-| `system.abandoned-plan-sweep`       | `0 * * * *`  |
-| `system.filter-subscription-tick`   | `0 * * * *`  |
-| `system.organization-erasure-sweep` | `0 * * * *`  |
-| `system.auto-plan-cadence-tick`     | `30 * * * *` |
-| `system.ci-actions-gate-sweep`      | `30 * * * *` |
-| `system.work-item-embedding-sweep`  | `17 * * * *` |
+| job                                            | cron         |
+| ---------------------------------------------- | ------------ |
+| `system.abandoned-plan-sweep`                  | `0 * * * *`  |
+| `system.filter-subscription-tick`              | `0 * * * *`  |
+| `system.organization-erasure-sweep`            | `0 * * * *`  |
+| `system.auto-plan-cadence-tick`                | `30 * * * *` |
+| `system.ci-actions-gate-sweep`                 | `30 * * * *` |
+| `system.work-item-embedding-sweep`             | `17 * * * *` |
+| `system.hosted-application-grace-notice-sweep` | `25 * * * *` |
+| `system.hosting-application-grace-stop`        | `35 * * * *` |
 
 **Every 6 hours (UTC)**
 
@@ -1269,6 +1271,7 @@ cluster bought nothing. The why is
 | `system.code-graph-offboard-sweep`         | `0 5 * * *`  |
 | `system.data-export-expiry-sweep`          | `30 5 * * *` |
 | `system.public-hostname-reservation-sweep` | `45 5 * * *` |
+| `system.hosted-application-export-expire`  | `50 5 * * *` |
 | `system.job-run-reap`                      | `0 6 * * *`  |
 | `system.job-queue-retention`               | `15 6 * * *` |
 | `system.dispatch-run-sweep`                | `30 6 * * *` |

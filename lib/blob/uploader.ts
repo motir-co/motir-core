@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
+import type { Readable } from 'node:stream';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { privateBucket, publicBaseUrl, publicBucket, s3Client } from '@/lib/blob/s3';
 
@@ -174,6 +176,51 @@ export async function putPrivateAttachment(
   contentType: string,
 ): Promise<PrivatePutResult> {
   return { pathname: await putObject('private', pathname, body, contentType) };
+}
+
+export interface PrivateStreamPutResult {
+  /** The object key — exactly the key given. */
+  key: string;
+  /** The stored object's size, read back from the store, never counted here. */
+  sizeBytes: number;
+}
+
+/** A multipart upload's part: 16 MiB, so a 10,000-part upload holds 160 GiB. */
+const STREAM_PART_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Upload a STREAM to the private bucket as a multipart upload, under EXACTLY
+ * `key` — no random suffix, because the caller names the object by the row it
+ * is about to write (MOTIR-12134: a database dump, possibly gigabytes, so it is
+ * never buffered whole). Memory stays at a few parts.
+ *
+ * The size is read back with {@link headPrivateBlob} after the upload completes,
+ * so the answer is the stored object's, not a count kept beside the stream. A
+ * failed upload is ABORTED (no orphaned parts are billed) and rethrown; the
+ * caller still deletes the key, since a store can complete an upload that then
+ * fails to answer.
+ */
+export async function putPrivateStream(
+  key: string,
+  body: Readable,
+  contentType: string,
+): Promise<PrivateStreamPutResult> {
+  const upload = new Upload({
+    client: s3Client(),
+    params: { Bucket: privateBucket(), Key: key, Body: body, ContentType: contentType },
+    partSize: STREAM_PART_BYTES,
+    queueSize: 2,
+    leavePartsOnError: false,
+  });
+  try {
+    await upload.done();
+  } catch (err) {
+    await upload.abort().catch(() => undefined);
+    throw err;
+  }
+  const head = await headPrivateBlob(key);
+  if (!head) throw new Error(`The uploaded object ${key} could not be read back.`);
+  return { key, sizeBytes: head.size };
 }
 
 /** The key's last segment — the filename a download should land under. */

@@ -621,6 +621,7 @@ const PANEL: ProductionPanelDto = {
   nextCursor: null,
   isAdministrator: true,
   canRollback: false,
+  handover: null,
 };
 
 describe('the Production panel mounts When idle and Usage', () => {

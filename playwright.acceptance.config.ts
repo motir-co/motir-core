@@ -3,6 +3,10 @@ import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
 import { E2E_AI_TO_CORE_SERVICE_TOKEN } from './tests/e2e/_helpers/billing-push';
 import { E2E_CORE_CALLBACK_SECRET } from './tests/e2e/_helpers/log-bug-as-ai';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
+import {
+  E2E_AWS_ORG_ADMIN_ROLE_ARN,
+  E2E_OBJECT_STORE_ENV,
+} from './tests/e2e/_helpers/e2e-object-store-env';
 import { generateKeyPairSync } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -199,6 +203,17 @@ process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PA
 // alone, reached the REAL api.github.com. The two halves only ever travel
 // together: `githubMergeSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
 process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
+// Story MOTIR-9800 · MOTIR-12140 — a TAKEOVER's GitHub calls (the owner's id, Actions
+// re-enabled, the repository's secrets, variables and environment deleted, the
+// transfer), answered by `lib/test-github-takeover-mock.ts`. A Fly takeover makes them
+// in the webServer and the AWS handover's steps in the worker, so the seam is
+// stateless and journals to one file both processes append to — and the worker
+// installs it through `githubTakeoverSeamEnv`. NO REAL REPOSITORY IS EVER TRANSFERRED.
+const MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH = path.resolve(
+  '/tmp/motir-acceptance-github-takeover-journal.jsonl',
+);
+process.env['MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH'] ??= MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH;
+process.env['E2E_JOB_WORKER_GITHUB_TAKEOVER_SEAM'] ??= '1';
 
 // ── The GitHub FLEET ORG CI seam (Story MOTIR-8699 · MOTIR-8717) ─────────────
 //
@@ -297,6 +312,40 @@ process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-hosting.json',
 );
+// Story MOTIR-9800 · MOTIR-12142 — THE GRACE WINDOW. The worker creates a
+// production database and deletes it at the grace-window stop, the webServer
+// deletes it on Stop now and exports it on demand, and the spec asks whether it
+// still exists — so the database fake's store is one file all three share. The
+// export lands in the object store from the worker AND the webServer, so the
+// blob mock is file-backed here too. The export spawns `pg_dump`, which is the
+// lane's fake (`tests/e2e/_fakes/bin`, prepended to PATH): the export service
+// hands its child only PATH, PGPASSWORD and PGCONNECT_TIMEOUT, so that fake
+// falls back to EXACTLY this database path when the variable does not reach it
+// — keep the two in step.
+process.env['MOTIR_FAKE_DATABASE_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-database.json',
+);
+process.env['MOTIR_FAKE_BLOB_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-blob.json',
+);
+// Story MOTIR-9800 · MOTIR-12141 — THE TAKEOVER HANDOVER's AWS tenant. The
+// webServer starts the handover and takes the owner's email code, the worker
+// advances its steps, and the spec seeds and reads the account — so the fake
+// tenant (CloudFormation, IAM, Organizations behind the shipped factories,
+// `lib/test-fake-aws-tenant.ts`) is one file all three share. The management
+// role is a placeholder ARN: the factories never reach AWS while the fake is
+// installed, and the handover reads only the account id out of it.
+process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-aws-tenant.json',
+);
+process.env['AWS_ORG_ADMIN_ROLE_ARN'] ??= E2E_AWS_ORG_ADMIN_ROLE_ARN;
+{
+  const fakeBin = path.resolve('tests/e2e/_fakes/bin');
+  const current = process.env['PATH'] ?? '';
+  if (!current.split(path.delimiter).includes(fakeBin)) {
+    process.env['PATH'] = current ? `${fakeBin}${path.delimiter}${current}` : fakeBin;
+  }
+}
 process.env['MOTIR_PRODUCTION_RELEASE_CONTROL_PATH'] ??= path.resolve(
   '/tmp/motir-acceptance-production-release-control.json',
 );
@@ -520,13 +569,9 @@ const APP_SERVER_ENV = {
   // calling itself Claude from example.org) — the hardened transport
   // refuses a local fixture server, so the seam replaces the transport.
   E2E_TEST_CIMD: '1',
-  MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
-  MOTIR_S3_REGION: 'auto',
-  MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
-  MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
-  MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
-  MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-  MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
+  // The placeholders are shared with the job worker (MOTIR-12142), whose
+  // grace-window stop writes an export through the same seam.
+  ...E2E_OBJECT_STORE_ENV,
   // ⚠️ THE DOCS ROW IS CONFIGURATION NOW (MOTIR-4167 / #2530, MOTIR-4257).
   //
   // `lib/docs/links.ts` resolves the rail's Docs row from an operator's
@@ -644,6 +689,9 @@ const APP_SERVER_ENV = {
   E2E_TEST_GITHUB_MERGE: '1',
   MOTIR_GITHUB_MERGE_CONTROL_PATH,
   MOTIR_GITHUB_MERGE_JOURNAL_PATH,
+  // A takeover's GitHub calls (MOTIR-12140) — see the block above.
+  E2E_TEST_GITHUB_TAKEOVER: '1',
+  MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH: process.env['MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH']!,
   // The fleet settings journey's GitHub (MOTIR-8717) — see the block above.
   E2E_TEST_GITHUB_FLEET_ORG_CI: '1',
   E2E_GITHUB_FLEET_ORG_CI_CONTROL: process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL']!,
@@ -689,6 +737,14 @@ const APP_SERVER_ENV = {
   // The hosting fake's store — a production release's (MOTIR-10040) and a
   // preview's (MOTIR-10098); see its block above.
   MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+  // The grace window's database and object stores (MOTIR-12142) — see their
+  // block above; PATH carries the fake `pg_dump`.
+  MOTIR_FAKE_DATABASE_STATE_PATH: process.env['MOTIR_FAKE_DATABASE_STATE_PATH']!,
+  MOTIR_FAKE_BLOB_STATE_PATH: process.env['MOTIR_FAKE_BLOB_STATE_PATH']!,
+  PATH: process.env['PATH']!,
+  // The takeover handover's fake AWS tenant (MOTIR-12141) — see its block above.
+  MOTIR_FAKE_AWS_TENANT_STATE_PATH: process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH']!,
+  AWS_ORG_ADMIN_ROLE_ARN: process.env['AWS_ORG_ADMIN_ROLE_ARN']!,
   // A production release made HERE, not in the worker: an idle-policy switch
   // redeploys the serving release from the request (Story MOTIR-9799 ·
   // MOTIR-12112), reading the manifest at its commit as a merge's release does.

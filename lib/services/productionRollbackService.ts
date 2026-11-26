@@ -11,6 +11,7 @@ import {
   IllegalReleaseTransitionError,
   NoPreviousReleaseError,
   ReleaseInProgressError,
+  RepositoryTakenOverError,
   RollbackFailedError,
   RollbackNotPermittedError,
   type RollbackStep,
@@ -206,9 +207,12 @@ async function rollbackProduction(input: RollbackProductionInput): Promise<Hoste
     projectRepoRepository.findDeployFactsInTx(projectRepositoryId, tx),
   );
   if (!repo) throw new ApplicationNotFoundError(projectRepositoryId);
-  if (deployEligibilityRefusal(repo) === 'customer_repository') {
+  const refusal = deployEligibilityRefusal(repo);
+  if (refusal === 'customer_repository') {
     throw new CustomerRepositoryNotDeployableError(projectRepositoryId);
   }
+  // The takeover's release freeze (MOTIR-12127): refused before any provider call.
+  if (refusal === 'taken_over') throw new RepositoryTakenOverError(projectRepositoryId);
   const app = await hostedApplicationService.getApplicationForRepositorySystem(projectRepositoryId);
   if (!app) throw new ApplicationNotFoundError(projectRepositoryId);
   await assertMayRollBack(repo.projectId, projectRepositoryId, actor);

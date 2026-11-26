@@ -284,6 +284,18 @@ describe('skips', () => {
     expect(await adminDb.hostedRelease.count()).toBe(0);
   });
 
+  it('ends with no release, and no retry, for a repository in its grace window (MOTIR-12127)', async () => {
+    const fx = await workspace();
+    const id = await repo(fx);
+    const app = await hostedApplicationService.ensureApplication(id);
+    await adminDb.hostedApplication.update({ where: { id: app.id }, data: { state: 'grace' } });
+
+    expect(await service.runProductionRedeploy({ projectRepositoryId: id, attempt: 0 })).toEqual({
+      outcome: 'skipped_taken_over',
+    });
+    expect(await adminDb.hostedRelease.count()).toBe(0);
+  });
+
   it('ends with no release for an unknown repository', async () => {
     expect(
       await service.runProductionRedeploy({ projectRepositoryId: 'nope', attempt: 0 }),

@@ -153,6 +153,17 @@ describe('Dockerfile — the runner image', () => {
     expect(runnerStage).toMatch(/SILENTLY|silently/);
   });
 
+  it('installs a PGDG PostgreSQL client, so a grace-window export can run pg_dump (MOTIR-12134)', () => {
+    // `pg_dump` refuses a server newer than itself, and the tenant databases run
+    // whatever major their provider defaults to — so the client is PGDG's
+    // newest, not Debian's one older major. Without it, every export fails in
+    // production with ENOENT and no test elsewhere would notice.
+    expect(runnerStage).toMatch(/apt\.postgresql\.org\.sh -y/);
+    expect(runnerStage).toMatch(/apt-get install[^\n]*\bpostgresql-client-(\d+)\b/);
+    const major = Number(/postgresql-client-(\d+)/.exec(runnerStage)?.[1]);
+    expect(major).toBeGreaterThanOrEqual(18);
+  });
+
   it('copies the standalone output, the static assets and public/', () => {
     // `.next/static` and `public` are NOT part of the standalone bundle; Next
     // requires them to be copied alongside it, and a missing copy serves an

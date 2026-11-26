@@ -1091,6 +1091,19 @@
       "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
       "openBilling": "续订 AI 套餐",
       "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} 将在 Motir 上继续运行至 {date}} seven_days {{repository} 将在 7 天后于 Motir 上停止运行} one_day {{repository} 将于明天在 Motir 上停止运行} other {{repository} 已在 Motir 上停止运行}}",
+      "preview": "{kind, select, stopped {请在 30 天内下载 {repository} 的最终数据库导出} other {{repository} 将于 {date} 在 Motir 上停止运行}}",
+      "greeting": "{name}，你好：",
+      "lede": {
+        "transferred": "{repository} 已转移到你自己的 GitHub 账户。它的应用将在 Motir 上继续运行至 {date}，让你有时间将其部署到自己的托管服务。在生产面板中，你可以随时下载数据库导出，并在准备就绪时提前停止该应用。",
+        "seven_days": "{repository} 的应用将于 {date}（7 天后）在 Motir 上停止运行。在此之前，请将仓库部署到自己的托管服务，在那里恢复数据库导出，并将你的域名指向它。",
+        "one_day": "{repository} 的应用将于 {date}（明天）在 Motir 上停止运行。如果新的托管服务还没有你的最新数据，请立即下载一份新的数据库导出。",
+        "stopped": "{repository} 的应用已在 Motir 上停止运行，应用及其数据库已被删除。应用停止后生成的最终数据库导出可在生产面板中下载，保留 30 天。"
+      },
+      "openProduction": "打开生产面板",
+      "footer": "你收到这封邮件，是因为你是该组织的所有者或管理员。"
     }
   },
   "auth": {
@@ -4946,6 +4959,105 @@
           "bodyCannotSuspend": "此应用以无法暂停的 AWS 容器运行，因此会一直运行并持续消耗额度，直到余额充值。Motir 绝不会因为额度不足而停止或删除生产应用。",
           "topUp": "充值额度",
           "member": "组织所有者或管理员可以充值额度。"
+        }
+      },
+      "handover": {
+        "notice": {
+          "title": "此应用正在移交",
+          "body": "{organization} 正在接管其 AWS 托管。Motir 不再部署、重新部署或回滚它；应用在此期间持续运行。",
+          "link": "在代码仓库中查看移交进度",
+          "memberNote": "可以查看生产环境。只有组织管理员可以接管托管。"
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} 已移至你的 GitHub — 在 {date} 之前仍在此运行",
+            "body": "请在此之前将其部署到自己的主机上。可随时下载数据库导出，准备好后也可以提前停止应用。"
+          },
+          "sevenDays": {
+            "title": "{name} 将在 7 天后（{date}）停止在 Motir 上运行",
+            "body": "请在新主机上恢复数据库导出，并将域名指向新主机。"
+          },
+          "oneDay": {
+            "title": "{name} 将于明天（{date}）停止在 Motir 上运行",
+            "body": "如果新主机还没有最新数据，请立即下载一份新的导出。"
+          }
+        },
+        "grace": {
+          "memberNote": "可以查看生产环境。只有组织管理员可以下载导出或提前停止应用。",
+          "runsUntil": "运行至",
+          "body": "在此之前，Motir 继续在 {address} 提供 {name}。之后应用停止，其数据库被删除；最终导出保留 30 天。",
+          "bodyNoAddress": "在此之前，Motir 继续提供 {name}。之后应用停止，其数据库被删除；最终导出保留 30 天。",
+          "pill": "宽限期"
+        },
+        "exports": {
+          "title": "数据库导出",
+          "download": "下载导出",
+          "busy": "正在导出…",
+          "busyStatus": "正在生成导出 — 可能需要几分钟。完成后会显示在这里。",
+          "help": "生产数据库的完整转储（pg_dump，自定义格式），用于在新主机上恢复。每份导出可在旁边显示的日期之前下载。",
+          "empty": "暂无导出。",
+          "row": "{size} · 由 {name} 发起 · 保留至 {date}",
+          "rowUnnamed": "{size} · 保留至 {date}",
+          "downloadLink": "下载",
+          "downloadAria": "下载 {date} 的导出",
+          "failed": "导出未完成。数据库没有任何变化 — <retry>请重试</retry>。"
+        },
+        "refusal": {
+          "forbidden": "只有组织管理员可以执行此操作。",
+          "notInGrace": "此应用已不在宽限期内，因此没有任何变化。",
+          "notFound": "此应用已不可用。"
+        },
+        "stop": {
+          "title": "提前停止",
+          "body": "新主机开始提供服务后，可以立即停止 {name}，无需等到 {date}。",
+          "button": "立即停止",
+          "failed": {
+            "stop_serving": "在让 {name} 下线时停止未完成。没有删除任何内容。重试会从那里继续。",
+            "final_export": "在生成最终导出时停止未完成。应用已不再提供服务，没有删除任何内容。重试会从那里继续。",
+            "delete_database": "在删除数据库时停止未完成。已完成的操作保持不变 — 应用已不再提供服务，最终导出已保留。重试会从那里继续。",
+            "record": "在记录停止时停止未完成。应用及其数据库已删除，最终导出已保留。重试会从那里继续。",
+            "unknown": "停止未完成。已完成的操作保持不变。重试会从那里继续。"
+          }
+        },
+        "dialog": {
+          "title": "立即停止 {name}？",
+          "body": "Motir 将在今天而不是 {date} 停止提供 {name}。随后删除：",
+          "deleteApp": "应用及其地址 {address}",
+          "deleteAppNoAddress": "应用",
+          "deleteDatabase": "生产数据库",
+          "finalExport": "会先生成一份数据库最终导出并保留 30 天，仍可在此下载。此操作无法撤销。",
+          "cancel": "取消",
+          "confirm": "立即停止 {name}",
+          "busy": "正在停止…",
+          "retry": "重试"
+        },
+        "handedOver": {
+          "copy": "复制",
+          "copied": "已复制",
+          "aws": {
+            "title": "已移交",
+            "body": "自 {date} 起，{organization} 在自己的 AWS 账号中运行 {name}。Motir 不再部署或提供它。",
+            "pill": "已移交",
+            "account": "AWS 账号",
+            "copyAccount": "复制 AWS 账号 ID",
+            "upstream": "上游地址",
+            "copyUpstream": "复制上游地址"
+          },
+          "stopped": {
+            "title": "已停止",
+            "body": "{name} 已移至你的 GitHub，其在 Motir {target, select, fly {Fly} other {无服务器}} 账号上的应用已停止。应用、地址和数据库均已删除。Motir 不再部署或提供它。",
+            "pill": "已停止"
+          },
+          "final": {
+            "title": "数据库最终导出",
+            "taken": "停止时生成，{date}",
+            "meta": "{size} · 保留至 {date}",
+            "download": "下载",
+            "downloadAria": "下载数据库最终导出",
+            "memberNote": "可以查看生产环境。只有组织管理员可以下载最终导出。",
+            "expired": "最终导出已保留至 {date} 并已删除。已下载的导出不受影响。",
+            "none": "此应用没有保留最终导出。"
+          }
         }
       }
     },
@@ -10724,6 +10836,154 @@
       "stateUnfinishedYours": "移除未完成",
       "unfinishedDetailYours": "Motir 在关闭它从此仓库运行的内容时中途停止。仓库本身仍保留在你的 GitHub 账户中，重试即可完成剩余部分。",
       "retryDelete": "重试"
+    },
+    "awsHandover": {
+      "takeOver": "接管 AWS 托管",
+      "takeOverLabel": "接管 {repo} 的 AWS 托管",
+      "rowHelperMember": "运行在 {org} 的 AWS 账号上，该账号会整体离开 Motir——由组织管理员移交。",
+      "refusalTitle": "{count, plural, other {{repo} 会与另外 # 个代码仓库一起迁移}}",
+      "refusalLead": "它的应用运行在 {org} 的 AWS 账号上，下面这些也是。AWS 账号会整体离开 Motir（每个组织一个账号），所以只能一起接管。",
+      "startLead": "这个代码仓库的应用运行在 Motir 内 {org} 自己的 AWS 账号上。该账号会整体离开 Motir，其中的应用照常运行——所以在 AWS 上要接管的是托管，代码仓库随之迁移。",
+      "refusalOthersLabel": "该账号上的其他代码仓库",
+      "oneAccountTitle": "每个组织一个 AWS 账号",
+      "oneAccountBody": "{org} 在 AWS 上运行的所有代码仓库会一起移交，在一个可跟进、可继续的步骤中完成。",
+      "nothingChanged": "没有任何改动。",
+      "stillHosted": "{repo} 仍由 Motir 托管，其他代码仓库也一样。",
+      "askAnAdmin": "组织管理员可以一次性接管它们全部的 AWS 托管。",
+      "cancel": "取消",
+      "close": "关闭",
+      "back": "上一步",
+      "continue": "继续",
+      "stepEyebrow": "接管 AWS 托管 · 第 {step} 步，共 2 步",
+      "stepTitle": "移交 {org} 的 AWS 账号",
+      "stepLead": "账号离开 Motir 时，其中的每个应用照常运行。请填写新的所有者，以及代码仓库的去向。",
+      "ownerEmailLabel": "所有者邮箱",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "将拥有该 AWS 账号的邮箱地址。AWS 会向它发送一次性验证码。",
+      "ownerEmailInvalid": "请输入邮箱地址，例如 name@example.com。",
+      "githubOwnerLabel": "GitHub 所有者",
+      "githubOwnerPlaceholder": "your-organization",
+      "githubOwnerHelp": "接收代码仓库的 GitHub 账号或组织。",
+      "githubOwnerInvalid": "请输入 GitHub 账号或组织名：字母、数字和单个连字符。",
+      "handedOverTogether": "一起移交",
+      "noAwsRepositories": "{org} 没有在 AWS 上运行的代码仓库，无需移交。",
+      "awsStepsNote": "有几步在 AWS 中完成——以根用户登录、添加付款方式。Motir 从不索要付款信息或根用户密码。",
+      "confirmTitle": "开始移交？",
+      "confirmNewOwner": "AWS 账号的新所有者",
+      "confirmRepositoriesGoTo": "代码仓库移交给",
+      "consequencePreviews": "{count, plural, other {这 # 个代码仓库的预览会被删除，Motir 停止部署它们。}}",
+      "consequenceRunning": "应用照常运行。在 Motir 的访问权限结束前，把你的域名指向它们自己的地址。",
+      "consequenceIrreversible": "账号一旦离开 Motir 的 AWS Organization，就无法撤销。",
+      "start": "开始移交",
+      "starting": "正在开始…",
+      "startRefused": {
+        "notReady": "移交未能开始：{org} 的 AWS 账号还没准备好移交。没有任何改动——请几分钟后重试。",
+        "alreadyStarted": "移交未能开始：{org} 的 AWS 账号已经开始移交。没有任何改动——刷新页面即可跟进。",
+        "githubIdentity": "移交未能开始：请先连接你的 GitHub 账号，以便转移代码仓库。没有任何改动。",
+        "input": "移交未能开始：请检查所有者邮箱和 GitHub 所有者。没有任何改动。",
+        "failed": "移交未能开始。没有任何改动——请稍后重试。"
+      },
+      "checklistEyebrow": "AWS 托管移交",
+      "checklistTitle": "{org} 的 AWS 账号",
+      "accountLabel": "账号",
+      "repositoryCount": "{count, plural, other {# 个代码仓库}}",
+      "checklistLoading": "正在读取移交进度…",
+      "checklistError": "无法读取移交进度",
+      "checklistErrorBody": "没有任何改动。请稍后重试。",
+      "tryAgain": "重试",
+      "stepsLabel": "移交步骤",
+      "stepFailedUnknown": "这一步失败了。之后的步骤都没有执行。",
+      "retry": "再试一次",
+      "status": {
+        "pending": "等待中",
+        "running": "进行中",
+        "waitingOnYou": "等你操作",
+        "done": "已完成",
+        "failed": "失败"
+      },
+      "overall": {
+        "inProgress": "进行中",
+        "waiting": "等你操作",
+        "failed": "需要重试",
+        "done": "已移交"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "已删除预览",
+          "body": "{count, plural, other {删除 # 个代码仓库的预览环境。}}"
+        },
+        "create_deploy_role": {
+          "label": "已为你的 CI 创建部署角色",
+          "body": "此后代码仓库的工作流用它来部署。"
+        },
+        "open_upstream": {
+          "label": "应用无需 Motir 即可访问",
+          "body": "每个应用在自己的地址上响应，见下方列表。"
+        },
+        "move_email": {
+          "label": "已更换账号邮箱",
+          "body": "AWS 账号的邮箱改为新所有者的邮箱。"
+        },
+        "await_standalone": {
+          "label": "AWS 自身的步骤",
+          "body": "根用户登录、付款方式、联系信息和协议，在 AWS 中完成。"
+        },
+        "remove_access": {
+          "label": "已移除 Motir 的访问权限",
+          "body": "删除账号中 Motir 的角色；motir.site 地址停止响应。"
+        },
+        "leave_organization": {
+          "label": "账号已离开 Motir 的 AWS Organization",
+          "body": "该账号现在是独立的 AWS 账号。"
+        },
+        "transfer_repositories": {
+          "label": "已转移每个代码仓库",
+          "body": "GitHub 把每个代码仓库转移给新的所有者。",
+          "bodyOwner": "GitHub 把每个代码仓库转移给 {owner}。"
+        }
+      },
+      "codeLabel": "AWS 发来的验证码",
+      "confirmCode": "确认验证码",
+      "codeRefused": "AWS 没有接受这个验证码。",
+      "codeEmpty": "请输入 AWS 邮件中的验证码。",
+      "codeHelp": "AWS 已向 {email} 发送一次性验证码。Motir 只把它转交给 AWS，从不保存。",
+      "codeHelpUnknown": "AWS 已向新所有者发送一次性验证码。Motir 只把它转交给 AWS，从不保存。",
+      "codeRefusedHelp": "查看 AWS 发给 {email} 的最新邮件（新验证码会取代旧的），然后重试。",
+      "codeRefusedHelpUnknown": "查看 AWS 发给新所有者的最新邮件（新验证码会取代旧的），然后重试。",
+      "standaloneIntro": "{email} 需要在 AWS 中完成：",
+      "standaloneIntroUnknown": "新所有者需要在 AWS 中完成：",
+      "standalone": {
+        "rootSignIn": "以根用户登录账号并设置密码",
+        "payment": "添加付款方式",
+        "contact": "确认联系信息",
+        "agreement": "接受 AWS 客户协议"
+      },
+      "standaloneNote": "这些在 AWS 中完成，不在这里。Motir 从不索要付款信息或根用户密码。",
+      "checkAgain": "再次检查",
+      "signIn": "打开 AWS 登录页面（在新标签页中打开）",
+      "notReady": "还没准备好——AWS 仍需要：",
+      "missing": {
+        "wait_period": "等待一段时间：AWS 会把新账号保留几天后才允许离开",
+        "delegated_administrator": "该账号不再担任委派管理员",
+        "payment_method": "付款方式",
+        "support_plan": "支持计划",
+        "contact_information": "账号的联系信息"
+      },
+      "actionFailed": "操作没有完成。没有任何改动——请稍后重试。",
+      "upstreamsTitle": "应用在没有 Motir 时的访问地址",
+      "upstreamsLead": "Motir 的访问权限移除后，Motir 的地址（…motir.site）将停止响应。在此之前，把每个域名指向它的地址。",
+      "upstreamsLoading": "正在读取地址…",
+      "upstreamsEmpty": "暂无可列出的应用。",
+      "upstreamsError": "无法读取地址",
+      "upstreamsErrorBody": "移交不受影响。请稍后重试。",
+      "ownAddress": "自己的地址",
+      "upstreamNotOpen": "尚未开放",
+      "noDomains": "没有自定义域名——无需重新指向。",
+      "pointAt": "指向",
+      "copy": "复制",
+      "copied": "已复制",
+      "copyOwnLabel": "复制 {app} 的地址",
+      "copyDomainLabel": "复制 {host} 指向的地址"
     }
   },
   "apiDocs": {
@@ -15558,14 +15818,22 @@
           "creating": "创建中",
           "bootstrapping": "引导中",
           "ready": "就绪",
-          "refused": "被拒绝"
+          "refused": "被拒绝",
+          "handing_over": "移交中",
+          "awaiting_standalone": "等待独立",
+          "removing": "退出中",
+          "handed_over": "已移交"
         },
         "notReady": {
           "requested": "账户就绪后才会读取配额。该账户尚未创建。",
           "creating": "账户就绪后才会读取配额。AWS 正在创建该账户。",
           "bootstrapping": "账户就绪后才会读取配额。引导正在设置其部署角色、标签和配额提升请求。",
           "refused": "{count, plural, other {AWS 已拒绝创建该账户 # 次，最近一次在{age}。}}对账会在退避后重试；账户就绪后才会读取配额。",
-          "refusedNever": "账户就绪后才会读取配额。AWS 拒绝创建该账户；协调程序将在退避期后重试。"
+          "refusedNever": "账户就绪后才会读取配额。AWS 拒绝创建该账户；协调程序将在退避期后重试。",
+          "handing_over": "移交期间不读取配额。账户正在移交给其组织。",
+          "awaiting_standalone": "移交期间不读取配额。账户退出前，组织需要先添加账单信息和支持计划。",
+          "removing": "移交期间不读取配额。账户正在退出 Motir 的 AWS 组织。",
+          "handed_over": "账户已离开 Motir，归其组织所有。不再读取它的配额。"
         },
         "col": {
           "quota": "配额",
@@ -18912,6 +19180,14 @@
       "title": "这里没有预览",
       "body": "此地址不属于任何正在运行的预览。它可能已被关闭，或者链接输入有误。",
       "home": "前往 Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "已移交。该应用将在 Motir 上继续运行至 {date}。",
+      "seven_days": "该应用将在 7 天后（{date}）于 Motir 上停止运行。",
+      "one_day": "该应用将于明天（{date}）在 Motir 上停止运行。",
+      "stopped": "该应用已于 {date} 在 Motir 上停止运行。请在 30 天内下载最终数据库导出。"
     }
   }
 }

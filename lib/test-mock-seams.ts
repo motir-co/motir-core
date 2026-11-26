@@ -18,9 +18,11 @@
 // on in the worker: the worker inherits the RUNNER's environment, not
 // `webServer.env`, and `job-worker-process.ts` decides which flags it mirrors.
 // That is deliberate — a seam whose fake keeps state IN MEMORY
-// (`E2E_TEST_GITHUB_REPOS`' "created" map, `E2E_TEST_BLOB`'s object store) would
-// be a SECOND, disagreeing fake in a second process. Mirror only a seam whose
-// state lives in its control/journal files.
+// (`E2E_TEST_GITHUB_REPOS`' "created" map, `E2E_TEST_BLOB`'s object store when
+// `MOTIR_FAKE_BLOB_STATE_PATH` is unset) would be a SECOND, disagreeing fake in
+// a second process. Mirror only a seam whose state lives in files: the blob
+// seam qualifies once its store is file-backed, which is how the acceptance
+// lane mirrors it for the grace window (MOTIR-12142, `graceWindowSeamEnv`).
 //
 // The imports inside each `install` stay DYNAMIC: `instrumentation.ts` reaches
 // this module only under `NEXT_RUNTIME === 'nodejs'`, and a production worker
@@ -86,6 +88,22 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     install: async (agent) => {
       const { installBillingBoundaryMock } = await import('@/lib/test-billing-mock');
       installBillingBoundaryMock(agent);
+    },
+  },
+  {
+    // Story MOTIR-9800 · MOTIR-12140 — a TAKEOVER's GitHub calls, made by the
+    // webServer (a Fly or serverless takeover) AND the job worker (the AWS
+    // handover's steps): the owner's account id, Actions re-enabled, the
+    // repository's secrets, variables and `production` environment deleted, and
+    // the transfer. Stateless, with a file journal, so both processes install it.
+    // ⚠️ FIRST of the GitHub seams: its paths are narrow and scoped to the
+    // provisioning org, and a seam that claims a repository's paths wholesale
+    // must not shadow them.
+    flag: 'E2E_TEST_GITHUB_TAKEOVER',
+    message: 'GitHub takeover calls (owner id, Actions, secrets, transfer) mocked.',
+    install: async (agent) => {
+      const { installGithubTakeoverMock } = await import('@/lib/test-github-takeover-mock');
+      installGithubTakeoverMock(agent);
     },
   },
   {
@@ -320,6 +338,21 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     install: async () => {
       const { installFakeAwsSeam } = await import('@/lib/test-fake-aws');
       await installFakeAwsSeam();
+    },
+  },
+  {
+    // Story MOTIR-9800 · MOTIR-12141 — the fake AWS TENANT: the takeover
+    // handover's CloudFormation, IAM and management-account calls answered from
+    // one state file all three lane processes share, behind the SHIPPED
+    // factories (`createAwsManagementApi`, `createTenantClients`,
+    // `createTenantMemberIam`), so the real handover runs against it. Keyed on
+    // the state file's path, like the fake AWS above. Ignores the agent.
+    flag: 'MOTIR_FAKE_AWS_TENANT_STATE_PATH',
+    message: 'fake AWS tenant (file-backed CloudFormation, IAM and Organizations) installed.',
+    active: () => Boolean(process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH']?.trim()),
+    install: async () => {
+      const { installFakeAwsTenantSeam } = await import('@/lib/test-fake-aws-tenant');
+      installFakeAwsTenantSeam();
     },
   },
 ];

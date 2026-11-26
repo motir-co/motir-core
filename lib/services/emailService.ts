@@ -74,6 +74,10 @@ import {
   organizationErasedEmail,
   type OrganizationErasedEmailProps,
 } from '@/lib/emailTemplates/organizationErased';
+import {
+  hostedApplicationGraceEmail,
+  type HostedApplicationGraceEmailProps,
+} from '@/lib/emailTemplates/hostedApplicationGrace';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -156,6 +160,11 @@ export type TransactionalEmail =
       to: string;
       template: 'agents-deletion-scheduled';
       data: AgentsDeletionScheduledEmailProps;
+    }
+  | {
+      to: string;
+      template: 'hosted-application-grace';
+      data: HostedApplicationGraceEmailProps;
     };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
@@ -218,6 +227,9 @@ export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
   // An org's AI plan ended (MOTIR-6921): the reader loses their agents' homes on
   // the date unless the plan is renewed — never budgeted away.
   'agents-deletion-scheduled': 'essential',
+  // A taken-over app's grace window (MOTIR-12136): the reader loses the running
+  // app, and then its database, on a date — never budgeted away.
+  'hosted-application-grace': 'essential',
   'mention-notification': 'notification',
   'watcher-comment-notification': 'notification',
   // A page comment's mention or reply (MOTIR-10925) — counted by the rolling budget.
@@ -376,6 +388,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return organizationErasedEmail(message.data);
     case 'agents-deletion-scheduled':
       return agentsDeletionScheduledEmail(message.data);
+    case 'hosted-application-grace':
+      return hostedApplicationGraceEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

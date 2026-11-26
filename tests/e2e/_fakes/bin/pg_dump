@@ -1,0 +1,125 @@
+#!/usr/bin/env node
+'use strict';
+// THE ACCEPTANCE LANE'S `pg_dump` (Story MOTIR-9800 · MOTIR-12142). The lane
+// prepends this directory to PATH (`playwright.acceptance.config.ts`), so the
+// grace-window export (`hostedApplicationExportService.dumpInto`) spawns this in
+// the webServer and in the job worker instead of a real `pg_dump`, which would
+// try to reach `fake-db-<n>.fake.invalid`.
+//
+// It behaves like pg_dump where a journey can see it:
+//   - only `--format=custom` (or `-Fc`) is accepted; any other format exits 1;
+//   - the database is the one named by `--dbname=<url>` (or `-d <url>`, or the
+//     last positional argument), and it must be in the DATABASE FAKE's file —
+//     matched by the URL's host against each stored database's direct URL. A
+//     database that is not there (deleted at a stop, never created) exits 1 with
+//     pg_dump's own `could not connect` wording on stderr;
+//   - a failure armed by the spec (`armFakePgDumpFailure`) is consumed once and
+//     fails the same way;
+//   - otherwise it writes a deterministic custom-format archive to stdout: the
+//     `PGDMP` magic, then the database's name and a run counter, so two exports
+//     of one database differ.
+//
+// WHERE THE FILE IS. The export service hands its child only PATH, PGPASSWORD
+// and PGCONNECT_TIMEOUT — none of the lane's variables reach this process. So
+// it reads `MOTIR_FAKE_DATABASE_STATE_PATH` when it is set (the unit test sets
+// it) and otherwise the lane's default, which the acceptance config also uses:
+// `out/playwright-output-acceptance/.fake-database.json` under the repository
+// root this file lives in. Its own state — the run counter and an armed failure
+// — is a sidecar beside that file, `<file>.pg-dump.json`.
+const fs = require('node:fs');
+const path = require('node:path');
+
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const DEFAULT_STATE_PATH = path.join(
+  REPO_ROOT,
+  'out',
+  'playwright-output-acceptance',
+  '.fake-database.json',
+);
+
+function statePath() {
+  const raw = process.env.MOTIR_FAKE_DATABASE_STATE_PATH;
+  return raw ? raw : DEFAULT_STATE_PATH;
+}
+
+function readJson(file, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const sibling = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(sibling, JSON.stringify(value));
+  fs.renameSync(sibling, file);
+}
+
+function parseArgs(argv) {
+  let format = 'plain';
+  let dbname = null;
+  const positional = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg.startsWith('--format=')) format = arg.slice('--format='.length);
+    else if (arg === '--format' || arg === '-F') format = argv[++i] ?? '';
+    else if (arg.startsWith('-F')) format = arg.slice(2);
+    else if (arg.startsWith('--dbname=')) dbname = arg.slice('--dbname='.length);
+    else if (arg === '--dbname' || arg === '-d') dbname = argv[++i] ?? null;
+    else if (!arg.startsWith('-')) positional.push(arg);
+  }
+  return { format, dbname: dbname ?? positional[positional.length - 1] ?? null };
+}
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function couldNotConnect(host) {
+  process.stderr.write(
+    `pg_dump: error: connection to server at "${host ?? 'localhost'}", port 5432 failed: ` +
+      'could not connect to server: Connection refused\n',
+  );
+  process.exit(1);
+}
+
+const { format, dbname } = parseArgs(process.argv.slice(2));
+if (format !== 'custom' && format !== 'c') {
+  process.stderr.write(
+    `pg_dump: error: this fake writes only the custom format, not "${format}"\n`,
+  );
+  process.exit(1);
+}
+
+const host = dbname ? hostOf(dbname) : null;
+const store = statePath();
+const sidecarPath = `${store}.pg-dump.json`;
+const sidecar = readJson(sidecarPath, { runs: 0, armed: null });
+
+if (sidecar.armed) {
+  writeJson(sidecarPath, { ...sidecar, armed: null });
+  couldNotConnect(host);
+}
+
+const slices = readJson(store, {});
+const database = Object.values(slices)
+  .flatMap((slice) => Object.values((slice && slice.databases) || {}))
+  .find((db) => host !== null && hostOf(db.directUrl) === host);
+if (!database) couldNotConnect(host);
+
+const runs = (sidecar.runs || 0) + 1;
+writeJson(sidecarPath, { ...sidecar, runs });
+const name = new URL(dbname).pathname.replace(/^\//, '') || 'postgres';
+process.stdout.write(
+  Buffer.concat([
+    Buffer.from('PGDMP'),
+    Buffer.from([1, 14, 0, 4, 8, 8, 1]),
+    Buffer.from(`\n-- database: ${name}\n-- host: ${host}\n-- run: ${runs}\n`),
+  ]),
+);

@@ -51,6 +51,10 @@ import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcile
 import { awsCostService } from '@/lib/services/awsCostService';
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
+import { tenantAccountHandoverService } from '@/lib/services/tenantAccountHandoverService';
+import { hostedApplicationExportService } from '@/lib/services/hostedApplicationExportService';
+import { hostedApplicationHandoverService } from '@/lib/services/hostedApplicationHandoverService';
+import { hostedApplicationGraceNotifier } from '@/lib/services/hostedApplicationGraceNotifier';
 import { productionHealthService } from '@/lib/services/productionHealthService';
 import { productionUsageMeterService } from '@/lib/services/productionUsageMeterService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
@@ -163,6 +167,14 @@ export const jobServices = {
   hostAccountState: hostAccountStateService,
   // The enterprise tenant account reconcile (Story MOTIR-9792 · MOTIR-9942).
   hostingTenantAccountReconcile: hostingTenantAccountService,
+  // One turn of an AWS account's takeover handover (Story MOTIR-9800 · MOTIR-12131).
+  tenantAccountHandover: tenantAccountHandoverService,
+  // A grace-window application's database export and its expiry (MOTIR-12134).
+  hostedApplicationExport: hostedApplicationExportService,
+  // The stop at the end of a grace window (MOTIR-12135).
+  hostedApplicationHandover: hostedApplicationHandoverService,
+  // The grace-window notices and their reminders (MOTIR-12136).
+  hostedApplicationGraceNotifier,
   // A live app's health and crashes (Story MOTIR-9799 · MOTIR-12106).
   productionHealth: productionHealthService,
   // Production hosting charged in credits (Story MOTIR-9799 · MOTIR-12108).

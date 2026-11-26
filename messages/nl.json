@@ -1091,6 +1091,19 @@
       "renew": "Als je het AI-abonnement vóór {date} verlengt, wordt de verwijdering geannuleerd. Tot die tijd kunnen je agents niet worden aangemaakt of gewekt, en wordt hun opslag nog elke dag in rekening gebracht.",
       "openBilling": "AI-abonnement verlengen",
       "footer": "Je ontvangt dit omdat je agents in deze organisatie bezit."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} blijft tot {date} draaien op Motir} seven_days {{repository} stopt over 7 dagen op Motir} one_day {{repository} stopt morgen op Motir} other {{repository} draait niet meer op Motir}}",
+      "preview": "{kind, select, stopped {Download de laatste database-export van {repository} binnen 30 dagen} other {{repository} stopt op {date} op Motir}}",
+      "greeting": "Hoi {name},",
+      "lede": {
+        "transferred": "{repository} is verhuisd naar je eigen GitHub-account. De app blijft tot {date} draaien op Motir, zodat je tijd hebt om hem bij je eigen hostingprovider uit te rollen. Vanuit het Productiepaneel kun je op elk moment een database-export downloaden en de app eerder stoppen wanneer je klaar bent.",
+        "seven_days": "De app van {repository} stopt op {date} op Motir, over 7 dagen. Rol de repository vóór die datum uit bij je eigen hostingprovider, zet daar een database-export terug en laat je domeinen ernaar verwijzen.",
+        "one_day": "De app van {repository} stopt op {date} op Motir, dus morgen. Heeft je nieuwe hostingprovider je nieuwste gegevens nog niet? Download dan nu een verse database-export.",
+        "stopped": "De app van {repository} draait niet meer op Motir; de app en de database zijn verwijderd. De laatste database-export, gemaakt nadat de app was gestopt, kun je 30 dagen lang downloaden in het Productiepaneel."
+      },
+      "openProduction": "Productiepaneel openen",
+      "footer": "Je ontvangt dit omdat je de Eigenaar of een Beheerder van de organisatie bent."
     }
   },
   "auth": {
@@ -4946,6 +4959,105 @@
           "bodyCannotSuspend": "Deze app draait als AWS-container, die niet gepauzeerd kan worden. Hij blijft dus altijd aan en verbruikt credits tot het saldo is aangevuld. Motir stopt of verwijdert nooit een productie-app omdat de credits op zijn.",
           "topUp": "Credits aanvullen",
           "member": "Een eigenaar of beheerder van de organisatie kan credits aanvullen."
+        }
+      },
+      "handover": {
+        "notice": {
+          "title": "Deze app wordt overgedragen",
+          "body": "{organization} neemt de AWS-hosting over. Motir zet de app niet meer live, niet opnieuw live en draait hem niet meer terug; de app blijft al die tijd draaien.",
+          "link": "Volg de overdracht in Repository's",
+          "memberNote": "Je kunt productie zien. Alleen organisatiebeheerders nemen de hosting over."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} is verhuisd naar je GitHub — hij blijft hier draaien tot {date}",
+            "body": "Zet hem voor die tijd live op je eigen host. Download wanneer je wilt een database-export, en stop de app eerder als je klaar bent."
+          },
+          "sevenDays": {
+            "title": "{name} stopt over 7 dagen met draaien op Motir, op {date}",
+            "body": "Zet een database-export terug op je nieuwe host en laat je domeinen ernaar wijzen."
+          },
+          "oneDay": {
+            "title": "{name} stopt morgen met draaien op Motir, {date}",
+            "body": "Heeft je nieuwe host je nieuwste gegevens nog niet? Download dan nu een verse export."
+          }
+        },
+        "grace": {
+          "memberNote": "Je kunt productie zien. Alleen organisatiebeheerders kunnen exports downloaden of de app eerder stoppen.",
+          "runsUntil": "Draait tot",
+          "body": "Motir blijft {name} tot dan serveren op {address}. Daarna stopt de app en wordt de database verwijderd; een laatste export wordt 30 dagen bewaard.",
+          "bodyNoAddress": "Motir blijft {name} tot dan serveren. Daarna stopt de app en wordt de database verwijderd; een laatste export wordt 30 dagen bewaard.",
+          "pill": "Overgangsperiode"
+        },
+        "exports": {
+          "title": "Database-exports",
+          "download": "Export downloaden",
+          "busy": "Exporteren…",
+          "busyStatus": "De export wordt gemaakt — dit kan een paar minuten duren. Hij staat hier zodra hij klaar is.",
+          "help": "Een volledige dump van de productiedatabase (pg_dump, custom-formaat) om terug te zetten op je nieuwe host. Elke export kun je downloaden tot de datum ernaast.",
+          "empty": "Nog geen exports.",
+          "row": "{size} · door {name} · bewaard tot {date}",
+          "rowUnnamed": "{size} · bewaard tot {date}",
+          "downloadLink": "Downloaden",
+          "downloadAria": "De export van {date} downloaden",
+          "failed": "De export is niet afgerond. Er is niets in de database veranderd — <retry>probeer het opnieuw</retry>."
+        },
+        "refusal": {
+          "forbidden": "Alleen organisatiebeheerders kunnen dit doen.",
+          "notInGrace": "Deze app zit niet meer in zijn overgangsperiode, dus er is niets veranderd.",
+          "notFound": "Deze app is niet meer beschikbaar voor je."
+        },
+        "stop": {
+          "title": "Eerder stoppen",
+          "body": "Zodra je nieuwe host serveert, stop je {name} nu in plaats van te wachten tot {date}.",
+          "button": "Nu stoppen",
+          "failed": {
+            "stop_serving": "Het stoppen is niet afgerond bij het offline halen van {name}. Er is niets verwijderd. Opnieuw proberen gaat daar verder.",
+            "final_export": "Het stoppen is niet afgerond bij het maken van de laatste export. De app wordt niet meer geserveerd, en er is niets verwijderd. Opnieuw proberen gaat daar verder.",
+            "delete_database": "Het stoppen is niet afgerond bij het verwijderen van de database. Wat al gebeurd is, blijft gebeurd — de app wordt niet meer geserveerd en de laatste export blijft bewaard. Opnieuw proberen gaat daar verder.",
+            "record": "Het stoppen is niet afgerond bij het vastleggen van de stop. De app en de database zijn verwijderd en de laatste export blijft bewaard. Opnieuw proberen gaat daar verder.",
+            "unknown": "Het stoppen is niet afgerond. Wat al gebeurd is, blijft gebeurd. Opnieuw proberen gaat daar verder."
+          }
+        },
+        "dialog": {
+          "title": "{name} nu stoppen?",
+          "body": "Motir stopt vandaag met het serveren van {name} in plaats van op {date}. Daarna verwijdert het:",
+          "deleteApp": "de app en het adres {address}",
+          "deleteAppNoAddress": "de app",
+          "deleteDatabase": "de productiedatabase",
+          "finalExport": "Eerst wordt een laatste database-export gemaakt en 30 dagen bewaard, zodat je hem hier nog kunt downloaden. Dit kan niet ongedaan worden gemaakt.",
+          "cancel": "Annuleren",
+          "confirm": "{name} nu stoppen",
+          "busy": "Stoppen…",
+          "retry": "Opnieuw proberen"
+        },
+        "handedOver": {
+          "copy": "Kopiëren",
+          "copied": "Gekopieerd",
+          "aws": {
+            "title": "Overgedragen",
+            "body": "{organization} draait {name} sinds {date} op een eigen AWS-account. Motir zet de app niet meer live en serveert hem niet meer.",
+            "pill": "Overgedragen",
+            "account": "AWS-account",
+            "copyAccount": "Het AWS-account-ID kopiëren",
+            "upstream": "Upstream-adres",
+            "copyUpstream": "Het upstream-adres kopiëren"
+          },
+          "stopped": {
+            "title": "Gestopt",
+            "body": "{name} is verhuisd naar je GitHub, en de app op het {target, select, fly {Fly} other {serverless}}-account van Motir is gestopt. De app, het adres en de database zijn verwijderd. Motir zet hem niet meer live en serveert hem niet meer.",
+            "pill": "Gestopt"
+          },
+          "final": {
+            "title": "Laatste database-export",
+            "taken": "Gemaakt bij het stoppen, {date}",
+            "meta": "{size} · bewaard tot {date}",
+            "download": "Downloaden",
+            "downloadAria": "De laatste database-export downloaden",
+            "memberNote": "Je kunt productie zien. Alleen organisatiebeheerders kunnen de laatste export downloaden.",
+            "expired": "De laatste export is bewaard tot {date} en is verwijderd. Exports die je hebt gedownload, blijven gewoon bestaan.",
+            "none": "Voor deze app wordt geen laatste export bewaard."
+          }
         }
       }
     },
@@ -10733,6 +10845,154 @@
       "stateUnfinishedYours": "Verwijderen is niet voltooid",
       "unfinishedDetailYours": "Motir is halverwege gestopt met het stoppen van wat het vanuit deze repository draait. De repository zelf blijft in je GitHub-account, en opnieuw proberen maakt de rest af.",
       "retryDelete": "Opnieuw proberen"
+    },
+    "awsHandover": {
+      "takeOver": "AWS-hosting overnemen",
+      "takeOverLabel": "AWS-hosting voor {repo} overnemen",
+      "rowHelperMember": "Draait op het AWS-account van {org}, dat Motir in zijn geheel verlaat — een organisatiebeheerder draagt het over.",
+      "refusalTitle": "{repo} verhuist samen met {count, plural, one {één andere repository} other {# andere repository's}}",
+      "refusalLead": "De app draait op het AWS-account van {org}, net als deze. Een AWS-account verlaat Motir in zijn geheel — één account per organisatie — dus ze kunnen alleen samen worden overgenomen.",
+      "startLead": "De app van deze repository draait op het eigen AWS-account van {org} binnen Motir. Dat account verlaat Motir in zijn geheel, met de apps nog draaiend — op AWS neem je dus de hosting over, en de repository's gaan mee.",
+      "refusalOthersLabel": "De andere repository's op het account",
+      "oneAccountTitle": "Eén AWS-account per organisatie",
+      "oneAccountBody": "Elke repository van {org} die op AWS draait, wordt samen overgedragen, in één stap die je kunt volgen en hervatten.",
+      "nothingChanged": "Er is niets veranderd.",
+      "stillHosted": "{repo} wordt nog steeds door Motir gehost, net als de andere.",
+      "askAnAdmin": "Een organisatiebeheerder kan de AWS-hosting voor alle samen overnemen.",
+      "cancel": "Annuleren",
+      "close": "Sluiten",
+      "back": "Terug",
+      "continue": "Doorgaan",
+      "stepEyebrow": "AWS-hosting overnemen · stap {step} van 2",
+      "stepTitle": "Het AWS-account van {org} overdragen",
+      "stepLead": "Het account verlaat Motir met elke app erin nog draaiend. Geef aan wie de nieuwe eigenaar is en waar de repository's naartoe gaan.",
+      "ownerEmailLabel": "E-mail van de eigenaar",
+      "ownerEmailPlaceholder": "naam@example.com",
+      "ownerEmailHelp": "Het adres dat eigenaar wordt van het AWS-account. AWS mailt hier een eenmalige code naartoe.",
+      "ownerEmailInvalid": "Voer een e-mailadres in, zoals naam@example.com.",
+      "githubOwnerLabel": "GitHub-eigenaar",
+      "githubOwnerPlaceholder": "je-organisatie",
+      "githubOwnerHelp": "Het GitHub-account of de organisatie die de repository's ontvangt.",
+      "githubOwnerInvalid": "Voer de naam van een GitHub-account of -organisatie in: letters, cijfers en enkele koppeltekens.",
+      "handedOverTogether": "Samen overgedragen",
+      "noAwsRepositories": "{org} heeft geen repository's die op AWS draaien, dus er is niets over te dragen.",
+      "awsStepsNote": "Een paar stappen gebeuren in AWS zelf — inloggen als root-gebruiker, een betaalmethode toevoegen. Motir vraagt nooit om betaalgegevens of een root-wachtwoord.",
+      "confirmTitle": "De overdracht starten?",
+      "confirmNewOwner": "Nieuwe eigenaar van het AWS-account",
+      "confirmRepositoriesGoTo": "Repository's gaan naar",
+      "consequencePreviews": "{count, plural, one {De previews van deze repository worden verwijderd en Motir stopt met het deployen ervan.} other {De previews van deze # repository's worden verwijderd en Motir stopt met het deployen ervan.}}",
+      "consequenceRunning": "De apps blijven draaien. Je laat je domeinen naar hun eigen adressen wijzen voordat de toegang van Motir eindigt.",
+      "consequenceIrreversible": "Zodra het account de AWS Organization van Motir heeft verlaten, kan dit niet ongedaan worden gemaakt.",
+      "start": "Overdracht starten",
+      "starting": "Bezig met starten…",
+      "startRefused": {
+        "notReady": "De overdracht kon niet starten: het AWS-account van {org} is nog niet klaar om over te dragen. Er is niets gewijzigd — probeer het over een paar minuten opnieuw.",
+        "alreadyStarted": "De overdracht kon niet starten: die is al gestart voor het AWS-account van {org}. Er is niets gewijzigd — laad de pagina opnieuw om hem te volgen.",
+        "githubIdentity": "De overdracht kon niet starten: koppel eerst je GitHub-account, zodat de repository's kunnen worden overgedragen. Er is niets gewijzigd.",
+        "input": "De overdracht kon niet starten: controleer de e-mail van de eigenaar en de GitHub-eigenaar. Er is niets gewijzigd.",
+        "failed": "De overdracht kon niet starten. Er is niets gewijzigd — probeer het zo opnieuw."
+      },
+      "checklistEyebrow": "Overdracht van de AWS-hosting",
+      "checklistTitle": "AWS-account van {org}",
+      "accountLabel": "Account-ID",
+      "repositoryCount": "{count, plural, one {# repository} other {# repository's}}",
+      "checklistLoading": "Overdracht wordt gelezen…",
+      "checklistError": "De overdracht kon niet worden gelezen",
+      "checklistErrorBody": "Er is niets veranderd. Probeer het zo opnieuw.",
+      "tryAgain": "Opnieuw proberen",
+      "stepsLabel": "Stappen van de overdracht",
+      "stepFailedUnknown": "Deze stap is mislukt. Niets daarna is uitgevoerd.",
+      "retry": "Opnieuw uitvoeren",
+      "status": {
+        "pending": "In afwachting",
+        "running": "Bezig",
+        "waitingOnYou": "Wacht op jou",
+        "done": "Klaar",
+        "failed": "Mislukt"
+      },
+      "overall": {
+        "inProgress": "Bezig",
+        "waiting": "Wacht op jou",
+        "failed": "Moet opnieuw",
+        "done": "Overgedragen"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Previews verwijderd",
+          "body": "{count, plural, one {De preview-omgevingen van de repository worden verwijderd.} other {De preview-omgevingen van de # repository's worden verwijderd.}}"
+        },
+        "create_deploy_role": {
+          "label": "Deployrol voor je CI aangemaakt",
+          "body": "De workflows van je repository's deployen er voortaan mee."
+        },
+        "open_upstream": {
+          "label": "Apps bereikbaar zonder Motir",
+          "body": "Elke app antwoordt op een eigen adres, hieronder vermeld."
+        },
+        "move_email": {
+          "label": "Accountmail overgezet",
+          "body": "Het e-mailadres van het AWS-account wordt dat van de nieuwe eigenaar."
+        },
+        "await_standalone": {
+          "label": "Stappen in AWS",
+          "body": "Root-aanmelding, betaalmethode, contactgegevens en overeenkomsten, gedaan in AWS."
+        },
+        "remove_access": {
+          "label": "Toegang van Motir verwijderd",
+          "body": "De rollen van Motir in het account worden verwijderd; motir.site-adressen antwoorden niet meer."
+        },
+        "leave_organization": {
+          "label": "Account heeft de AWS Organization van Motir verlaten",
+          "body": "Het account is nu een zelfstandig AWS-account."
+        },
+        "transfer_repositories": {
+          "label": "Elke repository overgedragen",
+          "body": "GitHub draagt elke repository over aan de nieuwe eigenaar.",
+          "bodyOwner": "GitHub draagt elke repository over aan {owner}."
+        }
+      },
+      "codeLabel": "Code van AWS",
+      "confirmCode": "Code bevestigen",
+      "codeRefused": "AWS heeft die code niet geaccepteerd.",
+      "codeEmpty": "Voer de code uit de e-mail van AWS in.",
+      "codeHelp": "AWS heeft een eenmalige code naar {email} gemaild. Motir geeft hem door aan AWS en bewaart hem nooit.",
+      "codeHelpUnknown": "AWS heeft een eenmalige code naar de nieuwe eigenaar gemaild. Motir geeft hem door aan AWS en bewaart hem nooit.",
+      "codeRefusedHelp": "Bekijk de nieuwste e-mail van AWS aan {email} — een nieuwe code vervangt de oude — en probeer het opnieuw.",
+      "codeRefusedHelpUnknown": "Bekijk de nieuwste e-mail van AWS aan de nieuwe eigenaar — een nieuwe code vervangt de oude — en probeer het opnieuw.",
+      "standaloneIntro": "{email} doet dit in AWS:",
+      "standaloneIntroUnknown": "De nieuwe eigenaar doet dit in AWS:",
+      "standalone": {
+        "rootSignIn": "Aanmelden bij het account als root-gebruiker en een wachtwoord instellen",
+        "payment": "Een betaalmethode toevoegen",
+        "contact": "De contactgegevens bevestigen",
+        "agreement": "De klantovereenkomst van AWS accepteren"
+      },
+      "standaloneNote": "Dit gebeurt in AWS, niet hier. Motir vraagt nooit om betaalgegevens of een root-wachtwoord.",
+      "checkAgain": "Opnieuw controleren",
+      "signIn": "De aanmeldpagina van AWS openen (opent in een nieuw tabblad)",
+      "notReady": "Nog niet klaar — AWS heeft nog nodig:",
+      "missing": {
+        "wait_period": "tijd: AWS houdt een nieuw account een paar dagen vast voordat het kan vertrekken",
+        "delegated_administrator": "dat het account geen gedelegeerde beheerder meer is",
+        "payment_method": "een betaalmethode",
+        "support_plan": "een supportplan",
+        "contact_information": "de contactgegevens van het account"
+      },
+      "actionFailed": "Dat is niet gelukt. Er is niets gewijzigd — probeer het zo opnieuw.",
+      "upstreamsTitle": "Waar je apps zonder Motir antwoorden",
+      "upstreamsLead": "De adressen van Motir (…motir.site) antwoorden niet meer zodra de toegang van Motir is verwijderd. Laat elk domein vóór die tijd naar zijn adres wijzen.",
+      "upstreamsLoading": "Adressen worden gelezen…",
+      "upstreamsEmpty": "Nog geen apps om te tonen.",
+      "upstreamsError": "De adressen konden niet worden gelezen",
+      "upstreamsErrorBody": "De overdracht is niet geraakt. Probeer het zo opnieuw.",
+      "ownAddress": "Eigen adres",
+      "upstreamNotOpen": "Nog niet geopend",
+      "noDomains": "Geen eigen domeinen — niets om om te zetten.",
+      "pointAt": "wijst naar",
+      "copy": "Kopiëren",
+      "copied": "Gekopieerd",
+      "copyOwnLabel": "Adres van {app} kopiëren",
+      "copyDomainLabel": "Kopiëren waar {host} naar wijst"
     }
   },
   "apiDocs": {
@@ -15567,14 +15827,22 @@
           "creating": "Wordt aangemaakt",
           "bootstrapping": "Bootstrap bezig",
           "ready": "Gereed",
-          "refused": "Geweigerd"
+          "refused": "Geweigerd",
+          "handing_over": "Wordt overgedragen",
+          "awaiting_standalone": "Wacht op zelfstandigheid",
+          "removing": "Vertrekt",
+          "handed_over": "Overgedragen"
         },
         "notReady": {
           "requested": "Quota worden gelezen zodra het account gereed is. Het account is nog niet aangemaakt.",
           "creating": "Quota worden gelezen zodra het account gereed is. AWS maakt het account aan.",
           "bootstrapping": "Quota worden gelezen zodra het account gereed is. De bootstrap richt de deployrol, de tags en de quotumverhogingen in.",
           "refused": "{count, plural, one {AWS weigerde het account één keer aan te maken, {age}.} other {AWS weigerde het account # keer aan te maken, laatst {age}.}} De reconciliatie probeert het opnieuw na de wachttijd; quota worden gelezen zodra het account gereed is.",
-          "refusedNever": "Quota worden gelezen zodra het account gereed is. AWS weigerde het account aan te maken; de reconciliatie probeert het opnieuw na de wachttijd."
+          "refusedNever": "Quota worden gelezen zodra het account gereed is. AWS weigerde het account aan te maken; de reconciliatie probeert het opnieuw na de wachttijd.",
+          "handing_over": "Tijdens een overdracht worden geen quota gelezen. Het account wordt overgedragen aan zijn organisatie.",
+          "awaiting_standalone": "Tijdens een overdracht worden geen quota gelezen. De organisatie moet factuurgegevens en een supportplan toevoegen voordat het account kan vertrekken.",
+          "removing": "Tijdens een overdracht worden geen quota gelezen. Het account verlaat de AWS-organisatie van Motir.",
+          "handed_over": "Het account heeft Motir verlaten en hoort bij zijn organisatie. De quota worden niet meer gelezen."
         },
         "col": {
           "quota": "Quotum",
@@ -18921,6 +19189,14 @@
       "title": "Hier is geen preview",
       "body": "Dit adres hoort niet bij een draaiende preview. Mogelijk is die uitgeschakeld, of is de link verkeerd getypt.",
       "home": "Naar Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Overgedragen. De app blijft tot {date} draaien op Motir.",
+      "seven_days": "De app stopt over 7 dagen op Motir, op {date}.",
+      "one_day": "De app stopt morgen op Motir, op {date}.",
+      "stopped": "De app is op {date} gestopt op Motir. Download de laatste database-export binnen 30 dagen."
     }
   }
 }

@@ -15,6 +15,7 @@ import { guardSettingsPage } from '../_guard';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { isOrgAdminForWorkspace } from '@/lib/services/organizationAccessService';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { tenantAccountHandoverService } from '@/lib/services/tenantAccountHandoverService';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 /** The member's own git account (MOTIR-4682) — where the room's connect prompt
@@ -168,6 +169,11 @@ async function RepositoriesPaneBody({
     organizationsService.resolveWorkspaceOrganization(userId, workspaceId),
   ]);
   const organizationName = organization?.name ?? '';
+  // The organisation's AWS hosting, for an organisation admin only (MOTIR-12137):
+  // null for anyone else, so the room draws no handover entry or checklist.
+  const awsHandover = organization
+    ? await tenantAccountHandoverService.roomOverview(organization.id, userId)
+    : null;
 
   // WHETHER MOTIR'S APP CAN WRITE EACH ORGANISATION REPOSITORY (MOTIR-1895 ·
   // design §18.1) — after the room read, because it is asked of the room's own
@@ -255,6 +261,7 @@ async function RepositoriesPaneBody({
         organizationInventoryHref={ORGANIZATION_GIT_PATH}
         nowIso={nowIso}
         hostedRunAccess={hostedRunAccess}
+        awsHandover={awsHandover}
       />
     </>
   );

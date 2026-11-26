@@ -165,6 +165,70 @@ describe('ensureVariable and deleteVariable', () => {
   });
 });
 
+describe('deleteEnvironmentSecret (MOTIR-12131)', () => {
+  function answer(status: number) {
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
+      status === 204 ? new Response(null, { status }) : Response.json({}, { status }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  it('deletes the environment secret by name, and answers absent for one gone', async () => {
+    const fetch = answer(204);
+    expect(
+      await repositoryActionsConfigClient.deleteEnvironmentSecret(REPO, 'production', 'S'),
+    ).toBe('deleted');
+    expect(String(fetch.mock.calls[0]![0])).toBe(
+      'https://api.github.com/repos/motir-projects/acme-web/environments/production/secrets/S',
+    );
+    expect(fetch.mock.calls[0]![1]?.method).toBe('DELETE');
+    answer(404);
+    expect(
+      await repositoryActionsConfigClient.deleteEnvironmentSecret(REPO, 'production', 'S'),
+    ).toBe('absent');
+  });
+
+  it('throws the typed error on a refusal', async () => {
+    answer(500);
+    await expect(
+      repositoryActionsConfigClient.deleteEnvironmentSecret(REPO, 'production', 'S'),
+    ).rejects.toBeInstanceOf(RepositoryActionsConfigError);
+  });
+});
+
+describe('deleteEnvironment (MOTIR-12132)', () => {
+  function answer(status: number) {
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
+      status === 204 ? new Response(null, { status }) : Response.json({}, { status }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  it('deletes the environment by name, and answers absent for one gone', async () => {
+    const fetch = answer(204);
+    expect(await repositoryActionsConfigClient.deleteEnvironment(REPO, 'production')).toBe(
+      'deleted',
+    );
+    expect(String(fetch.mock.calls[0]![0])).toBe(
+      'https://api.github.com/repos/motir-projects/acme-web/environments/production',
+    );
+    expect(fetch.mock.calls[0]![1]?.method).toBe('DELETE');
+    answer(404);
+    expect(await repositoryActionsConfigClient.deleteEnvironment(REPO, 'production')).toBe(
+      'absent',
+    );
+  });
+
+  it('throws the typed error on a refusal', async () => {
+    answer(403);
+    await expect(
+      repositoryActionsConfigClient.deleteEnvironment(REPO, 'production'),
+    ).rejects.toBeInstanceOf(RepositoryActionsConfigError);
+  });
+});
+
 describe('transport and credential failures', () => {
   it('names an unreachable GitHub and an unwired App as the typed error, with no status', async () => {
     transportDown = true;

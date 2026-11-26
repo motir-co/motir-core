@@ -38,6 +38,7 @@ const {
   putAttachment,
   putPublicAsset,
   putPrivateAttachment,
+  putPrivateStream,
   signedDownloadUrl,
   mintPrivateUploadToken,
   headPrivateBlob,
@@ -309,6 +310,55 @@ describe('headPrivateBlob — the authoritative metadata read', () => {
   it('returns null for an object that is not there', async () => {
     responses.set('HEAD motir-private/acceptance/missing.webm', { statusCode: 404 });
     expect(await headPrivateBlob('acceptance/missing.webm')).toBeNull();
+  });
+});
+
+describe('putPrivateStream — a streamed upload under EXACTLY the key given (MOTIR-12134)', () => {
+  const KEY = 'hosting-exports/ws1/app1/exp1.dump';
+
+  it('writes the private bucket under the key as given, and answers the size the store reports', async () => {
+    responses.set(`HEAD motir-private/${KEY}`, {
+      statusCode: 200,
+      headers: { 'content-length': '11', 'content-type': 'application/octet-stream' },
+    });
+
+    const result = await putPrivateStream(
+      KEY,
+      Readable.from([Buffer.from('hello '), Buffer.from('dump')]),
+      'application/octet-stream',
+    );
+
+    expect(result).toEqual({ key: KEY, sizeBytes: 11 });
+    const put = seen.find((s) => s.method === 'PUT');
+    expect(put).toMatchObject({ bucket: 'motir-private', key: KEY });
+    expect(put?.headers['content-type']).toBe('application/octet-stream');
+  });
+
+  it('rethrows a refused upload and never reads it back', async () => {
+    responses.set(`PUT motir-private/${KEY}`, { statusCode: 500 });
+    await expect(
+      putPrivateStream(KEY, Readable.from([Buffer.from('x')]), 'application/octet-stream'),
+    ).rejects.toBeTruthy();
+    expect(seen.some((s) => s.method === 'HEAD')).toBe(false);
+  });
+
+  it('rethrows the upload’s own failure even when aborting it fails too', async () => {
+    const { Upload } = await import('@aws-sdk/lib-storage');
+    vi.spyOn(Upload.prototype, 'abort').mockRejectedValue(new Error('abort refused'));
+    responses.set(`PUT motir-private/${KEY}`, { statusCode: 500 });
+    const error = await putPrivateStream(
+      KEY,
+      Readable.from([Buffer.from('x')]),
+      'application/octet-stream',
+    ).catch((e: unknown) => e);
+    expect(String(error)).not.toContain('abort refused');
+  });
+
+  it('refuses an upload the store then cannot find', async () => {
+    responses.set(`HEAD motir-private/${KEY}`, { statusCode: 404 });
+    await expect(
+      putPrivateStream(KEY, Readable.from([Buffer.from('x')]), 'application/octet-stream'),
+    ).rejects.toThrow(/could not be read back/);
   });
 });
 

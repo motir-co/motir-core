@@ -26,7 +26,8 @@
         "AlbArn",
         "AlbListenerArn",
         "AlbDnsName",
-        "FrontDoorDomainName"
+        "FrontDoorDomainName",
+        "FrontDoorVpcOriginId"
       ]
     },
     "registry.yaml": {
@@ -168,6 +169,10 @@
         {
           "name": "FrontDoorRevision",
           "required": false
+        },
+        {
+          "name": "OriginAccess",
+          "required": false
         }
       ],
       "outputs": [
@@ -253,6 +258,22 @@
         {
           "name": "ConfigHash",
           "required": false
+        },
+        {
+          "name": "OriginAccess",
+          "required": false
+        },
+        {
+          "name": "OpenListenerRulePriority",
+          "required": false
+        },
+        {
+          "name": "FrontDoorVpcOriginId",
+          "required": false
+        },
+        {
+          "name": "AlbDnsName",
+          "required": false
         }
       ],
       "outputs": [
@@ -261,7 +282,8 @@
         "ServiceName",
         "TaskDefinitionArn",
         "TargetGroupArn",
-        "EnvironmentSecretArn"
+        "EnvironmentSecretArn",
+        "OpenUpstreamUrl"
       ]
     }
   }

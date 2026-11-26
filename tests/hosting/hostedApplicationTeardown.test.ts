@@ -93,6 +93,7 @@ describe('hostedApplicationRepository — the hosted delete’s teardown', () =>
       currentReleaseId: release.id,
       previousReleaseId: null,
       databaseProjectId: 'neon-web',
+      state: 'live',
       customDomainCount: 1,
     });
   });

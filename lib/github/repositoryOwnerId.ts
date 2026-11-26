@@ -62,3 +62,43 @@ export async function githubRepositoryOwnerId(repositoryId: string): Promise<str
   }
   return String(id);
 }
+
+/**
+ * The numeric id of the GitHub account (a user or an organisation) named
+ * `login`, as a string (MOTIR-12131) — what the takeover handover's deploy role
+ * binds as the destination owner, because an id survives a rename and a login
+ * does not. `GET /users/{login}` answers organisations too. Anything but a
+ * readable account with a numeric id throws.
+ */
+export async function githubAccountIdOfLogin(login: string): Promise<string> {
+  const { token } = await resolveOrgAuth();
+  let res: Response;
+  try {
+    res = await githubFetch(
+      'repositoryOwnerId',
+      `${GITHUB_API}/users/${encodeURIComponent(login)}`,
+      {
+        method: 'GET',
+        headers: {
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+          authorization: `Bearer ${token}`,
+        },
+      },
+    );
+  } catch (err) {
+    throw new RepositoryOwnerIdApiError(null, err instanceof Error ? err.message : 'unknown');
+  }
+  if (!res.ok) throw new RepositoryOwnerIdApiError(res.status, '');
+  let body: { id?: unknown } | null;
+  try {
+    body = (await res.json()) as { id?: unknown } | null;
+  } catch {
+    throw new RepositoryOwnerIdApiError(res.status, 'a non-JSON body');
+  }
+  const id = body?.id;
+  if (typeof id !== 'number' || !Number.isInteger(id)) {
+    throw new RepositoryOwnerIdApiError(res.status, 'no numeric account id');
+  }
+  return String(id);
+}

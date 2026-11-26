@@ -46,6 +46,9 @@ export interface TenantNetwork {
   readonly albDnsName: string;
   /** The front door's CloudFront name, `<id>.cloudfront.net`. */
   readonly frontDoorDomainName: string;
+  /** The front door's VPC origin, which an open container release's own
+   *  distribution reaches the load balancer through (MOTIR-12128). */
+  readonly frontDoorVpcOriginId: string;
 }
 
 /** A stack finished without an output its caller reads. */
@@ -107,5 +110,6 @@ export async function ensureTenantNetwork(account: TenantAccountContext): Promis
     albListenerArn: read('AlbListenerArn'),
     albDnsName: read('AlbDnsName'),
     frontDoorDomainName: read('FrontDoorDomainName'),
+    frontDoorVpcOriginId: read('FrontDoorVpcOriginId'),
   };
 }

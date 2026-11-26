@@ -1091,6 +1091,19 @@
       "renew": "{date} より前に AI プランを更新すると、削除は取り消されます。それまではエージェントの作成や起動はできず、ストレージ料金は引き続き毎日発生します。",
       "openBilling": "AI プランを更新",
       "footer": "この組織でエージェントを所有しているため、このメールが送信されています。"
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} は {date} まで Motir で稼働します} seven_days {{repository} は 7 日後に Motir で停止します} one_day {{repository} は明日 Motir で停止します} other {{repository} は Motir で停止しました}}",
+      "preview": "{kind, select, stopped {{repository} の最終データベースエクスポートを 30 日以内にダウンロードしてください} other {{repository} は {date} に Motir で停止します}}",
+      "greeting": "{name} さん",
+      "lede": {
+        "transferred": "{repository} はあなた自身の GitHub アカウントに移管されました。アプリは {date} まで Motir で稼働し続けるため、ご自身のホスティング先にデプロイする時間があります。本番パネルからいつでもデータベースのエクスポートをダウンロードでき、準備ができたらアプリを早めに停止することもできます。",
+        "seven_days": "{repository} のアプリは {date}（7 日後）に Motir で停止します。それまでに、ご自身のホスティング先にリポジトリをデプロイし、データベースのエクスポートを復元して、ドメインをそちらに向けてください。",
+        "one_day": "{repository} のアプリは {date}（明日）に Motir で停止します。新しいホスティング先にまだ最新のデータがない場合は、今すぐ最新のデータベースエクスポートをダウンロードしてください。",
+        "stopped": "{repository} のアプリは Motir で停止し、アプリとデータベースは削除されました。アプリ停止後に作成された最終データベースエクスポートは、本番パネルから 30 日間ダウンロードできます。"
+      },
+      "openProduction": "本番パネルを開く",
+      "footer": "この組織のオーナーまたは管理者であるため、このメールが送信されています。"
     }
   },
   "auth": {
@@ -4946,6 +4959,105 @@
           "bodyCannotSuspend": "このアプリは停止できない AWS コンテナとして動作しているため、常時稼働を続け、残高がチャージされるまでクレジットを消費し続けます。Motir がクレジット不足を理由に本番アプリを停止や削除することはありません。",
           "topUp": "クレジットをチャージ",
           "member": "クレジットをチャージできるのは組織のオーナーまたは管理者です。"
+        }
+      },
+      "handover": {
+        "notice": {
+          "title": "このアプリは引き渡し中です",
+          "body": "{organization} が AWS ホスティングを引き継いでいます。Motir はこのアプリのデプロイ、再デプロイ、ロールバックを行いません。アプリはその間も動き続けます。",
+          "link": "リポジトリで引き渡しの状況を確認する",
+          "memberNote": "本番環境は表示できます。ホスティングを引き継げるのは組織の管理者だけです。"
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} はあなたの GitHub に移りました — {date} まではここで動き続けます",
+            "body": "それまでに自分のホストにデプロイしてください。データベースのエクスポートはいつでもダウンロードでき、準備ができたらアプリを早めに停止できます。"
+          },
+          "sevenDays": {
+            "title": "{name} は 7 日後の {date} に Motir での稼働を停止します",
+            "body": "新しいホストにデータベースのエクスポートを復元し、ドメインをそちらに向けてください。"
+          },
+          "oneDay": {
+            "title": "{name} は明日 {date} に Motir での稼働を停止します",
+            "body": "新しいホストに最新のデータがまだない場合は、今すぐ新しいエクスポートをダウンロードしてください。"
+          }
+        },
+        "grace": {
+          "memberNote": "本番環境は表示できます。エクスポートのダウンロードやアプリの早期停止ができるのは組織の管理者だけです。",
+          "runsUntil": "稼働期限",
+          "body": "それまで Motir は {address} で {name} を提供し続けます。その後アプリは停止し、データベースは削除されます。最終エクスポートは 30 日間保管されます。",
+          "bodyNoAddress": "それまで Motir は {name} を提供し続けます。その後アプリは停止し、データベースは削除されます。最終エクスポートは 30 日間保管されます。",
+          "pill": "猶予期間"
+        },
+        "exports": {
+          "title": "データベースのエクスポート",
+          "download": "エクスポートをダウンロード",
+          "busy": "エクスポート中…",
+          "busyStatus": "エクスポートを作成しています — 数分かかることがあります。準備ができるとここに表示されます。",
+          "help": "新しいホストに復元するための、本番データベースの完全なダンプ（pg_dump、カスタム形式）です。各エクスポートは横に表示された日付までダウンロードできます。",
+          "empty": "まだエクスポートはありません。",
+          "row": "{size} · {name} · {date} まで保管",
+          "rowUnnamed": "{size} · {date} まで保管",
+          "downloadLink": "ダウンロード",
+          "downloadAria": "{date} のエクスポートをダウンロード",
+          "failed": "エクスポートが完了しませんでした。データベースは何も変更されていません — <retry>もう一度お試しください</retry>。"
+        },
+        "refusal": {
+          "forbidden": "この操作ができるのは組織の管理者だけです。",
+          "notInGrace": "このアプリは猶予期間を過ぎているため、何も変更されていません。",
+          "notFound": "このアプリはもう利用できません。"
+        },
+        "stop": {
+          "title": "早めに停止する",
+          "body": "新しいホストで提供が始まったら、{date} を待たずに今すぐ {name} を停止できます。",
+          "button": "今すぐ停止",
+          "failed": {
+            "stop_serving": "{name} をオフラインにする途中で停止が完了しませんでした。何も削除されていません。再試行するとそこから再開します。",
+            "final_export": "最終エクスポートの作成中に停止が完了しませんでした。アプリはもう提供されておらず、何も削除されていません。再試行するとそこから再開します。",
+            "delete_database": "データベースの削除中に停止が完了しませんでした。すでに行われたことはそのままです — アプリはもう提供されておらず、最終エクスポートは保管されています。再試行するとそこから再開します。",
+            "record": "停止の記録中に停止が完了しませんでした。アプリとデータベースは削除済みで、最終エクスポートは保管されています。再試行するとそこから再開します。",
+            "unknown": "停止が完了しませんでした。すでに行われたことはそのままです。再試行するとそこから再開します。"
+          }
+        },
+        "dialog": {
+          "title": "{name} を今すぐ停止しますか？",
+          "body": "Motir は {date} ではなく今日 {name} の提供を停止します。その後、次のものを削除します:",
+          "deleteApp": "アプリとそのアドレス {address}",
+          "deleteAppNoAddress": "アプリ",
+          "deleteDatabase": "本番データベース",
+          "finalExport": "最初にデータベースの最終エクスポートが作成されて 30 日間保管されるので、ここから引き続きダウンロードできます。この操作は元に戻せません。",
+          "cancel": "キャンセル",
+          "confirm": "{name} を今すぐ停止",
+          "busy": "停止中…",
+          "retry": "再試行"
+        },
+        "handedOver": {
+          "copy": "コピー",
+          "copied": "コピーしました",
+          "aws": {
+            "title": "引き渡し済み",
+            "body": "{date} から {organization} が自身の AWS アカウントで {name} を運用しています。Motir はもうデプロイも提供も行いません。",
+            "pill": "引き渡し済み",
+            "account": "AWS アカウント",
+            "copyAccount": "AWS アカウント ID をコピー",
+            "upstream": "アップストリームアドレス",
+            "copyUpstream": "アップストリームアドレスをコピー"
+          },
+          "stopped": {
+            "title": "停止済み",
+            "body": "{name} はあなたの GitHub に移り、Motir の {target, select, fly {Fly} other {サーバーレス}} アカウント上のアプリは停止しました。アプリ、アドレス、データベースは削除されています。Motir はもうデプロイも提供も行いません。",
+            "pill": "停止済み"
+          },
+          "final": {
+            "title": "データベースの最終エクスポート",
+            "taken": "停止時に作成、{date}",
+            "meta": "{size} · {date} まで保管",
+            "download": "ダウンロード",
+            "downloadAria": "データベースの最終エクスポートをダウンロード",
+            "memberNote": "本番環境は表示できます。最終エクスポートをダウンロードできるのは組織の管理者だけです。",
+            "expired": "最終エクスポートは {date} まで保管され、削除されました。ダウンロード済みのエクスポートには影響しません。",
+            "none": "このアプリには最終エクスポートは保管されていません。"
+          }
         }
       }
     },
@@ -10730,6 +10842,154 @@
       "stateUnfinishedYours": "削除が完了しませんでした",
       "unfinishedDetailYours": "Motir はこのリポジトリから実行しているものの停止を途中で中断しました。リポジトリ自体はあなたの GitHub アカウントに残り、もう一度試すと残りが完了します。",
       "retryDelete": "もう一度試す"
+    },
+    "awsHandover": {
+      "takeOver": "AWS ホスティングを引き継ぐ",
+      "takeOverLabel": "{repo} の AWS ホスティングを引き継ぐ",
+      "rowHelperMember": "{org} の AWS アカウントで動いています。このアカウントは丸ごと Motir を離れるため、組織の管理者が引き渡します。",
+      "refusalTitle": "{count, plural, other {{repo} はほかの # 件のリポジトリと一緒に移ります}}",
+      "refusalLead": "このアプリは {org} の AWS アカウントで動いており、これらも同じです。AWS アカウントは丸ごと Motir を離れる（1 組織につき 1 アカウント）ため、まとめてしか引き継げません。",
+      "startLead": "このリポジトリのアプリは、Motir 内にある {org} 専用の AWS アカウントで動いています。そのアカウントはアプリが動いたまま丸ごと Motir を離れます。そのため AWS ではホスティングを引き継ぎ、リポジトリも一緒に移ります。",
+      "refusalOthersLabel": "このアカウントにあるほかのリポジトリ",
+      "oneAccountTitle": "1 組織につき 1 つの AWS アカウント",
+      "oneAccountBody": "AWS で動く {org} のリポジトリはすべてまとめて引き渡されます。進み具合を確認でき、途中から再開できる 1 つの手順です。",
+      "nothingChanged": "何も変更されていません。",
+      "stillHosted": "{repo} はほかのリポジトリと同じく、引き続き Motir がホストしています。",
+      "askAnAdmin": "組織の管理者なら、すべてまとめて AWS ホスティングを引き継げます。",
+      "cancel": "キャンセル",
+      "close": "閉じる",
+      "back": "戻る",
+      "continue": "続ける",
+      "stepEyebrow": "AWS ホスティングを引き継ぐ · ステップ {step}/2",
+      "stepTitle": "{org} の AWS アカウントを引き渡す",
+      "stepLead": "アカウントは中のアプリが動いたまま Motir を離れます。次の所有者と、リポジトリの移動先を指定してください。",
+      "ownerEmailLabel": "所有者のメールアドレス",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "AWS アカウントを所有するアドレスです。AWS がこのアドレスにワンタイムコードを送ります。",
+      "ownerEmailInvalid": "name@example.com のようなメールアドレスを入力してください。",
+      "githubOwnerLabel": "GitHub の所有者",
+      "githubOwnerPlaceholder": "your-organization",
+      "githubOwnerHelp": "リポジトリを受け取る GitHub アカウントまたは組織です。",
+      "githubOwnerInvalid": "GitHub のアカウント名または組織名を入力してください（英字、数字、単独のハイフン）。",
+      "handedOverTogether": "まとめて引き渡すもの",
+      "noAwsRepositories": "{org} には AWS で動くリポジトリがないため、引き渡すものはありません。",
+      "awsStepsNote": "いくつかの手順は AWS 上で行います（ルートユーザーとしてのサインイン、支払い方法の追加など）。Motir が支払い情報やルートパスワードを尋ねることはありません。",
+      "confirmTitle": "引き渡しを開始しますか？",
+      "confirmNewOwner": "AWS アカウントの新しい所有者",
+      "confirmRepositoriesGoTo": "リポジトリの移動先",
+      "consequencePreviews": "{count, plural, other {これら # 件のリポジトリのプレビューは削除され、Motir はデプロイを停止します。}}",
+      "consequenceRunning": "アプリは動き続けます。Motir のアクセスが終わる前に、ドメインを各アプリ自身のアドレスに向けてください。",
+      "consequenceIrreversible": "アカウントが Motir の AWS Organization を離れた後は、元に戻せません。",
+      "start": "引き渡しを開始",
+      "starting": "開始しています…",
+      "startRefused": {
+        "notReady": "引き渡しを開始できませんでした。{org} の AWS アカウントはまだ引き渡しの準備ができていません。何も変更されていません。数分後にもう一度お試しください。",
+        "alreadyStarted": "引き渡しを開始できませんでした。{org} の AWS アカウントの引き渡しはすでに開始されています。何も変更されていません。ページを再読み込みして進み具合を確認してください。",
+        "githubIdentity": "引き渡しを開始できませんでした。リポジトリを移管できるよう、先に GitHub アカウントを接続してください。何も変更されていません。",
+        "input": "引き渡しを開始できませんでした。所有者のメールアドレスと GitHub の所有者を確認してください。何も変更されていません。",
+        "failed": "引き渡しを開始できませんでした。何も変更されていません。しばらくしてからもう一度お試しください。"
+      },
+      "checklistEyebrow": "AWS ホスティングの引き渡し",
+      "checklistTitle": "{org} の AWS アカウント",
+      "accountLabel": "アカウント",
+      "repositoryCount": "{count, plural, other {# 件のリポジトリ}}",
+      "checklistLoading": "引き渡しを読み込んでいます…",
+      "checklistError": "引き渡しを読み込めませんでした",
+      "checklistErrorBody": "何も変更されていません。しばらくしてからもう一度お試しください。",
+      "tryAgain": "もう一度試す",
+      "stepsLabel": "引き渡しの手順",
+      "stepFailedUnknown": "この手順は失敗しました。以降の手順は実行されていません。",
+      "retry": "再試行",
+      "status": {
+        "pending": "保留中",
+        "running": "実行中",
+        "waitingOnYou": "あなたの操作待ち",
+        "done": "完了",
+        "failed": "失敗"
+      },
+      "overall": {
+        "inProgress": "進行中",
+        "waiting": "あなたの操作待ち",
+        "failed": "再試行が必要",
+        "done": "引き渡し済み"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "プレビューを削除",
+          "body": "{count, plural, other {# 件のリポジトリのプレビュー環境を削除します。}}"
+        },
+        "create_deploy_role": {
+          "label": "CI 用のデプロイロールを作成",
+          "body": "今後はリポジトリのワークフローがこのロールでデプロイします。"
+        },
+        "open_upstream": {
+          "label": "Motir なしでアプリに到達可能",
+          "body": "各アプリは下に記載した自身のアドレスで応答します。"
+        },
+        "move_email": {
+          "label": "アカウントのメールアドレスを変更",
+          "body": "AWS アカウントのメールアドレスが新しい所有者のものになります。"
+        },
+        "await_standalone": {
+          "label": "AWS 側の手順",
+          "body": "ルートサインイン、支払い方法、連絡先情報、契約への同意を AWS 上で行います。"
+        },
+        "remove_access": {
+          "label": "Motir のアクセスを削除",
+          "body": "アカウント内の Motir のロールを削除します。motir.site のアドレスは応答しなくなります。"
+        },
+        "leave_organization": {
+          "label": "Motir の AWS Organization から離脱",
+          "body": "アカウントは独立した AWS アカウントになります。"
+        },
+        "transfer_repositories": {
+          "label": "各リポジトリを移管",
+          "body": "GitHub が各リポジトリを新しい所有者に移管します。",
+          "bodyOwner": "GitHub が各リポジトリを {owner} に移管します。"
+        }
+      },
+      "codeLabel": "AWS からのコード",
+      "confirmCode": "コードを確認",
+      "codeRefused": "AWS はそのコードを受け付けませんでした。",
+      "codeEmpty": "AWS からのメールに記載されたコードを入力してください。",
+      "codeHelp": "AWS が {email} にワンタイムコードを送りました。Motir はそれを AWS に渡すだけで、保存することはありません。",
+      "codeHelpUnknown": "AWS が新しい所有者にワンタイムコードを送りました。Motir はそれを AWS に渡すだけで、保存することはありません。",
+      "codeRefusedHelp": "{email} 宛ての AWS からの最新メールを確認し（新しいコードが古いコードに代わります）、もう一度お試しください。",
+      "codeRefusedHelpUnknown": "新しい所有者宛ての AWS からの最新メールを確認し（新しいコードが古いコードに代わります）、もう一度お試しください。",
+      "standaloneIntro": "{email} が AWS で次の操作を行います：",
+      "standaloneIntroUnknown": "新しい所有者が AWS で次の操作を行います：",
+      "standalone": {
+        "rootSignIn": "ルートユーザーとしてアカウントにサインインし、パスワードを設定する",
+        "payment": "支払い方法を追加する",
+        "contact": "連絡先情報を確認する",
+        "agreement": "AWS のカスタマーアグリーメントに同意する"
+      },
+      "standaloneNote": "これらはここではなく AWS 上で行います。Motir が支払い情報やルートパスワードを尋ねることはありません。",
+      "checkAgain": "もう一度確認",
+      "signIn": "AWS のサインインページを開く（新しいタブで開きます）",
+      "notReady": "まだ準備ができていません。AWS が必要としているもの：",
+      "missing": {
+        "wait_period": "時間の経過（AWS は新しいアカウントを離脱可能になるまで数日間保持します）",
+        "delegated_administrator": "アカウントが委任管理者でなくなること",
+        "payment_method": "支払い方法",
+        "support_plan": "サポートプラン",
+        "contact_information": "アカウントの連絡先情報"
+      },
+      "actionFailed": "処理できませんでした。何も変更されていません。しばらくしてからもう一度お試しください。",
+      "upstreamsTitle": "Motir なしでアプリが応答する場所",
+      "upstreamsLead": "Motir のアクセスが削除されると、Motir のアドレス（…motir.site）は応答しなくなります。それまでに各ドメインをそのアドレスに向けてください。",
+      "upstreamsLoading": "アドレスを読み込んでいます…",
+      "upstreamsEmpty": "表示するアプリはまだありません。",
+      "upstreamsError": "アドレスを読み込めませんでした",
+      "upstreamsErrorBody": "引き渡しには影響ありません。しばらくしてからもう一度お試しください。",
+      "ownAddress": "自身のアドレス",
+      "upstreamNotOpen": "まだ開いていません",
+      "noDomains": "カスタムドメインはありません。向け直すものはありません。",
+      "pointAt": "の向け先",
+      "copy": "コピー",
+      "copied": "コピーしました",
+      "copyOwnLabel": "{app} のアドレスをコピー",
+      "copyDomainLabel": "{host} の向け先をコピー"
     }
   },
   "apiDocs": {
@@ -15564,14 +15824,22 @@
           "creating": "作成中",
           "bootstrapping": "ブートストラップ中",
           "ready": "準備完了",
-          "refused": "拒否"
+          "refused": "拒否",
+          "handing_over": "引き渡し中",
+          "awaiting_standalone": "独立待ち",
+          "removing": "離脱中",
+          "handed_over": "引き渡し済み"
         },
         "notReady": {
           "requested": "クォータはアカウントの準備ができてから読み取ります。アカウントはまだ作成されていません。",
           "creating": "クォータはアカウントの準備ができてから読み取ります。AWS がアカウントを作成しています。",
           "bootstrapping": "クォータはアカウントの準備ができてから読み取ります。ブートストラップがデプロイロール、タグ、クォータの引き上げを設定しています。",
           "refused": "{count, plural, other {AWS はアカウントの作成を # 回拒否しました(最後は{age})。}}調整処理はバックオフの後に再試行します。クォータはアカウントの準備ができてから読み取ります。",
-          "refusedNever": "クォータはアカウントの準備ができてから読み取ります。AWS はアカウントの作成を拒否しました。調整処理はバックオフの後に再試行します。"
+          "refusedNever": "クォータはアカウントの準備ができてから読み取ります。AWS はアカウントの作成を拒否しました。調整処理はバックオフの後に再試行します。",
+          "handing_over": "引き渡し中はクォータを読み取りません。アカウントを組織に引き渡しています。",
+          "awaiting_standalone": "引き渡し中はクォータを読み取りません。アカウントが離脱する前に、組織が請求情報とサポートプランを追加する必要があります。",
+          "removing": "引き渡し中はクォータを読み取りません。アカウントが Motir の AWS 組織から離脱しています。",
+          "handed_over": "アカウントは Motir を離れ、組織のものになりました。クォータはもう読み取りません。"
         },
         "col": {
           "quota": "クォータ",
@@ -18918,6 +19186,14 @@
       "title": "ここにプレビューはありません",
       "body": "このアドレスは実行中のプレビューのものではありません。停止されたか、リンクが間違っている可能性があります。",
       "home": "Motir へ移動"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "引き渡し済みです。アプリは {date} まで Motir で稼働します。",
+      "seven_days": "アプリは 7 日後の {date} に Motir で停止します。",
+      "one_day": "アプリは明日 {date} に Motir で停止します。",
+      "stopped": "アプリは {date} に Motir で停止しました。最終データベースエクスポートを 30 日以内にダウンロードしてください。"
     }
   }
 }

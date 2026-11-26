@@ -1,4 +1,10 @@
-import { AwsManagementApiError, type AwsManagementApi } from '../management';
+import {
+  AWS_MEMBER_ROLE_NAME,
+  AWS_TENANT_DEPLOY_ROLE,
+  AwsManagementApiError,
+  type AwsManagementApi,
+  type AwsSessionCredentials,
+} from '../management';
 import type { TenantSdkCredentials } from './sdk';
 import { TenantRoleUnavailableError } from './errors';
 
@@ -22,13 +28,47 @@ export interface TenantSessionOptions {
 export function tenantDeploySession(
   options: TenantSessionOptions,
 ): () => Promise<TenantSdkCredentials> {
-  const now = options.now ?? (() => Date.now());
+  return roleSession(
+    options.accountId,
+    AWS_TENANT_DEPLOY_ROLE,
+    (accountId) => options.management.assumeTenantDeployRole(accountId),
+    options.now,
+  );
+}
+
+export interface TenantMemberSessionOptions {
+  readonly management: Pick<AwsManagementApi, 'assumeMemberRole'>;
+  readonly accountId: string;
+  readonly now?: () => number;
+}
+
+/** A credential provider for the account's MEMBER ACCESS ROLE
+ *  (`AWS_MEMBER_ROLE_NAME`), the one session that outlives
+ *  `motir-tenant-deploy` while the handover removes Motir's access (MOTIR-12130). */
+export function tenantMemberSession(
+  options: TenantMemberSessionOptions,
+): () => Promise<TenantSdkCredentials> {
+  return roleSession(
+    options.accountId,
+    AWS_MEMBER_ROLE_NAME,
+    (accountId) => options.management.assumeMemberRole(accountId),
+    options.now,
+  );
+}
+
+function roleSession(
+  accountId: string,
+  roleName: string,
+  assume: (accountId: string) => Promise<AwsSessionCredentials>,
+  clock?: () => number,
+): () => Promise<TenantSdkCredentials> {
+  const now = clock ?? (() => Date.now());
   let held: TenantSdkCredentials | null = null;
   return async () => {
     const expiresAt = held?.expiration?.getTime() ?? Infinity;
     if (held && expiresAt - now() > TENANT_SESSION_RENEW_MS) return held;
     try {
-      const session = await options.management.assumeTenantDeployRole(options.accountId);
+      const session = await assume(accountId);
       held = {
         accessKeyId: session.accessKeyId,
         secretAccessKey: session.secretAccessKey,
@@ -39,7 +79,7 @@ export function tenantDeploySession(
     } catch (err) {
       held = null;
       if (err instanceof AwsManagementApiError) {
-        throw new TenantRoleUnavailableError(options.accountId, err.awsCode);
+        throw new TenantRoleUnavailableError(accountId, err.awsCode, roleName);
       }
       throw err;
     }

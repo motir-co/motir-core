@@ -28,6 +28,7 @@ export const QUOTED = {
   organizationName: 'Acme GmbH',
   filterName: 'Meine Fehler',
   agentName: 'builder-01',
+  repositoryName: 'laden-web',
 } as const;
 
 const QUOTED_PROPS: { [K in EmailTemplate]?: Partial<TemplateData<K>> } = {
@@ -69,6 +70,7 @@ const QUOTED_PROPS: { [K in EmailTemplate]?: Partial<TemplateData<K>> } = {
     organizationName: QUOTED.organizationName,
     agentNames: [QUOTED.agentName],
   },
+  'hosted-application-grace': { repositoryName: QUOTED.repositoryName },
 };
 
 /** The quoted values a given template's render must carry unchanged. */

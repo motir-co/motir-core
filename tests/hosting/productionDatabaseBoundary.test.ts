@@ -10,8 +10,14 @@ import { describe, expect, it } from 'vitest';
 const ROOT = join(__dirname, '..', '..');
 const SCANNED = ['lib', 'app'];
 
-/** The production release service (MOTIR-10030) — the one importer allowed. */
-const ALLOWED_IMPORTERS = new Set(['lib/services/productionReleaseService.ts']);
+/** The production release service (MOTIR-10030), and the grace-window export
+ *  (MOTIR-12134), which reads the DIRECT string to dump a serverless or Fly
+ *  application's database for its organisation admins before the stop deletes
+ *  it — the only other reader, and it never stores, logs or returns the value. */
+const ALLOWED_IMPORTERS = new Set([
+  'lib/services/productionReleaseService.ts',
+  'lib/services/hostedApplicationExportService.ts',
+]);
 
 const CIPHERTEXT_READERS = new Set([
   'lib/repositories/hostedApplicationRepository.ts',
@@ -36,7 +42,7 @@ describe('the production database boundary', () => {
     expect(files).toContain('lib/services/productionDatabaseService.ts');
   });
 
-  it('lets only the production release service import productionDatabaseService', () => {
+  it('lets only the production release service and the export import productionDatabaseService', () => {
     const importers = files.filter((f) =>
       /from\s+['"]@\/lib\/services\/productionDatabaseService['"]/.test(
         readFileSync(join(ROOT, f), 'utf8'),

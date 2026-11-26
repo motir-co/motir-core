@@ -15,6 +15,7 @@ import {
   HostingTargetMissingError,
   ProductionEnablementFailedError,
   RepositoryNotEstablishedError,
+  RepositoryTakenOverError,
 } from '@/lib/hosting/errors';
 import {
   HOSTING_TARGET_VARIABLE,
@@ -25,6 +26,7 @@ import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { productionEnablementService as service } from '@/lib/services/productionEnablementService';
+import { hostedApplicationHandoverService } from '@/lib/services/hostedApplicationHandoverService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -93,6 +95,14 @@ function route(method: string, path: string, body: Record<string, unknown> | nul
     repo.environment = { custom: policy['custom_branch_policies'] === true };
     return json(200, { name: 'production' });
   }
+  // MOTIR-12132 — a takeover's preparation deletes the environment with its secrets.
+  if (method === 'DELETE' && rest === env) {
+    if (!repo.environment) return json(404, { message: 'Not Found' });
+    repo.environment = null;
+    repo.policies = [];
+    repo.secrets.clear();
+    return new Response(null, { status: 204 });
+  }
   if (rest === `${env}/deployment-branch-policies`) {
     if (method === 'GET')
       return json(200, { total_count: repo.policies.length, branch_policies: repo.policies });
@@ -128,6 +138,11 @@ function route(method: string, path: string, body: Record<string, unknown> | nul
   }
   if (rest.startsWith('/actions/variables')) {
     const name = rest.split('/')[3];
+    if (method === 'DELETE') {
+      return repo.variables.delete(name!)
+        ? new Response(null, { status: 204 })
+        : json(404, { message: 'Not Found' });
+    }
     if (method === 'GET') {
       return repo.variables.has(name!)
         ? json(200, { name, value: repo.variables.get(name!) })
@@ -312,6 +327,20 @@ describe('enableProduction', () => {
     await expect(service.enableProduction(id)).rejects.toBeInstanceOf(
       CustomerRepositoryNotDeployableError,
     );
+    expect(calls).toEqual([]);
+    expect(fakePort().mintedFor.length).toBe(minted);
+    expect(await appRow(id)).toBeNull();
+  });
+
+  it('refuses a taken-over repository before any call, so no deploy token is minted (MOTIR-12127)', async () => {
+    const fx = await workspace();
+    const id = await motirRepo(fx);
+    await adminDb.projectRepo.update({
+      where: { id },
+      data: { takeoverState: 'failed', takeoverTransferredAt: new Date() },
+    });
+    const minted = fakePort().mintedFor.length;
+    await expect(service.enableProduction(id)).rejects.toBeInstanceOf(RepositoryTakenOverError);
     expect(calls).toEqual([]);
     expect(fakePort().mintedFor.length).toBe(minted);
     expect(await appRow(id)).toBeNull();
@@ -514,6 +543,56 @@ describe('backfillProductionEnablement', () => {
         outcome: 'already_enabled',
       });
     }
+  });
+
+  it('never walks a taken-over repository, nor one whose application is handed over (MOTIR-12127)', async () => {
+    const fx = await workspace();
+    const ok = await motirRepo(fx, { name: 'ok' });
+    const moved = await motirRepo(fx, { name: 'moved' });
+    const handed = await motirRepo(fx, { name: 'handed' });
+    await adminDb.projectRepo.update({ where: { id: moved }, data: { takeoverState: 'done' } });
+    const app = await hostedApplicationService.ensureApplication(handed);
+    await adminDb.hostedApplication.update({
+      where: { id: app.id },
+      data: { state: 'handed_over' },
+    });
+    const minted = fakePort().mintedFor.length;
+
+    const walked = await service.backfillProductionEnablement();
+    expect(walked.map((e) => e.projectRepositoryId)).toEqual([ok]);
+    expect(fakePort().mintedFor.length).toBe(minted + 1);
+    expect(calls.some((c) => c.path.includes('/moved/') || c.path.includes('/handed/'))).toBe(
+      false,
+    );
+  });
+});
+
+describe('the backfill around a takeover’s preparation (MOTIR-12132)', () => {
+  it('re-creates nothing while the app is handing over, and re-installs it all once put back', async () => {
+    const fx = await workspace();
+    const id = await motirRepo(fx, { name: 'shop' });
+    await service.enableProduction(id);
+    const repo = repos.get('shop')!;
+
+    await hostedApplicationHandoverService.prepareForTransfer(id);
+    expect(repo.environment).toBeNull();
+    expect(repo.secrets.size).toBe(0);
+    expect(repo.variables.size).toBe(0);
+    expect(fakePort().liveCredentials(`mh-${id}`)).toBe(0);
+
+    expect(await service.backfillProductionEnablement()).toEqual([]);
+    expect(repo.environment).toBeNull();
+    expect(repo.variables.size).toBe(0);
+
+    expect(await hostedApplicationHandoverService.cancelPreparation(id)).toMatchObject({
+      outcome: 'restored',
+    });
+    const [entry] = await service.backfillProductionEnablement();
+    expect(entry).toMatchObject({ projectRepositoryId: id, result: { outcome: 'enabled' } });
+    expect(repo.environment).toEqual({ custom: true });
+    expect(repo.secrets.get(PRODUCTION_PUSH_TOKEN_SECRET)).toBe(`fake-deploy-token-mh-${id}`);
+    expect(repo.variables.get(PRODUCTION_IMAGE_VARIABLE)).toBe(`registry.fly.io/mh-${id}`);
+    expect(repo.variables.get(HOSTING_TARGET_VARIABLE)).toBe('fly');
   });
 });
 

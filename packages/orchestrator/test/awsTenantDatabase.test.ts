@@ -69,6 +69,7 @@ describe('ensureTenantNetwork', () => {
       albListenerArn: expect.stringContaining('listener/app/motir-tenant'),
       albDnsName: expect.stringContaining('.elb.amazonaws.com'),
       frontDoorDomainName: expect.stringMatching(/\.cloudfront\.net$/),
+      frontDoorVpcOriginId: expect.stringMatching(/^vo_/),
     });
     const stack = a.cloudformation.stacks.get('motir-network')!;
     expect(stack.tags).toEqual({ 'motir:organization': ORG, 'motir:repository': 'shared' });

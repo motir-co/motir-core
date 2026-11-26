@@ -1,19 +1,27 @@
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import type { IdlePolicyDto } from '@/lib/dto/idlePolicy';
-import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
+import type { HostedApplicationDto } from '@/lib/dto/hostedApplications';
+import type { ProductionHandoverDto, ProductionPanelDto } from '@/lib/dto/productionPanel';
 import { CustomerRepositoryNotDeployableError } from '@/lib/hosting/errors';
 import { decodeReleaseCursor, encodeReleaseCursor } from '@/lib/hosting/releaseCursor';
 import { ProjectRepoNotFoundError } from '@/lib/projectRepos/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 import type { HostedIdlePolicy } from '@/lib/hosting/idlePolicy';
+import {
+  EXPORT_RETENTION_DAYS,
+  hostedApplicationExportService,
+} from '@/lib/services/hostedApplicationExportService';
+import { hostedApplicationGraceNotifier } from '@/lib/services/hostedApplicationGraceNotifier';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
+import { isOrgAdminForWorkspace } from '@/lib/services/organizationAccessService';
 import { hostedIdlePolicyService } from '@/lib/services/hostedIdlePolicyService';
 import { productionRollbackService } from '@/lib/services/productionRollbackService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The PRODUCTION PANEL's server side (Story MOTIR-9797 · MOTIR-10036): the read
 // behind `GET …/repositories/[rowId]/production`, the rollback behind its
@@ -91,6 +99,7 @@ async function panelFor(
       nextCursor: null,
       isAdministrator,
       canRollback: false,
+      handover: null,
     };
   }
 
@@ -103,6 +112,10 @@ async function panelFor(
   });
   const releases: HostedReleaseDto[] = fetched.slice(0, take);
   const last = releases[releases.length - 1];
+  const handover = await handoverFor(app, projectRepositoryId, actor);
+  // Roll back is offered only on a live app the deploy guard still deploys: the
+  // takeover's release freeze (MOTIR-12127) refuses it on the server regardless.
+  const releasable = app.state === 'live' && handover?.deployRefusal !== 'taken_over';
   return {
     application: { id: app.id, target: app.target, productionAddress: app.productionAddress },
     currentRelease: app.currentRelease,
@@ -113,7 +126,62 @@ async function panelFor(
         ? encodeReleaseCursor({ createdAt: last.createdAt, id: last.id })
         : null,
     isAdministrator,
-    canRollback: isAdministrator && app.previousRelease !== null,
+    canRollback: isAdministrator && releasable && app.previousRelease !== null,
+    handover,
+  };
+}
+
+const DAY_MS = 86_400_000;
+
+/** The targets whose stop keeps a final export (an AWS app leaves with its
+ *  database). */
+const FINAL_EXPORT_TARGETS: ReadonlySet<string> = new Set(['serverless', 'fly']);
+
+/**
+ * The takeover facts the panel shows (MOTIR-12138). Every viewer who can browse
+ * the project reads the dates, the addresses and the export list; whether the
+ * viewer may ACT — Download export, Stop now — is `canManageHandover`, the
+ * organisation-admin question the export and stop routes ask themselves. Null
+ * only when the repository's organisation cannot be resolved.
+ */
+async function handoverFor(
+  app: HostedApplicationDto,
+  projectRepositoryId: string,
+  actor: ServiceContext,
+): Promise<ProductionHandoverDto | null> {
+  const facts = await hostedApplicationService.readHandoverFacts(
+    projectRepositoryId,
+    app.workspaceId,
+  );
+  if (!facts) return null;
+  const [canManageHandover, notice, exports] = await Promise.all([
+    isOrgAdminForWorkspace(actor.userId, app.workspaceId),
+    withWorkspaceServiceContext(app.workspaceId, (tx) =>
+      hostedApplicationGraceNotifier.latestGraceNotice(app.id, tx),
+    ),
+    // A live app has never had an export: no read.
+    app.state === 'live'
+      ? Promise.resolve([])
+      : hostedApplicationExportService.listForPanel(app.workspaceId, app.id),
+  ]);
+  const stoppedAt =
+    app.state === 'handed_over' && FINAL_EXPORT_TARGETS.has(app.target) ? app.handedOverAt : null;
+  return {
+    state: app.state,
+    target: app.target,
+    stopsAt: app.stopsAt,
+    handedOverAt: app.handedOverAt,
+    upstreamAddress: app.upstreamAddress,
+    handedOverAccountId: app.handedOverAccountId,
+    organizationId: facts.organizationId,
+    organizationName: facts.organizationName,
+    latestGraceNotice: notice ? { kind: notice.kind, sentAt: notice.sentAt.toISOString() } : null,
+    canManageHandover,
+    deployRefusal: facts.deployRefusal,
+    exports,
+    finalExportExpiresAt: stoppedAt
+      ? new Date(Date.parse(stoppedAt) + EXPORT_RETENTION_DAYS.final * DAY_MS).toISOString()
+      : null,
   };
 }
 

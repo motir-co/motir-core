@@ -275,6 +275,14 @@ function StatePill({ t, state }: { t: T; state: TenantAccountDTO['state'] }) {
       </Pill>
     );
   }
+  if (state === 'handed_over') {
+    // The account has left Motir (MOTIR-9800): settled, not waiting on anything.
+    return (
+      <Pill tone="neutral" data-account-state="handed_over">
+        {label}
+      </Pill>
+    );
+  }
   if (state === 'refused') {
     return (
       <Pill severity="danger" data-account-state="refused">
@@ -301,7 +309,7 @@ function NotReadyLine({ ctx, account }: { ctx: Ctx; account: TenantAccountDTO })
             age: ago(ctx.ft, secondsSince(account.lastRefusedAt, ctx.now)),
           })
         : t('notReady.refusedNever')
-      : t(`notReady.${account.state as 'requested' | 'creating' | 'bootstrapping'}`);
+      : t(`notReady.${account.state as Exclude<TenantAccountDTO['state'], 'ready' | 'refused'>}`);
   return <p className="max-w-prose font-sans text-xs text-(--el-text-secondary)">{text}</p>;
 }
 

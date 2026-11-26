@@ -54,6 +54,17 @@ export class CustomerRepositoryNotDeployableError extends Error {
   }
 }
 
+/** The repository has left Motir in a takeover, or its application is being
+ *  handed over, in its grace window or handed over: nothing Motir runs deploys
+ *  it again (Story MOTIR-9800 · MOTIR-12127). → 409 */
+export class RepositoryTakenOverError extends Error {
+  readonly code = 'REPOSITORY_TAKEN_OVER' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Repository ${projectRepositoryId} has been taken over; Motir no longer deploys it.`);
+    this.name = 'RepositoryTakenOverError';
+  }
+}
+
 /** The repository row names no repository that exists yet. → 409 */
 export class RepositoryNotEstablishedError extends Error {
   readonly code = 'REPOSITORY_NOT_ESTABLISHED' as const;
@@ -111,6 +122,130 @@ export class ApplicationNotFoundError extends Error {
   constructor(readonly id: string) {
     super(`No hosted application for ${id}.`);
     this.name = 'ApplicationNotFoundError';
+  }
+}
+
+/** The step of a serverless or Fly application's preparation for a takeover
+ *  that failed (MOTIR-12132). */
+export type HostedApplicationHandoverStep =
+  | 'set_state'
+  | 'revoke_credential'
+  | 'delete_environment'
+  | 'delete_variables';
+
+/**
+ * Preparing an application for its repository's transfer stopped at `step`.
+ * Every step is look-before-act, so running it again repairs it; the takeover
+ * fails before the repository moves. `detail` never carries a credential. → 502
+ */
+export class HostedApplicationHandoverError extends Error {
+  readonly code = 'HOSTED_APPLICATION_HANDOVER_FAILED' as const;
+  constructor(
+    readonly projectRepositoryId: string,
+    readonly step: HostedApplicationHandoverStep,
+    readonly detail: string,
+  ) {
+    super(`Preparing ${projectRepositoryId} for its transfer failed at ${step}: ${detail}`);
+    this.name = 'HostedApplicationHandoverError';
+  }
+}
+
+// ── Database exports of a grace-window application (MOTIR-12134) ────────────
+
+/** An export of an application whose target keeps no database Motir can dump —
+ *  an AWS application's database leaves with its account. → 422 */
+export class ExportTargetUnsupportedError extends Error {
+  readonly code = 'EXPORT_TARGET_UNSUPPORTED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly target: string,
+  ) {
+    super(`Application ${applicationId} on ${target} has no database Motir can export.`);
+    this.name = 'ExportTargetUnsupportedError';
+  }
+}
+
+const EXPORT_NOT_ALLOWED_MESSAGES = {
+  not_in_grace: (id: string) => `Application ${id} is not in its grace window.`,
+  final_needs_system: (id: string) =>
+    `A final export of ${id} is taken by the stop, not by a person.`,
+  on_demand_needs_admin: (id: string) =>
+    `An on-demand export of ${id} is asked for by an organisation admin.`,
+} as const;
+
+/** The export is not allowed now: the application is not in its grace window, a
+ *  `final` export was asked for by a person rather than the stop, or an
+ *  on-demand one by no person at all. → 409 */
+export class ExportNotAllowedError extends Error {
+  readonly code = 'EXPORT_NOT_ALLOWED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly reason: 'not_in_grace' | 'final_needs_system' | 'on_demand_needs_admin',
+  ) {
+    super(EXPORT_NOT_ALLOWED_MESSAGES[reason](applicationId));
+    this.name = 'ExportNotAllowedError';
+  }
+}
+
+/** No such export or application, another organisation's, or an export past its
+ *  expiry — indistinguishable on purpose. → 404 */
+export class ExportNotFoundError extends Error {
+  readonly code = 'EXPORT_NOT_FOUND' as const;
+  constructor(readonly id: string) {
+    super(`No export or application ${id}.`);
+    this.name = 'ExportNotFoundError';
+  }
+}
+
+/** The dump or its upload failed; nothing was recorded and any partial object
+ *  was deleted. Carries only `pg_dump`'s exit code or the store's HTTP status —
+ *  never the connection string or a byte of `pg_dump`'s output. → 502 */
+export class ExportFailedError extends Error {
+  readonly code = 'EXPORT_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly stage: 'database' | 'dump' | 'upload',
+    readonly status: number | null,
+  ) {
+    super(
+      `Exporting ${applicationId} failed at ${stage}` +
+        (status === null ? '.' : ` (${stage === 'dump' ? 'exit code' : 'status'} ${status}).`),
+    );
+    this.name = 'ExportFailedError';
+  }
+}
+
+/** An application that cannot be stopped: it is neither in its grace window
+ *  nor already handed over (MOTIR-12135). Nothing was called. → 409 */
+export class ApplicationNotStoppableError extends Error {
+  readonly code = 'APPLICATION_NOT_STOPPABLE' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly state: string,
+  ) {
+    super(`Application ${applicationId} is ${state}, not in its grace window.`);
+    this.name = 'ApplicationNotStoppableError';
+  }
+}
+
+/** The step of a grace-window stop that failed (MOTIR-12135). */
+export type ApplicationStopStep = 'stop_serving' | 'final_export' | 'delete_database' | 'record';
+
+/**
+ * A grace-window stop stopped at `step`; the application is still `grace` and
+ * the next sweep or Stop now continues from that step. `detail` is the failing
+ * call's error code or class name only — never a provider body or a
+ * connection string. → 502
+ */
+export class ApplicationStopFailedError extends Error {
+  readonly code = 'APPLICATION_STOP_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly step: ApplicationStopStep,
+    readonly detail: string,
+  ) {
+    super(`Stopping ${applicationId} failed at ${step} (${detail}).`);
+    this.name = 'ApplicationStopFailedError';
   }
 }
 

@@ -1091,6 +1091,19 @@
       "renew": "Wenn Sie den KI-Plan vor dem {date} verlängern, wird die Löschung abgebrochen. Bis dahin können Ihre Agents weder erstellt noch aufgeweckt werden, und ihr Speicher wird weiterhin täglich berechnet.",
       "openBilling": "KI-Plan verlängern",
       "footer": "Sie erhalten diese E-Mail, weil Sie Agents in dieser Organisation besitzen."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} läuft bis {date} weiter auf Motir} seven_days {{repository} wird in 7 Tagen auf Motir gestoppt} one_day {{repository} wird morgen auf Motir gestoppt} other {{repository} läuft nicht mehr auf Motir}}",
+      "preview": "{kind, select, stopped {Laden Sie den letzten Datenbankexport von {repository} innerhalb von 30 Tagen herunter} other {{repository} wird am {date} auf Motir gestoppt}}",
+      "greeting": "Hallo {name},",
+      "lede": {
+        "transferred": "{repository} ist in Ihr eigenes GitHub-Konto umgezogen. Die App läuft bis {date} weiter auf Motir, damit Sie Zeit haben, sie bei Ihrem eigenen Hoster bereitzustellen. Im Produktionsbereich können Sie jederzeit einen Datenbankexport herunterladen und die App vorzeitig stoppen, sobald Sie bereit sind.",
+        "seven_days": "Die App von {repository} wird am {date} auf Motir gestoppt, in 7 Tagen. Stellen Sie das Repository bis dahin bei Ihrem eigenen Hoster bereit, spielen Sie dort einen Datenbankexport ein und leiten Sie Ihre Domains dorthin um.",
+        "one_day": "Die App von {repository} wird am {date} auf Motir gestoppt, also morgen. Wenn Ihr neuer Hoster Ihre neuesten Daten noch nicht hat, laden Sie jetzt einen aktuellen Datenbankexport herunter.",
+        "stopped": "Die App von {repository} läuft nicht mehr auf Motir; App und Datenbank wurden gelöscht. Den letzten Datenbankexport, erstellt nach dem Stoppen der App, können Sie 30 Tage lang im Produktionsbereich herunterladen."
+      },
+      "openProduction": "Produktionsbereich öffnen",
+      "footer": "Sie erhalten diese E-Mail, weil Sie Inhaber oder Administrator der Organisation sind."
     }
   },
   "auth": {
@@ -4946,6 +4959,105 @@
           "bodyCannotSuspend": "Diese App läuft als AWS-Container, der nicht pausiert werden kann. Sie läuft daher dauerhaft weiter und verbraucht Credits, bis das Guthaben aufgeladen ist. Motir stoppt oder löscht eine Produktions-App nie wegen fehlender Credits.",
           "topUp": "Credits aufladen",
           "member": "Ein Inhaber oder Administrator der Organisation kann Credits aufladen."
+        }
+      },
+      "handover": {
+        "notice": {
+          "title": "Diese App wird übergeben",
+          "body": "{organization} übernimmt ihr AWS-Hosting. Motir stellt sie nicht mehr bereit, stellt sie nicht erneut bereit und setzt sie nicht zurück; die App läuft währenddessen weiter.",
+          "link": "Die Übergabe unter Repositorys verfolgen",
+          "memberNote": "Du siehst die Produktion. Nur Organisationsadmins übernehmen das Hosting."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} ist in dein GitHub umgezogen — hier läuft es weiter bis {date}",
+            "body": "Stelle es bis dahin auf deinem eigenen Host bereit. Lade jederzeit einen Datenbankexport herunter und stoppe die App früher, wenn du so weit bist."
+          },
+          "sevenDays": {
+            "title": "{name} läuft in 7 Tagen nicht mehr auf Motir, am {date}",
+            "body": "Stelle einen Datenbankexport auf deinem neuen Host wieder her und richte deine Domains darauf aus."
+          },
+          "oneDay": {
+            "title": "{name} läuft morgen nicht mehr auf Motir, am {date}",
+            "body": "Wenn dein neuer Host deine neuesten Daten noch nicht hat, lade jetzt einen frischen Export herunter."
+          }
+        },
+        "grace": {
+          "memberNote": "Du siehst die Produktion. Nur Organisationsadmins können Exporte herunterladen oder die App früher stoppen.",
+          "runsUntil": "Läuft bis",
+          "body": "Motir stellt {name} bis dahin unter {address} bereit. Danach stoppt die App und ihre Datenbank wird gelöscht; ein letzter Export wird 30 Tage aufbewahrt.",
+          "bodyNoAddress": "Motir stellt {name} bis dahin bereit. Danach stoppt die App und ihre Datenbank wird gelöscht; ein letzter Export wird 30 Tage aufbewahrt.",
+          "pill": "Übergangsfrist"
+        },
+        "exports": {
+          "title": "Datenbankexporte",
+          "download": "Export herunterladen",
+          "busy": "Wird exportiert…",
+          "busyStatus": "Der Export wird erstellt — das kann einige Minuten dauern. Er erscheint hier, sobald er fertig ist.",
+          "help": "Ein vollständiger Dump der Produktionsdatenbank (pg_dump, Custom-Format) zum Wiederherstellen auf deinem neuen Host. Jeder Export kann bis zu dem Datum daneben heruntergeladen werden.",
+          "empty": "Noch keine Exporte.",
+          "row": "{size} · von {name} · aufbewahrt bis {date}",
+          "rowUnnamed": "{size} · aufbewahrt bis {date}",
+          "downloadLink": "Herunterladen",
+          "downloadAria": "Den Export vom {date} herunterladen",
+          "failed": "Der Export wurde nicht abgeschlossen. An der Datenbank hat sich nichts geändert — <retry>versuche es erneut</retry>."
+        },
+        "refusal": {
+          "forbidden": "Das können nur Organisationsadmins.",
+          "notInGrace": "Diese App ist nicht mehr in ihrer Übergangsfrist, also hat sich nichts geändert.",
+          "notFound": "Diese App ist für dich nicht mehr verfügbar."
+        },
+        "stop": {
+          "title": "Früher stoppen",
+          "body": "Sobald dein neuer Host bereitstellt, stoppe {name} jetzt, statt bis {date} zu warten.",
+          "button": "Jetzt stoppen",
+          "failed": {
+            "stop_serving": "Das Stoppen wurde beim Offline-Nehmen von {name} nicht abgeschlossen. Nichts wurde gelöscht. Erneut versuchen macht dort weiter.",
+            "final_export": "Das Stoppen wurde beim Erstellen des letzten Exports nicht abgeschlossen. Die App wird nicht mehr bereitgestellt, und nichts wurde gelöscht. Erneut versuchen macht dort weiter.",
+            "delete_database": "Das Stoppen wurde beim Löschen der Datenbank nicht abgeschlossen. Was schon passiert ist, bleibt bestehen — die App wird nicht mehr bereitgestellt und der letzte Export bleibt erhalten. Erneut versuchen macht dort weiter.",
+            "record": "Das Stoppen wurde beim Festhalten des Stopps nicht abgeschlossen. Die App und ihre Datenbank sind gelöscht und der letzte Export bleibt erhalten. Erneut versuchen macht dort weiter.",
+            "unknown": "Das Stoppen wurde nicht abgeschlossen. Was schon passiert ist, bleibt bestehen. Erneut versuchen macht dort weiter."
+          }
+        },
+        "dialog": {
+          "title": "{name} jetzt stoppen?",
+          "body": "Motir stellt {name} heute statt am {date} nicht mehr bereit. Danach löscht es:",
+          "deleteApp": "die App und ihre Adresse {address}",
+          "deleteAppNoAddress": "die App",
+          "deleteDatabase": "die Produktionsdatenbank",
+          "finalExport": "Zuerst wird ein letzter Datenbankexport erstellt und 30 Tage aufbewahrt, sodass du ihn hier weiterhin herunterladen kannst. Das lässt sich nicht rückgängig machen.",
+          "cancel": "Abbrechen",
+          "confirm": "{name} jetzt stoppen",
+          "busy": "Wird gestoppt…",
+          "retry": "Erneut versuchen"
+        },
+        "handedOver": {
+          "copy": "Kopieren",
+          "copied": "Kopiert",
+          "aws": {
+            "title": "Übergeben",
+            "body": "{organization} betreibt {name} seit {date} in einem eigenen AWS-Konto. Motir stellt es nicht mehr bereit und liefert es nicht mehr aus.",
+            "pill": "Übergeben",
+            "account": "AWS-Konto",
+            "copyAccount": "Die AWS-Kontonummer kopieren",
+            "upstream": "Upstream-Adresse",
+            "copyUpstream": "Die Upstream-Adresse kopieren"
+          },
+          "stopped": {
+            "title": "Gestoppt",
+            "body": "{name} ist in dein GitHub umgezogen, und seine App im {target, select, fly {Fly} other {Serverless}}-Konto von Motir wurde gestoppt. App, Adresse und Datenbank sind gelöscht. Motir stellt es nicht mehr bereit und liefert es nicht mehr aus.",
+            "pill": "Gestoppt"
+          },
+          "final": {
+            "title": "Letzter Datenbankexport",
+            "taken": "Beim Stopp erstellt, {date}",
+            "meta": "{size} · aufbewahrt bis {date}",
+            "download": "Herunterladen",
+            "downloadAria": "Den letzten Datenbankexport herunterladen",
+            "memberNote": "Du siehst die Produktion. Nur Organisationsadmins können den letzten Export herunterladen.",
+            "expired": "Der letzte Export wurde bis {date} aufbewahrt und ist gelöscht. Bereits heruntergeladene Exporte sind nicht betroffen.",
+            "none": "Für diese App wird kein letzter Export aufbewahrt."
+          }
         }
       }
     },
@@ -10733,6 +10845,154 @@
       "stateUnfinishedYours": "Entfernen nicht abgeschlossen",
       "unfinishedDetailYours": "Motir hat das Herunterfahren dessen, was es aus diesem Repository betreibt, mittendrin abgebrochen. Das Repository selbst bleibt in Ihrem GitHub-Konto, und ein erneuter Versuch schließt den Rest ab.",
       "retryDelete": "Erneut versuchen"
+    },
+    "awsHandover": {
+      "takeOver": "AWS-Hosting übernehmen",
+      "takeOverLabel": "AWS-Hosting für {repo} übernehmen",
+      "rowHelperMember": "Läuft im AWS-Konto von {org}, das Motir als Ganzes verlässt – ein Organisations-Admin übergibt es.",
+      "refusalTitle": "{repo} wird zusammen mit {count, plural, one {einem weiteren Repository} other {# weiteren Repositorys}} verschoben",
+      "refusalLead": "Seine App läuft im AWS-Konto von {org}, genau wie diese. Ein AWS-Konto verlässt Motir als Ganzes – ein Konto pro Organisation –, daher können sie nur gemeinsam übernommen werden.",
+      "startLead": "Die App dieses Repositorys läuft im eigenen AWS-Konto von {org} innerhalb von Motir. Dieses Konto verlässt Motir als Ganzes, und seine Apps laufen weiter – auf AWS übernehmen Sie also das Hosting, und die Repositorys ziehen mit.",
+      "refusalOthersLabel": "Die anderen Repositorys im Konto",
+      "oneAccountTitle": "Ein AWS-Konto pro Organisation",
+      "oneAccountBody": "Jedes Repository von {org}, das auf AWS läuft, wird gemeinsam übergeben – in einem Schritt, den Sie verfolgen und fortsetzen können.",
+      "nothingChanged": "Es hat sich nichts geändert.",
+      "stillHosted": "{repo} wird weiterhin von Motir gehostet, ebenso die anderen.",
+      "askAnAdmin": "Ein Organisations-Admin kann das AWS-Hosting für alle gemeinsam übernehmen.",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "back": "Zurück",
+      "continue": "Weiter",
+      "stepEyebrow": "AWS-Hosting übernehmen · Schritt {step} von 2",
+      "stepTitle": "Das AWS-Konto von {org} übergeben",
+      "stepLead": "Das Konto verlässt Motir, und jede App darin läuft weiter. Geben Sie an, wem es künftig gehört und wohin die Repositorys gehen.",
+      "ownerEmailLabel": "E-Mail des Inhabers",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "Die Adresse, der das AWS-Konto gehören wird. AWS sendet einen Einmalcode an diese Adresse.",
+      "ownerEmailInvalid": "Geben Sie eine E-Mail-Adresse ein, etwa name@example.com.",
+      "githubOwnerLabel": "GitHub-Inhaber",
+      "githubOwnerPlaceholder": "ihre-organisation",
+      "githubOwnerHelp": "Das GitHub-Konto oder die Organisation, die die Repositorys erhält.",
+      "githubOwnerInvalid": "Geben Sie den Namen eines GitHub-Kontos oder einer Organisation ein: Buchstaben, Ziffern und einzelne Bindestriche.",
+      "handedOverTogether": "Gemeinsam übergeben",
+      "noAwsRepositories": "{org} hat keine Repositorys, die auf AWS laufen – es gibt nichts zu übergeben.",
+      "awsStepsNote": "Einige Schritte finden in AWS selbst statt – die Anmeldung als Root-Benutzer, das Hinzufügen einer Zahlungsmethode. Motir fragt nie nach Zahlungsdaten oder einem Root-Passwort.",
+      "confirmTitle": "Übergabe starten?",
+      "confirmNewOwner": "Neuer Inhaber des AWS-Kontos",
+      "confirmRepositoriesGoTo": "Repositorys gehen an",
+      "consequencePreviews": "{count, plural, one {Die Vorschauen dieses Repositorys werden gelöscht, und Motir stellt es nicht mehr bereit.} other {Die Vorschauen dieser # Repositorys werden gelöscht, und Motir stellt sie nicht mehr bereit.}}",
+      "consequenceRunning": "Die Apps laufen weiter. Sie richten Ihre Domains auf deren eigene Adressen aus, bevor Motirs Zugriff endet.",
+      "consequenceIrreversible": "Sobald das Konto Motirs AWS Organization verlassen hat, lässt sich das nicht rückgängig machen.",
+      "start": "Übergabe starten",
+      "starting": "Wird gestartet…",
+      "startRefused": {
+        "notReady": "Die Übergabe konnte nicht starten: Das AWS-Konto von {org} ist noch nicht bereit zur Übergabe. Es wurde nichts geändert – versuchen Sie es in ein paar Minuten erneut.",
+        "alreadyStarted": "Die Übergabe konnte nicht starten: Für das AWS-Konto von {org} wurde sie bereits gestartet. Es wurde nichts geändert – laden Sie die Seite neu, um sie zu verfolgen.",
+        "githubIdentity": "Die Übergabe konnte nicht starten: Verbinden Sie zuerst Ihr GitHub-Konto, damit die Repositorys übertragen werden können. Es wurde nichts geändert.",
+        "input": "Die Übergabe konnte nicht starten: Prüfen Sie die E-Mail des Inhabers und den GitHub-Inhaber. Es wurde nichts geändert.",
+        "failed": "Die Übergabe konnte nicht starten. Es wurde nichts geändert – versuchen Sie es gleich noch einmal."
+      },
+      "checklistEyebrow": "Übergabe des AWS-Hostings",
+      "checklistTitle": "AWS-Konto von {org}",
+      "accountLabel": "Konto",
+      "repositoryCount": "{count, plural, one {# Repository} other {# Repositorys}}",
+      "checklistLoading": "Übergabe wird gelesen…",
+      "checklistError": "Die Übergabe konnte nicht gelesen werden",
+      "checklistErrorBody": "Es hat sich nichts geändert. Versuchen Sie es gleich noch einmal.",
+      "tryAgain": "Erneut versuchen",
+      "stepsLabel": "Schritte der Übergabe",
+      "stepFailedUnknown": "Dieser Schritt ist fehlgeschlagen. Nichts danach wurde ausgeführt.",
+      "retry": "Wiederholen",
+      "status": {
+        "pending": "Ausstehend",
+        "running": "Läuft",
+        "waitingOnYou": "Wartet auf Sie",
+        "done": "Erledigt",
+        "failed": "Fehlgeschlagen"
+      },
+      "overall": {
+        "inProgress": "In Arbeit",
+        "waiting": "Wartet auf Sie",
+        "failed": "Muss wiederholt werden",
+        "done": "Übergeben"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Vorschauen entfernt",
+          "body": "{count, plural, one {Die Vorschauumgebungen des Repositorys werden gelöscht.} other {Die Vorschauumgebungen der # Repositorys werden gelöscht.}}"
+        },
+        "create_deploy_role": {
+          "label": "Deploy-Rolle für Ihre CI erstellt",
+          "body": "Die Workflows Ihrer Repositorys stellen ab jetzt damit bereit."
+        },
+        "open_upstream": {
+          "label": "Apps ohne Motir erreichbar",
+          "body": "Jede App antwortet unter ihrer eigenen Adresse, unten aufgeführt."
+        },
+        "move_email": {
+          "label": "Konto-E-Mail umgestellt",
+          "body": "Die E-Mail des AWS-Kontos wird die des neuen Inhabers."
+        },
+        "await_standalone": {
+          "label": "Schritte in AWS",
+          "body": "Root-Anmeldung, Zahlungsmethode, Kontaktdaten und Vereinbarungen – in AWS erledigt."
+        },
+        "remove_access": {
+          "label": "Motirs Zugriff entfernt",
+          "body": "Motirs Rollen im Konto werden gelöscht; motir.site-Adressen antworten nicht mehr."
+        },
+        "leave_organization": {
+          "label": "Konto hat Motirs AWS Organization verlassen",
+          "body": "Das Konto ist jetzt ein eigenständiges AWS-Konto."
+        },
+        "transfer_repositories": {
+          "label": "Jedes Repository übertragen",
+          "body": "GitHub überträgt jedes Repository an seinen neuen Inhaber.",
+          "bodyOwner": "GitHub überträgt jedes Repository an {owner}."
+        }
+      },
+      "codeLabel": "Code von AWS",
+      "confirmCode": "Code bestätigen",
+      "codeRefused": "AWS hat diesen Code nicht akzeptiert.",
+      "codeEmpty": "Geben Sie den Code aus der E-Mail von AWS ein.",
+      "codeHelp": "AWS hat einen Einmalcode an {email} gesendet. Motir gibt ihn an AWS weiter und speichert ihn nie.",
+      "codeHelpUnknown": "AWS hat einen Einmalcode an den neuen Inhaber gesendet. Motir gibt ihn an AWS weiter und speichert ihn nie.",
+      "codeRefusedHelp": "Prüfen Sie die neueste E-Mail von AWS an {email} – ein neuer Code ersetzt den alten – und versuchen Sie es erneut.",
+      "codeRefusedHelpUnknown": "Prüfen Sie die neueste E-Mail von AWS an den neuen Inhaber – ein neuer Code ersetzt den alten – und versuchen Sie es erneut.",
+      "standaloneIntro": "{email} erledigt in AWS:",
+      "standaloneIntroUnknown": "Der neue Inhaber erledigt in AWS:",
+      "standalone": {
+        "rootSignIn": "Als Root-Benutzer beim Konto anmelden und ein Passwort festlegen",
+        "payment": "Eine Zahlungsmethode hinzufügen",
+        "contact": "Die Kontaktdaten bestätigen",
+        "agreement": "Die Kundenvereinbarung von AWS annehmen"
+      },
+      "standaloneNote": "Das geschieht in AWS, nicht hier. Motir fragt nie nach Zahlungsdaten oder einem Root-Passwort.",
+      "checkAgain": "Erneut prüfen",
+      "signIn": "Die AWS-Anmeldeseite öffnen (öffnet in einem neuen Tab)",
+      "notReady": "Noch nicht bereit – AWS braucht noch:",
+      "missing": {
+        "wait_period": "Zeit: AWS hält ein neues Konto einige Tage, bevor es gehen kann",
+        "delegated_administrator": "dass das Konto kein delegierter Administrator mehr ist",
+        "payment_method": "eine Zahlungsmethode",
+        "support_plan": "einen Support-Plan",
+        "contact_information": "die Kontaktdaten des Kontos"
+      },
+      "actionFailed": "Das hat nicht geklappt. Es wurde nichts geändert – versuchen Sie es gleich noch einmal.",
+      "upstreamsTitle": "Wo Ihre Apps ohne Motir antworten",
+      "upstreamsLead": "Motirs Adressen (…motir.site) antworten nicht mehr, sobald Motirs Zugriff entfernt ist. Richten Sie jede Domain vorher auf ihre Adresse aus.",
+      "upstreamsLoading": "Adressen werden gelesen…",
+      "upstreamsEmpty": "Noch keine Apps aufzulisten.",
+      "upstreamsError": "Die Adressen konnten nicht gelesen werden",
+      "upstreamsErrorBody": "Die Übergabe ist davon nicht betroffen. Versuchen Sie es gleich noch einmal.",
+      "ownAddress": "Eigene Adresse",
+      "upstreamNotOpen": "Noch nicht geöffnet",
+      "noDomains": "Keine eigenen Domains – nichts umzustellen.",
+      "pointAt": "zeigt auf",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "copyOwnLabel": "Adresse von {app} kopieren",
+      "copyDomainLabel": "Kopieren, worauf {host} zeigt"
     }
   },
   "apiDocs": {
@@ -15567,14 +15827,22 @@
           "creating": "Wird erstellt",
           "bootstrapping": "Bootstrap läuft",
           "ready": "Bereit",
-          "refused": "Abgelehnt"
+          "refused": "Abgelehnt",
+          "handing_over": "Wird übergeben",
+          "awaiting_standalone": "Wartet auf Eigenständigkeit",
+          "removing": "Wird gelöst",
+          "handed_over": "Übergeben"
         },
         "notReady": {
           "requested": "Kontingente werden gelesen, sobald das Konto bereit ist. Das Konto wurde noch nicht erstellt.",
           "creating": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS erstellt das Konto gerade.",
           "bootstrapping": "Kontingente werden gelesen, sobald das Konto bereit ist. Der Bootstrap richtet die Deploy-Rolle, die Tags und die Kontingentanhebungen ein.",
           "refused": "{count, plural, one {AWS hat die Erstellung des Kontos einmal abgelehnt, {age}.} other {AWS hat die Erstellung des Kontos # Mal abgelehnt, zuletzt {age}.}} Der Abgleich versucht es nach seiner Wartezeit erneut; Kontingente werden gelesen, sobald das Konto bereit ist.",
-          "refusedNever": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS hat die Erstellung des Kontos abgelehnt; der Abgleich versucht es nach seiner Wartezeit erneut."
+          "refusedNever": "Kontingente werden gelesen, sobald das Konto bereit ist. AWS hat die Erstellung des Kontos abgelehnt; der Abgleich versucht es nach seiner Wartezeit erneut.",
+          "handing_over": "Während einer Übergabe werden keine Kontingente gelesen. Das Konto wird an seine Organisation übergeben.",
+          "awaiting_standalone": "Während einer Übergabe werden keine Kontingente gelesen. Die Organisation muss Zahlungsdaten und einen Supportplan hinterlegen, bevor das Konto austreten kann.",
+          "removing": "Während einer Übergabe werden keine Kontingente gelesen. Das Konto tritt aus der AWS-Organisation von Motir aus.",
+          "handed_over": "Das Konto hat Motir verlassen und gehört seiner Organisation. Seine Kontingente werden nicht mehr gelesen."
         },
         "col": {
           "quota": "Kontingent",
@@ -18921,6 +19189,14 @@
       "title": "Hier gibt es keine Vorschau",
       "body": "Diese Adresse gehört zu keiner laufenden Vorschau. Sie wurde möglicherweise beendet, oder der Link ist falsch geschrieben.",
       "home": "Zu Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Übergeben. Die App läuft bis {date} weiter auf Motir.",
+      "seven_days": "Die App wird in 7 Tagen auf Motir gestoppt, am {date}.",
+      "one_day": "Die App wird morgen auf Motir gestoppt, am {date}.",
+      "stopped": "Die App wurde am {date} auf Motir gestoppt. Laden Sie den letzten Datenbankexport innerhalb von 30 Tagen herunter."
     }
   }
 }

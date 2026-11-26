@@ -245,7 +245,7 @@ function accountOf(
     organizationName: row.organization.name,
     accountName: tenantAccountName(row.organizationId),
     awsAccountId: row.awsAccountId,
-    // The column's check constraint holds it to the five states.
+    // The column's check constraint holds it to the nine states.
     state: row.state as HostingTenantAccountState,
     refusedCount: row.refusedCount,
     lastRefusedAt: row.lastRefusedAt?.toISOString() ?? null,

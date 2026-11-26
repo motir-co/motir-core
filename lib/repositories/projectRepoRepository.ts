@@ -1,5 +1,6 @@
 import {
   Prisma,
+  type HostedApplicationState,
   type HostingShape,
   type HostingSize,
   type HostingTarget,
@@ -11,6 +12,7 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
+import { HANDOVER_APPLICATION_STATES } from '@/lib/hosting/vocabulary';
 import { TRANSFERRED_TAKEOVER_STATES } from '@/lib/projectRepos/takeover';
 import {
   ESTABLISHED_PROJECT_REPO_STATES,
@@ -255,6 +257,21 @@ const PREVIEW_LIFECYCLE_SUBJECT_SELECT = {
     },
   },
 } satisfies Prisma.ProjectRepoSelect;
+
+/** The takeover facts the deploy decision reads (MOTIR-12127). */
+const TAKEOVER_FACTS_SELECT = {
+  takeoverState: true,
+  takeoverTransferredAt: true,
+  hostedApplication: { select: { state: true } },
+} as const satisfies Prisma.ProjectRepoSelect;
+
+/** Flatten the application's state onto the row as `applicationState`. */
+function flattenTakeoverFacts<
+  T extends { hostedApplication: { state: HostedApplicationState } | null },
+>(row: T): Omit<T, 'hostedApplication'> & { applicationState: HostedApplicationState | null } {
+  const { hostedApplication, ...rest } = row;
+  return { ...rest, applicationState: hostedApplication?.state ?? null };
+}
 
 export const projectRepoRepository = {
   /**
@@ -1179,12 +1196,14 @@ export const projectRepoRepository = {
 
   /**
    * The facts a PRODUCTION home is decided from (Story MOTIR-9797 · MOTIR-10026):
-   * tenancy, name, seed source, establish state and hosting target. A read by id
-   * alone, like {@link findHostingIdentityInTx} — the caller holds a
+   * tenancy, name, seed source, establish state and hosting target, and — for the
+   * takeover's release freeze (MOTIR-12127) — the takeover state, the transfer
+   * time and the application's handover state, flattened to `applicationState`.
+   * A read by id alone, like {@link findHostingIdentityInTx} — the caller holds a
    * `withSystemContext` transaction (`project_repository_system_read`).
    */
   async findDeployFactsInTx(id: string, tx: Prisma.TransactionClient) {
-    return tx.projectRepo.findUnique({
+    const row = await tx.projectRepo.findUnique({
       where: { id },
       select: {
         id: true,
@@ -1197,14 +1216,38 @@ export const projectRepoRepository = {
         hostingSize: true,
         hostingShape: true,
         githubRepo: { select: { owner: true, name: true, defaultBranch: true } },
+        ...TAKEOVER_FACTS_SELECT,
       },
     });
+    return row ? flattenTakeoverFacts(row) : null;
+  },
+
+  /**
+   * The deploy facts of every row linked to one GitHub repository, in position
+   * order — what the merge release filters on (MOTIR-12127). Same posture as
+   * {@link listByGithubRepoId}.
+   */
+  async listDeployFactsByGithubRepoId(githubRepoId: string, tx: Prisma.TransactionClient) {
+    const rows = await tx.projectRepo.findMany({
+      where: { githubRepoId },
+      orderBy: { position: 'asc' },
+      select: {
+        id: true,
+        workspaceId: true,
+        seedSource: true,
+        state: true,
+        hostingTarget: true,
+        ...TAKEOVER_FACTS_SELECT,
+      },
+    });
+    return rows.map(flattenTakeoverFacts);
   },
 
   /**
    * One page of the repositories production enablement's backfill walks
-   * (MOTIR-10027): established, not a customer repository, Fly-targeted and
-   * realized on GitHub, in id order after `afterId`. A platform read across
+   * (MOTIR-10027): established, not a customer repository, Fly-targeted,
+   * realized on GitHub and not taken over (MOTIR-12127), in id order after
+   * `afterId`. A platform read across
    * workspaces — the caller holds a `withSystemContext` transaction.
    */
   async listProductionCandidatesInTx(
@@ -1219,6 +1262,24 @@ export const projectRepoRepository = {
         hostingTarget: 'fly',
         seedSource: { not: SEED_SOURCE_ORGANIZATION },
         githubRepoId: { not: null },
+        // Never a taken-over repository (MOTIR-12127): re-minting its deploy
+        // token would re-create a credential the handover removed. `NOT IN`
+        // drops NULL in SQL, so a row with no takeover is admitted explicitly.
+        takeoverTransferredAt: null,
+        AND: [
+          {
+            OR: [
+              { takeoverState: null },
+              { takeoverState: { notIn: [...TRANSFERRED_TAKEOVER_STATES] } },
+            ],
+          },
+          {
+            OR: [
+              { hostedApplication: { is: null } },
+              { hostedApplication: { is: { state: { notIn: [...HANDOVER_APPLICATION_STATES] } } } },
+            ],
+          },
+        ],
       },
       select: { id: true },
       orderBy: { id: 'asc' },
@@ -1254,6 +1315,30 @@ export const projectRepoRepository = {
       organizationId: row.workspace.organizationId,
       githubRepositoryId: row.githubRepo?.repoId ?? null,
     };
+  },
+
+  /**
+   * Every Motir-created repository of the organisation whose hosting target is
+   * `aws` (MOTIR-12131) — the repositories its one tenant AWS account holds,
+   * oldest first, with the takeover state and the realized GitHub repository.
+   * `state: 'created'` is the ownership test, as `assertTransferable`'s. A
+   * platform read across the organisation's workspaces — the caller holds a
+   * `withSystemContext` transaction (`project_repository_system_read`).
+   */
+  async listAwsMotirReposByOrganizationInTx(organizationId: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { hostingTarget: 'aws', state: 'created', workspace: { organizationId } },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        takeoverState: true,
+        project: { select: { name: true } },
+        githubRepo: { select: { repoId: true, owner: true, name: true, installationId: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
   },
 
   /**

@@ -4,7 +4,10 @@ import {
   applicationHostForWorkspaceHostname,
   deriveApplicationSlug,
 } from '@/lib/hosting/applicationAddress';
-import { deployEligibilityRefusal } from '@/lib/hosting/deployEligibility';
+import {
+  deployEligibilityRefusal,
+  type DeployEligibilityRefusal,
+} from '@/lib/hosting/deployEligibility';
 import { defaultIdlePolicy, idlePolicyColumns } from '@/lib/hosting/idlePolicy';
 import {
   ApplicationNotFoundError,
@@ -13,6 +16,7 @@ import {
   IllegalReleaseTransitionError,
   ReleaseNotOfApplicationError,
   RepositoryNotEstablishedError,
+  RepositoryTakenOverError,
 } from '@/lib/hosting/errors';
 import {
   isLegalReleaseTransition,
@@ -29,6 +33,7 @@ import {
   hostedReleaseRepository,
   type HostedReleaseStamp,
 } from '@/lib/repositories/hostedReleaseRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -117,6 +122,8 @@ function refuseIneligible(row: Parameters<typeof deployEligibilityRefusal>[0] & 
   switch (deployEligibilityRefusal(row)) {
     case 'customer_repository':
       throw new CustomerRepositoryNotDeployableError(row.id);
+    case 'taken_over':
+      throw new RepositoryTakenOverError(row.id);
     case 'not_established':
       throw new RepositoryNotEstablishedError(row.id, row.state);
     case 'no_target':
@@ -264,6 +271,38 @@ export const hostedApplicationService = {
         tx,
       );
       return row ? toHostedApplicationDto(row) : null;
+    });
+  },
+
+  /**
+   * What the Production panel's handover read needs beyond the application row
+   * (MOTIR-12138): the repository's deploy refusal — the one function every
+   * deploy path asks, so the panel hides exactly what the server refuses — and
+   * the organisation that owns the workspace, which the export and stop routes
+   * are addressed by. A SYSTEM read of a row the caller already resolved through
+   * its browse-gated door; the organisation row is not readable in a workspace
+   * context. Null when the repository or its organisation is gone.
+   */
+  async readHandoverFacts(
+    projectRepositoryId: string,
+    workspaceId: string,
+  ): Promise<{
+    deployRefusal: DeployEligibilityRefusal | null;
+    organizationId: string;
+    organizationName: string;
+  } | null> {
+    return withSystemContext(async (tx) => {
+      const facts = await projectRepoRepository.findDeployFactsInTx(projectRepositoryId, tx);
+      if (!facts || facts.workspaceId !== workspaceId) return null;
+      const organizationId = await workspaceRepository.findOrganizationId(workspaceId, tx);
+      if (!organizationId) return null;
+      const organization = await organizationRepository.findByIdInTx(organizationId, tx);
+      if (!organization) return null;
+      return {
+        deployRefusal: deployEligibilityRefusal(facts),
+        organizationId,
+        organizationName: organization.name,
+      };
     });
   },
 

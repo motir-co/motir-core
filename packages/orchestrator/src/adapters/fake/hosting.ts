@@ -113,6 +113,9 @@ export interface FakeHostedApp {
    *  an origin a lane points at a stand-in (MOTIR-10100). Null or absent: the
    *  template. */
   upstreamOverride?: string | null;
+  /** The address `openUpstream` opened the production release at (MOTIR-12141):
+   *  the release answering without Motir's origin secret. Absent until opened. */
+  openedUpstream?: string | null;
 }
 
 /** The port operations, as the fake's call log names them. */
@@ -129,6 +132,15 @@ export interface FakeHostingCall {
 }
 
 export interface FakeHostingControls {
+  /**
+   * The AWS adapter's `openUpstream`, as the fake answers it (Story MOTIR-9800 ·
+   * MOTIR-12141): the app's production release answers without Motir's origin
+   * secret at the address returned, recorded on the app in the shared store so
+   * every process reads it. Idempotent — a repeat answers the same address —
+   * and failable once through `failNext('openUpstream')`. An app with no live
+   * release is the typed refusal the real adapter gives for nothing to open.
+   */
+  openUpstream(handle: ReleaseHandle): Promise<{ readonly upstreamAddress: string }>;
   /** The fake's clock. */
   now(): Date;
   advanceSeconds(seconds: number): void;
@@ -193,7 +205,8 @@ export type FakeHostingFailure =
   | 'deploy'
   | 'runReleaseCommand'
   | 'ensurePushNamespace'
-  | 'revokeDeployCredentials';
+  | 'revokeDeployCredentials'
+  | 'openUpstream';
 
 /** The name MOTIR-10030 gave the failable operations. */
 export type FakeFailableOperation = FakeHostingFailure;
@@ -718,6 +731,20 @@ export function createFakeHostingDeployPort(
       clearRuntime(app.appRef, true);
       save();
       return result;
+    },
+
+    async openUpstream(handle) {
+      injectedFailure('openUpstream');
+      load();
+      const app = appOf(handle.appRef);
+      if (!app.live) {
+        throw new OrchestratorApiError('fake', 409, `app ${handle.appRef} has no live release`);
+      }
+      if (!app.openedUpstream) {
+        app.openedUpstream = app.upstreamOverride ?? upstreamFor(app.appRef, app.live.shape);
+        save();
+      }
+      return { upstreamAddress: app.openedUpstream };
     },
 
     async destroyApp({ appRef }) {

@@ -1091,6 +1091,19 @@
       "renew": "Renewing the AI plan before {date} cancels the deletion. Until then your agents cannot be created or woken, and their storage is still charged every day.",
       "openBilling": "Renew the AI plan",
       "footer": "You are receiving this because you own agents in this organization."
+    },
+    "hostedApplicationGrace": {
+      "subject": "{kind, select, transferred {{repository} keeps running on Motir until {date}} seven_days {{repository} stops running on Motir in 7 days} one_day {{repository} stops running on Motir tomorrow} other {{repository} has stopped running on Motir}}",
+      "preview": "{kind, select, stopped {Download the final database export of {repository} within 30 days} other {{repository} stops running on Motir on {date}}}",
+      "greeting": "Hi {name},",
+      "lede": {
+        "transferred": "{repository} has moved to your own GitHub account. Its app keeps running on Motir until {date}, so you have time to deploy it on your own host. From the Production panel you can download a database export at any time, and stop the app early when you are ready.",
+        "seven_days": "The app of {repository} stops running on Motir on {date}, in 7 days. Before then, deploy the repository on your own host, restore a database export there and point your domains at it.",
+        "one_day": "The app of {repository} stops running on Motir on {date}, tomorrow. If your new host does not have your latest data yet, download a fresh database export now.",
+        "stopped": "The app of {repository} has stopped running on Motir, and its app and database have been deleted. The final database export, taken after the app stopped, can be downloaded from the Production panel for 30 days."
+      },
+      "openProduction": "Open the Production panel",
+      "footer": "You are receiving this because you are the Owner or an Admin of the organization."
     }
   },
   "auth": {
@@ -4946,6 +4959,105 @@
           "bodyCannotSuspend": "This app runs as an AWS container, which can’t be suspended, so it keeps running always on and keeps using credits until the balance is topped up. Motir never stops or deletes a production app for being out of credits.",
           "topUp": "Top up credits",
           "member": "An organisation owner or admin can top up credits."
+        }
+      },
+      "handover": {
+        "notice": {
+          "title": "This app is being handed over",
+          "body": "{organization} is taking over its AWS hosting. Motir no longer deploys, redeploys or rolls it back; the app keeps running throughout.",
+          "link": "Follow the handover in Repositories",
+          "memberNote": "You can see production. Only organisation admins take over the hosting."
+        },
+        "banner": {
+          "transferred": {
+            "title": "{name} moved to your GitHub — it keeps running here until {date}",
+            "body": "Deploy it on your own host before then. Download a database export any time, and stop the app early when you are ready."
+          },
+          "sevenDays": {
+            "title": "{name} stops running on Motir in 7 days, on {date}",
+            "body": "Restore a database export on your new host and point your domains at it."
+          },
+          "oneDay": {
+            "title": "{name} stops running on Motir tomorrow, {date}",
+            "body": "If your new host does not have your latest data yet, download a fresh export now."
+          }
+        },
+        "grace": {
+          "memberNote": "You can see production. Only organisation admins can download exports or stop the app early.",
+          "runsUntil": "Runs until",
+          "body": "Motir keeps serving {name} at {address} until then. Then the app stops and its database is deleted; a final export is kept for 30 days.",
+          "bodyNoAddress": "Motir keeps serving {name} until then. Then the app stops and its database is deleted; a final export is kept for 30 days.",
+          "pill": "Grace window"
+        },
+        "exports": {
+          "title": "Database exports",
+          "download": "Download export",
+          "busy": "Exporting…",
+          "busyStatus": "Taking the export — this can take a few minutes. It is listed here when it is ready.",
+          "help": "A full dump of the production database (pg_dump, custom format) to restore on your new host. Each export can be downloaded until the date shown beside it.",
+          "empty": "No exports yet.",
+          "row": "{size} · by {name} · kept until {date}",
+          "rowUnnamed": "{size} · kept until {date}",
+          "downloadLink": "Download",
+          "downloadAria": "Download the export taken {date}",
+          "failed": "The export didn’t finish. Nothing in the database changed — <retry>try again</retry>."
+        },
+        "refusal": {
+          "forbidden": "Only organisation admins can do this.",
+          "notInGrace": "This app is no longer in its grace window, so nothing changed.",
+          "notFound": "This app is no longer available to you."
+        },
+        "stop": {
+          "title": "Stop it early",
+          "body": "When your new host is serving, stop {name} now instead of waiting for {date}.",
+          "button": "Stop now",
+          "failed": {
+            "stop_serving": "Stopping didn’t finish while taking {name} offline. Nothing was deleted. Try again picks up from there.",
+            "final_export": "Stopping didn’t finish while taking the final export. The app is no longer served, and nothing was deleted. Try again picks up from there.",
+            "delete_database": "Stopping didn’t finish while deleting the database. What already happened stays done — the app is no longer served and the final export is kept. Try again picks up from there.",
+            "record": "Stopping didn’t finish while recording the stop. The app and its database are deleted and the final export is kept. Try again picks up from there.",
+            "unknown": "Stopping didn’t finish. What already happened stays done. Try again picks up from there."
+          }
+        },
+        "dialog": {
+          "title": "Stop {name} now?",
+          "body": "Motir stops serving {name} today instead of on {date}. Then it deletes:",
+          "deleteApp": "the app and its address {address}",
+          "deleteAppNoAddress": "the app",
+          "deleteDatabase": "the production database",
+          "finalExport": "A final database export is taken first and kept for 30 days, so you can still download it here. This cannot be undone.",
+          "cancel": "Cancel",
+          "confirm": "Stop {name} now",
+          "busy": "Stopping…",
+          "retry": "Try again"
+        },
+        "handedOver": {
+          "copy": "Copy",
+          "copied": "Copied",
+          "aws": {
+            "title": "Handed over",
+            "body": "{organization} runs {name} on its own AWS account since {date}. Motir no longer deploys or serves it.",
+            "pill": "Handed over",
+            "account": "AWS account",
+            "copyAccount": "Copy the AWS account id",
+            "upstream": "Upstream address",
+            "copyUpstream": "Copy the upstream address"
+          },
+          "stopped": {
+            "title": "Stopped",
+            "body": "{name} moved to your GitHub, and its app on Motir’s {target, select, fly {Fly} other {serverless}} account stopped. Its app, address and database are deleted. Motir no longer deploys or serves it.",
+            "pill": "Stopped"
+          },
+          "final": {
+            "title": "Final database export",
+            "taken": "Taken at the stop, {date}",
+            "meta": "{size} · kept until {date}",
+            "download": "Download",
+            "downloadAria": "Download the final database export",
+            "memberNote": "You can see production. Only organisation admins can download the final export.",
+            "expired": "The final export was kept until {date} and has been deleted. Exports you downloaded are unaffected.",
+            "none": "No final export is kept for this app."
+          }
         }
       }
     },
@@ -10730,6 +10842,154 @@
       "stateUnfinishedYours": "Removal didn’t finish",
       "unfinishedDetailYours": "Motir stopped part way through shutting down what it runs from this repository. The repository itself stays in your GitHub account, and trying again finishes the rest.",
       "retryDelete": "Try again"
+    },
+    "awsHandover": {
+      "takeOver": "Take over AWS hosting",
+      "takeOverLabel": "Take over AWS hosting for {repo}",
+      "rowHelperMember": "Runs on {org}’s AWS account, which leaves Motir whole — an organization admin hands it over.",
+      "refusalTitle": "{repo} moves with {count, plural, one {one other repository} other {# other repositories}}",
+      "refusalLead": "Its app runs on {org}’s AWS account, and so do these. An AWS account leaves Motir whole — one account per organization — so they can only be taken over together.",
+      "startLead": "This repository’s app runs on {org}’s own AWS account inside Motir. That account leaves Motir whole, with its apps still running — so on AWS you take over the hosting, and the repositories move with it.",
+      "refusalOthersLabel": "The other repositories on the account",
+      "oneAccountTitle": "One AWS account per organization",
+      "oneAccountBody": "Every {org} repository that runs on AWS is handed over together, in one step you can follow and resume.",
+      "nothingChanged": "Nothing has changed.",
+      "stillHosted": "{repo} is still hosted by Motir, and so are the others.",
+      "askAnAdmin": "An organization admin can take over AWS hosting for all of them together.",
+      "cancel": "Cancel",
+      "close": "Close",
+      "back": "Back",
+      "continue": "Continue",
+      "stepEyebrow": "Take over AWS hosting · step {step} of 2",
+      "stepTitle": "Hand {org}’s AWS account over",
+      "stepLead": "The account leaves Motir with every app in it still running. Name who owns it next, and where the repositories go.",
+      "ownerEmailLabel": "Owner email",
+      "ownerEmailPlaceholder": "name@example.com",
+      "ownerEmailHelp": "The address that will own the AWS account. AWS emails a one-time code here.",
+      "ownerEmailInvalid": "Enter an email address, like name@example.com.",
+      "githubOwnerLabel": "GitHub owner",
+      "githubOwnerPlaceholder": "your-organization",
+      "githubOwnerHelp": "The GitHub account or organization that receives the repositories.",
+      "githubOwnerInvalid": "Enter a GitHub account or organization name: letters, digits and single hyphens.",
+      "handedOverTogether": "Handed over together",
+      "noAwsRepositories": "{org} has no repositories running on AWS, so there is nothing to hand over.",
+      "awsStepsNote": "A few steps happen in AWS itself — signing in as the root user, adding a payment method. Motir never asks for a payment detail or a root password.",
+      "confirmTitle": "Start the handover?",
+      "confirmNewOwner": "New owner of the AWS account",
+      "confirmRepositoriesGoTo": "Repositories go to",
+      "consequencePreviews": "{count, plural, one {The previews of this repository are deleted, and Motir stops deploying it.} other {Previews of these # repositories are deleted, and Motir stops deploying them.}}",
+      "consequenceRunning": "The apps keep running. You point your domains at their own addresses before Motir’s access ends.",
+      "consequenceIrreversible": "Once the account has left Motir’s AWS Organization, this cannot be undone.",
+      "start": "Start handover",
+      "starting": "Starting…",
+      "startRefused": {
+        "notReady": "The handover couldn’t start: {org}’s AWS account isn’t ready to hand over yet. Nothing was changed — try again in a few minutes.",
+        "alreadyStarted": "The handover couldn’t start: it has already been started for {org}’s AWS account. Nothing was changed — reload the page to follow it.",
+        "githubIdentity": "The handover couldn’t start: connect your GitHub account first, so the repositories can be transferred. Nothing was changed.",
+        "input": "The handover couldn’t start: check the owner email and the GitHub owner. Nothing was changed.",
+        "failed": "The handover couldn’t start. Nothing was changed — try again in a moment."
+      },
+      "checklistEyebrow": "AWS hosting handover",
+      "checklistTitle": "{org}’s AWS account",
+      "accountLabel": "Account",
+      "repositoryCount": "{count, plural, one {# repository} other {# repositories}}",
+      "checklistLoading": "Reading the handover…",
+      "checklistError": "The handover couldn’t be read",
+      "checklistErrorBody": "Nothing has changed. Try again in a moment.",
+      "tryAgain": "Try again",
+      "stepsLabel": "Handover steps",
+      "stepFailedUnknown": "This step failed. Nothing after it has run.",
+      "retry": "Retry",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "waitingOnYou": "Waiting on you",
+        "done": "Done",
+        "failed": "Failed"
+      },
+      "overall": {
+        "inProgress": "In progress",
+        "waiting": "Waiting on you",
+        "failed": "Needs a retry",
+        "done": "Handed over"
+      },
+      "step": {
+        "destroy_previews": {
+          "label": "Previews removed",
+          "body": "{count, plural, one {The preview environments of the repository are deleted.} other {The preview environments of the # repositories are deleted.}}"
+        },
+        "create_deploy_role": {
+          "label": "Deploy role for your CI created",
+          "body": "Your repositories’ workflows deploy with it from now on."
+        },
+        "open_upstream": {
+          "label": "Apps reachable without Motir",
+          "body": "Each app answers on its own address, listed below."
+        },
+        "move_email": {
+          "label": "Account email moved",
+          "body": "The AWS account’s email becomes the new owner’s."
+        },
+        "await_standalone": {
+          "label": "AWS’s own steps",
+          "body": "Root sign-in, payment method, contact details and agreements, done in AWS."
+        },
+        "remove_access": {
+          "label": "Motir’s access removed",
+          "body": "Motir’s roles in the account are deleted; motir.site addresses stop answering."
+        },
+        "leave_organization": {
+          "label": "Account left Motir’s AWS Organization",
+          "body": "The account is now a standalone AWS account."
+        },
+        "transfer_repositories": {
+          "label": "Each repository transferred",
+          "body": "GitHub moves each repository to its new owner.",
+          "bodyOwner": "GitHub moves each repository to {owner}."
+        }
+      },
+      "codeLabel": "Code from AWS",
+      "confirmCode": "Confirm code",
+      "codeRefused": "AWS didn’t accept that code.",
+      "codeEmpty": "Enter the code from AWS’s email.",
+      "codeHelp": "AWS emailed a one-time code to {email}. Motir passes it to AWS and never stores it.",
+      "codeHelpUnknown": "AWS emailed a one-time code to the new owner. Motir passes it to AWS and never stores it.",
+      "codeRefusedHelp": "Check the latest email from AWS to {email} — a new code replaces the old one — and try again.",
+      "codeRefusedHelpUnknown": "Check the latest email from AWS to the new owner — a new code replaces the old one — and try again.",
+      "standaloneIntro": "{email} does these in AWS:",
+      "standaloneIntroUnknown": "The new owner does these in AWS:",
+      "standalone": {
+        "rootSignIn": "Sign in to the account as its root user and set a password",
+        "payment": "Add a payment method",
+        "contact": "Confirm the contact details",
+        "agreement": "Accept AWS’s customer agreement"
+      },
+      "standaloneNote": "These are done in AWS, not here. Motir never asks for a payment detail or a root password.",
+      "checkAgain": "Check again",
+      "signIn": "Open the AWS sign-in page (opens in a new tab)",
+      "notReady": "Not ready yet — AWS still needs:",
+      "missing": {
+        "wait_period": "time to pass: AWS holds a new account for a few days before it can leave",
+        "delegated_administrator": "the account to stop being a delegated administrator",
+        "payment_method": "a payment method",
+        "support_plan": "a support plan",
+        "contact_information": "the account’s contact details"
+      },
+      "actionFailed": "That didn’t go through. Nothing was changed — try again in a moment.",
+      "upstreamsTitle": "Where your apps answer without Motir",
+      "upstreamsLead": "Motir’s addresses (…motir.site) stop answering when Motir’s access is removed. Point each domain at its address before then.",
+      "upstreamsLoading": "Reading the addresses…",
+      "upstreamsEmpty": "No apps to list yet.",
+      "upstreamsError": "The addresses couldn’t be read",
+      "upstreamsErrorBody": "The handover is unaffected. Try again in a moment.",
+      "ownAddress": "Its own address",
+      "upstreamNotOpen": "Not open yet",
+      "noDomains": "No custom domains — nothing to repoint.",
+      "pointAt": "point at",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyOwnLabel": "Copy the address of {app}",
+      "copyDomainLabel": "Copy where {host} points"
     }
   },
   "apiDocs": {
@@ -15564,14 +15824,22 @@
           "creating": "Creating",
           "bootstrapping": "Bootstrapping",
           "ready": "Ready",
-          "refused": "Refused"
+          "refused": "Refused",
+          "handing_over": "Handing over",
+          "awaiting_standalone": "Waiting to stand alone",
+          "removing": "Leaving",
+          "handed_over": "Handed over"
         },
         "notReady": {
           "requested": "Quotas are read once the account is ready. The account has not been created yet.",
           "creating": "Quotas are read once the account is ready. AWS is creating the account.",
           "bootstrapping": "Quotas are read once the account is ready. The bootstrap is setting up its deploy role, tags and quota raises.",
           "refused": "{count, plural, one {AWS refused to create the account once, {age}.} other {AWS refused to create the account # times, last {age}.}} The reconcile tries again after its backoff; quotas are read once the account is ready.",
-          "refusedNever": "Quotas are read once the account is ready. AWS refused to create the account; the reconcile tries again after its backoff."
+          "refusedNever": "Quotas are read once the account is ready. AWS refused to create the account; the reconcile tries again after its backoff.",
+          "handing_over": "Quotas are not read during a handover. The account is being handed over to its organisation.",
+          "awaiting_standalone": "Quotas are not read during a handover. The organisation must add billing details and a support plan before the account can leave.",
+          "removing": "Quotas are not read during a handover. The account is leaving Motir’s AWS organisation.",
+          "handed_over": "The account has left Motir and belongs to its organisation. Its quotas are no longer read."
         },
         "col": {
           "quota": "Quota",
@@ -18918,6 +19186,14 @@
       "title": "There is no preview here",
       "body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
       "home": "Go to Motir"
+    }
+  },
+  "hosting": {
+    "graceNotice": {
+      "transferred": "Handed over. The app keeps running on Motir until {date}.",
+      "seven_days": "The app stops running on Motir in 7 days, on {date}.",
+      "one_day": "The app stops running on Motir tomorrow, on {date}.",
+      "stopped": "The app stopped running on Motir on {date}. Download the final database export within 30 days."
     }
   }
 }

@@ -134,7 +134,7 @@ function render(template: EmailTemplate, locale: Locale): Promise<RenderedEmail>
 
 describe('the matrix', () => {
   it('covers every template in the union', () => {
-    expect(TEMPLATES).toHaveLength(19);
+    expect(TEMPLATES).toHaveLength(20);
     expect([...ENGLISH_ONLY].every((t) => TEMPLATES.includes(t))).toBe(true);
   });
 });
@@ -217,6 +217,7 @@ describe('PART C — dates are written in the recipient’s language', () => {
     ['organization-deletion-scheduled', 'dueDate'],
     ['organization-deletion-reminder', 'dueDate'],
     ['agents-deletion-scheduled', 'deletionDate'],
+    ['hosted-application-grace', 'stopDate'],
   ] as const)('%s carries the localized date, never the US form', async (template, field) => {
     for (const [locale, expected] of [
       ['ja', '2026年10月7日'],

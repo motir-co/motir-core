@@ -10,7 +10,9 @@ import type { ProductionHealthDto } from '@/lib/dto/productionHealth';
 import type { ProductionUsageDto } from '@/lib/dto/productionUsage';
 import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
 import {
+  productionHandoverClient,
   productionPanelClient,
+  type HandoverRefusalKey,
   type ProductionRefusalKey,
 } from '@/lib/hosting/productionPanelClient';
 import { productionRuntimeClient } from '@/lib/hosting/productionRuntimeClient';
@@ -22,6 +24,14 @@ import { ProductionLogsView } from '@/components/hosting/ProductionLogsView';
 import { IdlePolicyControl, type IdlePolicyView } from '@/components/hosting/IdlePolicyControl';
 import { ProductionUsage, type UsageView } from '@/components/hosting/ProductionUsage';
 import { ProductionEmptyState } from '@/components/hosting/ProductionEmptyState';
+import {
+  GraceNoticeBanner,
+  GracePanel,
+  HandoverMemberNote,
+  StopNowDialog,
+  type ExportView,
+} from '@/components/hosting/GracePanel';
+import { HandedOverPanel, HandingOverNotice } from '@/components/hosting/HandedOverPanel';
 import { ReleaseHistoryList } from '@/components/hosting/ReleaseHistoryList';
 import { RollbackDialog } from '@/components/hosting/RollbackDialog';
 
@@ -49,9 +59,34 @@ import { RollbackDialog } from '@/components/hosting/RollbackDialog';
 // read and re-read every minute (the probe's own cadence) and after a rollback,
 // through its own sequence counter. Roll back on a crash event opens the same
 // confirmation as the card's.
+//
+// THE TAKEOVER HANDOVER (Story MOTIR-9800 · MOTIR-12138, the delta mock
+// `design/hosting/production--takeover-handover.mock.html`): the read's `handover`
+// picks the branch. `live` is the panel above, unchanged. `handing_over` adds the
+// in-progress notice; `grace` adds the Grace notice banner and the Grace panel;
+// `handed_over` is the Handed-over panel and the history alone — the app no longer
+// runs on Motir, so there is no health, log, idle or usage read. Outside `live`, and
+// whenever the deploy guard answers `taken_over`, NO release control renders: no
+// Roll back (card or crash event), no rollback dialog, no When idle switch (a
+// change redeploys). Download export and Stop now follow the page-state rule: the
+// 202 export is re-read through the panel read until it is listed, and a stop is
+// re-read until the read no longer answers `grace` — each on a bounded interval,
+// each with its own sequence counter, nothing optimistic.
 
 /** How often Health is re-read while the panel is open: the probe runs per minute. */
 export const HEALTH_REFRESH_MS = 60_000;
+
+/** How often, and how many times, the panel re-reads while an export is taken —
+ *  five minutes in all, the "few minutes" the busy line promises. */
+export const EXPORT_POLL_MS = 5_000;
+export const EXPORT_POLL_ATTEMPTS = 60;
+
+/** How often, and how many times, the panel re-reads after Stop now answers while
+ *  the read still says `grace`. */
+export const STOP_POLL_MS = 3_000;
+export const STOP_POLL_ATTEMPTS = 20;
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export function ProductionPanel({
   projectKey,
@@ -90,6 +125,27 @@ export function ProductionPanel({
   );
   const healthSeq = useRef(0);
   const hasApplication = panel.application !== null;
+  const handover = panel.handover;
+  const appState = handover?.state ?? 'live';
+  // The app still runs on Motir in every state but `handed_over`.
+  const running = hasApplication && appState !== 'handed_over';
+  // Release controls exist only on a live app the deploy guard still deploys.
+  const releasable = appState === 'live' && handover?.deployRefusal !== 'taken_over';
+
+  const [exportView, setExportView] = useState<ExportView>({ kind: 'idle' });
+  const exportSeq = useRef(0);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopPending, setStopPending] = useState(false);
+  const [stopRefusal, setStopRefusal] = useState<HandoverRefusalKey | null>(null);
+  const stopSeq = useRef(0);
+  // An unmounted panel drops every re-read loop still running.
+  useEffect(
+    () => () => {
+      exportSeq.current += 1;
+      stopSeq.current += 1;
+    },
+    [],
+  );
 
   const [idle, setIdle] = useState<IdlePolicyView>(
     initialIdle ? { kind: 'ready', idle: initialIdle } : { kind: 'loading' },
@@ -111,10 +167,13 @@ export function ProductionPanel({
       }),
     [projectKey, repositoryId],
   );
+  // A handed-over app has no idle policy or usage left to read.
+  const handedOver = appState === 'handed_over';
   useEffect(() => {
+    if (handedOver) return;
     if (!initialIdle) void readIdle();
     if (!initialUsage) void readUsage();
-  }, [initialIdle, initialUsage, readIdle, readUsage]);
+  }, [handedOver, initialIdle, initialUsage, readIdle, readUsage]);
 
   /** One health read. A `shown` read (the first, Try again) shows its error; a
    *  `quiet` refresh that fails keeps the last state read rather than replacing
@@ -132,12 +191,12 @@ export function ProductionPanel({
   );
 
   useEffect(() => {
-    if (!hasApplication) return;
+    if (!running) return;
     // With no server read the state already starts as loading.
     if (!initialHealth) void readHealth('shown');
     const timer = setInterval(() => void readHealth('quiet'), HEALTH_REFRESH_MS);
     return () => clearInterval(timer);
-  }, [hasApplication, initialHealth, readHealth]);
+  }, [running, initialHealth, readHealth]);
 
   const { currentRelease, previousRelease, releases, application } = panel;
   const address = application?.productionAddress ?? null;
@@ -187,13 +246,112 @@ export function ProductionPanel({
     void readHealth('quiet');
   };
 
+  /** Download export: ask for the dump, then re-read the panel until the export
+   *  the job names is listed, replacing the island's list from each read. */
+  const requestExport = async () => {
+    if (!handover || !application) return;
+    const mine = ++exportSeq.current;
+    setExportView({ kind: 'busy' });
+    const created = await productionHandoverClient.createExport(
+      handover.organizationId,
+      application.id,
+    );
+    if (mine !== exportSeq.current) return;
+    if (!created.ok) {
+      setExportView({ kind: 'failed', refusalKey: created.refusalKey });
+      return;
+    }
+    for (let attempt = 0; attempt < EXPORT_POLL_ATTEMPTS; attempt++) {
+      await wait(EXPORT_POLL_MS);
+      if (mine !== exportSeq.current) return;
+      const read = await productionPanelClient.read(projectKey, repositoryId);
+      if (mine !== exportSeq.current) return;
+      const fresh = read.ok ? read.data.handover : null;
+      if (!fresh) continue;
+      setPanel((prev) =>
+        prev.handover ? { ...prev, handover: { ...prev.handover, exports: fresh.exports } } : prev,
+      );
+      if (fresh.exports.some((e) => e.id === created.data.jobId)) {
+        setExportView({ kind: 'idle' });
+        return;
+      }
+    }
+    setExportView({ kind: 'failed', refusalKey: 'handover.exports.failed' });
+  };
+
+  const openStop = () => {
+    setStopRefusal(null);
+    setStopOpen(true);
+  };
+
+  /** Stop now: the confirmation stays busy until the stop answers AND a re-read
+   *  of the panel no longer answers `grace`; that read then replaces the panel. */
+  const confirmStop = async () => {
+    if (!handover || !application) return;
+    const mine = ++stopSeq.current;
+    setStopPending(true);
+    setStopRefusal(null);
+    const result = await productionHandoverClient.stop(handover.organizationId, application.id);
+    if (mine !== stopSeq.current) return;
+    if (!result.ok) {
+      setStopPending(false);
+      setStopRefusal(result.refusalKey);
+      return;
+    }
+    for (let attempt = 0; attempt < STOP_POLL_ATTEMPTS; attempt++) {
+      if (attempt > 0) await wait(STOP_POLL_MS);
+      if (mine !== stopSeq.current) return;
+      const read = await productionPanelClient.read(projectKey, repositoryId);
+      if (mine !== stopSeq.current) return;
+      if (read.ok && read.data.handover?.state !== 'grace') {
+        // Whatever else was in flight answers about an app that has stopped.
+        seq.current += 1;
+        exportSeq.current += 1;
+        setPanel(read.data);
+        setLoadingMore(false);
+        setMoreFailed(false);
+        setExportView({ kind: 'idle' });
+        setStopPending(false);
+        setStopOpen(false);
+        router.refresh();
+        return;
+      }
+    }
+    setStopPending(false);
+    setStopRefusal('handover.stop.failed.unknown');
+  };
+
   const newest = releases[0];
   const deployingCommit =
     newest && (newest.state === 'building' || newest.state === 'releasing')
       ? newest.commitSha
       : null;
   const healthDto = health.kind === 'ready' ? health.health : null;
-  const rollbackEnabled = panel.canRollback && previousRelease !== null;
+  const rollbackEnabled = releasable && panel.canRollback && previousRelease !== null;
+  // A project administrator sees Roll back only where a release may happen.
+  const rollbackShown = panel.isAdministrator && releasable;
+
+  if (handover && application && appState === 'handed_over') {
+    return (
+      <div className="flex flex-col gap-6" data-testid="production-panel">
+        <HandedOverPanel
+          handover={handover}
+          applicationId={application.id}
+          repositoryName={repositoryName}
+        />
+        {releases.length > 0 ? (
+          <ReleaseHistoryList
+            releases={releases}
+            address={address}
+            hasMore={panel.nextCursor !== null}
+            loadingMore={loadingMore}
+            moreFailed={moreFailed}
+            onShowMore={showMore}
+          />
+        ) : null}
+      </div>
+    );
+  }
   const failedNewer =
     currentRelease !== null && newest !== undefined && newest.state === 'failed'
       ? currentRelease
@@ -201,6 +359,24 @@ export function ProductionPanel({
 
   return (
     <div className="flex flex-col gap-6" data-testid="production-panel">
+      {handover && appState === 'handing_over' ? <HandingOverNotice handover={handover} /> : null}
+      {handover && application && appState === 'grace' ? (
+        <>
+          <GraceNoticeBanner handover={handover} repositoryName={repositoryName} />
+          {handover.canManageHandover ? null : (
+            <HandoverMemberNote>{t('handover.grace.memberNote')}</HandoverMemberNote>
+          )}
+          <GracePanel
+            handover={handover}
+            applicationId={application.id}
+            repositoryName={repositoryName}
+            address={address}
+            exportView={exportView}
+            onExport={() => void requestExport()}
+            onStop={openStop}
+          />
+        </>
+      ) : null}
       {failedNewer ? (
         <p
           role="status"
@@ -212,7 +388,7 @@ export function ProductionPanel({
         </p>
       ) : null}
 
-      {!panel.isAdministrator && (currentRelease || releases.length > 0) ? (
+      {appState === 'live' && !panel.isAdministrator && (currentRelease || releases.length > 0) ? (
         <p
           role="note"
           className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) font-sans text-sm text-(--el-text-secondary)"
@@ -227,7 +403,7 @@ export function ProductionPanel({
           <CurrentReleaseCard
             release={currentRelease}
             address={address}
-            isAdministrator={panel.isAdministrator}
+            isAdministrator={rollbackShown}
             canRollback={rollbackEnabled}
             onRollback={openDialog}
           />
@@ -254,7 +430,7 @@ export function ProductionPanel({
         <ProductionCrashEvents
           events={healthDto.events}
           currentReleaseId={currentRelease.id}
-          isAdministrator={panel.isAdministrator}
+          isAdministrator={rollbackShown}
           canRollback={rollbackEnabled}
           onRollback={openDialog}
           focusEventId={focusEventId}
@@ -271,18 +447,20 @@ export function ProductionPanel({
       />
 
       <div className="grid gap-6 lg:grid-cols-2" data-testid="production-operations-row">
-        <IdlePolicyControl
-          projectKey={projectKey}
-          repositoryId={repositoryId}
-          view={idle}
-          onView={setIdle}
-          onRetry={() => {
-            setIdle({ kind: 'loading' });
-            void readIdle();
-          }}
-          hasRelease={currentRelease !== null}
-          creditsExhausted={usage.kind === 'ready' && usage.usage.state === 'credits_exhausted'}
-        />
+        {releasable ? (
+          <IdlePolicyControl
+            projectKey={projectKey}
+            repositoryId={repositoryId}
+            view={idle}
+            onView={setIdle}
+            onRetry={() => {
+              setIdle({ kind: 'loading' });
+              void readIdle();
+            }}
+            hasRelease={currentRelease !== null}
+            creditsExhausted={usage.kind === 'ready' && usage.usage.state === 'credits_exhausted'}
+          />
+        ) : null}
         <ProductionUsage
           view={usage}
           isAdministrator={panel.isAdministrator}
@@ -304,7 +482,19 @@ export function ProductionPanel({
         />
       ) : null}
 
-      {dialogOpen && currentRelease && previousRelease ? (
+      {stopOpen && handover ? (
+        <StopNowDialog
+          repositoryName={repositoryName}
+          stopsAt={handover.stopsAt}
+          address={address}
+          pending={stopPending}
+          refusalKey={stopRefusal}
+          onConfirm={() => void confirmStop()}
+          onCancel={() => setStopOpen(false)}
+        />
+      ) : null}
+
+      {releasable && dialogOpen && currentRelease && previousRelease ? (
         <RollbackDialog
           repositoryName={repositoryName}
           leaving={currentRelease}

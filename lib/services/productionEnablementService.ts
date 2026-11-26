@@ -8,8 +8,9 @@ import {
   HostingManifestMissingError,
   HostingTargetMissingError,
   ProductionEnablementFailedError,
-  RepositoryNotEstablishedError,
   type ProductionEnablementStep,
+  RepositoryNotEstablishedError,
+  RepositoryTakenOverError,
 } from '@/lib/hosting/errors';
 import { parseHostingManifest } from '@/lib/hosting/manifest';
 import { productionImageRepository } from '@/lib/hosting/productionArtifact';
@@ -89,6 +90,9 @@ function readFacts(projectRepositoryId: string): Promise<DeployFacts | null> {
 function refuseIneligible(facts: DeployFacts): void {
   const refusal = deployEligibilityRefusal(facts);
   if (refusal === 'customer_repository') throw new CustomerRepositoryNotDeployableError(facts.id);
+  // A taken-over repository is never switched on or re-minted: that would
+  // re-create the deploy credential the handover removed (MOTIR-12127).
+  if (refusal === 'taken_over') throw new RepositoryTakenOverError(facts.id);
   if (refusal === 'not_established') throw new RepositoryNotEstablishedError(facts.id, facts.state);
   if (refusal === 'no_target') throw new HostingTargetMissingError(facts.id);
 }

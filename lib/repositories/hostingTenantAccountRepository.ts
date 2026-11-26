@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { HostingTenantAccount, Prisma } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import type { HostingTenantAccountState } from '@/lib/ciFleet/hostingTenantAccounts';
+import {
+  TENANT_ACCOUNT_BRING_UP_STATES,
+  type HostingTenantAccountState,
+} from '@/lib/ciFleet/hostingTenantAccounts';
 
 // An organisation's AWS hosting account record (Story MOTIR-9792 · MOTIR-9939):
 // one row per organisation — the account id once known, the state, the
@@ -9,6 +12,10 @@ import type { HostingTenantAccountState } from '@/lib/ciFleet/hostingTenantAccou
 // caller holds a `withSystemContext` transaction.
 
 export const hostingTenantAccountRepository = {
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<HostingTenantAccount | null> {
+    return tx.hostingTenantAccount.findUnique({ where: { id } });
+  },
+
   async findByOrganizationId(
     organizationId: string,
     tx?: Prisma.TransactionClient,
@@ -35,14 +42,19 @@ export const hostingTenantAccountRepository = {
       DO UPDATE SET "organization_id" = EXCLUDED."organization_id"
       RETURNING "id", "organization_id" AS "organizationId", "aws_account_id" AS "awsAccountId",
         "state", "refused_count" AS "refusedCount", "last_refused_at" AS "lastRefusedAt",
-        "ou_id" AS "ouId", "quotas_checked_at" AS "quotasCheckedAt", "region", "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
+        "ou_id" AS "ouId", "quotas_checked_at" AS "quotasCheckedAt", "region",
+        "handover_owner_email" AS "handoverOwnerEmail", "handover_github_owner" AS "handoverGithubOwner",
+        "handover_started_by_user_id" AS "handoverStartedByUserId",
+        "created_at" AS "createdAt", "updated_at" AS "updatedAt"`;
     return rows[0]!;
   },
 
-  /** Every row not yet `ready`, oldest first — what the reconcile walks. */
+  /** Every row still being brought up (`requested`, `creating`, `bootstrapping`,
+   *  `refused`), oldest first — what the reconcile walks. An account in a
+   *  takeover handover state is not unready, so it is never listed (MOTIR-12126). */
   async listUnreadyInTx(tx: Prisma.TransactionClient): Promise<HostingTenantAccount[]> {
     return tx.hostingTenantAccount.findMany({
-      where: { state: { not: 'ready' } },
+      where: { state: { in: [...TENANT_ACCOUNT_BRING_UP_STATES] } },
       orderBy: { createdAt: 'asc' },
     });
   },
@@ -138,6 +150,55 @@ export const hostingTenantAccountRepository = {
       where: { organizationId },
       data: { refusedCount: { increment: 1 }, lastRefusedAt: at },
     });
+  },
+
+  /** The email address and GitHub owner the administrator names at takeover
+   *  (MOTIR-12126) — kept so a restarted handover resumes with them. */
+  async setHandoverOwnerInTx(
+    organizationId: string,
+    owner: { ownerEmail: string; githubOwner: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<HostingTenantAccount> {
+    return tx.hostingTenantAccount.update({
+      where: { organizationId },
+      data: { handoverOwnerEmail: owner.ownerEmail, handoverGithubOwner: owner.githubOwner },
+    });
+  },
+
+  /** Start the takeover handover (MOTIR-12131): only a `ready` account moves to
+   *  `handing_over`, with the owner the administrator named and who started it.
+   *  One conditional statement, so two starts at once leave ONE handover; true
+   *  when this call started it. */
+  async startHandoverInTx(
+    id: string,
+    start: { ownerEmail: string; githubOwner: string; startedByUserId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostingTenantAccount.updateMany({
+      where: { id, state: 'ready' },
+      data: {
+        state: 'handing_over',
+        handoverOwnerEmail: start.ownerEmail,
+        handoverGithubOwner: start.githubOwner,
+        handoverStartedByUserId: start.startedByUserId,
+      },
+    });
+    return count === 1;
+  },
+
+  /** Move the account to `to` only while it is in one of `from`; true when it
+   *  moved (MOTIR-12131). */
+  async setStateIfInTx(
+    id: string,
+    from: readonly HostingTenantAccountState[],
+    to: HostingTenantAccountState,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostingTenantAccount.updateMany({
+      where: { id, state: { in: [...from] } },
+      data: { state: to },
+    });
+    return count === 1;
   },
 
   /** The account exists: no refusal is outstanding. */

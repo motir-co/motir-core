@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type {
+  HostedApplicationState,
   HostedIdleMode,
   HostedReleaseState,
   HostingShape,
@@ -95,11 +96,41 @@ export interface HostedApplicationInsert {
   idleSeconds: number | null;
 }
 
+/** The tombstone prefix a released application's slug is rewritten to
+ *  (MOTIR-12126). `--` is reserved inside application labels by the address
+ *  decision, so the shipped slug derivation can never produce it, and the old
+ *  slug is free for another application in the workspace. */
+export const RELEASED_SLUG_PREFIX = 'released--';
+
+/** A released application's slug: `released--<id>`. */
+export const releasedSlugOf = (id: string) => `${RELEASED_SLUG_PREFIX}${id}`;
+
+/** What a handover state move may set beside the state (MOTIR-12126). */
+export interface HostedApplicationStateFields {
+  stopsAt?: Date | null;
+  handedOverAt?: Date | null;
+  handedOverAccountId?: string | null;
+}
+
+/** An AWS-target application of an organisation, as the handover reads it. */
+export interface HostedApplicationAwsRow {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  projectRepositoryId: string;
+  slug: string;
+  productionAddress: string | null;
+  state: HostedApplicationState;
+  upstreamAddress: string | null;
+  currentReleaseId: string | null;
+}
+
 /** The teardown read of {@link hostedApplicationRepository.findTeardownByProjectRepository}. */
 export interface HostedApplicationTeardown {
   id: string;
   projectRepositoryId: string;
   target: HostingTarget;
+  state: HostedApplicationState;
   slug: string;
   productionAddress: string | null;
   productionAppName: string | null;
@@ -107,6 +138,30 @@ export interface HostedApplicationTeardown {
   previousReleaseId: string | null;
   databaseProjectId: string | null;
   customDomainCount: number;
+}
+
+/** What the teardown reads select. */
+const TEARDOWN_SELECT = {
+  id: true,
+  projectRepositoryId: true,
+  target: true,
+  state: true,
+  slug: true,
+  productionAddress: true,
+  productionAppName: true,
+  currentReleaseId: true,
+  previousReleaseId: true,
+  databaseProjectId: true,
+  _count: { select: { customDomains: true } },
+} as const;
+
+function toTeardown(
+  row: Omit<HostedApplicationTeardown, 'customDomainCount'> & {
+    _count: { customDomains: number };
+  },
+): HostedApplicationTeardown {
+  const { _count, ...rest } = row;
+  return { ...rest, customDomainCount: _count.customDomains };
 }
 
 export const hostedApplicationRepository = {
@@ -137,6 +192,7 @@ export const hostedApplicationRepository = {
     productionAppName: string | null;
     currentReleaseId: string | null;
     productionAddress: string | null;
+    state: HostedApplicationState;
     /** Who may open it. No column holds it yet (MOTIR-9817 adds it), so it reads
      *  `null`, which `applicationAccessOf` treats as members only. */
     access: string | null;
@@ -151,6 +207,7 @@ export const hostedApplicationRepository = {
         productionAppName: true,
         currentReleaseId: true,
         productionAddress: true,
+        state: true,
       },
     });
     return row ? { ...row, access: null } : null;
@@ -271,6 +328,16 @@ export const hostedApplicationRepository = {
     });
   },
 
+  /** Forget that production was switched on (MOTIR-12132): a takeover that
+   *  failed before the transfer removed the deploy credential and variables, so
+   *  the backfill's next `enableProduction` must run its full path again. */
+  async clearProductionEnablement(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.hostedApplication.update({
+      where: { id },
+      data: { productionEnabledAt: null, productionTokenMintedAt: null },
+    });
+  },
+
   /** The application's database columns, ciphertext included — the one read
    *  that selects it (MOTIR-10028). */
   async findDatabaseById(
@@ -324,22 +391,32 @@ export const hostedApplicationRepository = {
   ): Promise<HostedApplicationTeardown | null> {
     const row = await tx.hostedApplication.findUnique({
       where: { projectRepositoryId },
-      select: {
-        id: true,
-        projectRepositoryId: true,
-        target: true,
-        slug: true,
-        productionAddress: true,
-        productionAppName: true,
-        currentReleaseId: true,
-        previousReleaseId: true,
-        databaseProjectId: true,
-        _count: { select: { customDomains: true } },
-      },
+      select: TEARDOWN_SELECT,
     });
-    if (!row) return null;
-    const { _count, ...rest } = row;
-    return { ...rest, customDomainCount: _count.customDomains };
+    return row ? toTeardown(row) : null;
+  },
+
+  /** The same teardown read, by the application's own id — what the stop at
+   *  the end of a grace window reads (MOTIR-12135). */
+  async findTeardownById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationTeardown | null> {
+    const row = await tx.hostedApplication.findUnique({ where: { id }, select: TEARDOWN_SELECT });
+    return row ? toTeardown(row) : null;
+  },
+
+  /**
+   * Forget the application's production database once the provider has deleted
+   * it (MOTIR-12135): the database project id and the encrypted URL, so a
+   * retried stop has no database left to delete and nothing can decrypt a URL
+   * to a database that no longer exists. Idempotent.
+   */
+  async clearDatabase(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.hostedApplication.updateMany({
+      where: { id },
+      data: { databaseProjectId: null, databaseUrlCiphertext: null },
+    });
   },
 
   /**
@@ -361,6 +438,154 @@ export const hostedApplicationRepository = {
     await tx.hostedApplication.updateMany({
       where: { id },
       data: { currentReleaseId: null, previousReleaseId: null, productionAppName: null },
+    });
+  },
+
+  // ── The takeover handover (Story MOTIR-9800 · MOTIR-12126) ────────────────
+
+  /**
+   * Move the application's handover state to `to`, ONLY while it is in `from`,
+   * setting `fields` beside it. One conditional UPDATE, so a caller is
+   * look-before-act without a separate read; returns whether it wrote.
+   */
+  async setStateIfIn(
+    id: string,
+    from: readonly HostedApplicationState[],
+    to: HostedApplicationState,
+    fields: HostedApplicationStateFields,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostedApplication.updateMany({
+      where: { id, state: { in: [...from] } },
+      data: { state: to, ...fields },
+    });
+    return count === 1;
+  },
+
+  /** Record the address an AWS app's own front door answers on without Motir. */
+  async setUpstreamAddress(
+    id: string,
+    upstreamAddress: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.hostedApplication.update({ where: { id }, data: { upstreamAddress } });
+  },
+
+  /**
+   * Release a KEPT application's addresses when Motir stops serving it (the
+   * address decision §3): `productionAddress` cleared and `slug` rewritten to its
+   * tombstone, so both are free for another application. The row, its id and its
+   * state are kept. The UPDATE matches only while either is still held, so a
+   * second call changes nothing; returns whether it wrote.
+   */
+  async releaseAddresses(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const tombstone = releasedSlugOf(id);
+    const { count } = await tx.hostedApplication.updateMany({
+      where: { id, OR: [{ productionAddress: { not: null } }, { slug: { not: tombstone } }] },
+      data: { productionAddress: null, slug: tombstone },
+    });
+    return count === 1;
+  },
+
+  /** The workspaces holding an application on one of `targets` — where the
+   *  export expiry sweep looks (MOTIR-12134), read under the system context
+   *  (the policy's system arm is on USING). */
+  async listWorkspaceIdsByTargets(
+    targets: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.hostedApplication.findMany({
+      where: { target: { in: targets as HostingTarget[] } },
+      select: { workspaceId: true },
+      distinct: ['workspaceId'],
+      orderBy: { workspaceId: 'asc' },
+    });
+    return rows.map((row) => row.workspaceId);
+  },
+
+  /** What a grace-window notice reads of its application (MOTIR-12136): its
+   *  state, `stopsAt`, when it was handed over, and the repository it runs, by
+   *  name. */
+  async findForGraceNotice(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    id: string;
+    workspaceId: string;
+    projectRepositoryId: string;
+    state: HostedApplicationState;
+    stopsAt: Date | null;
+    handedOverAt: Date | null;
+    repositoryName: string;
+  } | null> {
+    const row = await tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectRepositoryId: true,
+        state: true,
+        stopsAt: true,
+        handedOverAt: true,
+        projectRepository: { select: { name: true } },
+      },
+    });
+    if (!row) return null;
+    const { projectRepository, ...rest } = row;
+    return { ...rest, repositoryName: projectRepository.name };
+  },
+
+  /** Every `grace` application whose `stopsAt` is after `after` and at or before
+   *  `before`, soonest first — what the grace-notice reminder sweep walks
+   *  (MOTIR-12136). */
+  async listInGraceStoppingBetween(
+    after: Date,
+    before: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; workspaceId: string; stopsAt: Date | null }[]> {
+    return tx.hostedApplication.findMany({
+      where: { state: 'grace', stopsAt: { gt: after, lte: before } },
+      select: { id: true, workspaceId: true, stopsAt: true },
+      orderBy: { stopsAt: 'asc' },
+    });
+  },
+
+  /** Every `grace` application whose `stopsAt` is at or before `before`, soonest
+   *  first — what the stop job walks. */
+  async listInGraceStoppingBy(
+    before: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; workspaceId: string; stopsAt: Date | null }[]> {
+    return tx.hostedApplication.findMany({
+      where: { state: 'grace', stopsAt: { lte: before } },
+      select: { id: true, workspaceId: true, stopsAt: true },
+      orderBy: { stopsAt: 'asc' },
+    });
+  },
+
+  /**
+   * The AWS-target applications of every workspace in the organisation — what
+   * the organisation-wide handover moves, read under the system context (the
+   * policy's system arm is on USING).
+   */
+  async listAwsByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationAwsRow[]> {
+    return tx.hostedApplication.findMany({
+      where: { target: 'aws', workspace: { organizationId } },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        projectRepositoryId: true,
+        slug: true,
+        productionAddress: true,
+        state: true,
+        upstreamAddress: true,
+        currentReleaseId: true,
+      },
+      orderBy: { createdAt: 'asc' },
     });
   },
 
@@ -598,5 +823,15 @@ export const hostedApplicationRepository = {
    */
   async lockRollback(id: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hosted-application-rollback:${id}`}, 0))`;
+  },
+
+  /**
+   * Serialize the stops of ONE application (MOTIR-12135) — the sweep's and an
+   * admin's Stop now: a transaction-scoped advisory lock, released when `tx`
+   * ends, held across the provider calls and the final export, which the row
+   * lock must never be.
+   */
+  async lockStop(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hosted-application-stop:${id}`}, 0))`;
   },
 };

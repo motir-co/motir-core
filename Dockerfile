@@ -437,8 +437,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # one. Verified the hard way during the spike (MOTIR-2383).
 ENV HOSTNAME=0.0.0.0
 ENV PORT=8080
+# `pg_dump` for a grace-window application's database export (MOTIR-12134).
+# From PGDG (apt.postgresql.org), not Debian's own: Debian ships one older
+# major, and `pg_dump` REFUSES a server newer than itself, while the database
+# port pins no Postgres version (a tenant database runs whatever its provider
+# defaults to). PostgreSQL 19 is the newest major PGDG ships for bookworm, and
+# pg_dump dumps every older server, so one client covers every tenant. The
+# repository's signing key comes with `postgresql-common` and its setup script
+# writes the source, so the build fetches no key over the network.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && apt-get install -y --no-install-recommends openssl ca-certificates postgresql-common \
+ && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
+ && apt-get install -y --no-install-recommends postgresql-client-19 \
  && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 1001 nodejs \
  && useradd --system --uid 1001 --gid nodejs nextjs

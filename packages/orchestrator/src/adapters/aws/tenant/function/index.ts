@@ -15,8 +15,10 @@ import { AwsTenantApiError } from '../errors';
 import { stackOutput, type TenantAccountContext, type TenantNetwork } from '../network';
 import { TAG_ORGANIZATION, TAG_REPOSITORY } from '../stackRunner';
 import {
+  originAccessOf,
   previousReleaseNumber,
   releaseConfigHash,
+  type OriginAccess,
   type ReleaseVariableSplit,
 } from '../releaseTemplate';
 import { renderFunctionTemplate, splitReleaseVariables } from './environment';
@@ -125,14 +127,19 @@ export function functionReleaseNames(
 }
 
 /**
- * The front door's `FrontDoorRevision`: a hash of the origin secret and the
- * rendered template, so a rotated key or a changed handler publishes a new front
- * door version (a version reads the environment it was published with). The
- * secret cannot be read back from it.
+ * The front door's `FrontDoorRevision`: a hash of the origin secret, the origin
+ * access and the rendered template, so a rotated key, a switch to or from
+ * `open` (MOTIR-12128) or a changed handler publishes a new front door version
+ * (a version reads the environment it was published with). The secret cannot
+ * be read back from it.
  */
-export function frontDoorRevision(originSecret: string, template: string): string {
+export function frontDoorRevision(
+  originSecret: string,
+  template: string,
+  originAccess: OriginAccess,
+): string {
   return createHash('sha256')
-    .update(JSON.stringify([originSecret, template]))
+    .update(JSON.stringify([originSecret, originAccess, template]))
     .digest('hex');
 }
 
@@ -184,6 +191,9 @@ export async function deployFunctionRelease(
     split.plain,
   );
   const originSecret = deriveOriginSecret(input.originSecretKey, appRef);
+  // The stack's own origin access, resent: a deploy never closes an opened app.
+  const existing = await account.runner.describeStack(stackName);
+  const originAccess = originAccessOf(existing?.parameters);
   const parameters = (hash: string) => ({
     OrganizationId: account.organizationId,
     RepositoryId: repositoryId,
@@ -199,7 +209,8 @@ export async function deployFunctionRelease(
     ConfigHash: hash,
     InvokePrincipalArn: input.invokePrincipalArn,
     OriginSecret: originSecret,
-    FrontDoorRevision: frontDoorRevision(originSecret, template),
+    FrontDoorRevision: frontDoorRevision(originSecret, template, originAccess),
+    OriginAccess: originAccess,
   });
   const apply = (hash: string) =>
     account.runner.applyStack({
@@ -211,7 +222,7 @@ export async function deployFunctionRelease(
 
   // 1. The stack and its environment secret — created unpublished only when the
   // stack has never finished; a published stack is never taken back.
-  let outputs = (await account.runner.describeStack(stackName))?.outputs ?? {};
+  let outputs = existing?.outputs ?? {};
   if (!outputs['EnvironmentSecretArn']) outputs = (await apply('')).outputs;
   const secretArn = stackOutput(stackName, outputs, 'EnvironmentSecretArn');
 

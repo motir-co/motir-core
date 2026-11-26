@@ -3,6 +3,7 @@ import type { HostingTenantAccount } from '@/generated/prisma/client';
 import { FleetShardAccountRefusedError } from '@/lib/ciFleet/errors';
 import { TenantAccountRefusedError } from '@/lib/ciFleet/headroomErrors';
 import {
+  isTenantAccountHandoverState,
   TENANT_ACCOUNT_REGION,
   type HostingTenantAccountState,
 } from '@/lib/ciFleet/hostingTenantAccounts';
@@ -87,6 +88,9 @@ export type TenantAccountOutcome =
   | 'refused'
   /** The organisation has no row; nothing to do. */
   | 'not_requested'
+  /** The account is being handed over to the organisation, or has left Motir
+   *  (MOTIR-9800); the bring-up never touches it again. */
+  | 'in_handover'
   /** A step failed; the state stays for the next pass. */
   | 'failed';
 
@@ -188,6 +192,9 @@ async function walk(
   const { organizationId } = row;
   let state = row.state as HostingTenantAccountState;
   if (state === 'ready') return 'already_ready';
+  // A handover owns the row from here on: walking it would re-bootstrap an
+  // account that is leaving, so the bring-up stops before any write or call.
+  if (isTenantAccountHandoverState(state)) return 'in_handover';
 
   if (state === 'requested' || state === 'refused') {
     if (!clearOfBackoff(row, now)) return 'backing_off';

@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { E2E_AWS_ORG_ADMIN_ROLE_ARN, E2E_OBJECT_STORE_ENV } from './e2e-object-store-env';
 import {
   E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
@@ -305,7 +306,8 @@ export function embeddingsSeamEnv(): Record<string, string> {
  *   * the environment-configuration key, which seals the production database's
  *     connection string and is otherwise set on the webServer only.
  *
- * The database fake stays in this process's memory: only a release reaches it.
+ * The database fake's store is mirrored by `graceWindowSeamEnv` below, which
+ * the grace window needs and a release shares.
  *
  * Opt-in (`E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM=1`, set by
  * `playwright.acceptance.config.ts`), because only that lane holds the store.
@@ -327,6 +329,79 @@ export function productionReleaseSeamEnv(): Record<string, string> {
     GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
     GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
     GITHUB_STUDIO_APP_PRIVATE_KEY: generateAppPrivateKey(),
+  };
+}
+
+/**
+ * THE GRACE WINDOW'S STORES, MIRRORED INTO THE WORKER (Story MOTIR-9800 · MOTIR-12142).
+ *
+ * The grace-window stop (`hosting.application-grace.stop`) is a JOB: it exports
+ * the application's database to the object store and then deletes the
+ * database, while the webServer exports on demand and deletes on Stop now. So
+ * this process needs:
+ *
+ *   * the database fake's cross-process store (`MOTIR_FAKE_DATABASE_STATE_PATH`),
+ *     so the database the worker deletes is the one the spec watches;
+ *   * the blob mock (`E2E_TEST_BLOB=1`) with its file-backed store
+ *     (`MOTIR_FAKE_BLOB_STATE_PATH`) and the lane's object-store placeholders,
+ *     so the export the worker writes is the one the webServer serves;
+ *   * the fake fleet adapter, which resolves the database port to its fake.
+ *
+ * The fake `pg_dump` arrives on PATH, which the worker inherits from the runner.
+ * Opt-in by the store path: only the acceptance lane sets it.
+ */
+export function graceWindowSeamEnv(): Record<string, string> {
+  const databasePath = process.env['MOTIR_FAKE_DATABASE_STATE_PATH'];
+  if (!databasePath) return {};
+  const blobPath = process.env['MOTIR_FAKE_BLOB_STATE_PATH'];
+  return {
+    E2E_TEST_BLOB: '1',
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    MOTIR_FAKE_DATABASE_STATE_PATH: databasePath,
+    ...(blobPath ? { MOTIR_FAKE_BLOB_STATE_PATH: blobPath } : {}),
+    ...E2E_OBJECT_STORE_ENV,
+  };
+}
+
+/**
+ * THE TAKEOVER HANDOVER'S FAKE AWS TENANT, MIRRORED INTO THE WORKER (Story
+ * MOTIR-9800 · MOTIR-12141). The handover's steps run as jobs here, while the
+ * webServer starts it and takes the owner's email code, so both reach the one
+ * fake tenant through its state file (`MOTIR_FAKE_AWS_TENANT_STATE_PATH`), and
+ * both name the same placeholder management role, whose account id the
+ * handover strips from every trust. Opt-in by the path: only the acceptance
+ * lane sets it.
+ */
+export function takeoverHandoverSeamEnv(): Record<string, string> {
+  const tenantPath = process.env['MOTIR_FAKE_AWS_TENANT_STATE_PATH'];
+  if (!tenantPath) return {};
+  return {
+    MOTIR_FAKE_AWS_TENANT_STATE_PATH: tenantPath,
+    AWS_ORG_ADMIN_ROLE_ARN: process.env['AWS_ORG_ADMIN_ROLE_ARN'] || E2E_AWS_ORG_ADMIN_ROLE_ARN,
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+  };
+}
+
+/**
+ * A TAKEOVER'S GITHUB SEAM, MIRRORED INTO THE WORKER (Story MOTIR-9800 ·
+ * MOTIR-12140). The AWS handover's steps run here: the deploy role reads the new
+ * owner's account id, Motir's access removal deletes each repository's production
+ * secret and variables, and the last step transfers every repository. The seam
+ * (`lib/test-github-takeover-mock.ts`) is stateless and journals to a file, so a
+ * second copy here agrees with the webServer's. Its token mint is the merge seam's
+ * and its org installation read the production-release seam's, both mirrored here
+ * already; the org it is scoped to is the one they share.
+ *
+ * Opt-in (`E2E_JOB_WORKER_GITHUB_TAKEOVER_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane's server installs it.
+ */
+export function githubTakeoverSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_GITHUB_TAKEOVER_SEAM'] !== '1') return {};
+  const journal = process.env['MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH'];
+  return {
+    E2E_TEST_GITHUB_TAKEOVER: '1',
+    ...(journal ? { MOTIR_GITHUB_TAKEOVER_JOURNAL_PATH: journal } : {}),
+    GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
   };
 }
 
@@ -445,6 +520,10 @@ const WEBHOOK_HANDLER_ENV_KEYS: readonly (string | RegExp)[] = [
   'MOTIR_HOSTING_GATE_SIGNING_KEY',
   'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
   'MOTIR_FAKE_HOSTING_STATE_PATH',
+  'MOTIR_FAKE_DATABASE_STATE_PATH',
+  'MOTIR_FAKE_BLOB_STATE_PATH',
+  'MOTIR_FAKE_AWS_TENANT_STATE_PATH',
+  'AWS_ORG_ADMIN_ROLE_ARN',
 ];
 
 /**
@@ -563,6 +642,12 @@ export async function startJobWorker(): Promise<void> {
       ...githubPreviewSeamEnv(),
       // A production release's hosting store and GitHub — see `productionReleaseSeamEnv`.
       ...productionReleaseSeamEnv(),
+      // The grace window's database and object stores — see `graceWindowSeamEnv`.
+      ...graceWindowSeamEnv(),
+      // The takeover handover's fake AWS tenant — see `takeoverHandoverSeamEnv`.
+      ...takeoverHandoverSeamEnv(),
+      // A takeover's GitHub calls — see `githubTakeoverSeamEnv`.
+      ...githubTakeoverSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -692,6 +777,12 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       // A preview's GitHub deployment and manifest — see `githubPreviewSeamEnv`.
       ...githubPreviewSeamEnv(),
       ...productionReleaseSeamEnv(),
+      // The grace window's database and object stores — see `graceWindowSeamEnv`.
+      ...graceWindowSeamEnv(),
+      // The takeover handover's fake AWS tenant — see `takeoverHandoverSeamEnv`.
+      ...takeoverHandoverSeamEnv(),
+      // A takeover's GitHub calls — see `githubTakeoverSeamEnv`.
+      ...githubTakeoverSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

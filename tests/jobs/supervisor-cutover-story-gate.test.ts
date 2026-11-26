@@ -555,13 +555,15 @@ describe('§3 the guards', () => {
       expect(Object.hasOwn(def, 'idempotency'), def.id).toBe(true);
       expect(Object.hasOwn(def, 'debounce'), def.id).toBe(true);
     }
-    // Exactly four SHIPPED jobs declare a debounce (the code-graph refresh lost
+    // Exactly five SHIPPED jobs declare a debounce (the code-graph refresh lost
     // its own to MOTIR-11884): the agent instance idle timer (MOTIR-6873), whose debounce IS its 30-minute window,
     // the page embedding job (MOTIR-9571), which folds a typing burst into
     // one run per page, the production config redeploy (MOTIR-10032), which
     // folds a burst of saves into one release per repository, and the release
     // status post (MOTIR-10033), which folds a release's burst of state changes
-    // into one post per release.
+    // into one post per release, and the takeover handover's advance
+    // (MOTIR-12131), which folds an answer and a finished step into one run per
+    // account.
     expect(
       registered
         .filter((d) => d.debounce !== undefined)
@@ -570,6 +572,7 @@ describe('§3 the guards', () => {
     ).toEqual([
       'agent-instance/idle-check',
       'hosted-release.status',
+      'hosting.tenant-handover.advance',
       'hosting/production-config-redeploy',
       'page/embedding.requested',
     ]);

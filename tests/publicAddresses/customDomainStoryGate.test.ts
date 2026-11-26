@@ -338,6 +338,7 @@ describe('the host contract — read ANONYMOUSLY, with a private project present
               productionAppName: row.productionAppName,
               currentReleaseId: row.currentReleaseId,
               productionAddress: row.productionAddress,
+              state: row.state,
               access: 'public',
             }
           : null;

@@ -467,6 +467,73 @@ describe('the ready-account quota re-check', () => {
   });
 });
 
+// MOTIR-9800 · MOTIR-12126: an account mid-handover, or handed over, belongs to
+// the handover. The bring-up must never walk it (it would re-bootstrap an account
+// that is leaving), ensure must not reset it, and the ready-only paths — the
+// quota re-check and the deploy-policy converge — must not touch it either.
+describe('an account in a handover state', () => {
+  const HANDOVER = ['handing_over', 'awaiting_standalone', 'removing', 'handed_over'] as const;
+
+  async function seedInHandover(state: (typeof HANDOVER)[number]) {
+    const org = await seedOrg();
+    await service.ensureForOrganization(org.id);
+    await adminDb.hostingTenantAccount.update({
+      where: { organizationId: org.id },
+      data: { state, awsAccountId: ACCOUNT_ID, quotasCheckedAt: null },
+    });
+    return org;
+  }
+
+  it.each(HANDOVER)(
+    '%s: reconcile answers in_handover with no write and no AWS call',
+    async (state) => {
+      const org = await seedInHandover(state);
+      const before = await rowOf(org.id);
+      expect(await service.reconcileOrganization(org.id, deps(minutes(1)))).toEqual({
+        organizationId: org.id,
+        outcome: 'in_handover',
+      });
+      const after = await rowOf(org.id);
+      expect(after?.state).toBe(state);
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+      expect(creates).toEqual([]);
+      expect(bootstraps).toEqual([]);
+    },
+  );
+
+  it('a pass neither lists, walks nor quota-checks any of them, and ensure leaves each as it is', async () => {
+    const orgs = [];
+    for (const state of HANDOVER) orgs.push({ state, org: await seedInHandover(state) });
+    const summary = await service.runReconcile(deps(minutes(1)));
+    expect(summary).toMatchObject({ ran: true, organizations: [], quotaChecks: [], failures: 0 });
+    expect(creates).toEqual([]);
+    expect(bootstraps).toEqual([]);
+    expect(quotaChecks).toEqual([]);
+    for (const { state, org } of orgs) {
+      expect(await service.ensureForOrganization(org.id)).toEqual({
+        state,
+        ready: false,
+        accountId: ACCOUNT_ID,
+      });
+      expect((await rowOf(org.id))?.state).toBe(state);
+    }
+  });
+
+  it('the deploy-policy converge answers not_ready and calls nothing', async () => {
+    const org = await seedInHandover('handed_over');
+    const converged: string[] = [];
+    expect(
+      await service.convergeDeployPolicy(org.id, {
+        converge: async (id) => {
+          converged.push(id);
+          return { policyChanged: true };
+        },
+      }),
+    ).toEqual({ organizationId: org.id, outcome: 'not_ready' });
+    expect(converged).toEqual([]);
+  });
+});
+
 describe('the schedule', () => {
   it('runs every minute, catching up only the latest, with no retry', () => {
     expect(hostingTenantAccountReconcile).toMatchObject({

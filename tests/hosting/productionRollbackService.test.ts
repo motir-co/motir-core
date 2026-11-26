@@ -14,6 +14,7 @@ import {
   IllegalReleaseTransitionError,
   NoPreviousReleaseError,
   ReleaseInProgressError,
+  RepositoryTakenOverError,
   RollbackFailedError,
   RollbackNotPermittedError,
 } from '@/lib/hosting/errors';
@@ -361,6 +362,30 @@ describe('rollbackProduction', () => {
       service.rollbackProduction({ projectRepositoryId: 'missing', actor: fx.ctx }),
     ).rejects.toBeInstanceOf(ApplicationNotFoundError);
 
+    expect(hosting().calls).toEqual([]);
+    expect(await adminDb.hostedRelease.count()).toBe(0);
+  });
+
+  it('refuses a taken-over repository, or one whose application is handing over, before any port call', async () => {
+    const fx = await workspace();
+    const moved = await repo(fx);
+    const handing = await repo(fx, { role: 'api' });
+    await hostedApplicationService.ensureApplication(moved);
+    const app = await hostedApplicationService.ensureApplication(handing);
+    await adminDb.projectRepo.update({
+      where: { id: moved },
+      data: { takeoverState: 'awaiting_reinstall' },
+    });
+    await adminDb.hostedApplication.update({
+      where: { id: app.id },
+      data: { state: 'handing_over' },
+    });
+
+    for (const id of [moved, handing]) {
+      await expect(
+        service.rollbackProduction({ projectRepositoryId: id, actor: fx.ctx }),
+      ).rejects.toBeInstanceOf(RepositoryTakenOverError);
+    }
     expect(hosting().calls).toEqual([]);
     expect(await adminDb.hostedRelease.count()).toBe(0);
   });

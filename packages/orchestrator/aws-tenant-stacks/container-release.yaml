@@ -13,7 +13,11 @@ Description: >-
   environment secret at the version ConfigHash names; the caller writes both
   lists into this template at the markers, and the secret's value. A first apply
   with an empty ConfigHash creates no task definition and no service, so the
-  caller can write that value before a task starts.
+  caller can write that value before a task starts. Under OriginAccess=open
+  (MOTIR-12128, a taken-over app) the secret rule stays, so Motir's edge keeps
+  answering, and the stack adds a second rule matching X-Motir-App = AppRef and
+  its OWN CloudFront distribution, on the network's VPC origin, that sets that
+  header itself: the app answers at that distribution without Motir.
 
 Parameters:
   OrganizationId:
@@ -77,6 +81,32 @@ Parameters:
     Type: String
     NoEcho: true
     Description: The app's origin secret, derived by the caller (deriveOriginSecret); never computed here.
+  OriginAccess:
+    Type: String
+    Default: motir_edge
+    AllowedValues: [motir_edge, open]
+    Description: >-
+      Who reaches the app. motir_edge: only a request carrying the origin secret,
+      through the network's front door (Motir's edge). open: that too, and every
+      request through this stack's own distribution (OpenUpstreamUrl). A deploy
+      resends the stack's current value.
+  OpenListenerRulePriority:
+    Type: String
+    Default: ''
+    AllowedPattern: '^([1-9][0-9]{0,4})?$'
+    Description: >-
+      The open rule's priority on the shared listener, unique per rule (1-50000);
+      empty unless OriginAccess is open.
+  FrontDoorVpcOriginId:
+    Type: String
+    Default: ''
+    Description: >-
+      The network stack's FrontDoorVpcOriginId output - the VPC origin the open
+      distribution reaches the load balancer through; empty unless open.
+  AlbDnsName:
+    Type: String
+    Default: ''
+    Description: The network stack's AlbDnsName output - the open distribution origin's name; empty unless open.
   DatabaseSecretArn:
     Type: String
     Default: ''
@@ -92,6 +122,7 @@ Parameters:
 Conditions:
   HasDatabase: !Not [!Equals [!Ref DatabaseSecretArn, '']]
   Published: !Not [!Equals [!Ref ConfigHash, '']]
+  Open: !Equals [!Ref OriginAccess, open]
 
 Resources:
   # The release's secret variables as one JSON object; the caller writes the value.
@@ -252,6 +283,65 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
+  # THE OPEN MODE (MOTIR-12128). The app's own name cannot route a request at the
+  # load balancer: it is internal, and the network's distribution replaces Host
+  # with the load balancer's name. So the open distribution below sets a header
+  # that is not a secret, X-Motir-App, to the app's name, and this rule matches
+  # it. CloudFront overwrites a viewer header of an origin custom header's name,
+  # so a viewer of the open distribution cannot pick another app.
+  OpenListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: Open
+    Properties:
+      ListenerArn: !Ref AlbListenerArn
+      Priority: !Ref OpenListenerRulePriority
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: X-Motir-App
+            Values: [!Ref AppRef]
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # The app's own https address while it is open, on the network's VPC origin
+  # (one VPC origin may back several distributions), cached and forwarded
+  # exactly as the network's front door is.
+  OpenFrontDoor:
+    Type: AWS::CloudFront::Distribution
+    Condition: Open
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub Motir open front door - ${AppRef}
+        PriceClass: PriceClass_100
+        HttpVersion: http2
+        Origins:
+          - Id: load-balancer
+            DomainName: !Ref AlbDnsName
+            OriginCustomHeaders:
+              - HeaderName: X-Motir-App
+                HeaderValue: !Ref AppRef
+            VpcOriginConfig:
+              VpcOriginId: !Ref FrontDoorVpcOriginId
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: load-balancer
+          ViewerProtocolPolicy: https-only
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: false
+          # Managed CachingDisabled.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # Managed AllViewerExceptHostHeader.
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
   Service:
     Type: AWS::ECS::Service
     Condition: Published
@@ -298,3 +388,6 @@ Outputs:
     Value: !Ref TargetGroup
   EnvironmentSecretArn:
     Value: !Ref EnvironmentSecret
+  OpenUpstreamUrl:
+    Condition: Open
+    Value: !Sub https://${OpenFrontDoor.DomainName}

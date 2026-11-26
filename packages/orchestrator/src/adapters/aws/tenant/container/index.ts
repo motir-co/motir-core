@@ -17,9 +17,11 @@ import type { EnvironmentDatabaseReference } from '../database';
 import { ReleaseVariableInvalidError } from '../function/errors';
 import { stackOutput, type TenantAccountContext, type TenantNetwork } from '../network';
 import {
+  originAccessOf,
   releaseConfigHash,
   replaceMarkerLine,
   yamlString,
+  type OriginAccess,
   type ReleaseVariableSplit,
 } from '../releaseTemplate';
 import { NETWORK_STACK_NAME, TAG_ORGANIZATION, TAG_REPOSITORY } from '../stackRunner';
@@ -105,7 +107,13 @@ export interface DeployContainerReleaseInput extends ContainerReleaseTarget {
   readonly env: readonly ReleaseEnvVar[];
   readonly network: Pick<
     TenantNetwork,
-    'vpcId' | 'privateSubnetIds' | 'appSecurityGroupId' | 'albListenerArn' | 'frontDoorDomainName'
+    | 'vpcId'
+    | 'privateSubnetIds'
+    | 'appSecurityGroupId'
+    | 'albListenerArn'
+    | 'albDnsName'
+    | 'frontDoorDomainName'
+    | 'frontDoorVpcOriginId'
   >;
   /** The key the app's origin secret is derived from (`deriveOriginSecret`). */
   readonly originSecretKey: string;
@@ -190,6 +198,10 @@ export function renderContainerTemplate(template: string, split: ReleaseVariable
   );
 }
 
+/** The seed of an open release's second rule (MOTIR-12128), so it starts its
+ *  probe away from the app's secret rule. */
+export const OPEN_RULE_SEED_SUFFIX = ':open';
+
 /** A free priority on the shared listener, starting from one the app's name
  *  picks, so apps rarely probe. */
 export function pickRulePriority(appRef: string, taken: readonly number[]): number {
@@ -203,6 +215,29 @@ export function pickRulePriority(appRef: string, taken: readonly number[]): numb
     if (!used.has(priority)) return priority;
   }
   throw new ContainerRolloutFailedError('listener rule', appRef);
+}
+
+/**
+ * The open mode's three parameters (MOTIR-12128): under `open`, the open rule's
+ * priority and the network's VPC origin and load balancer name (read fresh from
+ * the network, so they follow it); under `motir_edge`, all empty, so a stack
+ * that was never opened carries nothing of the open mode.
+ */
+export function openParameters(
+  originAccess: OriginAccess,
+  openListenerRulePriority: string,
+  network: Pick<TenantNetwork, 'frontDoorVpcOriginId' | 'albDnsName'>,
+): Record<
+  'OriginAccess' | 'OpenListenerRulePriority' | 'FrontDoorVpcOriginId' | 'AlbDnsName',
+  string
+> {
+  const open = originAccess === 'open';
+  return {
+    OriginAccess: originAccess,
+    OpenListenerRulePriority: open ? openListenerRulePriority : '',
+    FrontDoorVpcOriginId: open ? network.frontDoorVpcOriginId : '',
+    AlbDnsName: open ? network.albDnsName : '',
+  };
 }
 
 /** The revision a rollback restores: the newest below the stack's. */
@@ -287,6 +322,10 @@ export async function deployContainerRelease(
   const units = fargateTaskUnits(awsContainerSize(input.size, environment));
 
   const existing = await account.runner.describeStack(stackName);
+  // The stack's own origin access and open rule, resent: a deploy never closes
+  // an opened app (MOTIR-12128).
+  const originAccess = originAccessOf(existing?.parameters);
+  const openPriority = existing?.parameters['OpenListenerRulePriority'] ?? '';
   const priority =
     existing?.parameters['ListenerRulePriority'] ??
     String(
@@ -314,6 +353,7 @@ export async function deployContainerRelease(
     OriginSecret: deriveOriginSecret(input.originSecretKey, appRef),
     DatabaseSecretArn: input.database?.secretArn ?? '',
     ConfigHash: hash,
+    ...openParameters(originAccess, openPriority, input.network),
   });
   const apply = (hash: string) =>
     account.runner.applyStack({

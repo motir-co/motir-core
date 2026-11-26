@@ -54,6 +54,7 @@ import { awsCostFetch } from './definitions/awsCostFetch';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
 import { hostAccountState } from './definitions/hostAccountState';
 import { hostingTenantAccountReconcile } from './definitions/hostingTenantAccountReconcile';
+import { hostingTenantHandoverAdvance } from './definitions/hostingTenantHandoverAdvance';
 import { productionHealthProbe } from './definitions/productionHealthProbe';
 import { productionUsageAccrual } from './definitions/productionUsageAccrual';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
@@ -81,6 +82,13 @@ import { jobRunReap } from './definitions/jobRunReap';
 import { jobQueueRetention } from './definitions/jobQueueRetention';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
+import {
+  hostedApplicationExport,
+  hostedApplicationExportExpire,
+} from './definitions/hostedApplicationExport';
+import { hostedApplicationGraceStop } from './definitions/hostedApplicationGraceStop';
+import { hostedApplicationGraceNotice } from './definitions/hostedApplicationGraceNotice';
+import { hostedApplicationGraceNoticeSweep } from './definitions/hostedApplicationGraceNoticeSweep';
 import { publicHostnameReservationSweep } from './definitions/publicHostnameReservationSweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { runLivenessSweep } from './definitions/runLivenessSweep';
@@ -189,6 +197,7 @@ export const jobDefinitions = [
   awsCostFetch,
   hostAccountState,
   hostingTenantAccountReconcile,
+  hostingTenantHandoverAdvance,
   hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,
@@ -221,6 +230,11 @@ export const jobDefinitions = [
   jobQueueRetention,
   dataExportBuild,
   dataExportExpirySweep,
+  hostedApplicationExport,
+  hostedApplicationExportExpire,
+  hostedApplicationGraceStop,
+  hostedApplicationGraceNotice,
+  hostedApplicationGraceNoticeSweep,
   publicHostnameReservationSweep,
   dispatchRunSweep,
   runLivenessSweep,

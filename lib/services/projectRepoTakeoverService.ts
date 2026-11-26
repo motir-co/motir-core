@@ -8,6 +8,8 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
+import { SharedTenantAccountError } from '@/lib/hosting/tenantHandoverErrors';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -15,6 +17,10 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import {
+  hostedApplicationHandoverService,
+  type GraceNotice,
+} from '@/lib/services/hostedApplicationHandoverService';
 import { actionsPermissionsClient } from '@/lib/github/actionsPermissions';
 import { repoTransferClient, RepoTransferError } from '@/lib/github/repoTransfer';
 import { toProjectRepoDto, type ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
@@ -128,6 +134,15 @@ export const projectRepoTakeoverService = {
     const identity = await githubIdentityService.getIdentityForUser(ctx.userId);
     if (!identity) throw new GithubIdentityRequiredError();
 
+    // MOTIR-12131 — an AWS-target repository shares its organisation's ONE
+    // tenant account with every other one, and the account leaves with all of
+    // them: handed over one at a time, the first would leave the rest deploying
+    // into an account on its way out, and even a lone one would leave its app
+    // running in Motir's account. So a single takeover is refused, naming any
+    // others, before the claim writes anything — except while the
+    // organisation's handover is itself transferring them (`removing`).
+    await assertNotSharedTenantAccount(rowId);
+
     // ── 1 · CLAIM (locked, no network) ──────────────────────────────────────
     const claimed = await inLockedRow(rowId, ctx, async (row, tx) => {
       assertTransferable(rowId, row);
@@ -219,6 +234,22 @@ export const projectRepoTakeoverService = {
       });
     }
 
+    // MOTIR-12132 — a serverless or Fly app cannot leave with its repository
+    // (decision MOTIR-9802). Its deploy credential, its `production` environment
+    // and its variables would travel with the repository, so they go here,
+    // after the previews and BEFORE the transfer, the application reading
+    // `handing_over` first so every deploy is refused while they go. A failure
+    // fails the saga before anything moves and puts the application back.
+    try {
+      await hostedApplicationHandoverService.prepareForTransfer(rowId);
+    } catch (err) {
+      await this.markFailed(rowId, detailOf(err), ctx);
+      await cancelPreparationQuietly(rowId);
+      throw new RepoTransferRefusedError(
+        `could not withdraw the production deploy credentials before the transfer: ${detailOf(err)}`,
+      );
+    }
+
     let accepted = false;
     try {
       const result = await repoTransferClient.transferRepo({
@@ -230,6 +261,7 @@ export const projectRepoTakeoverService = {
       accepted = result.completed;
     } catch (err) {
       await this.markFailed(rowId, detailOf(err), ctx);
+      await cancelPreparationQuietly(rowId);
       throw new RepoTransferRefusedError(detailOf(err));
     }
 
@@ -238,10 +270,25 @@ export const projectRepoTakeoverService = {
     // accepted on github.com. Either way the `repository` `transferred` delivery
     // is what CONFIRMS it — this only skips the pending state when GitHub has
     // already reported the new owner, and the webhook remains idempotent over it.
+    //
+    // MOTIR-12132 — a transfer GitHub reports completed is recorded HERE, and
+    // the later delivery answers `already_applied`, so the grace window starts
+    // here too, in the same transaction as `takeoverTransferredAt`.
     const next: ProjectRepoTakeoverState = accepted ? 'awaiting_reinstall' : 'transfer_pending';
+    const transferredAt = accepted ? new Date() : null;
+    let notice: GraceNotice | null = null;
     const row = await this.transition(rowId, next, ctx, {
-      transferredAt: accepted ? new Date() : null,
+      transferredAt,
+      ...(transferredAt
+        ? {
+            inTransaction: async (tx: Prisma.TransactionClient) => {
+              notice = (await hostedApplicationHandoverService.startGrace(rowId, transferredAt, tx))
+                .notice;
+            },
+          }
+        : {}),
     });
+    await hostedApplicationHandoverService.sendGraceNotice(notice);
 
     // The re-enable above cleared Motir's pause on a repository it is handing over.
     // Clear the stored INTENT too, or MOTIR-1907's sweep would read the row as
@@ -326,17 +373,23 @@ export const projectRepoTakeoverService = {
       ) {
         return { outcome: 'already_applied' as const };
       }
+      const transferredAt = new Date();
       await projectRepoRepository.setTakeover(
         found.id,
         {
           takeoverState: 'awaiting_reinstall',
-          takeoverTransferredAt: new Date(),
+          takeoverTransferredAt: transferredAt,
           takeoverFailureReason: null,
         },
         tx,
       );
-      return { outcome: 'applied' as const };
+      // MOTIR-12132 — a serverless or Fly app's grace window starts with the
+      // transfer, committed with it; its notice is enqueued after the commit.
+      const grace = await hostedApplicationHandoverService.startGrace(found.id, transferredAt, tx);
+      return { outcome: 'applied' as const, notice: grace.notice };
     });
+    if (outcome.outcome === 'applied')
+      await hostedApplicationHandoverService.sendGraceNotice(outcome.notice);
 
     // POST-COMMIT, BEST-EFFORT — the repository has LEFT Motir's org, so it must
     // leave the project's runner group too (MOTIR-1972 · `ci-runner-fleet.md`
@@ -357,7 +410,7 @@ export const projectRepoTakeoverService = {
       workspaceId: found.workspaceId,
     });
 
-    return outcome;
+    return { outcome: outcome.outcome };
   },
 
   /**
@@ -407,7 +460,12 @@ export const projectRepoTakeoverService = {
     rowId: string,
     state: ProjectRepoTakeoverState,
     ctx: ServiceContext,
-    options: { failureReason?: string; transferredAt?: Date | null } = {},
+    options: {
+      failureReason?: string;
+      transferredAt?: Date | null;
+      /** Runs in the transaction that writes the state, after the write. */
+      inTransaction?: (tx: Prisma.TransactionClient) => Promise<void>;
+    } = {},
   ): Promise<ProjectRepoDto> {
     return inLockedRow(rowId, ctx, async (row, tx) => {
       const from = row.takeoverState;
@@ -431,6 +489,7 @@ export const projectRepoTakeoverService = {
         },
         tx,
       );
+      await options.inTransaction?.(tx);
       return toProjectRepoDto({
         ...updated,
         githubRepo: row.githubRepo,
@@ -477,6 +536,62 @@ export const projectRepoTakeoverService = {
     }
   },
 };
+
+/** The takeover states past the transfer call: the repository is leaving or
+ *  has left, so it no longer shares the account. */
+const PAST_TRANSFER_STATES: readonly ProjectRepoTakeoverState[] = [
+  'transfer_pending',
+  'awaiting_reinstall',
+  'done',
+];
+
+/** Tenant-account states under which a single AWS takeover may proceed:
+ *  `removing` is the organisation-wide handover's own transfer step, and
+ *  `handed_over` is an account Motir no longer holds. */
+const SINGLE_AWS_TAKEOVER_ACCOUNT_STATES: readonly string[] = ['removing', 'handed_over'];
+
+/**
+ * Refuse a single-repository takeover of an AWS-target row whose organisation
+ * holds a tenant account Motir still hosts it in (MOTIR-12131). The account is
+ * one per organisation and leaves WHOLE through the handover, so a takeover
+ * outside it would move the repository while its app kept running in Motir's
+ * account — whether or not another repository shares the account. A lone AWS
+ * repository is refused too, with no others named (the review of MOTIR-9800:
+ * a project admin who is not an organisation admin, or a direct API call,
+ * otherwise skipped the handover). Lifted while the account is `removing`, the
+ * state the handover's transfer step runs under. Reads only; a row that is not
+ * AWS-targeted, not found, or with no tenant account created, passes.
+ */
+async function assertNotSharedTenantAccount(rowId: string): Promise<void> {
+  const others = await withSystemContext(async (tx) => {
+    const facts = await projectRepoRepository.findDeployFactsInTx(rowId, tx);
+    if (facts?.hostingTarget !== 'aws') return null;
+    const identity = await projectRepoRepository.findHostingIdentityInTx(rowId, tx);
+    if (!identity) return null;
+    const account = await hostingTenantAccountRepository.findByOrganizationId(
+      identity.organizationId,
+      tx,
+    );
+    // No account was ever created: nothing runs in one, so nothing to hand over.
+    if (!account?.awsAccountId) return null;
+    if (SINGLE_AWS_TAKEOVER_ACCOUNT_STATES.includes(account.state)) return null;
+    const repos = await projectRepoRepository.listAwsMotirReposByOrganizationInTx(
+      identity.organizationId,
+      tx,
+    );
+    return repos.filter(
+      (repo) =>
+        repo.id !== rowId &&
+        !(repo.takeoverState && PAST_TRANSFER_STATES.includes(repo.takeoverState)),
+    );
+  });
+  if (others !== null) {
+    throw new SharedTenantAccountError(
+      rowId,
+      others.map((repo) => repo.name),
+    );
+  }
+}
 
 /**
  * Reject a row that is not Motir's to hand over, distinguishing the two shapes so
@@ -541,6 +656,20 @@ async function inLockedRow<T>(
       return fn(fresh, tx);
     },
   );
+}
+
+/** Put a serverless or Fly application back after a takeover that failed
+ *  before the repository moved (MOTIR-12132). The caller is about to throw the
+ *  real failure, so a throw from here is logged rather than replacing it. */
+async function cancelPreparationQuietly(rowId: string): Promise<void> {
+  try {
+    await hostedApplicationHandoverService.cancelPreparation(rowId);
+  } catch (err) {
+    console.error(
+      `[projectRepoTakeoverService] could not put row ${rowId}'s application back to live:`,
+      err instanceof Error ? err.message : 'unknown',
+    );
+  }
 }
 
 /** GitHub logins are case-insensitive; the payload's casing need not match what
