@@ -89,6 +89,33 @@ describe('handOffCodeGraphIndex', () => {
     expect(sentBody(fetchMock)).not.toHaveProperty('changedPaths');
   });
 
+  it('a default-branch handoff leaves isDefaultBranch out of the body (MOTIR-12257)', async () => {
+    const fetchMock = stubFetch(() => jsonResponse({ jobId: 'job_4' }, 202));
+    await handOffCodeGraphIndex({ ...COMMON, kind: 'refresh' });
+    expect(sentBody(fetchMock)).not.toHaveProperty('isDefaultBranch');
+  });
+
+  it.each([false, true])('an explicit isDefaultBranch %s is sent as given', async (value) => {
+    const fetchMock = stubFetch(() => jsonResponse({ jobId: 'job_5' }, 202));
+    const previousCommitSha = 'b'.repeat(40);
+    await handOffCodeGraphIndex({
+      ...COMMON,
+      ref: 'feature-x',
+      kind: 'push',
+      previousCommitSha,
+      changedPaths: ['src/a.ts'],
+      isDefaultBranch: value,
+    });
+    expect(sentBody(fetchMock)).toEqual({
+      ...COMMON,
+      ref: 'feature-x',
+      kind: 'push',
+      previousCommitSha,
+      changedPaths: ['src/a.ts'],
+      isDefaultBranch: value,
+    });
+  });
+
   it('429 rate_limited is the registration retry, not an error', async () => {
     stubFetch(() =>
       jsonResponse({ code: 'rate_limited', status: 429, title: 'retry shortly' }, 429),

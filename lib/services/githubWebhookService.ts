@@ -46,6 +46,7 @@ import { projectRunnerGroupService } from './projectRunnerGroupService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { githubCodeGraphForwardService } from './githubCodeGraphForwardService';
+import { githubPrHeadIndexService } from './githubPrHeadIndexService';
 import { repoDeploymentService } from './repoDeploymentService';
 import { productionMergeReleaseService } from './productionMergeReleaseService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
@@ -354,6 +355,9 @@ export const githubWebhookService = {
         // AFTER the handling, so its early returns and its answer stay as they are; it
         // never throws (MOTIR-12056).
         await githubCodeGraphForwardService.onPullRequest(body);
+        // AFTER both, for the same reason: a same-repository head is handed off for
+        // indexing (MOTIR-12257); it never throws and never changes the answer.
+        await githubPrHeadIndexService.onPullRequest(body);
         return result;
       }
       case 'pull_request_review':

@@ -13,6 +13,7 @@ import { INDEX_AI_URL, INDEX_SERVICE_TOKEN, stubAppCredentials } from './indexFl
 //   GitHub    /access_tokens                     an installation token
 //             /commits/<ref>                     the live head, `handoffWorld.head`
 //             /compare/<base>...<head>           `handoffWorld.compare` (MOTIR-11887)
+//             /pulls/<number>                    `handoffWorld.pullRequest` (MOTIR-12257)
 //             /tarball/<ref>                     a 302 to a URL carrying `SOURCE_URL_SENTINEL`
 //
 // Any other request throws, so a call to the container path (a credential mint, a
@@ -54,6 +55,14 @@ export const handoffWorld: {
   compare: { files: GithubCompareFile[] } | { status: number } | null;
   /** Every comparison asked, as `base...head`. */
   compareReads: string[];
+  /**
+   * What GitHub's single pull-request read answers (MOTIR-12257): the pull request
+   * object, or a status. `null` (the default) throws, so a case that never expected
+   * a live read fails by name if one is asked.
+   */
+  pullRequest: Record<string, unknown> | { status: number } | null;
+  /** Every pull-request number read. */
+  pullRequestReads: number[];
 } = {
   allowanceOutcome: 'ok',
   head: HANDOFF_HEAD,
@@ -67,6 +76,8 @@ export const handoffWorld: {
   aiPaths: [],
   compare: null,
   compareReads: [],
+  pullRequest: null,
+  pullRequestReads: [],
 };
 
 /** One `files[]` entry of GitHub's compare answer — names only. */
@@ -173,6 +184,8 @@ export function stubIndexHandoff(): void {
   handoffWorld.aiPaths = [];
   handoffWorld.compare = null;
   handoffWorld.compareReads = [];
+  handoffWorld.pullRequest = null;
+  handoffWorld.pullRequestReads = [];
   stubAppCredentials();
   vi.stubEnv('MOTIR_AI_URL', INDEX_AI_URL);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', INDEX_SERVICE_TOKEN);
@@ -246,6 +259,16 @@ export function stubIndexHandoff(): void {
         if ('status' in answer) return json(answer.status, { message: 'Server Error' });
         return json(200, { files: answer.files, commits: [] });
       }
+      const pull = /\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)$/.exec(parsed.pathname);
+      if (pull) {
+        handoffWorld.pullRequestReads.push(Number(pull[1]));
+        const answer = handoffWorld.pullRequest;
+        if (answer === null) throw new Error(`unexpected pull-request read ${parsed.pathname}`);
+        if ('status' in answer && typeof answer['status'] === 'number' && !('head' in answer)) {
+          return json(answer.status, { message: 'Not Found' });
+        }
+        return json(200, answer);
+      }
       const tarball = /\/repos\/[^/]+\/[^/]+\/tarball\/([^/]+)$/.exec(parsed.pathname);
       if (tarball) {
         const ref = decodeURIComponent(tarball[1]!);
@@ -255,4 +278,31 @@ export function stubIndexHandoff(): void {
       throw new Error(`unexpected fetch to ${parsed.href}`);
     }),
   );
+}
+
+/**
+ * A pull request as GitHub's single read returns it — open, head in the base
+ * repository unless a case says otherwise. `repoId` is both repositories' id.
+ */
+export function livePullRequest(
+  opts: {
+    number?: number;
+    state?: 'open' | 'closed';
+    headRef?: string;
+    headSha?: string;
+    repoId?: number | string;
+    headRepoId?: number | string | null;
+  } = {},
+): Record<string, unknown> {
+  const repoId = opts.repoId ?? 1;
+  return {
+    number: opts.number ?? 7,
+    state: opts.state ?? 'open',
+    head: {
+      ref: opts.headRef ?? 'feature-x',
+      sha: opts.headSha ?? HANDOFF_HEAD,
+      repo: opts.headRepoId === null ? null : { id: opts.headRepoId ?? repoId },
+    },
+    base: { ref: 'main', repo: { id: repoId } },
+  };
 }
