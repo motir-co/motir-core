@@ -428,6 +428,7 @@ describe('Usage this period', () => {
           balance: -42,
           canSuspend: true,
           suspendsAt: '2026-11-27T00:00:00.000Z',
+          graceStopsAt: null,
         },
       }),
     });
@@ -450,6 +451,7 @@ describe('Usage this period', () => {
             balance: null,
             canSuspend: true,
             suspendsAt: null,
+            graceStopsAt: null,
           },
         }),
       },
@@ -464,6 +466,28 @@ describe('Usage this period', () => {
     expect(box.textContent).toContain('An organisation owner or admin can top up credits.');
   });
 
+  it('tells an app in its takeover grace window that it runs until the window ends, with no switch date (MOTIR-12248)', () => {
+    renderUsage({
+      kind: 'ready',
+      usage: usage({
+        state: 'credits_exhausted',
+        exhausted: {
+          since: '2026-11-20T00:00:00.000Z',
+          balance: -12,
+          canSuspend: true,
+          suspendsAt: null,
+          graceStopsAt: '2026-12-24T09:30:00.000Z',
+        },
+      }),
+    });
+    const box = screen.getByTestId('production-credits-exhausted');
+    expect(box.textContent).toContain('in its takeover grace window');
+    expect(box.textContent).toContain('until Dec 24, 2026');
+    expect(box.textContent).not.toContain('still below zero on');
+    expect(box.textContent).not.toContain('sleeps when nothing asks for it');
+    expect(within(box).getByTestId('production-top-up')).toBeTruthy();
+  });
+
   it('says an AWS container keeps running always on in overdraft', () => {
     renderUsage({
       kind: 'ready',
@@ -474,6 +498,7 @@ describe('Usage this period', () => {
           balance: -5,
           canSuspend: false,
           suspendsAt: null,
+          graceStopsAt: null,
         },
       }),
     });
@@ -657,6 +682,7 @@ describe('the Production panel mounts When idle and Usage', () => {
                 balance: -3,
                 canSuspend: true,
                 suspendsAt: '2026-11-27T00:00:00.000Z',
+                graceStopsAt: null,
               },
             }),
           );

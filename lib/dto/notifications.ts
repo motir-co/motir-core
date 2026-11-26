@@ -170,7 +170,9 @@ export interface NotificationProductionCreditsExhaustedData {
   apps: Array<{ repositoryName: string; projectKey: string }>;
   /** When the balance was first read below zero, ISO-8601. */
   exhaustedSince: string;
-  /** `exhaustedSince` plus the 7 days of §9, ISO-8601. */
+  /** `exhaustedSince` plus the 7 days of §9, ISO-8601 — or `''` when the switch
+   *  acts on none of the listed apps (each in its takeover grace window or on a
+   *  target that cannot suspend, MOTIR-12248), and the row draws no excerpt. */
   suspendFrom: string;
 }
 

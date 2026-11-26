@@ -60,6 +60,8 @@ export interface HostedApplicationMeterTarget {
   /** The takeover handover state (MOTIR-12126): a `grace` application is exempt
    *  from the out-of-credits actions (MOTIR-12143). */
   state: HostedApplicationState;
+  /** When a `grace` application's window ends (MOTIR-12126); null otherwise. */
+  stopsAt: Date | null;
   idleMode: HostedIdleMode;
   creditsExhaustedSince: Date | null;
   databaseProjectId: string | null;
@@ -688,6 +690,7 @@ export const hostedApplicationRepository = {
         projectRepositoryId: true,
         target: true,
         state: true,
+        stopsAt: true,
         idleMode: true,
         creditsExhaustedSince: true,
         databaseProjectId: true,
@@ -788,6 +791,9 @@ export const hostedApplicationRepository = {
       projectKey: string;
       repositoryName: string;
       seedSource: string;
+      state: HostedApplicationState;
+      target: HostingTarget;
+      hostingShape: HostingShape | null;
     }>
   > {
     if (ids.length === 0) return [];
@@ -800,8 +806,10 @@ export const hostedApplicationRepository = {
       select: {
         id: true,
         workspaceId: true,
+        state: true,
+        target: true,
         project: { select: { identifier: true } },
-        projectRepository: { select: { name: true, seedSource: true } },
+        projectRepository: { select: { name: true, seedSource: true, hostingShape: true } },
       },
     });
     return rows.map((r) => ({
@@ -810,6 +818,9 @@ export const hostedApplicationRepository = {
       projectKey: r.project.identifier,
       repositoryName: r.projectRepository.name,
       seedSource: r.projectRepository.seedSource,
+      state: r.state,
+      target: r.target,
+      hostingShape: r.projectRepository.hostingShape,
     }));
   },
 

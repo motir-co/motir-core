@@ -4957,6 +4957,7 @@
           "body": "Cette application continue de tourner. Si le solde est toujours négatif le {date}, Motir la passe en « Mettre en veille si inactive » : elle se met en veille quand personne ne la sollicite. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
           "bodySuspended": "Cette application continue de tourner et se met en veille quand personne ne la sollicite. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
           "bodyCannotSuspend": "Cette application tourne en conteneur AWS, qui ne peut pas être mis en veille : elle reste toujours active et consomme des crédits jusqu’à ce que le solde soit rechargé. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
+          "bodyGrace": "Cette application est dans la période de grâce de son transfert, donc Motir ne la passe pas en « Mettre en veille si inactive » : elle continue de tourner telle quelle jusqu’au {date}, et son utilisation reste facturée. Motir n’arrête ni ne supprime jamais une application en production faute de crédits.",
           "topUp": "Recharger des crédits",
           "member": "Un propriétaire ou un administrateur de l’organisation peut recharger des crédits."
         }

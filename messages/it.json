@@ -4957,6 +4957,7 @@
           "body": "Questa app resta in esecuzione. Se il saldo è ancora sotto zero il {date}, Motir la imposta su «Sospendi se inattiva», così si sospende quando nessuno la richiede. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
           "bodySuspended": "Questa app resta in esecuzione e si sospende quando nessuno la richiede. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
           "bodyCannotSuspend": "Questa app gira come container AWS, che non può essere sospeso, quindi resta sempre attiva e continua a consumare crediti finché il saldo non viene ricaricato. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
+          "bodyGrace": "Questa app è nel periodo di tolleranza della consegna, quindi Motir non la imposta su «Sospendi se inattiva»: resta in esecuzione così com’è fino al {date}, e il suo utilizzo continua a essere addebitato. Motir non arresta né elimina mai un’app in produzione per mancanza di crediti.",
           "topUp": "Ricarica crediti",
           "member": "Un proprietario o amministratore dell’organizzazione può ricaricare i crediti."
         }

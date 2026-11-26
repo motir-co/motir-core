@@ -4957,6 +4957,7 @@
           "body": "Esta aplicación sigue funcionando. Si el saldo sigue siendo negativo el {date}, Motir la cambia a «Suspender si está inactiva», así entra en reposo cuando nadie la solicita. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
           "bodySuspended": "Esta aplicación sigue funcionando y entra en reposo cuando nadie la solicita. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
           "bodyCannotSuspend": "Esta aplicación se ejecuta como contenedor de AWS, que no se puede suspender, así que sigue siempre activa y consumiendo créditos hasta que se recargue el saldo. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
+          "bodyGrace": "Esta aplicación está en el periodo de gracia del traspaso, así que Motir no la cambia a «Suspender si está inactiva»: sigue funcionando tal cual hasta el {date}, y su uso se sigue cobrando. Motir nunca detiene ni elimina una aplicación en producción por falta de créditos.",
           "topUp": "Recargar créditos",
           "member": "Un propietario o administrador de la organización puede recargar créditos."
         }

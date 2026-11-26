@@ -29,6 +29,11 @@ export interface ProductionUsageExhaustedDto {
   /** When an always-on application that can suspend is switched to suspend if
    *  the balance is still below zero (since + 7 days), ISO-8601; null otherwise. */
   suspendsAt: string | null;
+  /** When the takeover grace window of an application in it ends, ISO-8601;
+   *  null otherwise. Such an application is exempt from the out-of-credits
+   *  actions (MOTIR-12143): it is never switched, so it has no `suspendsAt`,
+   *  and keeps running as it is until then (MOTIR-12248). */
+  graceStopsAt: string | null;
 }
 
 export interface ProductionUsageDto {
