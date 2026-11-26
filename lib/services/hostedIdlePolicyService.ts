@@ -212,7 +212,9 @@ async function setIdlePolicy(
  * Refuse `always_on` while the organisation is below zero (Decision MOTIR-12100
  * §9), for an application whose target can suspend. The meter's stored state
  * says the organisation went below zero; the balance read live confirms it, so
- * a top-up lifts the refusal at once, and an unreadable balance keeps it.
+ * a top-up lifts the refusal at once, and an unreadable balance keeps it. An
+ * application in its takeover grace window is never refused for its balance
+ * (Decision MOTIR-9802; MOTIR-12143).
  */
 async function assertAlwaysOnAffordable(
   applicationId: string,
@@ -224,7 +226,12 @@ async function assertAlwaysOnAffordable(
   );
   // Only an application the meter has seen below zero is asked about: the
   // live read then confirms it, so a top-up lifts the refusal at once.
-  if (!meter?.creditsExhaustedSince || !productionCreditBalanceService.canSuspend(meter)) return;
+  if (
+    !meter?.creditsExhaustedSince ||
+    !productionCreditBalanceService.takesOutOfCreditsAction(meter)
+  ) {
+    return;
+  }
   const { below } = await productionCreditBalanceService.isBelowZero(
     meter.organizationId,
     meter.creditsExhaustedSince,

@@ -70,6 +70,17 @@ export const HANDOVER_APPLICATION_STATES = [
   'handed_over',
 ] as const satisfies readonly HostedApplicationState[];
 
+/** The application states the out-of-credits actions never act on (Decision
+ *  MOTIR-9802; MOTIR-12143): during its grace window an application's credits
+ *  still pay, and an exhausted balance does not stop, suspend or refuse it — the
+ *  window ends at `stopsAt` and nowhere else. Its usage is still accrued and
+ *  charged. `handing_over` is not here: a takeover that fails before the
+ *  transfer returns the application to `live`, so it is billed and acted on
+ *  like one. */
+export const OUT_OF_CREDITS_EXEMPT_APPLICATION_STATES = [
+  'grace',
+] as const satisfies readonly HostedApplicationState[];
+
 /** How long a serverless or Fly application keeps running after its repository
  *  is transferred (decision MOTIR-9802): `stopsAt` is the transfer time plus
  *  these days (MOTIR-12132). */

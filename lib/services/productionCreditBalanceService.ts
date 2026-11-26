@@ -1,6 +1,10 @@
 import { idlePolicyRefusal } from '@motir/orchestrator';
 import { getOrgUsage } from '@/lib/ai/motirAiClient';
 import { HOSTED_IDLE_SECONDS_DEFAULT } from '@/lib/hosting/idlePolicy';
+import {
+  OUT_OF_CREDITS_EXEMPT_APPLICATION_STATES,
+  type HostedApplicationState,
+} from '@/lib/hosting/vocabulary';
 import type { HostedApplicationMeterTarget } from '@/lib/repositories/hostedApplicationRepository';
 
 // THE ORGANISATION'S CREDIT BALANCE AS THE HOSTING PATHS READ IT (Story
@@ -62,8 +66,28 @@ function canSuspend(app: Pick<HostedApplicationMeterTarget, 'target' | 'hostingS
   );
 }
 
+const EXEMPT_STATES: ReadonlySet<HostedApplicationState> = new Set(
+  OUT_OF_CREDITS_EXEMPT_APPLICATION_STATES,
+);
+
+/**
+ * Whether an out-of-credits action of Decision MOTIR-12100 §9 may act on the
+ * application at all — the 7-day switch to suspend when idle, and the refusal
+ * of always-on while below zero. THE ONE SELECTION both read applications
+ * through, so neither, nor a later caller, can reach an exempt one: an
+ * application in its takeover grace window is never switched or refused
+ * (Decision MOTIR-9802; MOTIR-12143), and one whose target cannot suspend has
+ * nothing to be switched to. Accrual and the daily charge never ask it.
+ */
+function takesOutOfCreditsAction(
+  app: Pick<HostedApplicationMeterTarget, 'state' | 'target' | 'hostingShape'>,
+): boolean {
+  return !EXEMPT_STATES.has(app.state) && canSuspend(app);
+}
+
 export const productionCreditBalanceService = {
   readOrganizationBalance,
   isBelowZero,
   canSuspend,
+  takesOutOfCreditsAction,
 };

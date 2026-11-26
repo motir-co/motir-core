@@ -164,17 +164,26 @@ interface Live {
   organizationId: string;
 }
 
-/** A Motir repository on `target` with its first production release live. */
+/** A Motir repository on `target` with its first production release live —
+ *  in a project of its own, or, given `fx` and a `name`, beside another. */
 async function liveApp(
-  opts: { target?: HostingTarget; identifier?: string; size?: 'small' | 'medium' } = {},
+  opts: {
+    target?: HostingTarget;
+    identifier?: string;
+    size?: 'small' | 'medium';
+    fx?: WorkItemFixture;
+    name?: string;
+  } = {},
 ): Promise<Live> {
-  const fx = await makeWorkItemFixture({
-    name: opts.identifier ?? 'Acme',
-    identifier: opts.identifier ?? 'ACME',
-  });
+  const fx =
+    opts.fx ??
+    (await makeWorkItemFixture({
+      name: opts.identifier ?? 'Acme',
+      identifier: opts.identifier ?? 'ACME',
+    }));
   const row = await projectRepoSetService.addRow(
     fx.projectId,
-    { role: 'web', name: 'repo-web' },
+    { role: 'web', name: opts.name ?? 'repo-web' },
     fx.ctx,
   );
   await adminDb.projectRepo.update({
@@ -806,6 +815,99 @@ describe('out of credits (§9)', () => {
     );
 
     expect(await meter.accrue({ now: () => now })).toMatchObject({ suspended: 0, failed: 0 });
+  });
+});
+
+// MOTIR-12143 — Decision MOTIR-9802: during the takeover grace window credits
+// still pay and an exhausted balance does not stop the app. The out-of-credits
+// actions above read their applications through ONE predicate
+// (`productionCreditBalanceService.takesOutOfCreditsAction`), which leaves a
+// `grace` application out; its usage is still sliced and charged.
+describe('an application in its takeover grace window (MOTIR-12143)', () => {
+  /** The app each fake-port call named after `mark`, other than usage reads. */
+  const actedOn = (mark: number) =>
+    port()
+      .calls.slice(mark)
+      .filter((c) => c.operation !== 'usageSince' && c.appRef !== null)
+      .map((c) => c.appRef);
+
+  async function exhaustedPair(state: 'grace' | 'handing_over') {
+    const live = await liveApp();
+    let mark = port().calls.length;
+    const other = await liveApp({ fx: live.fx, name: 'repo-api' });
+    const otherRefs = new Set(actedOn(mark));
+    expect(otherRefs.size).toBeGreaterThan(0);
+    const stopsAt = new Date(Date.now() + 20 * DAY);
+    const until = new Date(Math.max(live.liveAt.getTime(), other.liveAt.getTime()) + HOUR);
+    releaseUsage(until, 3600);
+    await meter.accrue({ now: () => until });
+    await shiftSlices(live.appId, ENDED_DAY_SHIFT);
+    await shiftSlices(other.appId, ENDED_DAY_SHIFT);
+    const since = new Date(Date.now() - 8 * DAY);
+    for (const app of [live, other]) {
+      await adminDb.hostedApplication.update({
+        where: { id: app.appId },
+        data: { idleMode: 'always_on', idleSeconds: null, creditsExhaustedSince: since },
+      });
+    }
+    await adminDb.hostedApplication.update({
+      where: { id: other.appId },
+      data: { state, stopsAt: state === 'grace' ? stopsAt : null },
+    });
+    balance = -40;
+    mark = port().calls.length;
+    return { live, other, otherRefs, stopsAt: state === 'grace' ? stopsAt : null, mark };
+  }
+
+  it('leaves a grace application serving under an exhausted balance while a live one is switched, and still charges both', async () => {
+    const { live, other: grace, otherRefs, stopsAt, mark } = await exhaustedPair('grace');
+    const apply = vi.spyOn(hostedIdlePolicyService, 'applyIdlePolicyAsSystem');
+    const releasesBefore = await adminDb.hostedRelease.count({
+      where: { applicationId: grace.appId },
+    });
+
+    const result = await meter.accrue({ now: () => new Date() });
+
+    // The live application takes §9's action: switched to suspend when idle.
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(live.rowId, {
+      mode: 'suspend',
+      idleSeconds: HOSTED_IDLE_SECONDS_DEFAULT,
+    });
+    expect(result.suspended).toBe(1);
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { id: live.appId } }),
+    ).toMatchObject({ idleMode: 'suspend', idleSeconds: HOSTED_IDLE_SECONDS_DEFAULT });
+
+    // The grace application is untouched: same state, same stopsAt, same policy,
+    // no new release and no port operation on it.
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { id: grace.appId } }),
+    ).toMatchObject({ state: 'grace', stopsAt, idleMode: 'always_on', idleSeconds: null });
+    expect(await adminDb.hostedRelease.count({ where: { applicationId: grace.appId } })).toBe(
+      releasesBefore,
+    );
+    const after = actedOn(mark);
+    expect(after.length).toBeGreaterThan(0); // the live application's switch
+    expect(after.filter((ref) => otherRefs.has(ref))).toEqual([]);
+
+    // …and its usage is still sliced and charged for the ended day, as the live one's.
+    expect((await slices(grace.appId)).map((s) => s.chargeState)).toEqual(['charged']);
+    expect(debits.map((d) => d.applicationId).sort()).toEqual([live.appId, grace.appId].sort());
+  });
+
+  it('still acts on a handing-over application: only the grace window is exempt', async () => {
+    const { live, other: handingOver } = await exhaustedPair('handing_over');
+    const apply = vi.spyOn(hostedIdlePolicyService, 'applyIdlePolicyAsSystem');
+
+    await meter.accrue({ now: () => new Date() });
+
+    expect(apply.mock.calls.map(([rowId]) => rowId).sort()).toEqual(
+      [live.rowId, handingOver.rowId].sort(),
+    );
+    expect(debits.map((d) => d.applicationId).sort()).toEqual(
+      [live.appId, handingOver.appId].sort(),
+    );
   });
 });
 

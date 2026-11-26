@@ -547,6 +547,26 @@ describe('always on while out of credits (MOTIR-12108)', () => {
     ).toMatchObject({ idleMode: 'suspend' });
   });
 
+  // MOTIR-12143 — Decision MOTIR-9802: an exhausted balance never refuses an
+  // application in its takeover grace window. What answers instead is the grace
+  // window's own deploy freeze (MOTIR-12127), which this card leaves as it is.
+  it('never refuses always on for its balance to an application in its grace window', async () => {
+    const id = await exhausted(-5);
+    const stopsAt = new Date(Date.now() + 20 * 86_400_000);
+    await adminDb.hostedApplication.update({
+      where: { projectRepositoryId: id },
+      data: { state: 'grace', stopsAt },
+    });
+
+    const res = await putIdle('ACME', id, { mode: 'always_on' });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('repository_taken_over');
+    expect(
+      await adminDb.hostedApplication.findUniqueOrThrow({ where: { projectRepositoryId: id } }),
+    ).toMatchObject({ state: 'grace', stopsAt });
+  });
+
   it('lifts the refusal at once on a top-up, before the meter’s next pass', async () => {
     const id = await exhausted(250);
 
