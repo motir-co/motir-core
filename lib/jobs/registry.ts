@@ -37,6 +37,7 @@ import { platformMeterReport } from './definitions/platformMeterReport';
 import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { codeGraphRefresh } from './definitions/codeGraphRefresh';
 import { codeGraphForward } from './definitions/codeGraphForward';
+import { codeGraphPrHeadIndex } from './definitions/codeGraphPrHeadIndex';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
 import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
 import { monitorBugEnrichBackfill } from './definitions/monitorBugEnrichBackfill';
@@ -179,6 +180,7 @@ export const jobDefinitions = [
   codeGraphIndex,
   codeGraphRefresh,
   codeGraphForward,
+  codeGraphPrHeadIndex,
   outwardBugTelemetryOnCreated,
   monitorBugEnrichOnCreated,
   monitorBugEnrichBackfill,

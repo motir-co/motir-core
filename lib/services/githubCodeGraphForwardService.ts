@@ -1,10 +1,12 @@
-import { repoRefOf } from '@/lib/github/indexEnqueue';
 import { enqueueCodeGraphForward } from '@/lib/jobs/codeGraphForward';
 import type { CodeGraphForwardData } from '@/lib/jobs/types';
-import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
-import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
-import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import {
+  asRecord,
+  logRef,
+  nonEmpty,
+  readId,
+  resolveDeliveryScope as resolveScope,
+} from './githubDeliveryScope';
 
 // THE GITHUB → CODE-GRAPH FORWARD (MOTIR-12056 · story MOTIR-11870) — a second
 // listener on two webhook deliveries, beside the handling they already get.
@@ -28,9 +30,9 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 // service's call; a pull request whose head is the default branch, or a push that
 // deletes it, is forwarded like any other and answered by the service.
 //
-// ⚠️ THE ORGANISATION READ BINDS THE WORKSPACE FIRST, like
-// `codeGraphIndexService.resolveIndexTarget`: `workspace`'s policies key on
-// `app.workspace_id`, so an unbound read returns null and raises nothing.
+// ⚠️ THE SCOPE READ IS SHARED with the pull-request head index listener
+// (`githubDeliveryScope.ts`, MOTIR-12257), which binds the workspace before it
+// reads the organisation.
 
 /** What one listener did; for tests and the log, never part of the delivery's answer. */
 export type CodeGraphForwardOutcome =
@@ -45,62 +47,9 @@ export type CodeGraphForwardOutcome =
 
 const BRANCH_REF = 'refs/heads/';
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-/** A GitHub numeric id, as the string the mirror stores it as. */
-function readId(value: unknown): string | null {
-  return typeof value === 'number' || typeof value === 'string' ? String(value) : null;
-}
-
-const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value !== '';
-
 /** An ISO time GitHub wrote, kept as GitHub wrote it, or null when it does not parse. */
 function readTime(value: unknown): string | null {
   return nonEmpty(value) && !Number.isNaN(Date.parse(value)) ? value : null;
-}
-
-/** The repository's name for the log: `owner/name` from the payload, never a token or URL. */
-function logRef(body: Record<string, unknown>): string {
-  const fullName = asRecord(body['repository'])?.['full_name'];
-  return typeof fullName === 'string' ? fullName : '(unknown repository)';
-}
-
-/** The stored installation → repository row → workspace → organisation, or why not. */
-async function resolveScope(
-  body: Record<string, unknown>,
-  providerRepoId: string,
-): Promise<
-  | { kind: 'resolved'; coreOrganizationId: string; repoRef: string }
-  | { kind: 'unknown_installation' | 'unknown_repo' }
-> {
-  const installationId = readId(asRecord(body['installation'])?.['id']);
-  if (!installationId) return { kind: 'unknown_installation' };
-  return withSystemContext(async (tx) => {
-    const installation = await githubInstallationRepository.findByInstallationId(
-      installationId,
-      tx,
-    );
-    if (!installation) return { kind: 'unknown_installation' as const };
-    const repo = await githubRepoRepository.findByInstallationAndRepoId(
-      installation.id,
-      providerRepoId,
-      tx,
-    );
-    if (!repo) return { kind: 'unknown_repo' as const };
-    await bindWorkspaceContext(tx, repo.workspaceId);
-    const workspace = await workspaceRepository.findByIdInTx(repo.workspaceId, tx);
-    // A repository row whose workspace is gone holds nothing to forward for.
-    if (!workspace) return { kind: 'unknown_repo' as const };
-    return {
-      kind: 'resolved' as const,
-      coreOrganizationId: workspace.organizationId,
-      repoRef: repoRefOf({ owner: repo.owner, name: repo.name }),
-    };
-  });
 }
 
 /** One pull request's state, or why the delivery forwards nothing. */

@@ -445,6 +445,37 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // and the 24 h deadline are measured from it. The call itself is never memoized.
     shape: '{ startedAt: string }',
   },
+  // MOTIR-12257 — the pull-request head index (`system.code-graph-pr-head-index`).
+  // Its target read is the default-branch run's, under its own id.
+  'resolve-target-v1': {
+    file: 'lib/jobs/definitions/codeGraphPrHeadIndex.ts',
+    shape:
+      '{ anchorProjectId: string; indexed: true; organizationId: string; providerId: "github" | "gitlab"; repoRef: string } | { indexed: false; reason: "installation_missing" | "no_commit_beyond_template" | "no_projects" | "provider_cannot_index" | "workspace_missing" }',
+  },
+  // The allowance, the paid plan and the row's size refusal, asked without a write.
+  'pr-gates-v1': {
+    file: 'lib/jobs/definitions/codeGraphPrHeadIndex.ts',
+    shape:
+      '{ proceed: false; reason: "refused_for_size" | `paused_index_${string}` } | { proceed: true }',
+  },
+  // The pull request read LIVE: the handed commit is this head, never the delivery's.
+  'pr-head-v1': {
+    file: 'lib/jobs/definitions/codeGraphPrHeadIndex.ts',
+    shape:
+      '{ headRef: string; headSha: string; open: true } | { open: false; reason: "fork_head" | "gone" | "not_open" }',
+  },
+  // The push-or-first-index decision over the two listings; memoized so a retry
+  // does not ask the host again.
+  'pr-head-diff-v1': {
+    file: 'lib/jobs/definitions/codeGraphPrHeadIndex.ts',
+    shape:
+      '{ changedPaths: Array<string>; kind: "push"; previousCommitSha: string } | { fallback: "comparison_threw" | "head_unchanged" | "host_error" | "no_stamped_head" | "no_such_ref" | "not_connected" | "revoked" | "sha_not_hex" | "too_large" | "truncated"; kind: "first_index" }',
+  },
+  // NEVER the source URL: it is a bearer secret and a memo is stored.
+  'pr-handoff-v1': {
+    file: 'lib/jobs/definitions/codeGraphPrHeadIndex.ts',
+    shape: '{ commitSha: string; handedAt: string; jobId: string }',
+  },
   'index-handoff-v1': {
     file: 'lib/jobs/indexHandoffSteps.ts',
     // MOTIR-11883. NEVER the source URL: it is a bearer secret and a memo is stored.

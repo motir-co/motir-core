@@ -434,6 +434,27 @@ export interface CodeGraphRefreshData extends CodeGraphIndexData {
 }
 
 /**
+ * The `system.code-graph-pr-head-index` event payload (MOTIR-12257 · story
+ * MOTIR-12250) — ONE same-repository pull request whose head should be indexed,
+ * from a `pull_request` `opened`, `reopened` or `synchronize` delivery.
+ *
+ * ⚠️ NO SHA IS CARRIED. The run reads the pull request's head LIVE from the host,
+ * so a redelivered or out-of-order `synchronize` never hands off an older commit as
+ * newer, and a pull request closed before its run reads it hands off nothing.
+ *
+ * The first five fields are the default-branch index's (`CodeGraphIndexData`), so
+ * the run resolves its target exactly as that job does; `defaultBranch` is the
+ * repository's, not the pull request's base.
+ */
+export interface CodeGraphPrHeadIndexData extends CodeGraphIndexData {
+  pullRequestNumber: number;
+  /** The pull request's HEAD branch name — the `ref` the handoff names. */
+  headRef: string;
+  /** The pull request's BASE branch name, as delivered; for the log and the output. */
+  baseRef: string;
+}
+
+/**
  * The `system.code-graph-forward` event payload (MOTIR-12055 · story MOTIR-11870) —
  * ONE thing GitHub reported about a connected repository's branch, to be relayed to
  * motir-ai and on to motir-codegraph: a pull request's state on its head branch, or
@@ -878,6 +899,8 @@ export interface JobEventDataMap {
   'system.code-graph-refresh': CodeGraphRefreshData;
   /** One pull-request state or branch delete relayed to motir-codegraph (MOTIR-12055). */
   'system.code-graph-forward': CodeGraphForwardData;
+  /** One same-repository pull request's head handed off for indexing (MOTIR-12257). */
+  'system.code-graph-pr-head-index': CodeGraphPrHeadIndexData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'public-follow/digest': PublicFollowDigestData;
   'account/data-export.requested': DataExportRequestedData;

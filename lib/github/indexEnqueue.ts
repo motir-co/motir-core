@@ -1,5 +1,9 @@
 import { sendSystemEvent } from '@/lib/jobs/sendEvent';
-import type { CodeGraphIndexData, CodeGraphRefreshData } from '@/lib/jobs/types';
+import type {
+  CodeGraphIndexData,
+  CodeGraphPrHeadIndexData,
+  CodeGraphRefreshData,
+} from '@/lib/jobs/types';
 import type { NormalizedRepo } from '@/lib/git/types';
 
 // Best-effort, POST-COMMIT enqueue of the `system.code-graph-index` job for a
@@ -61,6 +65,15 @@ export async function enqueueCodeGraphRefresh(
   _opts: { trigger?: CodeGraphRefreshTrigger } = {},
 ): Promise<void> {
   await sendSystemEvent('system.code-graph-refresh', data);
+}
+
+/**
+ * Enqueue ONE same-repository pull request's HEAD index (MOTIR-12257). Best-effort
+ * like its two siblings: the webhook 2xx never hinges on the queue, and the next
+ * `synchronize` re-enqueues, so a dropped run self-heals at the next push.
+ */
+export async function enqueueCodeGraphPrHeadIndex(data: CodeGraphPrHeadIndexData): Promise<void> {
+  await sendSystemEvent('system.code-graph-pr-head-index', data);
 }
 
 /**

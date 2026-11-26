@@ -1594,12 +1594,19 @@ interface CodeGraphIndexHandoffCommon {
   coreProjectId: string;
   /** `owner/name`. */
   repoRef: string;
-  /** The default-branch head the source URL was minted at — 40 lowercase hex. */
+  /** The head the source URL was minted at — 40 lowercase hex. */
   commitSha: string;
-  /** The default branch's NAME. */
+  /** The NAME of the branch `commitSha` is the head of: the default branch, or a
+   *  pull request's head branch (MOTIR-12257). */
   ref: string;
   /** The pre-signed archive URL at `commitSha`. A bearer secret. */
   sourceUrl: string;
+  /**
+   * `false` for a pull request's head (MOTIR-12257). motir-ai reads an ABSENT field
+   * as `true`, so a default-branch handoff leaves it unset and its body is exactly
+   * what it was before the field existed.
+   */
+  isDefaultBranch?: boolean;
 }
 
 /** One handoff: a push carries the previous head and the host's changed paths. */
@@ -1641,6 +1648,7 @@ export async function handOffCodeGraphIndex(
       commitSha: input.commitSha,
       ref: input.ref,
       sourceUrl: input.sourceUrl,
+      ...(input.isDefaultBranch !== undefined ? { isDefaultBranch: input.isDefaultBranch } : {}),
       ...(input.kind === 'push'
         ? { previousCommitSha: input.previousCommitSha, changedPaths: input.changedPaths }
         : {}),

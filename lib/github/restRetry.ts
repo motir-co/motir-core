@@ -159,6 +159,8 @@ export const GITHUB_CALLERS = [
   'historicalPullRequestBackfill',
   /** The one-time open-pull-request report's page walk (MOTIR-12057). */
   'openPullRequestReport',
+  /** The pull-request head index's live read of the pull request (MOTIR-12257). */
+  'codeGraphPrHeadIndex',
   /** The `pull_request` webhook's changed-path capture. */
   'webhook.changedPaths',
   /** The decision-document capture's changed-path read. */
