@@ -753,20 +753,6 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // behind its default branch carries. The summary was re-read and still says what the tool does.
     descriptionFingerprint: 'bb73c179712f',
   },
-  record_name_occurrences: {
-    // MOTIR-11647 — the organisation-wide name record, written from plan.py.
-    summary:
-      'Record where code names occur in file content a session read — name, blob and lines — in the record both planners ask first; additive, a repeat inserts nothing.',
-    // Pinned from the LIVE handshake, never hand-computed.
-    descriptionFingerprint: '70af2ae7ce21',
-  },
-  lookup_name_occurrences: {
-    // MOTIR-11647 — the organisation-wide name record, asked from plan.py.
-    summary:
-      'Where each of up to 200 code names occurs in one repository at a commit, from the record both planners write — one entry per name, a miss an empty list, never an error.',
-    // Pinned from the LIVE handshake, never hand-computed.
-    descriptionFingerprint: 'fca028563179',
-  },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
     // (`folderId` on a filed row, the project's `folders`) the read carries.

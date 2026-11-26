@@ -605,15 +605,6 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   code_search: { readOnlyHint: true, openWorldHint: false },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (as code_explore)
   code_grep: { readOnlyHint: true, openWorldHint: false },
-  // W: nameOccurrences.ts → nameOccurrencesService.record → motir-ai POST /v1/code-graph/name-occurrences/record — ADDITIVE: creates occurrence rows, changes or removes none; a repeat of a held row (keyed on tenant, blob, name, start line) writes nothing. Motir's own record over the private boundary.
-  record_name_occurrences: {
-    readOnlyHint: false,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-  // R: nameOccurrences.ts → nameOccurrencesService.lookup → motir-ai POST /v1/code-graph/name-occurrences/lookup (Motir's own record over the private boundary)
-  lookup_name_occurrences: { readOnlyHint: true, openWorldHint: false },
   // R: skeleton.ts → aiBoundaryService.readPlanTree
   skeleton: { readOnlyHint: true, openWorldHint: false },
   // R: listFolders.ts → foldersService.listProjectFolders

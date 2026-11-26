@@ -307,9 +307,6 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       code_search: true,
       // MOTIR-10066 — the file-contents search, the same loss and the same reason.
       code_grep: true,
-      // MOTIR-11647 — the name look-up, filed under `read` but gated on `ai:plan`: the
-      // same loss. The record needs no row: `work_items:write` already confers `ai:plan`.
-      lookup_name_occurrences: true,
       // MOTIR-7410. A FIFTH loss, of the lesson tools' kind: no legacy scope ever
       // gated `get_page`, because `page:view` did not exist when the six strings
       // were written. Its `TOOL_SCOPES` row files it under `read` as the nearest

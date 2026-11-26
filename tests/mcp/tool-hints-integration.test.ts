@@ -30,8 +30,6 @@ import { truncateAuthTables } from '../helpers/db';
 import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 import { mcpToolArgs } from '../helpers/mcpToolArgs';
 import { makeWorkWaitOn } from '../helpers/designWaits';
-import { connectRepairRepo } from '../helpers/repairFixtures';
-import { createTestProject } from '../fixtures/projectFixtures';
 
 // The ONE boundary replaced: presigning a PUT against the object store. It writes
 // nothing to Postgres either way (a local signature), and faking it is what lets
@@ -277,22 +275,6 @@ async function seed(): Promise<Seeded> {
     files: [{ kind: 'mock', sourcePath: 'design/hints/hints.mock.html', contentType: 'text/html' }],
   };
   argFor.create_acceptance_upload = { key: story.identifier };
-  // The name-record look-up refuses a repository outside the project's set (a typed
-  // error), and the seeded project has none. It is aimed at a SECOND project whose set
-  // holds the repository it names, so the guard measures the look-up itself — with
-  // motir-ai unconfigured here, a degraded answer that writes nothing. A second
-  // project, not a repository on the first, so no other read changes what it reads.
-  const names = await createTestProject({
-    workspaceId: fx.workspaceId,
-    actorUserId: fx.ctx.userId,
-    name: 'Hints names',
-    identifier: 'HNAME',
-  });
-  await connectRepairRepo({ ...fx, projectId: names.id }, 'motir-core');
-  argFor.lookup_name_occurrences = {
-    ...argFor.lookup_name_occurrences,
-    projectKey: names.identifier,
-  };
   return { fx, item1, item2, argFor };
 }
 

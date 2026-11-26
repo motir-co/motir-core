@@ -415,28 +415,10 @@ contents, through the same `POST /v1/code-graph/read` — is gated on `ai:plan` 
 the hosted planner's own `code_grep` already shows those lines to every `ai:plan` holder, and
 `read_file` already shows them the whole file.
 
-**A seventh (MOTIR-11647, Story MOTIR-11497, 2026-11-17):** the `record_name_occurrences` MCP
-tool, which WRITES to the organisation's name record: for each code name an author session
-found, the git blob of the file content and the name's line range, forwarded through motir-ai's
-`POST /v1/code-graph/name-occurrences/record` (`nameOccurrencesService.record` in
-`lib/services/nameOccurrencesService.ts`; `TOOL_PERMISSIONS.record_name_occurrences`). It is
-gated on `ai:plan` at the door and again in the service. It is a write, but the key is already a
-write surface: `expand_item`, `open_plan_session`, `append_plan_turn` and `submit_plan_session`
-sit on it (`lib/mcp/toolPermissions.ts`). The hosted planner also performs this exact write
-itself, after each author session, inside a planning job a member submits under `ai:plan`. So a
-member who can plan already causes these rows, and the tool gives the local planner the same
-capability without widening anyone's reach. The write is additive and tenant-scoped. Its rows
-are keyed to a blob and carry no repository, path or commit, and the record is the token's own
-organisation's. It writes no card, no status and no claim.
-
-**An eighth (MOTIR-11647, Story MOTIR-11497, 2026-11-17):** the `lookup_name_occurrences` MCP
-tool, which READS the same record at one commit of one repository: where each of a batch of
-names occurs, forwarded through motir-ai's `POST /v1/code-graph/name-occurrences/lookup`
-(`nameOccurrencesService.lookup`; `TOOL_PERMISSIONS.lookup_name_occurrences`). It is gated on
-`ai:plan` at the door and again in the service, on the argument this amendment makes for the
-code-surface reads already on the key: the hosted planner reads the same record for every
-`ai:plan` holder. It is narrower than `read_file`: it answers paths, line ranges and blob ids,
-never file text, and only from the token's own organisation's record.
+**A seventh and an eighth (MOTIR-11647, Story MOTIR-11497, 2026-11-17) are withdrawn
+(MOTIR-12265, 2026-11-26):** the two MCP tools that wrote and read the organisation's name
+record were removed with the record itself, once both planners verify each code name against the
+file's text. Nothing on `ai:plan` writes or reads that record any more.
 
 ## AMENDMENT 4 (2026-10-21) — §4: the `/code` READS are `ai:plan`; the writes stay `ai:configure` (MOTIR-9173)
 

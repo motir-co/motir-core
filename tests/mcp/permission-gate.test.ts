@@ -117,8 +117,8 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     // adds `code_explore` / `code_search` the same way, MOTIR-10066 `code_grep`,
     // and MOTIR-10069 `list_changed_files` — the hosted planner's own listing —
     // and MOTIR-10237 `get_code_history`, the commit metadata off the same host —
-    // and MOTIR-10242's two dependency reads, the hosted planner's own — and
-    // MOTIR-11647's two name-record tools, the record the hosted planner writes and asks.
+    // and MOTIR-10242's two dependency reads, the hosted planner's own. (MOTIR-11647's
+    // two name-record tools were on this list until MOTIR-12265 removed them.)
     const noPlanning = GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan');
     const blocked = MCP_TOOL_NAMES.filter((n) => permissionDenial(n, noPlanning) !== null);
     expect([...blocked].sort()).toEqual(
@@ -134,9 +134,7 @@ describe('permissionDenial — pure decision over the whole registry', () => {
         'read_dependency_source',
         'get_coding_convention',
         'list_changed_files',
-        'lookup_name_occurrences',
         'open_plan_session',
-        'record_name_occurrences',
         'read_file',
         'submit_plan_session',
       ].sort(),

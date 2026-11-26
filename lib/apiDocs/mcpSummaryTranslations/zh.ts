@@ -583,16 +583,4 @@ export const zh: McpSummaryTranslations = {
     source:
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
   },
-  record_name_occurrences: {
-    summary:
-      '记录代码名称在某次会话读取的文件内容中出现的位置——名称、blob 和行号——写入两个规划器都会先查询的记录；只做追加，重复记录不会插入任何内容。',
-    source:
-      'Record where code names occur in file content a session read — name, blob and lines — in the record both planners ask first; additive, a repeat inserts nothing.',
-  },
-  lookup_name_occurrences: {
-    summary:
-      '最多 200 个代码名称各自在某个仓库某次提交中出现的位置，取自两个规划器共同写入的记录——每个名称一个条目，未命中为空列表，绝不报错。',
-    source:
-      'Where each of up to 200 code names occurs in one repository at a commit, from the record both planners write — one entry per name, a miss an empty list, never an error.',
-  },
 };
