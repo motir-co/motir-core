@@ -20,6 +20,7 @@ import {
 } from '@motir/orchestrator';
 import * as orchestrator from '@/lib/orchestrator';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import {
@@ -2410,5 +2411,108 @@ describe('MOTIR-11230 — a runner with no job is retired, not left to idle for 
     expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
     expect(runnerReadCalls()).toHaveLength(0);
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+});
+
+// ── MOTIR-12264 · a runner running ANOTHER job survives its own job's completion ─
+//
+// The bug report suspected this path of a same-second kill of six busy runners.
+// The kill was EC2's (every one settled `spot_interrupted`), but the scenario it
+// named is the one this supervision must never get wrong, so it is pinned end to
+// end through the real webhook deliveries: the runner is booted for job A, GitHub
+// hands it job B, job A then completes on ANOTHER runner — and supervision, past
+// the idle timeout, keeps the runner until job B finishes and its container exits.
+
+/** A `workflow_job` delivery for the seeded run (`runId` 7001, attempt 1). */
+function workflowJobDelivery(
+  action: 'in_progress' | 'completed',
+  job: { jobId: string; runnerId: number; name: string; conclusion?: string },
+) {
+  return {
+    action,
+    workflow_job: {
+      id: Number(job.jobId),
+      run_id: 7001,
+      run_attempt: 1,
+      name: job.name,
+      labels: [MOTIR_RUNNER_LABEL],
+      runner_id: job.runnerId,
+      ...(action === 'completed'
+        ? { completed_at: new Date().toISOString(), conclusion: job.conclusion ?? 'success' }
+        : {}),
+    },
+    repository: { id: 99001, name: 'acme-web', owner: { login: MOTIR_ORG } },
+    installation: { id: 556677 },
+  };
+}
+
+describe('MOTIR-12264 — a runner busy with another job is never torn down by supervision', () => {
+  it('booted for job A, takes job B, A completes elsewhere: the runner survives until B finishes', async () => {
+    const fx = await seedTenant();
+    const jobA = await seedIntent(fx);
+    const jobBId = String(Number(jobA.jobId) + 500_000);
+    fakeOrchestrator.setBootBehaviour('hang');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // Were supervision ever to ask, GitHub would say the runner is idle — so only
+    // the recorded pick-up of job B can be what keeps it alive.
+    answerRunner(() => json(200, { id: 9001, busy: false, status: 'online' }));
+    // Both retirement triggers armed: the idle timeout has passed on the first
+    // poll, and job A will be completed elsewhere.
+    const options = { ...IDLE_FAST, idleTimeoutMs: 1, jobTimeoutMs: 60_000 };
+
+    // The runner is registered (id 9001) and its container is up.
+    const booted = await ciRunnerBootService.bootIntent(jobA.id, options);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([booted.session.handle.id]);
+
+    // GitHub hands this runner job B …
+    await githubWebhookService.handleWorkflowJob(
+      workflowJobDelivery('in_progress', { jobId: jobBId, runnerId: 9001, name: 'test' }),
+    );
+    // … and job A, the one it was booted for, completes on another runner.
+    await githubWebhookService.handleWorkflowJob(
+      workflowJobDelivery('completed', { jobId: jobA.jobId, runnerId: 9002, name: 'build' }),
+    );
+    const stamped = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: jobA.id },
+    });
+    expect(stamped.jobPickedUpAt).not.toBeNull();
+    expect(stamped.jobCompletedAt).not.toBeNull();
+    expect(stamped.takenJobId).toBe(jobBId);
+
+    // Poll after poll past both triggers: the runner is kept, never read from
+    // GitHub, never de-registered, its container still up.
+    let state: Extract<PollResult, { done: false }> | undefined;
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((r) => setTimeout(r, 5));
+      const polled = await ciRunnerBootService.pollOnce(booted.session, state, options);
+      if (polled.done) throw new Error(`torn down on poll ${i + 1}: ${polled.reason}`);
+      state = polled;
+    }
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([booted.session.handle.id]);
+    expect(runnerReadCalls()).toHaveLength(0);
+    expect(deleteRunnerCalls()).toHaveLength(0);
+
+    // Job B finishes: the runner exits, and only then is it settled.
+    fakeOrchestrator.completeJob(booted.session.handle.id);
+    const verdict = await ciRunnerBootService.pollOnce(booted.session, state, options);
+    if (!verdict.done) throw new Error('the exited container was not seen');
+    expect(verdict.reason).toBe('job_completed');
+    const outcome = await ciRunnerBootService.settleSupervision(booted.session, verdict, options);
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: jobA.id },
+    });
+    // The teardown reason is recorded against the runner's name, so a kill can be
+    // traced from Motir by the name GitHub showed on the job.
+    expect(settled).toMatchObject({
+      status: 'completed',
+      teardownReason: 'job_completed',
+      githubRunnerId: 9001,
+    });
+    expect(settled.runnerName).toEqual(expect.any(String));
+    expect(settled.settledAt).not.toBeNull();
   });
 });
