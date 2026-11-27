@@ -30,7 +30,8 @@ import { JobTestEngine, captureJobEvents, type CapturedJobEvent } from '../helpe
 // same way. Real Postgres throughout.
 //
 // The only doubles are at the edges: `fetch` (motir-ai's two routes and GitHub's REST
-// API), the App's installation-token mint (it needs a private key the test env does
+// API, including the single pull-request read a held open report makes before each
+// re-send — MOTIR-12321), the App's installation-token mint (it needs a private key the test env does
 // not carry), and the engine's dispatch, which `captureJobEvents` records so each
 // enqueued event is run by its real job. No fixture builds a forward event: every one
 // run here is the one the handling built.
@@ -83,6 +84,13 @@ let aiRequests: AiRequest[];
 let aiAnswers: AiAnswer[];
 /** GitHub's open-pull-request listing, by `owner/name`, as pages. */
 let githubOpenPulls: Record<string, unknown[][]>;
+/**
+ * What GitHub's single pull-request read answers now (MOTIR-12321): the
+ * `pull_request` object of a delivery, open unless a case closes it.
+ */
+let githubLivePull: Record<string, unknown>;
+/** Every single pull-request read, as `owner/name#number`. */
+let githubPullReads: string[];
 
 const settled = (outcome: string): AiAnswer => ({ status: 200, body: { ref: 'x', outcome } });
 const problem = (code: string, status: number): AiAnswer => ({
@@ -118,6 +126,11 @@ async function routedFetch(input: string | URL | Request, init?: RequestInit): P
       const pages = githubOpenPulls[`${listing[1]}/${listing[2]}`];
       if (!pages) return json({ message: 'Not Found' }, 404);
       return json(pages[Number(url.searchParams.get('page')) - 1] ?? []);
+    }
+    const single = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/.exec(url.pathname);
+    if (single) {
+      githubPullReads.push(`${single[1]}/${single[2]}#${single[3]}`);
+      return json(githubLivePull);
     }
     // Every other GitHub read the handling makes (the changed-path capture): empty.
     return json([]);
@@ -404,6 +417,8 @@ beforeEach(async () => {
   aiRequests = [];
   aiAnswers = [];
   githubOpenPulls = {};
+  githubLivePull = pullRequest({ action: 'opened' })['pull_request'] as Record<string, unknown>;
+  githubPullReads = [];
   vi.stubGlobal('fetch', vi.fn(routedFetch));
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -567,6 +582,43 @@ describe('a settled answer ends the forward after one call, succeeded', () => {
     expect(aiRequests[0]!.body).toMatchObject({ state: 'open' });
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ status: 'succeeded', output: { outcome: 'recorded' } });
+    // MOTIR-12321: each RE-SEND first read the pull request live; the first send did not.
+    expect(githubPullReads).toEqual(['moooon/acme#7', 'moooon/acme#7']);
+  });
+
+  // MOTIR-12321: closed before its head publishes, the close report settles on its
+  // first `unknown_ref`; the held open report then reads the pull request live and
+  // reports it merged, so no open state is ever recorded for a closed pull request.
+  it('an opened report held while the pull request merges is re-sent as merged, never as open', async () => {
+    const opened = await forwardOf(OPENED);
+    const mergedDelivery = pullRequest({ action: 'closed', merged: true, updatedAt: MERGED_AT });
+    const closed = await deliver(['pull_request', mergedDelivery], {
+      deliveryId: 'gate-merged-while-held',
+    });
+    const openId = await enqueueForReal(opened);
+    const closeId = await enqueueForReal(closed.forwards[0]!);
+    aiAnswers = [settled('unknown_ref'), settled('unknown_ref'), settled('recorded')];
+    const w = worker();
+    expect((await onePass(w, openId)).state).toBe('pending');
+    expect((await onePass(w, closeId)).state).toBe('succeeded');
+    // The head publishes; GitHub now has the pull request merged.
+    githubLivePull = mergedDelivery['pull_request'] as Record<string, unknown>;
+    expect((await onePass(w, openId)).state).toBe('succeeded');
+    expect(aiRequests.map((r) => [r.body['state'], r.body['reportedAt']])).toEqual([
+      ['open', UPDATED_AT],
+      ['merged', MERGED_AT],
+      ['merged', MERGED_AT],
+    ]);
+    expect(aiRequests[2]!.body).toMatchObject({ mergedAt: MERGED_AT });
+    expect(githubPullReads).toEqual(['moooon/acme#7']);
+    const runs = await adminDb.jobRun.findMany({
+      where: { functionId: FORWARD, status: 'succeeded' },
+    });
+    expect(runs.map((r) => r.output)).toContainEqual({
+      kind: 'pull_request_state',
+      outcome: 'recorded',
+      reportedAs: 'merged',
+    });
   });
 
   it('a 401 ends the forward as a failed run on the real worker', async () => {
