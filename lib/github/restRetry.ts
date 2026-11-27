@@ -161,6 +161,8 @@ export const GITHUB_CALLERS = [
   'openPullRequestReport',
   /** The pull-request head index's live read of the pull request (MOTIR-12257). */
   'codeGraphPrHeadIndex',
+  /** A held open code-graph forward's live read of its pull request (MOTIR-12321). */
+  'codeGraphForward',
   /** The `pull_request` webhook's changed-path capture. */
   'webhook.changedPaths',
   /** The decision-document capture's changed-path read. */

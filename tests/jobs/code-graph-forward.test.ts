@@ -1,4 +1,13 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import type { JobQueueRun } from '@/generated/prisma/client';
 import { MotirAiConfigError, MotirAiUnauthorizedError } from '@/lib/ai/errors';
 import { db } from '@/lib/db';
@@ -18,6 +27,11 @@ import { JobWorker } from '@/lib/jobs/engine/worker';
 import * as sendEventModule from '@/lib/jobs/sendEvent';
 import { jobServices } from '@/lib/jobs/services';
 import type { CodeGraphForwardData } from '@/lib/jobs/types';
+import { PullRequestReadError } from '@/lib/github/pullRequestRead';
+import {
+  codeGraphForwardLiveStateService,
+  type CodeGraphForwardLiveState,
+} from '@/lib/services/codeGraphForwardLiveStateService';
 import '@/lib/jobs/registry';
 import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
@@ -33,6 +47,11 @@ import { truncateJobRuns } from '../helpers/db';
 //     retry, a deferred pass REFUNDS its attempt, a 401 burns the budget;
 //   - a PASS DRIVER over one memo — the engine's `job_step` — with the clock moved
 //     between passes, for the waits and the 24 h deadline.
+//
+// A held open report re-reads its pull request live before every re-send
+// (MOTIR-12321); that read is `codeGraphForwardLiveStateService.read`, doubled here
+// to answer `open` unless a case says otherwise (its own suite is
+// `tests/services/codeGraphForwardLiveStateService.test.ts`).
 
 const JOB = 'system.code-graph-forward';
 const ORG = 'org_fwd';
@@ -91,8 +110,14 @@ const problem = (code: string, status: number): Answer => ({
   body: { type: `https://motir.co/errors/${code}`, title: code, status, code },
 });
 
+/** The live read every re-send of an open report asks; `open` unless a case moves it. */
+let liveRead: MockInstance<typeof codeGraphForwardLiveStateService.read>;
+
 beforeEach(async () => {
   await truncateJobRuns();
+  liveRead = vi
+    .spyOn(codeGraphForwardLiveStateService, 'read')
+    .mockResolvedValue({ kind: 'open' } satisfies CodeGraphForwardLiveState);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.example.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -565,4 +590,174 @@ describe('an open report answered unknown_ref waits for the branch to be indexed
       `[code-graph-forward] ${REPO} feature-x was never indexed within 24 hours; pull request #7 stays unrecorded as open`,
     );
   });
+});
+
+// ── a held open report asks the host again before every re-send (MOTIR-12321) ────
+
+describe('a held open report reads its pull request live before it is re-sent', () => {
+  const MERGED_LIVE: CodeGraphForwardLiveState = {
+    kind: 'ended',
+    state: 'merged',
+    mergedAt: '2026-11-22T11:00:00Z',
+    reportedAt: '2026-11-22T11:00:00Z',
+  };
+  const CLOSED_LIVE: CodeGraphForwardLiveState = {
+    kind: 'ended',
+    state: 'closed',
+    reportedAt: '2026-11-22T11:00:00Z',
+  };
+
+  it.each([
+    ['merged', MERGED, MERGED_LIVE],
+    ['closed', CLOSED, CLOSED_LIVE],
+  ] as const)(
+    '%s before the head publishes: once the head is indexed, no open row — the ended state is recorded instead',
+    async (state, closeReport, live) => {
+      const codegraph = fakeCodeGraph();
+      // 1. The pull request opens; its open report lands before the head is indexed.
+      const openRun = passDriver(OPEN);
+      expect((await openRun.pass()).kind).toBe('deferred');
+      // 2. It closes before the head publishes; the close report settles unknown_ref.
+      expect(await passDriver(closeReport).pass()).toEqual({
+        kind: 'done',
+        result: { kind: 'pull_request_state', outcome: 'unknown_ref' },
+      });
+      // 3. The head publishes, and the held open report comes round again.
+      codegraph.publish('feature-x');
+      liveRead.mockResolvedValue(live);
+      expect(await openRun.pass()).toEqual({
+        kind: 'done',
+        result: { kind: 'pull_request_state', outcome: 'recorded', reportedAs: state },
+      });
+      const rows = [...codegraph.refPullRequests.values()];
+      expect(rows.filter((r) => r.state === 'open')).toEqual([]);
+      expect(rows).toEqual([
+        {
+          refName: 'feature-x',
+          pullRequestNumber: 7,
+          state,
+          reportedAt: '2026-11-22T11:00:00Z',
+        },
+      ]);
+      expect(codegraph.requests.at(-1)).toEqual({
+        coreOrganizationId: ORG,
+        repoRef: REPO,
+        ref: 'feature-x',
+        pullRequestNumber: 7,
+        state,
+        ...(state === 'merged' ? { mergedAt: '2026-11-22T11:00:00Z' } : {}),
+        reportedAt: '2026-11-22T11:00:00Z',
+      });
+      // The live read is asked on the re-send only, never on the first pass or a close.
+      expect(liveRead).toHaveBeenCalledTimes(1);
+      expect(liveRead).toHaveBeenCalledWith(OPEN);
+    },
+  );
+
+  it('through the real engine: deferred passes read live, and an open pull request is recorded open once its head publishes', async () => {
+    const codegraph = fakeCodeGraph();
+    await enqueueCodeGraphForward(OPEN);
+    const w = worker();
+    expect((await onePass(w)).state).toBe('pending');
+    expect(liveRead).not.toHaveBeenCalled();
+    expect((await onePass(w)).state).toBe('pending');
+    expect(liveRead).toHaveBeenCalledTimes(1);
+    codegraph.publish('feature-x');
+    const row = await onePass(w);
+    expect(row.state).toBe('succeeded');
+    expect(liveRead).toHaveBeenCalledTimes(2);
+    expect([...codegraph.refPullRequests.values()].map((r) => r.state)).toEqual(['open']);
+    const runs = await ledger();
+    expect(runs.at(-1)!.output).toEqual({ kind: 'pull_request_state', outcome: 'recorded' });
+  });
+
+  it('closed while the head is still unpublished: the ended report is sent once and settles unknown_ref', async () => {
+    const codegraph = fakeCodeGraph();
+    const openRun = passDriver(OPEN);
+    expect((await openRun.pass()).kind).toBe('deferred');
+    liveRead.mockResolvedValue(CLOSED_LIVE);
+    expect(await openRun.pass()).toEqual({
+      kind: 'done',
+      result: { kind: 'pull_request_state', outcome: 'unknown_ref', reportedAs: 'closed' },
+    });
+    expect(codegraph.refPullRequests.size).toBe(0);
+    expect(codegraph.requests).toHaveLength(2);
+  });
+
+  it('a refused ended report is recorded as refused, like any refusal', async () => {
+    const requests = stubMotirAi(settled('unknown_ref'), problem('validation_error', 400));
+    const openRun = passDriver(OPEN);
+    expect((await openRun.pass()).kind).toBe('deferred');
+    liveRead.mockResolvedValue(MERGED_LIVE);
+    expect(await openRun.pass()).toEqual({
+      kind: 'done',
+      result: {
+        kind: 'pull_request_state',
+        outcome: 'refused',
+        status: 400,
+        code: 'validation_error',
+      },
+    });
+    expect((requests[1]!.body as { state: string }).state).toBe('merged');
+  });
+
+  it.each([['gone'], ['not_connected']] as const)(
+    'a pull request that reads %s settles without sending anything',
+    async (kind) => {
+      const requests = stubMotirAi(settled('unknown_ref'));
+      const openRun = passDriver(OPEN);
+      expect((await openRun.pass()).kind).toBe('deferred');
+      liveRead.mockResolvedValue({ kind });
+      expect(await openRun.pass()).toEqual({
+        kind: 'done',
+        result: { kind: 'pull_request_state', outcome: kind },
+      });
+      expect(requests).toHaveLength(1);
+    },
+  );
+
+  it('a live read the host cannot answer defers like an outage, sends nothing, and times out past 24 h', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T00:00:00Z'));
+    const requests = stubMotirAi(settled('unknown_ref'));
+    const openRun = passDriver(OPEN);
+    expect((await openRun.pass()).kind).toBe('deferred');
+    liveRead.mockRejectedValue(new PullRequestReadError('moooon/motir-core#7', 502, 'down'));
+    vi.setSystemTime(Date.now() + 30_000);
+    const out = await openRun.pass();
+    expect(out.kind).toBe('deferred');
+    const defer = (out as { defer: JobRunDefer }).defer;
+    expect(defer.reason).toBe(
+      'code-graph forward: the pull request could not be read from the host',
+    );
+    expect(defer.resumeAt.getTime() - Date.now()).toBe(30_000);
+    expect(requests).toHaveLength(1);
+    vi.setSystemTime(new Date('2026-11-22T00:00:00Z').getTime() + CODE_GRAPH_FORWARD_DEADLINE_MS);
+    const error = await openRun.pass().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CodeGraphForwardTimedOutError);
+    expect((error as Error).message).toContain('Could not read moooon/motir-core#7 (502): down');
+  });
+
+  it('any other failure of the live read throws into the retry budget', async () => {
+    stubMotirAi(settled('unknown_ref'));
+    const openRun = passDriver(OPEN);
+    expect((await openRun.pass()).kind).toBe('deferred');
+    liveRead.mockRejectedValue(new Error('installation token mint failed'));
+    await expect(openRun.pass()).rejects.toThrow('installation token mint failed');
+  });
+
+  it.each([
+    ['closed', CLOSED, 'recorded'],
+    ['merged', MERGED, 'recorded'],
+    ['retire', RETIRE, 'retired'],
+  ] as const)(
+    'a %s report re-sent after an outage never reads live',
+    async (_label, event, outcome) => {
+      stubMotirAi('transport', settled(outcome));
+      const run = passDriver(event);
+      expect((await run.pass()).kind).toBe('deferred');
+      expect((await run.pass()).kind).toBe('done');
+      expect(liveRead).not.toHaveBeenCalled();
+    },
+  );
 });

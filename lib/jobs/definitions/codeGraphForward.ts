@@ -4,6 +4,8 @@ import {
   forwardRetire,
   type CodeGraphForwardAnswer,
 } from '@/lib/ai/motirAiClient';
+import { PullRequestReadError } from '@/lib/github/pullRequestRead';
+import { codeGraphForwardLiveStateService } from '@/lib/services/codeGraphForwardLiveStateService';
 import { defineJob } from '../defineJob';
 import { deferRun } from '../engine/defer';
 import type { CodeGraphForwardData } from '../types';
@@ -17,6 +19,14 @@ import type { CodeGraphForwardData } from '../types';
 // mapping. The run keeps sending it until motir-ai gives a SETTLED answer.
 //
 //   step  forward-started-v1   { startedAt } — the only thing a run remembers
+//     ↓
+//   on a RE-SEND of a `state: open` report only, the pull request read LIVE
+//   (MOTIR-12321), NOT memoized:
+//     still open                                 → sent as it is
+//     closed or merged since                     → THAT is sent instead, with the
+//                                                 host's `updated_at` (and `merged_at`)
+//     gone (404 / 410) · repository disconnected → succeeded, nothing sent
+//     unreadable (`PullRequestReadError`)        → deferred like an outage, below
 //     ↓
 //   ONE call, NOT memoized, picked by `kind`:
 //     settled  (recorded · stale · unknown_ref · default_branch · retired ·
@@ -52,6 +62,19 @@ import type { CodeGraphForwardData } from '../types';
 // the deadline, with a warning. A closed or merged report stays settled on
 // `unknown_ref`: its branch is retired or was never held, and there is nothing to
 // protect.
+//
+// ⚠️ A HELD OPEN REPORT ASKS THE HOST AGAIN BEFORE EVERY RE-SEND (MOTIR-12321). The
+// wait above can outlive the pull request. Closed or merged before its head
+// publishes, the close report answers `unknown_ref` and settles on that first answer
+// (writing nothing), and when the head then publishes the still-waiting open report
+// would be RECORDED — an open row for a closed pull request, its branch never retired
+// on report. So every pass after the first reads the pull request live
+// (`codeGraphForwardLiveStateService`, the read `codeGraphPrHeadIndex.ts` step
+// `pr-head-v1` makes) and sends what the host says NOW: an ended pull request is
+// reported closed or merged, which the service records and retires on once the head
+// is held. The FIRST pass sends without the read: the report left its delivery
+// seconds ago, and every re-send pays for the read instead. The read is outside any
+// step for the reason the call is: a memo would freeze the first answer.
 //
 // ⚠️ A DEFER IS NOT A RETRY. `deferRun` returns the row to `pending` with the attempt
 // REFUNDED (`engine/defer.ts`), so an outage of any length up to the deadline costs
@@ -99,9 +122,12 @@ export function codeGraphForwardWaitMs(elapsedMs: number): number {
   );
 }
 
-/** What a finished run records: the kind and the answer, never more. */
+/**
+ * What a finished run records: the kind and the answer, never more — plus, when a
+ * held open report found its pull request ended and reported THAT, the state it sent.
+ */
 export type CodeGraphForwardResult =
-  | { kind: CodeGraphForwardData['kind']; outcome: string }
+  | { kind: CodeGraphForwardData['kind']; outcome: string; reportedAs?: 'closed' | 'merged' }
   | { kind: CodeGraphForwardData['kind']; outcome: 'refused'; status: number; code: string };
 
 /** The ONE call a pass makes, by kind. The body is built from named fields only. */
@@ -130,25 +156,54 @@ export const codeGraphForward = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx): Promise<CodeGraphForwardResult> => {
-    const data = ctx.event.data as CodeGraphForwardData;
-    const { startedAt } = await ctx.step.run('forward-started-v1', async () => ({
-      startedAt: new Date().toISOString(),
-    }));
+    const event = ctx.event.data as CodeGraphForwardData;
+    // The step body runs on the FIRST pass only; every later pass replays its memo.
+    let firstPass = false;
+    const { startedAt } = await ctx.step.run('forward-started-v1', async () => {
+      firstPass = true;
+      return { startedAt: new Date().toISOString() };
+    });
 
+    let data = event;
+    let reportedAs: 'closed' | 'merged' | undefined;
     let answer: CodeGraphForwardAnswer<string>;
     try {
+      if (!firstPass && event.kind === 'pull_request_state' && event.state === 'open') {
+        const live = await codeGraphForwardLiveStateService.read(event);
+        if (live.kind === 'gone' || live.kind === 'not_connected') {
+          return { kind: event.kind, outcome: live.kind };
+        }
+        if (live.kind === 'ended') {
+          reportedAs = live.state;
+          data = {
+            kind: 'pull_request_state',
+            coreOrganizationId: event.coreOrganizationId,
+            repoRef: event.repoRef,
+            ref: event.ref,
+            pullRequestNumber: event.pullRequestNumber,
+            state: live.state,
+            ...(live.mergedAt !== undefined ? { mergedAt: live.mergedAt } : {}),
+            reportedAt: live.reportedAt,
+          };
+        }
+      }
       answer = await send(data);
     } catch (err) {
-      if (!(err instanceof MotirAiUnavailableError)) throw err;
+      if (!(err instanceof MotirAiUnavailableError) && !(err instanceof PullRequestReadError)) {
+        throw err;
+      }
       const elapsedMs = Date.now() - Date.parse(startedAt);
       if (elapsedMs >= CODE_GRAPH_FORWARD_DEADLINE_MS) {
         throw new CodeGraphForwardTimedOutError(data.kind, data.repoRef, data.ref, err.message);
       }
       return deferRun(
         new Date(Date.now() + codeGraphForwardWaitMs(elapsedMs)),
-        'code-graph forward: motir-ai or motir-codegraph unavailable',
+        err instanceof PullRequestReadError
+          ? 'code-graph forward: the pull request could not be read from the host'
+          : 'code-graph forward: motir-ai or motir-codegraph unavailable',
       );
     }
+    const ended = reportedAs !== undefined ? { reportedAs } : {};
 
     if (
       answer.kind === 'settled' &&
@@ -175,6 +230,6 @@ export const codeGraphForward = defineJob(
       );
       return { kind: data.kind, outcome: 'refused', status: answer.status, code: answer.code };
     }
-    return { kind: data.kind, outcome: answer.outcome };
+    return { kind: data.kind, outcome: answer.outcome, ...ended };
   },
 );
