@@ -1,7 +1,15 @@
 import 'server-only';
 
-import type { CapacityAlertKey } from '@/lib/capacity/alertKeys';
-import { CapacityLimitOverShareError } from '@/lib/capacity/errors';
+import { type CapacityAlertKey, GATEWAY_SATURATION_ALERT_KEY } from '@/lib/capacity/alertKeys';
+import {
+  CapacityLimitOverShareError,
+  GatewaySaturationOverShareError,
+} from '@/lib/capacity/errors';
+import {
+  GATEWAY_SATURATION_ALERT_PERCENT,
+  type GatewaySaturationEvaluation,
+  judgeGatewaySaturation,
+} from '@/lib/capacity/gatewaySaturation';
 import {
   type CapacityEvaluation,
   type CapacityLimitEvaluation,
@@ -10,7 +18,14 @@ import {
 import type { CapacityRaisedAlertDTO } from '@/lib/dto/capacityAlerts';
 import type { CapacityRead, CapacityUnavailableReason } from '@/lib/gateway/capacityClient';
 import { gatewayCapacityClient } from '@/lib/gateway/capacityProvider';
-import { alertCapacityLimitOverShare } from '@/lib/monitoring/capacityLimitAlert';
+import {
+  type GatewaySaturationReading,
+  gatewaySaturationReader,
+} from '@/lib/gateway/gatewaySaturationReader';
+import {
+  alertCapacityLimitOverShare,
+  alertGatewaySaturationOverShare,
+} from '@/lib/monitoring/capacityLimitAlert';
 import { capacityAlertStateService } from '@/lib/services/capacityAlertStateService';
 
 /**
@@ -32,6 +47,12 @@ import { capacityAlertStateService } from '@/lib/services/capacityAlertStateServ
  *
  * A read that is `unavailable`, or whose counter store is down, neither raises
  * nor clears.
+ *
+ * THE GATEWAY-SATURATION SERIES (MOTIR-9675, design D6) is judged beside the
+ * provider limits from its own reading, whatever the capacity read answered:
+ * over 70 % of created machines × hard limit → raise (Sentry once); normal or
+ * near → clear; unavailable → left as it is. It is a live connection count, not a
+ * per-minute window, so it has no second-30 clear gate.
  */
 
 /**
@@ -45,12 +66,20 @@ import { capacityAlertStateService } from '@/lib/services/capacityAlertStateServ
 export const CLEAR_MIN_SECOND_OF_MINUTE = 30;
 const PER_MINUTE_UNITS = new Set(['rpm', 'tpm']);
 
+export type { GatewaySaturationEvaluation };
+
 export type CapacityEvaluationResult =
-  | { outcome: 'evaluated'; evaluation: CapacityEvaluation; raised: CapacityRaisedAlertDTO[] }
+  | {
+      outcome: 'evaluated';
+      evaluation: CapacityEvaluation;
+      raised: CapacityRaisedAlertDTO[];
+      saturation: GatewaySaturationEvaluation;
+    }
   | {
       outcome: 'unavailable';
       reason: CapacityUnavailableReason | 'counter_store_unavailable';
       raised: CapacityRaisedAlertDTO[];
+      saturation: GatewaySaturationEvaluation;
     };
 
 function keyName(key: CapacityAlertKey): string {
@@ -119,20 +148,70 @@ async function applyEvaluation(
   }
 }
 
+/** Judge the saturation reading, then raise or clear its one key. */
+async function evaluateSaturation(
+  reading: GatewaySaturationReading,
+): Promise<GatewaySaturationEvaluation> {
+  const alertPercent = GATEWAY_SATURATION_ALERT_PERCENT;
+  const judgement = judgeGatewaySaturation(
+    reading.outcome === 'answered'
+      ? reading
+      : { connectionsInUse: null, createdMachines: null, hardLimit: null },
+    alertPercent,
+  );
+  if (
+    judgement.state === 'over_share' &&
+    reading.outcome === 'answered' &&
+    reading.connectionsInUse !== null &&
+    judgement.capacityConnections !== null &&
+    judgement.sharePercent !== null
+  ) {
+    const { newlyRaised } = await capacityAlertStateService.raise(GATEWAY_SATURATION_ALERT_KEY, {
+      observedValue: reading.connectionsInUse,
+      limitValue: judgement.capacityConnections,
+      alertSharePercent: alertPercent,
+    });
+    if (newlyRaised) {
+      alertGatewaySaturationOverShare(
+        new GatewaySaturationOverShareError(
+          reading.connectionsInUse,
+          judgement.capacityConnections,
+          judgement.sharePercent,
+          alertPercent,
+        ),
+      );
+    }
+  } else if (judgement.state === 'normal' || judgement.state === 'near_limit') {
+    await capacityAlertStateService.clear(GATEWAY_SATURATION_ALERT_KEY);
+  }
+  return {
+    reading,
+    judgement,
+    alertPercent,
+    raised: await capacityAlertStateService.getSaturationRaised(),
+  };
+}
+
 export const capacityAlertEvaluationService = {
   /**
    * Read (or take the read the caller already has), judge, raise and clear.
    * Returns the evaluation and the raised list AFTER the writes — what the
    * screen's raised-alerts banner shows.
    */
-  async evaluate(options: { read?: CapacityRead } = {}): Promise<CapacityEvaluationResult> {
+  async evaluate(
+    options: { read?: CapacityRead; saturation?: GatewaySaturationReading } = {},
+  ): Promise<CapacityEvaluationResult> {
     const share = await capacityAlertStateService.getAlertShare();
     const read = options.read ?? (await gatewayCapacityClient().read());
+    const saturation = await evaluateSaturation(
+      options.saturation ?? (await gatewaySaturationReader()()),
+    );
     if (read.outcome === 'unavailable') {
       return {
         outcome: 'unavailable',
         reason: read.reason,
         raised: await capacityAlertStateService.listRaised(),
+        saturation,
       };
     }
     if (read.counterStore.state === 'unavailable') {
@@ -140,6 +219,7 @@ export const capacityAlertEvaluationService = {
         outcome: 'unavailable',
         reason: 'counter_store_unavailable',
         raised: await capacityAlertStateService.listRaised(),
+        saturation,
       };
     }
     const evaluation = evaluateCapacityRead(read, share.percent);
@@ -148,6 +228,7 @@ export const capacityAlertEvaluationService = {
       outcome: 'evaluated',
       evaluation,
       raised: await capacityAlertStateService.listRaised(),
+      saturation,
     };
   },
 };

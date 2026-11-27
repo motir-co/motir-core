@@ -47,6 +47,26 @@ export class CapacityLimitOverShareError extends Error {
   }
 }
 
+/**
+ * The gateway's connections in use reached the saturation share of created
+ * machines × hard limit (MOTIR-9675, design D6). Sent to Sentry by
+ * `alertGatewaySaturationOverShare`, once per raise.
+ */
+export class GatewaySaturationOverShareError extends Error {
+  constructor(
+    readonly connectionsInUse: number,
+    readonly capacityConnections: number,
+    readonly sharePercent: number,
+    readonly alertPercent: number,
+  ) {
+    super(
+      `motir-gateway: ${connectionsInUse} connections in use is ${Math.round(sharePercent)}% of ` +
+        `${capacityConnections} (created machines × hard limit; alert at ${alertPercent}%)`,
+    );
+    this.name = 'GatewaySaturationOverShareError';
+  }
+}
+
 const UNIT_WORDS: Record<string, string> = {
   max_concurrency: 'concurrency',
   rpm: 'requests per minute',

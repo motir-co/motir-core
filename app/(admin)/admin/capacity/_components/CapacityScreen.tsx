@@ -18,6 +18,7 @@ import { AlertShareCard } from './AlertShareCard';
 import { CapacityEntryCard } from './CapacityEntryCard';
 import { CapacityErrorPanel } from './CapacityErrorPanel';
 import { EditCapacityLimitsDialog } from './EditCapacityLimitsDialog';
+import { GatewaySaturationCard } from './GatewaySaturationCard';
 import { RaisedAlertsBanner } from './RaisedAlertsBanner';
 import { utcClock } from './capacityDisplay';
 
@@ -116,7 +117,7 @@ export function CapacityScreen({
           onRefresh={() => void reread()}
         />
       )}
-      <RaisedAlertsBanner raised={view.raised} />
+      <RaisedAlertsBanner raised={view.raised} saturation={view.saturation.raised} />
       {capacity.outcome === 'answered' && capacity.counterStore.state === 'unavailable' && (
         <Notice tone="warn">{t('unavailable.notice')}</Notice>
       )}
@@ -135,6 +136,7 @@ export function CapacityScreen({
         setAlertShare={setAlertShare}
         onSaved={() => void reread()}
       />
+      <GatewaySaturationCard saturation={view.saturation} />
       {capacity.outcome === 'unavailable' ? (
         <CapacityErrorPanel
           reason={capacity.reason}
