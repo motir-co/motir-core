@@ -20,7 +20,10 @@ import type { CodeGraphForwardData } from '../types';
 //     ↓
 //   ONE call, NOT memoized, picked by `kind`:
 //     settled  (recorded · stale · unknown_ref · default_branch · retired ·
-//               already_done)                   → succeeded, no retry
+//               already_done)                   → succeeded, no retry — EXCEPT:
+//     unknown_ref on a `state: open` report     → `deferRun` on the same waits and
+//                                                 the same 24 h deadline; past it,
+//                                                 succeeded with `unknown_ref`
 //     refused  (any 4xx but 401 and 429)         → succeeded, a warning, no retry
 //     unavailable (transport, deadline, 5xx, 429, 503 codegraph_unavailable)
 //                                               → `deferRun`, the wait growing with
@@ -36,6 +39,20 @@ import type { CodeGraphForwardData } from '../types';
 // `already_done`, and it keeps the NEWEST `reportedAt` per pull request, so retries
 // landing in any order leave whatever GitHub said last.
 //
+// ⚠️ AN OPEN REPORT WAITS FOR ITS BRANCH (MOTIR-12299). A pull request's `opened` /
+// `reopened` starts its head's index (`system.code-graph-pr-head-index`) AND enqueues
+// this forward in the same delivery, and the forward lands seconds before the head
+// publishes. motir-codegraph records a pull request's state only on a branch it holds
+// (`upsertPullRequestState` answers `unknown_ref` and writes nothing otherwise), and
+// `synchronize` forwards no state, so an `unknown_ref` settled on the first answer
+// lost the open state for good: production held no open row at all. So an open
+// report that answers `unknown_ref` is NOT settled — it is re-sent on the outage
+// waits until the head has published and it answers `recorded` (or `stale`), and a
+// branch that never publishes (refused, oversized, paused) settles `unknown_ref` at
+// the deadline, with a warning. A closed or merged report stays settled on
+// `unknown_ref`: its branch is retired or was never held, and there is nothing to
+// protect.
+//
 // ⚠️ A DEFER IS NOT A RETRY. `deferRun` returns the row to `pending` with the attempt
 // REFUNDED (`engine/defer.ts`), so an outage of any length up to the deadline costs
 // none of the five-attempt budget, which is left for the failures that are real.
@@ -44,7 +61,10 @@ import type { CodeGraphForwardData } from '../types';
 // workspace (`CodeGraphForwardData`), so it is enqueued with `sendSystemEvent`
 // (`lib/jobs/codeGraphForward.ts`).
 
-/** How long a run keeps re-sending through an outage before it fails, from its start. */
+/**
+ * How long a run keeps re-sending, from its start: through an outage before it fails,
+ * and for an open report's branch to be indexed before it settles `unknown_ref`.
+ */
 export const CODE_GRAPH_FORWARD_DEADLINE_MS = 24 * 60 * 60_000;
 
 /** The shortest and the longest wait between two sends. */
@@ -128,6 +148,25 @@ export const codeGraphForward = defineJob(
         new Date(Date.now() + codeGraphForwardWaitMs(elapsedMs)),
         'code-graph forward: motir-ai or motir-codegraph unavailable',
       );
+    }
+
+    if (
+      answer.kind === 'settled' &&
+      answer.outcome === 'unknown_ref' &&
+      data.kind === 'pull_request_state' &&
+      data.state === 'open'
+    ) {
+      const elapsedMs = Date.now() - Date.parse(startedAt);
+      if (elapsedMs < CODE_GRAPH_FORWARD_DEADLINE_MS) {
+        return deferRun(
+          new Date(Date.now() + codeGraphForwardWaitMs(elapsedMs)),
+          "code-graph forward: the open pull request's branch is not indexed yet",
+        );
+      }
+      console.warn(
+        `[code-graph-forward] ${data.repoRef} ${data.ref} was never indexed within ${String(CODE_GRAPH_FORWARD_DEADLINE_MS / 3_600_000)} hours; pull request #${String(data.pullRequestNumber)} stays unrecorded as open`,
+      );
+      return { kind: data.kind, outcome: answer.outcome };
     }
 
     if (answer.kind === 'refused') {

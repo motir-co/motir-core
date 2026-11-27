@@ -531,12 +531,13 @@ async function forwardOf(delivery: Delivery): Promise<CapturedJobEvent> {
 
 const OPENED: Delivery = ['pull_request', pullRequest({ action: 'opened' })];
 const DELETED: Delivery = ['push', push({ deleted: true })];
+const CLOSED: Delivery = ['pull_request', pullRequest({ action: 'closed' })];
 
 describe('a settled answer ends the forward after one call, succeeded', () => {
   it.each<[string, Delivery, AiAnswer]>([
     ['recorded', OPENED, settled('recorded')],
     ['stale', OPENED, settled('stale')],
-    ['unknown_ref', OPENED, settled('unknown_ref')],
+    ['unknown_ref (closed)', CLOSED, settled('unknown_ref')],
     ['default_branch (state)', OPENED, settled('default_branch')],
     ['retired', DELETED, settled('retired')],
     ['already_done', DELETED, settled('already_done')],
@@ -552,6 +553,20 @@ describe('a settled answer ends the forward after one call, succeeded', () => {
     expect(outcome.error).toBeUndefined();
     expect(aiRequests).toHaveLength(1);
     expect(runs.map((r) => r.status)).toEqual(['succeeded']);
+  });
+
+  // MOTIR-12299: the open report lands seconds before its branch's head publishes, so
+  // an `unknown_ref` on it is the branch not indexed YET — re-sent, never settled.
+  it('unknown_ref on an opened report is re-sent with the identical body until recorded', async () => {
+    const event = await forwardOf(OPENED);
+    aiAnswers = [settled('unknown_ref'), settled('unknown_ref'), settled('recorded')];
+    const { outcome, runs } = await runForward(event);
+    expect(outcome.error).toBeUndefined();
+    expect(aiRequests).toHaveLength(3);
+    expect(new Set(aiRequests.map((r) => JSON.stringify(r.body))).size).toBe(1);
+    expect(aiRequests[0]!.body).toMatchObject({ state: 'open' });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ status: 'succeeded', output: { outcome: 'recorded' } });
   });
 
   it('a 401 ends the forward as a failed run on the real worker', async () => {

@@ -47,6 +47,17 @@ const OPEN: CodeGraphForwardData = {
   state: 'open',
   reportedAt: '2026-11-22T10:00:00Z',
 };
+const CLOSED: CodeGraphForwardData = {
+  ...OPEN,
+  state: 'closed',
+  reportedAt: '2026-11-22T11:00:00Z',
+};
+const MERGED: CodeGraphForwardData = {
+  ...OPEN,
+  state: 'merged',
+  mergedAt: '2026-11-22T11:00:00Z',
+  reportedAt: '2026-11-22T11:00:00Z',
+};
 const RETIRE: CodeGraphForwardData = {
   kind: 'retire',
   coreOrganizationId: ORG,
@@ -179,8 +190,12 @@ describe('a settled or refused answer ends the run on its first pass', () => {
   it.each([
     [OPEN, 'recorded'],
     [OPEN, 'stale'],
-    [OPEN, 'unknown_ref'],
     [OPEN, 'default_branch'],
+    [CLOSED, 'recorded'],
+    // MOTIR-12299: only an OPEN report waits for its branch; a closed or merged one
+    // on a branch the service does not hold is settled, as before.
+    [CLOSED, 'unknown_ref'],
+    [MERGED, 'unknown_ref'],
     [RETIRE, 'retired'],
     [RETIRE, 'already_done'],
     [RETIRE, 'default_branch'],
@@ -396,5 +411,158 @@ describe('the waits and the deadline', () => {
     await expect(passDriver(OPEN).pass()).rejects.toBeInstanceOf(MotirAiUnauthorizedError);
     vi.stubEnv('MOTIR_AI_URL', '');
     await expect(passDriver(RETIRE).pass()).rejects.toBeInstanceOf(MotirAiConfigError);
+  });
+});
+
+// ── an open report waits for its branch (MOTIR-12299) ──────────────────────────
+
+/**
+ * motir-codegraph's pull-request-state rule, faked behind motir-ai: a report is
+ * recorded only on a branch the repository holds (`ref_heads`), newest `reportedAt`
+ * per pull request wins, and anything else answers `unknown_ref` and writes nothing —
+ * `upsertPullRequestState` in motir-codegraph's `src/db/pullRequestState.ts`.
+ */
+function fakeCodeGraph() {
+  const refHeads = new Set<string>();
+  const refPullRequests = new Map<
+    string,
+    { refName: string; pullRequestNumber: number; state: string; reportedAt: string }
+  >();
+  const requests: unknown[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as {
+        ref: string;
+        pullRequestNumber: number;
+        state: string;
+        reportedAt: string;
+      };
+      requests.push(body);
+      let outcome: string;
+      if (!refHeads.has(body.ref)) {
+        outcome = 'unknown_ref';
+      } else {
+        const key = `${body.ref}#${String(body.pullRequestNumber)}`;
+        const stored = refPullRequests.get(key);
+        if (stored && Date.parse(stored.reportedAt) >= Date.parse(body.reportedAt)) {
+          outcome = 'stale';
+        } else {
+          refPullRequests.set(key, {
+            refName: body.ref,
+            pullRequestNumber: body.pullRequestNumber,
+            state: body.state,
+            reportedAt: body.reportedAt,
+          });
+          outcome = 'recorded';
+        }
+      }
+      return new Response(JSON.stringify({ ref: body.ref, outcome }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }),
+  );
+  return {
+    requests,
+    refPullRequests,
+    /** The branch's head publishes: `ref_heads` gains its row. */
+    publish: (ref: string) => refHeads.add(ref),
+  };
+}
+
+describe('an open report answered unknown_ref waits for the branch to be indexed', () => {
+  it('sent before the head publishes, it defers refunded and records ONE open row once the head is indexed', async () => {
+    const codegraph = fakeCodeGraph();
+    await enqueueCodeGraphForward(OPEN);
+    const w = worker();
+    for (let pass = 1; pass <= 3; pass += 1) {
+      const before = Date.now();
+      const row = await onePass(w);
+      expect(row.state, `pass ${pass}`).toBe('pending');
+      // Waiting for a branch is not a failure: the attempt is refunded.
+      expect(row.attempts, `pass ${pass}`).toBe(0);
+      const wait = row.runAt.getTime() - before;
+      expect(wait).toBeGreaterThanOrEqual(CODE_GRAPH_FORWARD_MIN_WAIT_MS - 1_000);
+      expect(wait).toBeLessThanOrEqual(CODE_GRAPH_FORWARD_MAX_WAIT_MS + 1_000);
+    }
+    expect(codegraph.refPullRequests.size).toBe(0);
+
+    codegraph.publish('feature-x');
+    const row = await onePass(w);
+    expect(row.state).toBe('succeeded');
+    expect([...codegraph.refPullRequests.values()]).toEqual([
+      {
+        refName: 'feature-x',
+        pullRequestNumber: 7,
+        state: 'open',
+        reportedAt: '2026-11-22T10:00:00Z',
+      },
+    ]);
+    // Four sends of one identical body: nothing replayed the first answer.
+    expect(codegraph.requests).toHaveLength(4);
+    expect(new Set(codegraph.requests.map((r) => JSON.stringify(r))).size).toBe(1);
+    const runs = await ledger();
+    expect(runs.at(-1)!.output).toEqual({ kind: 'pull_request_state', outcome: 'recorded' });
+    expect(runs.some((r) => r.status === 'failed')).toBe(false);
+  });
+
+  it('a closed report answered unknown_ref is sent once and settled, even while an open one waits', async () => {
+    const codegraph = fakeCodeGraph();
+    const closedRun = passDriver(CLOSED);
+    expect(await closedRun.pass()).toEqual({
+      kind: 'done',
+      result: { kind: 'pull_request_state', outcome: 'unknown_ref' },
+    });
+    expect((await passDriver(OPEN).pass()).kind).toBe('deferred');
+    expect(codegraph.requests).toHaveLength(2);
+  });
+
+  it('waits on the same growing back-off as an outage', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T00:00:00Z'));
+    stubMotirAi(settled('unknown_ref'));
+    const run = passDriver(OPEN);
+    const waits: number[] = [];
+    for (let pass = 0; pass < 5; pass += 1) {
+      const out = await run.pass();
+      expect(out.kind).toBe('deferred');
+      const defer = (out as { defer: JobRunDefer }).defer;
+      expect(defer.reason).toContain('not indexed yet');
+      waits.push(defer.resumeAt.getTime() - Date.now());
+      vi.setSystemTime(defer.resumeAt);
+    }
+    expect(waits).toEqual([30_000, 30_000, 60_000, 120_000, 240_000]);
+  });
+
+  it('an unknown_ref then an outage then stale: the outage defers as before and stale ends the run', async () => {
+    const requests = stubMotirAi(settled('unknown_ref'), 'transport', settled('stale'));
+    const run = passDriver(OPEN);
+    expect((await run.pass()).kind).toBe('deferred');
+    expect((await run.pass()).kind).toBe('deferred');
+    expect(await run.pass()).toEqual({
+      kind: 'done',
+      result: { kind: 'pull_request_state', outcome: 'stale' },
+    });
+    expect(requests).toHaveLength(3);
+  });
+
+  it('a branch never indexed settles unknown_ref at the 24 h deadline, with a warning, never failed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T00:00:00Z'));
+    stubMotirAi(settled('unknown_ref'));
+    const run = passDriver(OPEN);
+    expect((await run.pass()).kind).toBe('deferred');
+    vi.setSystemTime(Date.now() + CODE_GRAPH_FORWARD_DEADLINE_MS - 1);
+    expect((await run.pass()).kind).toBe('deferred');
+    expect(console.warn).not.toHaveBeenCalled();
+    vi.setSystemTime(Date.now() + 1);
+    expect(await run.pass()).toEqual({
+      kind: 'done',
+      result: { kind: 'pull_request_state', outcome: 'unknown_ref' },
+    });
+    expect(console.warn).toHaveBeenCalledWith(
+      `[code-graph-forward] ${REPO} feature-x was never indexed within 24 hours; pull request #7 stays unrecorded as open`,
+    );
   });
 });
