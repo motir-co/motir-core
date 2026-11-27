@@ -10,6 +10,7 @@ import { PAGE_HREF_RE } from '@/lib/mentions/pageRefs';
 import type { PageRefMap } from '@/lib/dto/pages';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { externalLinkProps } from '@/lib/markdown/externalLink';
 
 // Mention tokens (Story 5.1 · Subtask 5.1.4) are stored as Markdown links with
 // the `mention:` scheme — `[@Display Name](mention:<userId>)` (the durable
@@ -159,8 +160,15 @@ function buildComponents(
         const id = href.slice('motir-page:'.length);
         return <PageRefChip summary={pageRefs?.[id]} />;
       }
+      // A link that leaves Motir — a code link above all — opens in a new tab
+      // (MOTIR-12300); a relative or same-origin link keeps navigating in place.
       return (
-        <a {...props} href={href} style={{ ...style, textDecorationLine: 'underline' }}>
+        <a
+          {...props}
+          {...externalLinkProps(href)}
+          href={href}
+          style={{ ...style, textDecorationLine: 'underline' }}
+        >
           {children}
         </a>
       );

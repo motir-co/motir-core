@@ -283,6 +283,10 @@ describe('the hosted-agent card', () => {
     expect(html).toContain('5 commits to packages/cli');
     expect(html).toContain('See the commits');
     expect(html).toContain('href="https://github.com/motir-co/motir-core/commit/4a9cb14');
+    // A code link opens in a new tab (MOTIR-12300).
+    expect(html).toMatch(
+      /href="https:\/\/github\.com\/motir-co\/motir-core\/commit\/4a9cb14[^"]*" target="_blank" rel="noopener noreferrer"/,
+    );
     expect(html).toContain('data-publish="enabled"');
     expect(html).toContain('Pins the newest main build');
     expect(html).toContain('Never published from this page.');
@@ -325,6 +329,10 @@ describe('the hosted-agent card', () => {
     expect(html).toContain('data-publish="running"');
     expect(html).toContain('Publishing.');
     expect(html).toContain('Motir agent pin · run #12');
+    // The workflow run is on GitHub, so it opens in a new tab (MOTIR-12300).
+    expect(html).toContain(
+      'href="https://github.com/motir-co/motir-core/actions/runs/77" target="_blank" rel="noopener noreferrer"',
+    );
     expect(html).toContain('by ops+publisher@example.test');
     expect(html).toContain('Publish started by ops+publisher@example.test');
     expect(html).toContain('Publishing…');

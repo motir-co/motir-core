@@ -104,6 +104,8 @@ function RepoLink({ repo, t }: { repo: string; t: T }) {
   return (
     <a
       href={`https://github.com/${repo}`}
+      target="_blank"
+      rel="noopener noreferrer"
       aria-label={t('repo.link', { repo })}
       className="inline-flex items-center gap-1 break-all font-mono text-xs text-(--el-link) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
     >

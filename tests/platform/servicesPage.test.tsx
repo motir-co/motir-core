@@ -514,7 +514,9 @@ describe('the commit column and the version pill', () => {
     expect(html).toMatch(/<th[^>]*scope="col"[^>]*>Commit<\/th>/);
     for (const tag of ['tr', 'li'] as const) {
       const row = rowOf(html, 'motir-core-web', tag);
-      expect(row).toContain(`href="https://github.com/motir-co/motir-core/commit/${SHA.core}"`);
+      expect(row).toContain(
+        `href="https://github.com/motir-co/motir-core/commit/${SHA.core}" target="_blank" rel="noopener noreferrer"`,
+      );
       expect(row).toContain('aria-label="Commit db9aef8 of motir-core on GitHub"');
       expect(row).toContain('>db9aef8</a>');
       expect(row).toContain('data-version="latest"');
@@ -534,7 +536,9 @@ describe('the commit column and the version pill', () => {
     expect(stale).toContain('data-version="behind-stale"');
     expect(stale).toContain('7 commits behind');
     expect(stale).toContain('oldest undeployed 3 h ago');
-    expect(stale).toContain(`href="https://github.com/motir-co/motir-ai/compare/${SHA.ai}...main"`);
+    expect(stale).toContain(
+      `href="https://github.com/motir-co/motir-ai/compare/${SHA.ai}...main" target="_blank" rel="noopener noreferrer"`,
+    );
     expect(stale).toContain('Compare on GitHub');
 
     const fresh = rowOf(html, 'motir-gateway', 'tr');

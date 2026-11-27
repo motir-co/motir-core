@@ -2,5 +2,5 @@
 
 exports[`MarkdownView > round-trips a stored Markdown value identically (snapshot) 1`] = `
 "<h2>Heading</h2>
-<p>A <a href="https://example.com" style="text-decoration-line: underline;">link</a> and <code>code</code>.</p>"
+<p>A <a target="_blank" rel="noopener noreferrer" href="https://example.com" style="text-decoration-line: underline;">link</a> and <code>code</code>.</p>"
 `;

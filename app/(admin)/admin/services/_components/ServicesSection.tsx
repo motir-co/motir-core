@@ -442,6 +442,8 @@ function CommitCell({ commit, t }: { commit: PlatformServiceCommitDTO | null; t:
     <a
       data-element="commit-cell"
       href={commit.url}
+      target="_blank"
+      rel="noopener noreferrer"
       aria-label={t('commit.linkLabel', { commit: short, repo: commit.repository })}
       className="font-mono text-xs text-(--el-link) underline underline-offset-2"
     >
@@ -519,6 +521,8 @@ function JudgementLines({
           </Sub>
           <a
             href={judgement.compareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="font-sans text-xs text-(--el-link) underline underline-offset-2"
           >
             {t('version.compare')}
