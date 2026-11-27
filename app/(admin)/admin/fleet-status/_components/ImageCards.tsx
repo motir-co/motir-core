@@ -246,6 +246,8 @@ function CommitLink({
   return (
     <a
       href={COMMIT_URL(commit, repo)}
+      target="_blank"
+      rel="noopener noreferrer"
       className={`font-mono text-(--el-link) underline underline-offset-2 ${className}`}
     >
       {shortCommit(commit)}
@@ -382,6 +384,8 @@ function RunLink({
   return (
     <a
       href={record.runUrl}
+      target="_blank"
+      rel="noopener noreferrer"
       className="inline-flex items-center gap-1 font-medium text-(--el-text-strong) underline underline-offset-2"
     >
       {text}

@@ -96,6 +96,11 @@ describe('the blind-spots card', () => {
       ['https://github.com/acme-labs/billing-api', 'acme-labs/billing-api on GitHub'],
       ['https://github.com/acme-labs/web', 'acme-labs/web on GitHub'],
     ]);
+    // A repository link is a code link: it opens in a new tab (MOTIR-12300).
+    for (const a of links) {
+      expect(a.getAttribute('target')).toBe('_blank');
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+    }
     // The design's copy, under every undelivered repo.
     expect(text(undelivered)).toContain(
       'motir-runner jobs but no workflow_job deliveries — is motir-studio installed on this repo?',
