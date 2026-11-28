@@ -1669,6 +1669,170 @@ export async function handOffCodeGraphIndex(
   return { outcome: 'accepted', jobId: body.jobId };
 }
 
+// ── A repository's SCIP upload credentials (MOTIR-12339 · story MOTIR-12262) ──
+//
+// motir-ai's three private routes (its contract, `/v1/code-graph/upload-credentials`,
+// MOTIR-12337) are motir-core's only door to the code graph's upload credentials:
+// motir-core never holds the code graph's operator token and never sees an upload's
+// bytes. Every answer is VALIDATED, not cast. A refusal goes through
+// `errorFromProblem`, which keeps the two 409 codes on `MotirAiCodeGraphRefusedError`
+// and makes `codegraph_unavailable` (503) a `MotirAiUnavailableError`. No thrown error
+// is built from a response body, so none can carry a token.
+
+/** The repository a credential call is about: motir-core's organisation and the
+ *  repository's `owner/name`. */
+export interface CodeGraphUploadCredentialScope {
+  coreOrganizationId: string;
+  repoRef: string;
+}
+
+/** A credential the code graph just issued. `token` is shown ONCE. */
+export interface CodeGraphMintedUploadCredential {
+  credentialId: string;
+  name: string;
+  displayPrefix: string;
+  token: string;
+  repositoryId: string;
+  uploadUrl: string;
+}
+
+/** One credential as the code graph lists it (never its token). */
+export interface CodeGraphUploadCredential {
+  credentialId: string;
+  name: string;
+  displayPrefix: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** motir-ai's answer to a revoke. `revoked: false` is a repeat or a foreign id. */
+export interface CodeGraphRevokedUploadCredential {
+  credentialId: string;
+  revoked: boolean;
+}
+
+const UPLOAD_CREDENTIALS_PATH = '/v1/code-graph/upload-credentials';
+
+function malformedUploadCredential(route: string, field: string): MotirAiUnavailableError {
+  return new MotirAiUnavailableError(`motir-ai returned a malformed '${field}' from ${route}`);
+}
+
+/** The answer's object body, or the malformed error naming the route. */
+async function uploadCredentialBody(
+  res: Response,
+  route: string,
+): Promise<Record<string, unknown>> {
+  const body = (await res.json().catch(() => null)) as unknown;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw malformedUploadCredential(route, 'body');
+  }
+  return body as Record<string, unknown>;
+}
+
+/** A non-empty string field, or the malformed error naming it. */
+function requiredText(body: Record<string, unknown>, field: string, route: string): string {
+  const value = body[field];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw malformedUploadCredential(route, field);
+  }
+  return value;
+}
+
+/**
+ * POST /v1/code-graph/upload-credentials — have the code graph issue ONE named upload
+ * credential for the repository. motir-ai makes the issue call exactly once, so this
+ * is never retried here either: a lost answer is `MotirAiUnavailableError`, and a
+ * credential that was made shows in the next listing.
+ */
+export async function mintCodeGraphUploadCredential(
+  input: CodeGraphUploadCredentialScope & { name: string },
+): Promise<CodeGraphMintedUploadCredential> {
+  const route = `POST ${UPLOAD_CREDENTIALS_PATH}`;
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}${UPLOAD_CREDENTIALS_PATH}`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({
+      coreOrganizationId: input.coreOrganizationId,
+      repoRef: input.repoRef,
+      name: input.name,
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = await uploadCredentialBody(res, route);
+  return {
+    credentialId: requiredText(body, 'credentialId', route),
+    name: requiredText(body, 'name', route),
+    displayPrefix: requiredText(body, 'displayPrefix', route),
+    token: requiredText(body, 'token', route),
+    repositoryId: requiredText(body, 'repositoryId', route),
+    uploadUrl: requiredText(body, 'uploadUrl', route),
+  };
+}
+
+/** GET /v1/code-graph/upload-credentials — the repository's credentials, as the code
+ *  graph holds them on this call (motir-ai keeps no copy). */
+export async function listCodeGraphUploadCredentials(
+  input: CodeGraphUploadCredentialScope,
+): Promise<CodeGraphUploadCredential[]> {
+  const route = `GET ${UPLOAD_CREDENTIALS_PATH}`;
+  const { url, serviceToken } = config();
+  const query = new URLSearchParams({
+    coreOrganizationId: input.coreOrganizationId,
+    repoRef: input.repoRef,
+  });
+  const res = await aiFetch(`${url}${UPLOAD_CREDENTIALS_PATH}?${query.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = await uploadCredentialBody(res, route);
+  const credentials = body['credentials'];
+  if (!Array.isArray(credentials)) throw malformedUploadCredential(route, 'credentials');
+  return credentials.map((entry: unknown, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw malformedUploadCredential(route, `credentials.${index}`);
+    }
+    const row = entry as Record<string, unknown>;
+    const revokedAt = row['revokedAt'];
+    if (revokedAt !== null && typeof revokedAt !== 'string') {
+      throw malformedUploadCredential(route, `credentials.${index}.revokedAt`);
+    }
+    return {
+      credentialId: requiredText(row, 'credentialId', route),
+      name: requiredText(row, 'name', route),
+      displayPrefix: requiredText(row, 'displayPrefix', route),
+      createdAt: requiredText(row, 'createdAt', route),
+      revokedAt,
+    };
+  });
+}
+
+/** POST /v1/code-graph/upload-credentials/:credentialId/revoke — revoke one credential
+ *  of the repository. A repeat answers `revoked: false`. */
+export async function revokeCodeGraphUploadCredential(
+  input: CodeGraphUploadCredentialScope & { credentialId: string },
+): Promise<CodeGraphRevokedUploadCredential> {
+  const path = `${UPLOAD_CREDENTIALS_PATH}/${encodeURIComponent(input.credentialId)}/revoke`;
+  const route = `POST ${UPLOAD_CREDENTIALS_PATH}/:credentialId/revoke`;
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}${path}`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({
+      coreOrganizationId: input.coreOrganizationId,
+      repoRef: input.repoRef,
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = await uploadCredentialBody(res, route);
+  if (typeof body['revoked'] !== 'boolean') throw malformedUploadCredential(route, 'revoked');
+  return {
+    credentialId: requiredText(body, 'credentialId', route),
+    revoked: body['revoked'],
+  };
+}
+
 /** The commit the service last PUBLISHED for the default branch. */
 export interface CodeGraphIndexedCommit {
   commit: string;

@@ -23,6 +23,8 @@ import {
   HostedRepositoryCheckFailedError,
   RepoEstablishBusyError,
   RepoExistsWithOtherSpecError,
+  ScipUploadActionsWriteError,
+  ScipUploadCredentialRefusedError,
 } from '@/lib/projectRepos/errors';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { SharedTenantAccountError } from '@/lib/hosting/tenantHandoverErrors';
@@ -67,6 +69,21 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
     return NextResponse.json(
       { code: err.code, error: err.message, repositories: err.repositories },
       { status: 409 },
+    );
+  }
+  // MOTIR-12339 — a SCIP upload-credential refusal, by motir-ai's code verbatim:
+  // the two 409s and the retryable 503. `retryable` lets the room offer Retry on
+  // the one refusal a retry can change.
+  if (err instanceof ScipUploadCredentialRefusedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, retryable: err.retryable },
+      { status: err.httpStatus },
+    );
+  }
+  if (err instanceof ScipUploadActionsWriteError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, retryable: true },
+      { status: 502 },
     );
   }
   if (err instanceof ProjectNotFoundError || err instanceof ProjectRepoNotFoundError) {

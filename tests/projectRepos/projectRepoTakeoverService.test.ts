@@ -32,6 +32,12 @@ import type { FakeHostingControls, HostingDeployPort } from '@motir/orchestrator
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
 import { resetDatabaseFakes } from '@/lib/orchestrator/database';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import {
+  CODEGRAPH_REPOSITORY_ID_VARIABLE,
+  CODEGRAPH_UPLOAD_URL_VARIABLE,
+  SCIP_UPLOAD_TOKEN_SECRET,
+  SCIP_UPLOAD_VARIABLES,
+} from '@/lib/codeGraph/scipUploadActionsNames';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { getDatabasePort } from '@/lib/orchestrator/database';
 import { hostedApplicationHandoverService } from '@/lib/services/hostedApplicationHandoverService';
@@ -374,7 +380,69 @@ describe('the runner variable needs no unset — the ORG scope is the mechanism 
     // a repo-scoped `MOTIR_RUNNER` (§7.3's per-project-label fallback), this test
     // is what will fail, and the unset belongs in this saga, ordered BEFORE the
     // transfer for the same reason §G orders the Actions re-enable before it.
-    expect(calls.filter((c) => c.url.includes('/actions/variables'))).toEqual([]);
+    //
+    // The one repository-variable call the handover DOES make is the SCIP upload
+    // credential's withdrawal (MOTIR-12339): its two variables are deleted because
+    // they travel with the repo. Nothing ever writes a runner variable here.
+    const scip = new Set<string>(SCIP_UPLOAD_VARIABLES);
+    expect(
+      calls.filter(
+        (c) =>
+          c.url.includes('/actions/variables') &&
+          !(c.method === 'DELETE' && scip.has(c.url.split('/').pop()!)),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('the SCIP upload credential withdrawn before the transfer (MOTIR-12339)', () => {
+  const FULL_NAME = `${MOTIR_ORG}/acme-web`;
+  function scipSequence(): string[] {
+    return calls.flatMap((c) => {
+      if (c.url.endsWith('/transfer') && c.method === 'POST') return ['transfer'];
+      if (c.url.endsWith('/actions/permissions') && c.method === 'PUT') return ['actions'];
+      const named = /\/actions\/(secrets|variables)\/([A-Z_]+)$/.exec(c.url);
+      if (named && c.method === 'DELETE') return [`delete:${named[2]}`];
+      return [];
+    });
+  }
+
+  it('deletes the secret and both variables after the re-enable and before the transfer, and clears the row', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    repoActions.variables(FULL_NAME).set(CODEGRAPH_REPOSITORY_ID_VARIABLE, 'cgr_1');
+    repoActions.variables(FULL_NAME).set(CODEGRAPH_UPLOAD_URL_VARIABLE, 'https://cg.test');
+    await adminDb.projectRepo.update({
+      where: { id: rowId },
+      data: { scipUploadInstalledCredentialId: 'cred_1' },
+    });
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    expect(scipSequence()).toEqual([
+      'actions',
+      `delete:${SCIP_UPLOAD_TOKEN_SECRET}`,
+      `delete:${CODEGRAPH_REPOSITORY_ID_VARIABLE}`,
+      `delete:${CODEGRAPH_UPLOAD_URL_VARIABLE}`,
+      'transfer',
+    ]);
+    expect(repoActions.variables(FULL_NAME).size).toBe(0);
+    const row = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    expect(row.scipUploadInstalledCredentialId).toBeNull();
+  });
+
+  it('fails the takeover, with no transfer, when a delete fails', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    repoActions.failNext('DELETE', `/secrets/${SCIP_UPLOAD_TOKEN_SECRET}`, 500);
+
+    const refusal = projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+    await expect(refusal).rejects.toBeInstanceOf(RepoTransferRefusedError);
+    await expect(refusal).rejects.toThrow(/SCIP upload credential/);
+    expect(scipSequence()).not.toContain('transfer');
+    expect((await readRow(rowId, fx)).takeover).toMatchObject({ state: 'failed' });
   });
 });
 

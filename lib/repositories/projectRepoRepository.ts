@@ -93,6 +93,7 @@ interface JoinedRow {
   previewPushNamespace: string | null;
   previewEnabledAt: Date | null;
   previewCredentialExpiresAt: Date | null;
+  scipUploadInstalledCredentialId: string | null;
   // The APPROVING USER's collaborator record (the `admin` one — ADR §3 Q2), or
   // all-NULL when the row has none. Only that record is joined here: this read
   // feeds the establish step, which asks "can *I* reach my code?", and joining a
@@ -176,6 +177,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     previewPushNamespace: r.previewPushNamespace,
     previewEnabledAt: r.previewEnabledAt,
     previewCredentialExpiresAt: r.previewCredentialExpiresAt,
+    scipUploadInstalledCredentialId: r.scipUploadInstalledCredentialId,
     seedHeadSha: r.seedHeadSha,
     seedMatch: r.seedMatch,
     // Zero or one record — the mapper then picks the `admin` one out of it, which
@@ -397,6 +399,7 @@ export const projectRepoRepository = {
         pr."preview_push_namespace" AS "previewPushNamespace",
         pr."preview_enabled_at" AS "previewEnabledAt",
         pr."preview_credential_expires_at" AS "previewCredentialExpiresAt",
+        pr."scip_upload_installed_credential_id" AS "scipUploadInstalledCredentialId",
         pr."seed_head_sha"     AS "seedHeadSha",
         pr."seed_match"        AS "seedMatch",
         oc."github_login"      AS "ownerLogin",
@@ -720,6 +723,53 @@ export const projectRepoRepository = {
    * the read and the write). Returns the id, or null when the row does not exist;
    * the caller re-reads the row under the lock to re-validate.
    */
+  /**
+   * The row a SCIP upload-credential write is about, LOCKED (`SELECT … FOR UPDATE`)
+   * and then read (MOTIR-12339). The lock is what serialises two mints, or a mint
+   * and a revoke, on one row: the repository's Actions secret and the recorded
+   * installed credential id are written under it, so they always name the same
+   * credential. Null when the row is gone.
+   */
+  async findForScipUploadUpdate(id: string, tx: Prisma.TransactionClient) {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "project_repository" WHERE "id" = ${id} FOR UPDATE
+    `;
+    if (!locked[0]) return null;
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: { id: true, scipUploadInstalledCredentialId: true },
+    });
+  },
+
+  /** Record which credential's token the repository's Actions secret holds, or
+   *  that none does (`null`). A credential id, never a token (MOTIR-12339). */
+  async setScipUploadInstalledCredential(
+    id: string,
+    credentialId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.projectRepo.update({
+      where: { id },
+      data: { scipUploadInstalledCredentialId: credentialId },
+    });
+  },
+
+  /**
+   * The row the takeover saga's SCIP upload withdrawal reads (MOTIR-12339). System
+   * context, like {@link findPreviewSubjectInTx}: the saga's step takes only the
+   * row id.
+   */
+  async findScipUploadSubjectInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        githubRepo: { select: { installationId: true, owner: true, name: true } },
+      },
+    });
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "project_repository" WHERE "id" = ${id} FOR UPDATE

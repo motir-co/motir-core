@@ -64,6 +64,26 @@ export class MotirAiBadRequestError extends MotirAiError {
   }
 }
 
+/**
+ * motir-ai's refusal of a repository's SCIP upload-credential mint, list or
+ * revoke (contract §5, motir-ai MOTIR-12337): `codegraph_repository_not_registered`
+ * — the code graph has not registered the repository — or
+ * `upload_credential_limit_reached` — it already holds its live-credential
+ * maximum. Both are 409s, so it IS a bad request; it keeps the motir-ai code so
+ * the Repositories room can tell the two apart (MOTIR-12339). It carries no
+ * response body.
+ */
+export class MotirAiCodeGraphRefusedError extends MotirAiBadRequestError {
+  constructor(
+    readonly problemCode: 'codegraph_repository_not_registered' | 'upload_credential_limit_reached',
+    detail: string,
+    httpStatus?: number,
+  ) {
+    super(detail, httpStatus);
+    this.name = 'MotirAiCodeGraphRefusedError';
+  }
+}
+
 /** The 4xx statuses that mean "this request's CONTENT was refused". */
 const PER_INPUT_REJECTION_STATUSES: ReadonlySet<number> = new Set([400, 413, 422]);
 
@@ -482,6 +502,12 @@ export function errorFromProblem(p: Problem): MotirAiError {
     // typed error before this generic switch is reached.
     case 'model_unreachable':
       return new MotirAiBadRequestError(p.detail ?? p.title, p.status);
+    // The SCIP upload-credential refusals (409; motir-ai MOTIR-12337). Named, and
+    // given their own class, so the code survives the mapping: the room shows a
+    // different sentence for each.
+    case 'codegraph_repository_not_registered':
+    case 'upload_credential_limit_reached':
+      return new MotirAiCodeGraphRefusedError(p.code, p.detail ?? p.title, p.status);
     case 'not_found':
       return new MotirAiJobNotFoundError(p.jobId ?? '(unknown)');
     case 'out_of_credits':

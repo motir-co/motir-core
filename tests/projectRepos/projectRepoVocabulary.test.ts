@@ -52,6 +52,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     previewPushNamespace: null,
     previewEnabledAt: null,
     previewCredentialExpiresAt: null,
+    scipUploadInstalledCredentialId: null,
     position: 'a0',
     // The CI-Actions intent (MOTIR-1907) — irrelevant to name resolution, but
     // part of the row's shape, so the fixture carries its default.

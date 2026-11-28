@@ -17,6 +17,7 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import { scipUploadCredentialService } from '@/lib/services/scipUploadCredentialService';
 import {
   hostedApplicationHandoverService,
   type GraceNotice,
@@ -213,6 +214,21 @@ export const projectRepoTakeoverService = {
       await this.markFailed(rowId, detailOf(err), ctx);
       throw new RepoTransferRefusedError(
         `could not withdraw the preview push credential before the transfer: ${detailOf(err)}`,
+      );
+    }
+
+    // MOTIR-12339 — the SCIP upload credential Motir installed in the repository's
+    // Actions (its secret and two variables) travels with the repository too, and a
+    // live upload token must not leave in a repository Motir no longer owns. Deleted
+    // here for the same reason and with the same failure handling as the preview
+    // credential above. The credential itself is not revoked: the person may move
+    // the token they were shown into their own secret.
+    try {
+      await scipUploadCredentialService.removeFromRepository(rowId);
+    } catch (err) {
+      await this.markFailed(rowId, detailOf(err), ctx);
+      throw new RepoTransferRefusedError(
+        `could not withdraw the SCIP upload credential before the transfer: ${detailOf(err)}`,
       );
     }
 

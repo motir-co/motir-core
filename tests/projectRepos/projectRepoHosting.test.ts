@@ -267,6 +267,7 @@ describe('toProjectRepoDto hosting fields', () => {
     previewPushNamespace: null,
     previewEnabledAt: null,
     previewCredentialExpiresAt: null,
+    scipUploadInstalledCredentialId: null,
     createdAt: new Date('2026-10-28T00:00:00Z'),
     hostedDeletionStartedAt: null,
     updatedAt: new Date('2026-10-28T00:00:00Z'),

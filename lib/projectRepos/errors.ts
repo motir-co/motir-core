@@ -467,3 +467,49 @@ export class HostedRepositoryCheckFailedError extends Error {
     this.name = 'HostedRepositoryCheckFailedError';
   }
 }
+
+/** The three answers that refuse a SCIP upload-credential call (MOTIR-12339), by
+ *  motir-ai's own codes (contract §5, MOTIR-12337). */
+export type ScipUploadRefusalCode =
+  | 'codegraph_repository_not_registered'
+  | 'upload_credential_limit_reached'
+  | 'codegraph_unavailable';
+
+/**
+ * A SCIP upload-credential mint, list or revoke refused (MOTIR-12339). `code` is
+ * motir-ai's code VERBATIM, so the room shows the sentence for each; only
+ * `codegraph_unavailable` is worth retrying. Nothing was written anywhere — no
+ * secret, no variable, no installed id. Carries no response body.
+ */
+export class ScipUploadCredentialRefusedError extends Error {
+  readonly retryable: boolean;
+  readonly httpStatus: 409 | 503;
+  constructor(readonly code: ScipUploadRefusalCode) {
+    super(SCIP_UPLOAD_REFUSAL_MESSAGES[code]);
+    this.name = 'ScipUploadCredentialRefusedError';
+    this.retryable = code === 'codegraph_unavailable';
+    this.httpStatus = code === 'codegraph_unavailable' ? 503 : 409;
+  }
+}
+
+const SCIP_UPLOAD_REFUSAL_MESSAGES: Record<ScipUploadRefusalCode, string> = {
+  codegraph_repository_not_registered:
+    'The code graph has not registered this repository, so no credential was made.',
+  upload_credential_limit_reached:
+    'This repository already holds its maximum of live upload credentials. Revoke one first.',
+  codegraph_unavailable: 'The code graph could not be reached, so nothing was made.',
+};
+
+/**
+ * GitHub refused deleting a hosted repository's SCIP upload secret or variables
+ * while revoking the installed credential (MOTIR-12339). Nothing was revoked at the
+ * code graph and the row still names the credential, so a retry repeats the deletes
+ * (each `absent` on a 404) and then revokes. A 502: the upstream refused.
+ */
+export class ScipUploadActionsWriteError extends Error {
+  readonly code = 'SCIP_UPLOAD_ACTIONS_WRITE_FAILED' as const;
+  constructor(readonly detail: string) {
+    super(`Motir could not remove the upload credential from the repository's Actions: ${detail}`);
+    this.name = 'ScipUploadActionsWriteError';
+  }
+}
