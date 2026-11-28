@@ -1,5 +1,4 @@
 import {
-  AWS_INDEX_IAM_ROLE,
   AWS_MEMBER_ROLE_NAME,
   AWS_RUNNER_IAM_ROLE,
   AWS_TENANT_DEPLOY_POLICY_PATH,
@@ -55,6 +54,10 @@ export const HANDOVER_DEPLOY_POLICY = 'motir-handover-deploy';
  *  registry push roles bind (`registry.yaml`). */
 export const GITHUB_OIDC_HOST = 'token.actions.githubusercontent.com';
 export const GITHUB_OIDC_AUDIENCE = 'sts.amazonaws.com';
+
+/** The index role the pool StackSet no longer creates (MOTIR-12314); an older
+ *  account may still carry it, so the handover deletes it with Motir's roles. */
+const RETIRED_INDEX_ROLE = 'motir-fleet-index';
 
 const SERVICE_ROLE_PATH = '/aws-service-role/';
 const VERSION = '2012-10-17';
@@ -544,7 +547,7 @@ export function createTenantHandover(deps: TenantHandoverDeps): TenantHandover {
         // 1–2. Motir's own roles, then the deploy role and its managed
         // policies. The deploy role's policy denies it every action on itself,
         // so this runs on the member access role, which outlives it.
-        for (const role of [AWS_RUNNER_IAM_ROLE, AWS_INDEX_IAM_ROLE, AWS_TENANT_DEPLOY_ROLE]) {
+        for (const role of [AWS_RUNNER_IAM_ROLE, RETIRED_INDEX_ROLE, AWS_TENANT_DEPLOY_ROLE]) {
           await deleteRoleWhole(iam, role);
         }
         for (const policy of await iam.listPolicies(AWS_TENANT_DEPLOY_POLICY_PATH)) {
