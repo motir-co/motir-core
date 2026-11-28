@@ -1,0 +1,139 @@
+# Upload a repository's SCIP index to the code graph from its own CI (Story
+# MOTIR-12262 · MOTIR-12341). A REUSABLE workflow: nothing in motir-core runs it;
+# another repository calls it from a job of its own.
+#
+#   jobs:
+#     scip:
+#       uses: motir-co/motir-core/.github/workflows/scip-upload.yml@main
+#       with:
+#         indexer: scip-typescript
+#         index-command: npx --yes @sourcegraph/scip-typescript index
+#         node-version: '22'
+#       secrets: inherit          # a Motir-hosted repository: Motir installed the
+#                                 # secret and both variables when it minted
+#
+# An imported repository passes the secret by name and the two values as inputs:
+#
+#       with:
+#         indexer: scip-go
+#         index-command: scip-go
+#         go-version: '1.24'
+#         repository-id: ${{ vars.MOTIR_CODEGRAPH_REPOSITORY_ID }}
+#       secrets:
+#         MOTIR_SCIP_UPLOAD_TOKEN: ${{ secrets.MOTIR_SCIP_UPLOAD_TOKEN }}
+#
+# The workflow is a THIN CALLER: every decision — is this a default-branch run, is
+# every setting there, what an answer means, which exit code — is
+# `scripts/scip-upload/scip-upload.sh`'s, the plain shell form a non-GitHub CI runs,
+# and is tested there (`tests/scipUpload/scipUploadScript.test.ts`). The script is
+# checked out from motir-core at THIS workflow file's own commit (`job.workflow_sha`,
+# which in a called workflow names the called file, unlike `github.workflow_sha`), so
+# a caller pinned to a ref gets the script of that same ref.
+#
+# The job runs on every call, including a pull request's: the script prints why it
+# skipped and exits 0, which a job-level `if` would hide.
+#
+# Every request goes to the code graph host and nowhere else: the file never passes
+# through Motir.
+
+name: SCIP upload
+
+on:
+  workflow_call:
+    inputs:
+      indexer:
+        description: The indexer that writes the file, a name the code graph registers (scip-typescript, scip-go, …).
+        type: string
+        required: true
+      index-command:
+        description: The command that writes the SCIP file, run in `root`.
+        type: string
+        required: true
+      root:
+        description: The project root to index, relative to the repository.
+        type: string
+        default: .
+      file:
+        description: The SCIP file the command writes, relative to `root`.
+        type: string
+        default: index.scip
+      node-version:
+        description: A Node.js version to set up before indexing (none when empty).
+        type: string
+        default: ''
+      go-version:
+        description: A Go version to set up before indexing (none when empty).
+        type: string
+        default: ''
+      wait-seconds:
+        description: How long to wait for the upload to be ingested.
+        type: number
+        default: 1800
+      repository-id:
+        description: The code graph repository id; overrides the MOTIR_CODEGRAPH_REPOSITORY_ID variable.
+        type: string
+        default: ''
+      upload-url:
+        description: The code graph upload host; overrides the MOTIR_CODEGRAPH_UPLOAD_URL variable.
+        type: string
+        default: ''
+    secrets:
+      MOTIR_SCIP_UPLOAD_TOKEN:
+        description: The upload credential's token, minted in Motir's Repositories room.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Upload the SCIP index
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Indexing plus `wait-seconds` (30 min by default) for the ingest. No healthy run
+    # is on record yet: 60 minutes is the stated floor — the default wait with as
+    # much again for checkout, toolchain and index — and a caller that raises
+    # `wait-seconds` past it is cut off here rather than holding a runner for six hours.
+    timeout-minutes: 60
+    steps:
+      - name: Check out the repository at the run's commit
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check out the upload script at this workflow's own commit
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .motir-scip-upload
+          sparse-checkout: scripts/scip-upload
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up Node.js
+        if: ${{ inputs.node-version != '' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Set up Go
+        if: ${{ inputs.go-version != '' }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ inputs.go-version }}
+
+      - name: Index, upload and wait for the ingest
+        env:
+          MOTIR_SCIP_UPLOAD_TOKEN: ${{ secrets.MOTIR_SCIP_UPLOAD_TOKEN }}
+          MOTIR_CODEGRAPH_REPOSITORY_ID: ${{ inputs.repository-id || vars.MOTIR_CODEGRAPH_REPOSITORY_ID }}
+          MOTIR_CODEGRAPH_UPLOAD_URL: ${{ inputs.upload-url || vars.MOTIR_CODEGRAPH_UPLOAD_URL }}
+          MOTIR_SCIP_COMMIT: ${{ github.sha }}
+          MOTIR_SCIP_BRANCH: ${{ github.ref_type == 'branch' && github.ref_name || '' }}
+          MOTIR_SCIP_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          MOTIR_SCIP_EVENT: ${{ github.event_name }}
+          MOTIR_SCIP_INDEXER: ${{ inputs.indexer }}
+          MOTIR_SCIP_INDEX_COMMAND: ${{ inputs.index-command }}
+          MOTIR_SCIP_ROOT: ${{ inputs.root }}
+          MOTIR_SCIP_FILE: ${{ inputs.file }}
+          MOTIR_SCIP_WAIT_SECONDS: ${{ inputs.wait-seconds }}
+        run: bash .motir-scip-upload/scripts/scip-upload/scip-upload.sh
