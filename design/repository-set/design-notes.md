@@ -4,12 +4,13 @@
 where it comes to live, who on the team can get into it, and what the standing _"it's yours — move
 it whenever you want"_ actually opens onto.
 
-| Surface                                                                                                    | Asset                                                                                                               | Card                                                                                                                             | Sections    |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| **The establish step** at plan approval                                                                    | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code) · **v5: MOTIR-5011 (design) → MOTIR-5014 / MOTIR-5015 / MOTIR-5016 (code)** | §0–§13      |
-| **The take-it-over flow** — move a repository to your own GitHub                                           | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga)                                                                     | §14         |
-| **Team code access** — who else on the team can clone it                                                   | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API)                                                                     | **§15**     |
-| **The room's two registries** — hosted set + workspace-connected, and the room's own `Add repository` door | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png) | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder), **MOTIR-4674** (the door + the two removals)                        | **§16–§17** |
+| Surface                                                                                                                            | Asset                                                                                                                               | Card                                                                                                                             | Sections    |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **The establish step** at plan approval                                                                                            | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)                             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code) · **v5: MOTIR-5011 (design) → MOTIR-5014 / MOTIR-5015 / MOTIR-5016 (code)** | §0–§13      |
+| **The take-it-over flow** — move a repository to your own GitHub                                                                   | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga)                                                                     | §14         |
+| **Team code access** — who else on the team can clone it                                                                           | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API)                                                                     | **§15**     |
+| **The room's two registries** — hosted set + workspace-connected, and the room's own `Add repository` door                         | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png)                 | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder), **MOTIR-4674** (the door + the two removals)                        | **§16–§17** |
+| **A repository's SCIP upload credential** — Motir-managed on a hosted repository; mint, show once, list, revoke on an imported one | [`repositories-room--scip-upload-credentials.mock.html`](./repositories-room--scip-upload-credentials.mock.html) (delta on §16–§17) | MOTIR-12338 (design) → MOTIR-12340 (surface), MOTIR-12345 (E2E)                                                                  | **§20**     |
 
 **Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13). Re-scoped to v5 by Story
 MOTIR-5010 · subtask MOTIR-5011.** §0–§13 are the design reference for the step at plan approval
@@ -2886,3 +2887,274 @@ The full specification — elements, the checklist's row and state table, the pe
 no-payment-detail / no-root-credential rule, the state-to-data map by card key, tokens and copy — is in
 **`design/hosting/design-notes.md` § Amendment 2026-11-23 — the takeover handover**, which also covers the
 Production panel delta drawn for the same card.
+
+# 20. `repositories-room--scip-upload-credentials.mock.html` — A REPOSITORY'S SCIP UPLOAD CREDENTIAL (MOTIR-12338, redrawn)
+
+**Story MOTIR-12262 · subtask MOTIR-12338 (design) → MOTIR-12340 (the room surface), MOTIR-12345
+(the story E2E), 2026-11-28.** A DELTA on §16–§17 (`repositories-room.mock.html`, the room as
+MOTIR-4674 and MOTIR-4954 left it) and on the hosted row's `Delete repository` / `Remove from this project` actions MOTIR-11981 ships
+(drawn in MOTIR-11980's published design, §19 of its notes). The mock,
+[`repositories-room--scip-upload-credentials.mock.html`](repositories-room--scip-upload-credentials.mock.html),
+holds only the changed panels. Neither older mock is edited.
+
+**This section REPLACES the version sent back on 2026-11-28** (result at `0db26d4b4`, refused by
+the reviewer: _"Wrong design, motir hosted repo upload credential should be generated and maintained
+internally"_). That version drew a person minting on a Motir-hosted repository, a hosted show-once
+panel, an install-failed form asking the person to copy the token into Actions by hand, and a hosted
+revoke confirm. **All four are gone, not kept beside the new panels.** A Motir-hosted repository
+now shows a read-only managed state; the imported repository's panels are carried over unchanged.
+
+**Design system (step 1 of the card).** Files read: `package.json` (depends on
+`@motir/design-system`, `workspace:*`) and `app/globals.css` (imports
+`@motir/design-system/theme.css`). **Verdict: on Motir Design (branch a).** The installed version
+is the workspace package (`packages/design-system`), which exports `@motir/design-system/mock`, so
+the mock is built with `renderMock` at the project's own axes from its root layout
+(`warm-editorial` · `motir` · `motir`), `boardWidth: 'full'`. It was rendered from the SHIPPED
+`RepositoriesRoom` → `OrganizationRepositories` and `TakeoverRow`, and the new dialog is composed
+from the package's `Modal`, `Input`, `Button`, `Checkbox`, `Pill` and `Spinner`, the way the account
+Tokens page composes its show-once (`CreateTokenModal`) and its revoke (`RevokeTokenDialog`).
+
+**The data is not this design's.** The imported fields and the three refusals belong to the motir-ai
+card MOTIR-12337 (mint, list and revoke) and to the core routes card MOTIR-12339 that carries them
+to the room. The three hosted states, and what the repository row records for them, belong to the
+maintenance card MOTIR-12357 (Motir mints, installs and keeps a hosted repository's credential).
+The values in the mock (`cgk_…` prefixes, `cgr_…` ids, dates, names, the `motir-managed` name) are
+illustrative fixtures only. The name limit (`{max}`) and the live-credential limit (`{limit}`) are
+interpolated from what the routes report; the upload host is whatever the mint answers.
+
+## 20.1 · The answer in one line
+
+**Every repository row that has code gains a quiet `Upload credentials` row action**, on the
+imported row and the Motir-hosted row alike, and **it opens one dialog per repository**. **On a
+Motir-hosted repository that dialog is read-only**: it says Motir manages the credential, shows one
+status (installed · repairing · waiting for the code graph) and the credentials Motir made, and its
+only next step is the recipe workflow. **On an imported repository it is the person's own mint**:
+name and mint at the top, the list below; a mint turns it into the show-once panel, a revoke into
+its confirm.
+
+## 20.2 · The decisions
+
+| Question (from the card)                 | Decision                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The access path                          | **A ghost row action**, `Upload credentials` with the `KeyRound` glyph, the room's quiet-action grammar. On an imported row it sits **before** `Remove from this project`; on a hosted row it sits **after** the row's way forward (`Move to my GitHub`, `Take over AWS hosting`) and **before** `Delete repository`, which stays last (MOTIR-11980 §19.3).                          |
+| Which rows get the door                  | A row whose repository exists: an organisation link, and a hosted row in the `hosted` register. **No door** on a row with no repository yet (proposed / never created), a hand-off in flight, or a delete that did not finish: none of them has a code-graph repository to upload into.                                                                                              |
+| One door or two kinds of section         | **One door, one dialog, two kinds of content**, told apart by the repository's kind. The person learns one place to look; what they find there says plainly whether Motir or they own the credential. The two kinds read clearly different: the hosted dialog opens on a mint callout and a status pill and holds no field and no button; the imported one opens on a form.          |
+| The hosted status's tones                | **The pill tones the app already gives these states**: installed `Pill severity="success"` (mint), repairing `Pill severity="info"` (sky, work in progress), waiting for the code graph `Pill tone="awaiting"` (yellow, the tone a decision waiting on somebody wears). No new tone. Each pill sits beside one sentence in `--el-text-secondary`.                                    |
+| Why no button on a hosted state          | **The person has nothing to do in any of them.** Repairing is retried by Motir's next pass; waiting ends when the first index lands. A button would suggest a person act the reviewer ruled out. The only link is the recipe docs, the one step a hosted team still takes (adding the workflow).                                                                                     |
+| What the hosted list shows               | **The repository's credentials, read-only** (name, prefix, created, revoked). The installed one carries the **Installed in Actions marker**; a credential Motir replaced on a rotation reads `Revoked {date}`; a live row's revoked cell reads `—`. **No row carries an action.** While waiting, nothing exists, so the list is replaced by the waiting status (its empty state).    |
+| How much repair detail                   | **None.** The repairing sentence says Motir is putting it back on its next pass and there is nothing to do; which step failed is the maintenance card's log, not the person's concern (the card's assumption).                                                                                                                                                                       |
+| Inline section or dialog (imported)      | **A dialog** (`Modal size="lg"`, `max-w-[42rem]`, the Tokens page's width). The token must be dismissed deliberately, and the room's rows are already dense with actions; an inline expansion would push every row below it. The hosted section uses the same dialog for one door.                                                                                                   |
+| One dialog or stacked dialogs (imported) | **One dialog, three phases** (manage · shown once · revoke), the `CreateTokenModal` two-phase shape plus a revoke phase. A confirm stacked over the list would be two focus traps; a phase swap keeps one.                                                                                                                                                                           |
+| The explicit close (imported)            | The show-once phase has **no close X** (`hideClose`), **ignores Escape and the overlay**, and its one button, `Done`, enables only once the `Checkbox` "I've copied what I need" is ticked. `Done` returns to the manage phase, where the new credential is the top row. The token is not reachable again.                                                                           |
+| The revoke weight (imported)             | **`Button variant="danger"`** on a rose callout, the shipped `RevokeTokenDialog`: a revoke destroys something (the next upload is refused), so it takes the danger weight the app already gives a token revoke.                                                                                                                                                                      |
+| Where the Revoke action sits (imported)  | **In the live row's `Revoked` cell.** A revoked row shows its date there instead, so the column answers "revoked?" for every row and a revoked row carries no action.                                                                                                                                                                                                                |
+| Who may do it                            | **`repository:manage`**. The room's nav entry declares that permission and no view key (`lib/settings/projectSettingsNav.ts`), and the page's destination guard refuses arrival without it (`app/(authed)/settings/project/repositories/page.tsx` via `_guard.tsx`). **So the design draws no member read-only state**: a member who cannot manage repositories never sees the room. |
+
+## 20.3 · Panel 1 — the door
+
+The real room with one imported row (`acme/billing-service`) and two hosted rows
+(`motir-projects/acme-shop-web`, `…-api`). Each gains `Upload credentials` in the position §20.2
+gives it. Nothing else in the rows changes.
+
+## 20.4 · Panel 2 — Motir-hosted: the Managed credential status in its three states
+
+**Title** `Upload credentials · {repo}`, **description** the one-line hint. Then, top to bottom:
+
+- the **Managed by Motir line** — mint callout (`--el-tint-mint`, `Info` in `--el-success`) naming
+  the secret `MOTIR_SCIP_UPLOAD_TOKEN` and the variables `MOTIR_CODEGRAPH_REPOSITORY_ID` and
+  `MOTIR_CODEGRAPH_UPLOAD_URL`, and saying nobody needs to copy a token;
+- the **Managed credential status** under a `Status` heading (`role="status"`), one pill and one
+  sentence:
+  - **installed** — `Installed` (success) · _In Actions since {date}. The recipe workflow reads it
+    as it is._
+  - **repairing** — `Repairing` (info) · _Motir found the credential missing from Actions, or an
+    install that didn't finish, and is putting it back on its next pass. There's nothing for you to
+    do._
+  - **waiting for the code graph** — `Waiting for the code graph` (awaiting) · _{repo} isn't
+    registered with Motir's code graph yet, so nothing has been created. Motir installs the
+    credential once the first index lands._
+- the **Managed credentials list** (installed and repairing only) — the same bordered four-column
+  list as the imported one, read-only;
+- the **Recipe docs link**, under one sentence saying adding the workflow is the one step left.
+
+The dialog closes with its ordinary close X. **No state carries a button.**
+
+## 20.5 · Panel 3 — Motir-hosted after a rotation
+
+When the secret goes missing Motir cannot read the token back, so it mints a new credential,
+installs it, then revokes the old one (the maintenance card's rotation). The list shows both: the
+new one with the **Installed in Actions marker**, the replaced one struck through in
+`--el-text-secondary` and reading `Revoked {date}`. Drawn at desktop and at 390px, where the list's
+cells wrap and the marker wraps under the name.
+
+## 20.6 · No person act on a hosted repository
+
+**A Motir-hosted repository draws no Mint credential button, no Credential name field, no Show-once
+token panel and no Revoke action, and no token appears anywhere on the page** — not in the
+dialog, the list (only the display prefix), a toast or the row. The mock checks it: no element
+under `data-variant="hosted"` contains a button, the name field, the mint label or a token value.
+
+## 20.7 · Panel 4 — Imported: the dialog and the list's four states
+
+**Title** `Upload credentials · {repo}`, **description** the one-line hint. The **Credential name
+field** and the **Mint credential button** share a row. Below, the **Credentials list** under a
+`Credentials` heading: a bordered card with a column header (`Name · Prefix · Created · Revoked`)
+and one **Credential row** per credential, newest first, then the **Recipe docs link**.
+
+- **populated** — live rows have the name in `--el-text`, the display prefix in mono with an
+  ellipsis, the created date, and `Revoke`. A revoked row strikes its name through in
+  `--el-text-secondary` and reads `Revoked {date}`.
+- **empty** — one sentence inside the card, no header.
+- **loading** — `Spinner` + `Reading this repository's credentials…` (`role="status"`).
+- **error** — a sentence and `Try again` (secondary, `RefreshCw`), `role="alert"`; the mint form
+  stays usable.
+
+No row on an imported repository carries the Installed in Actions marker: Motir installs nothing
+there (MOTIR-5511).
+
+## 20.8 · Panel 5 — Imported: naming and Mint pending
+
+`Input` with `helperText` at rest. **Empty** (after a submit) and **too long** replace the helper
+with the `Input`'s own `error`, and `Mint credential` disables. **Mint pending**: the field and the
+button disable, the button shows its `loading` spinner and `Minting…`; the form cannot be re-sent.
+
+## 20.9 · Panel 6 — Imported: the Refusal notice
+
+One sentence, under the mint row, in a rose callout (`role="alert"`), and **the list unchanged** —
+no new row. `not registered` and `limit reached` carry no action. `code graph unreachable` carries
+**`Retry`** (secondary), which re-sends the same name. A list read refused `not registered` reads
+the same not-registered sentence in place of the list.
+
+## 20.10 · Panel 7 — Imported: the Show-once token panel
+
+Title `Copy your upload credential`, lead `{name} for {repo}`. Then, top to bottom: the
+**Store-it-yourself line** (sky callout, `Info` in `--el-info`: paste it into your own CI's secret
+store; Motir writes nothing into the repository), the **Token field**, the **Repository id field**,
+the **Upload host field** (each a read-only mono box with a secondary **Copy button**; after a copy
+it reads `Copied` with a `Check` in `--el-success`), the **Never-shown-again warning** (peach
+callout), the **Recipe docs link**, the confirm `Checkbox` and `Done`. Drawn just minted, and with
+the token copied and the box ticked.
+
+## 20.11 · Panel 8 — Imported: Revoke confirm, pending, revoked
+
+`Modal size="sm"` phase, title `Revoke {name}?`, one rose callout (_The next upload with this
+credential is refused. Remove it from your CI's secret store too._), `Cancel` (ghost, back to the
+list) and `Revoke credential` (danger, `Trash2`). **Revoke pending**: back on the list, the row's
+action holds its `loading` state (`Revoking…`, disabled). **Then** the row reads `Revoked {date}`,
+struck through, with no action.
+
+## 20.12 · Panel 9 — dark and 390px
+
+The hosted installed dialog and the imported show-once in dark; the imported show-once at 390px,
+where the field boxes wrap (`break-all`, the `CreateTokenModal` rule) and the Copy buttons keep
+their width.
+
+## 20.13 · Elements, by the name the code card and the E2E cite
+
+| Element                                                   | Kind     | What it is                                                                                                                                            |
+| --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Upload credentials section**                            | both     | the dialog's body (`data-element="upload-credentials-section"`, `data-variant="hosted"` / `"imported"`), opened by the row action                     |
+| **Recipe docs link**                                      | both     | `--el-link` text link with `MoveUpRight` (`data-element="recipe-docs-link"`); hosted text `Add the CI recipe workflow`, imported `Read the CI recipe` |
+| **Managed by Motir line**                                 | hosted   | mint callout (`data-element="managed-by-motir-line"`)                                                                                                 |
+| **Managed credential status**                             | hosted   | `Pill` + sentence, `role="status"` (`data-element="managed-credential-status"`, `data-state="installed" \| "repairing" \| "waiting"`)                 |
+| **Managed credentials list**                              | hosted   | the read-only Credentials list (`data-element="managed-credentials-list"`); live rows read `—` in Revoked                                             |
+| **Installed in Actions marker**                           | hosted   | `Pill severity="success"` (`data-element="installed-in-actions"`)                                                                                     |
+| **Mint credential button**                                | imported | `Button variant="primary"`, `KeyRound`                                                                                                                |
+| **Credential name field**                                 | imported | `Input` with `label`, `helperText`, `error`                                                                                                           |
+| **Mint pending**                                          | imported | the form disabled, the button `loading`                                                                                                               |
+| **Show-once token panel**                                 | imported | the dialog's shown phase, `hideClose` (`data-element="show-once-token-panel"`)                                                                        |
+| **Token field · Repository id field · Upload host field** | imported | read-only `code` boxes, `--radius-input`, `--spacing-input-x/y`                                                                                       |
+| **Copy button**                                           | imported | `Button variant="secondary"`, `Copy` → `Check` + `Copied`                                                                                             |
+| **Never-shown-again warning**                             | imported | peach callout                                                                                                                                         |
+| **Store-it-yourself line**                                | imported | sky callout                                                                                                                                           |
+| **Credentials list · Credential row**                     | imported | bordered list, four-column grid                                                                                                                       |
+| **Revoke action**                                         | imported | ghost `Button`, `--el-danger-on-surface`, `hover:bg-(--el-danger-surface)` (the room's remove ink)                                                    |
+| **Revoke confirm**                                        | imported | the dialog's revoke phase (`data-element="revoke-confirm"`)                                                                                           |
+| **Refusal notice**                                        | imported | rose callout, `role="alert"` (`data-element="refusal-notice"`)                                                                                        |
+| **Retry button**                                          | imported | `Button variant="secondary"`, `RefreshCw`                                                                                                             |
+
+**Package parts used:** `Modal`, `Input`, `Button`, `Checkbox`, `Pill`, `Spinner`. **Product-local
+component:** `UploadCredentialsDialog` (the dialog, with its hosted read-only body and its
+three-phase imported body, specific to this room); no proposed addition to `@motir/design-system`.
+
+## 20.14 · Token roles
+
+| Role                                                 | Token                                                                                     |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| dialog title / name / field label                    | `--el-text`                                                                               |
+| hint, helper, prefix, dates, header, status sentence | `--el-text-secondary` (AA on every surface; never `--el-text-muted` here)                 |
+| callout copy                                         | `--el-text-strong` on `--el-tint-{mint,peach,sky,rose}`                                   |
+| status pills                                         | `Pill` `severity="success"` · `severity="info"` · `tone="awaiting"` (the package's own)   |
+| refusal / error / revoke glyph                       | `--el-danger-on-surface`                                                                  |
+| Revoke action ink                                    | `--el-danger-on-surface`, hover `--el-danger-surface`                                     |
+| inline env-name chips                                | `--el-code-bg` / `--el-code-text`, `--radius-control`, `--spacing-chip-x-4`               |
+| field boxes                                          | `--el-surface`, `--el-border`, `--radius-input`, `--spacing-input-x/y`                    |
+| list card                                            | `--el-border`, `--radius-card`, rows `--spacing-control-x/y`, dividers `--el-border-soft` |
+| callouts                                             | `--radius-card`, `--spacing-card-padding-12` (revoke: `--spacing-card-padding`)           |
+
+## 20.15 · Copy — every string, as `en.json` keys (`repositoryUploadCredentials.*`)
+
+English only; translation is the code card's. The four keys of the sent-back version that drew a
+hosted person act (`installedLine`, `installFailedLine`, `revokeInstalled`, `revokeNotInstalled`)
+are retired.
+
+| Key                                                    | String                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rowAction`                                            | Upload credentials                                                                                                                                                                                                                                                        |
+| `rowActionLabel`                                       | Upload credentials for {repo}                                                                                                                                                                                                                                             |
+| `title`                                                | Upload credentials · {repo}                                                                                                                                                                                                                                               |
+| `hint`                                                 | This repository’s own CI uses an upload credential to send its SCIP index to Motir’s code graph from the default branch.                                                                                                                                                  |
+| `managedLine`                                          | Motir creates this repository’s upload credential, installs it in {repo}’s GitHub Actions as the secret `MOTIR_SCIP_UPLOAD_TOKEN` and the variables `MOTIR_CODEGRAPH_REPOSITORY_ID` and `MOTIR_CODEGRAPH_UPLOAD_URL`, and keeps it working. Nobody needs to copy a token. |
+| `statusLabel`                                          | Status                                                                                                                                                                                                                                                                    |
+| `statusInstalled` · `statusInstalledBody`              | Installed · In Actions since {date}. The recipe workflow reads it as it is.                                                                                                                                                                                               |
+| `statusRepairing` · `statusRepairingBody`              | Repairing · Motir found the credential missing from Actions, or an install that didn’t finish, and is putting it back on its next pass. There’s nothing for you to do.                                                                                                    |
+| `statusWaiting` · `statusWaitingBody`                  | Waiting for the code graph · {repo} isn’t registered with Motir’s code graph yet, so nothing has been created. Motir installs the credential once the first index lands.                                                                                                  |
+| `notRevoked`                                           | —                                                                                                                                                                                                                                                                         |
+| `recipeHostedLine` · `recipeHosted`                    | The one step left to you: add the recipe workflow to {repo}, and its default-branch runs start uploading. · Add the CI recipe workflow                                                                                                                                    |
+| `nameLabel`                                            | Credential name                                                                                                                                                                                                                                                           |
+| `namePlaceholder`                                      | GitHub Actions                                                                                                                                                                                                                                                            |
+| `nameHelper`                                           | Name it after where it will live, so you can tell your credentials apart later.                                                                                                                                                                                           |
+| `nameEmpty`                                            | Give the credential a name.                                                                                                                                                                                                                                               |
+| `nameTooLong`                                          | Keep the name to {max} characters or fewer.                                                                                                                                                                                                                               |
+| `mint` · `minting`                                     | Mint credential · Minting…                                                                                                                                                                                                                                                |
+| `listHeading`                                          | Credentials                                                                                                                                                                                                                                                               |
+| `colName` · `colPrefix` · `colCreated` · `colRevoked`  | Name · Prefix · Created · Revoked                                                                                                                                                                                                                                         |
+| `revokedOn`                                            | Revoked {date}                                                                                                                                                                                                                                                            |
+| `installed`                                            | Installed in Actions                                                                                                                                                                                                                                                      |
+| `revoke` · `revokeLabel`                               | Revoke · Revoke {name}                                                                                                                                                                                                                                                    |
+| `empty`                                                | No upload credentials yet. Mint one, and this repository’s CI can start uploading its index.                                                                                                                                                                              |
+| `loading`                                              | Reading this repository’s credentials…                                                                                                                                                                                                                                    |
+| `loadFailed` · `tryAgain`                              | Motir couldn’t read this repository’s credentials. Nothing has changed. · Try again                                                                                                                                                                                       |
+| `refusedNotRegistered`                                 | {repo} isn’t registered with Motir’s code graph yet, so no credential was made.                                                                                                                                                                                           |
+| `refusedLimit`                                         | {repo} already has {limit} live credentials, so no new one was made. Revoke one first.                                                                                                                                                                                    |
+| `refusedUnavailable` · `retry`                         | Motir couldn’t reach the code graph, so nothing was made. · Retry                                                                                                                                                                                                         |
+| `shownTitle`                                           | Copy your upload credential                                                                                                                                                                                                                                               |
+| `shownLead`                                            | **{name}** for {repo}.                                                                                                                                                                                                                                                    |
+| `tokenField` · `repositoryIdField` · `uploadHostField` | Token · Repository id · Upload host                                                                                                                                                                                                                                       |
+| `copy` · `copied` · `copyLabel`                        | Copy · Copied · Copy {field}                                                                                                                                                                                                                                              |
+| `warning`                                              | This is the only time Motir shows this token. Once you close this it can’t be shown again: if you lose it, revoke it and mint a new one.                                                                                                                                  |
+| `storeLine`                                            | Paste the token into your own CI’s secret store, with the repository id and the upload host beside it. Motir writes nothing into {repo}.                                                                                                                                  |
+| `recipe`                                               | Read the CI recipe                                                                                                                                                                                                                                                        |
+| `understood` · `done`                                  | I’ve copied what I need. This token won’t be shown again. · Done                                                                                                                                                                                                          |
+| `revokeTitle`                                          | Revoke {name}?                                                                                                                                                                                                                                                            |
+| `revokeImported`                                       | The next upload with this credential is refused. Remove it from your CI’s secret store too.                                                                                                                                                                               |
+| `cancel` · `revokeConfirm` · `revoking`                | Cancel · Revoke credential · Revoking…                                                                                                                                                                                                                                    |
+
+## 20.16 · a11y
+
+- The hosted status is `role="status"`, so a repair or a first install is announced politely when
+  the dialog is open; its pill text is the state's name, never colour alone.
+- The imported show-once phase moves focus to the Token field's Copy button; Copy announces
+  `Copied` through the button's own text change (polite).
+- Refusals and the list error are `role="alert"`; loading is `role="status"`.
+- Each Revoke and Copy has its own accessible name (`Revoke {name}`, `Copy {field}`); the row action
+  names its repository (`Upload credentials for {repo}`). A hosted live row's `—` carries the
+  accessible name `Not revoked`.
+- The token is never put in a URL, a toast, the page's state after `Done`, or any log.
+
+## 20.17 · Explicitly OUT of scope here
+
+- The routes, the maintenance job and what the repository row records, any motir-ai or codegraph
+  change, the CI workflow and shell recipe, and the user-docs page's own layout.
+- Translation of the new copy.
+- A read-only view for members without `repository:manage` — the room refuses them (§20.2).
