@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  AWS_INDEX_IAM_ROLE,
   AWS_MEMBER_ROLE_NAME,
   AWS_RUNNER_IAM_ROLE,
   AWS_TENANT_DEPLOY_POLICY_PATH,
@@ -501,26 +500,37 @@ describe('the handover deploy policy', () => {
   });
 });
 
-/** An account Motir has been running: its fleet roles, a release role whose
- *  trust also names the management account, a customer role, a push role and
- *  a service-linked role. */
-function lived(h: Harness) {
+/** The index role the pool StackSet no longer creates (MOTIR-12314): an
+ *  account vended before then may still carry it, with its instance profile. */
+const RETIRED_INDEX_ROLE = 'motir-fleet-index';
+
+/** An account Motir has been running: its fleet roles (the retired index role
+ *  among them unless `indexRole` is false), a release role whose trust also
+ *  names the management account, a customer role, a push role and a
+ *  service-linked role. */
+function lived(h: Harness, { indexRole = true }: { indexRole?: boolean } = {}) {
   const account = h.clients.iamAccount;
   account.putRole(AWS_RUNNER_IAM_ROLE, {
     trust: fakeAwsTrust(`arn:aws:iam::${MANAGEMENT}:role/motir-org-admin`),
     inline: new Map([['motir-fleet-runner-ec2', { Version: '2012-10-17', Statement: [] }]]),
   });
-  const indexPolicy = account.putPolicy('motir-index-pull', '/');
-  account.putRole(AWS_INDEX_IAM_ROLE, {
-    trust: {
-      Version: '2012-10-17',
-      Statement: [
-        { Effect: 'Allow', Principal: { Service: 'ec2.amazonaws.com' }, Action: 'sts:AssumeRole' },
-      ],
-    },
-    attached: new Set([indexPolicy]),
-    instanceProfiles: new Set([AWS_INDEX_IAM_ROLE]),
-  });
+  if (indexRole) {
+    const indexPolicy = account.putPolicy('motir-index-pull', '/');
+    account.putRole(RETIRED_INDEX_ROLE, {
+      trust: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      },
+      attached: new Set([indexPolicy]),
+      instanceProfiles: new Set([RETIRED_INDEX_ROLE]),
+    });
+  }
   account.putRole('motir-mh-cmrepo1-fn', {
     trust: {
       Version: '2012-10-17',
@@ -561,10 +571,10 @@ describe('removeMotirAccess', () => {
     expect(answer).toEqual({ outcome: 'removed', memberRole: AWS_MEMBER_ROLE_NAME });
 
     const roles = h.clients.iamAccount.roles;
-    for (const gone of [AWS_TENANT_DEPLOY_ROLE, AWS_RUNNER_IAM_ROLE, AWS_INDEX_IAM_ROLE]) {
+    for (const gone of [AWS_TENANT_DEPLOY_ROLE, AWS_RUNNER_IAM_ROLE, RETIRED_INDEX_ROLE]) {
       expect(roles.has(gone), gone).toBe(false);
     }
-    expect(h.clients.iamAccount.instanceProfiles.has(AWS_INDEX_IAM_ROLE)).toBe(false);
+    expect(h.clients.iamAccount.instanceProfiles.has(RETIRED_INDEX_ROLE)).toBe(false);
     expect(
       [...h.clients.iamAccount.policies.values()].filter((p) =>
         p.path.startsWith(AWS_TENANT_DEPLOY_POLICY_PATH),
@@ -593,6 +603,19 @@ describe('removeMotirAccess', () => {
     expect(h.clients.iamAccount.writes.at(-1)).toBe(
       `${AWS_MEMBER_ROLE_NAME}:detachRolePolicy:${AWS_MEMBER_ROLE_NAME}/${FAKE_ADMINISTRATOR_ACCESS_ARN}`,
     );
+  });
+
+  it('hands over an account that never carried the retired index role', async () => {
+    const h = harness();
+    lived(h, { indexRole: false });
+    expect(h.clients.iamAccount.roles.has(RETIRED_INDEX_ROLE)).toBe(false);
+    const answer = await h.handover.removeMotirAccess(ACCOUNT);
+    expect(answer).toEqual({ outcome: 'removed', memberRole: AWS_MEMBER_ROLE_NAME });
+    const roles = h.clients.iamAccount.roles;
+    for (const gone of [AWS_TENANT_DEPLOY_ROLE, AWS_RUNNER_IAM_ROLE, RETIRED_INDEX_ROLE]) {
+      expect(roles.has(gone), gone).toBe(false);
+    }
+    expect(roles.get('motir-debug')!.trust).toEqual(accountRootTrust(ACCOUNT));
   });
 
   it('answers the same on a second call and writes nothing', async () => {

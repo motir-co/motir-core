@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AWS_CREATE_ACCOUNT_TIMEOUT_MS,
   AWS_EC2_VCPU_QUOTA_CODE,
-  AWS_INDEX_IAM_ROLE,
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_POLICY,
   AWS_RUNNER_IAM_ROLE,
@@ -681,7 +680,8 @@ describe('the runner role (MOTIR-9460)', () => {
   });
 });
 
-/** Every IAM action a policy document allows: the index role's pass, and no other. */
+/** Every IAM action a policy document allows: none, since the index role's pass
+ *  was retired with the index role (MOTIR-12320). */
 const iamActionsOf = (doc: { Statement: Array<Record<string, unknown>> }) =>
   doc.Statement.flatMap((s) => [s['Action']].flat() as string[]).filter((a) =>
     a.startsWith('iam:'),
@@ -701,22 +701,12 @@ describe('awsRunnerPolicyDocument', () => {
         'ec2:CreateTags',
         'ec2:TerminateInstances',
         'ec2:GetConsoleOutput',
-        'iam:PassRole',
       ]),
     );
-    // Its one IAM action passes the index role, to EC2 only (MOTIR-10123).
-    expect(doc.Statement.filter((s) => JSON.stringify(s).includes('iam:'))).toEqual([
-      {
-        Sid: 'PassIndexRole',
-        Effect: 'Allow',
-        Action: 'iam:PassRole',
-        Resource: `arn:aws:iam::*:role/${AWS_INDEX_IAM_ROLE}`,
-        Condition: { StringEquals: { 'iam:PassedToService': 'ec2.amazonaws.com' } },
-      },
-    ]);
-    expect(AWS_INDEX_IAM_ROLE).toBe('motir-fleet-index');
+    // No IAM action at all: the index role's pass left with the index role (MOTIR-12320).
+    expect(doc.Statement.filter((s) => JSON.stringify(s).includes('iam:'))).toEqual([]);
     expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
-    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
+    expect(iamActionsOf(doc)).toEqual([]);
     const terminate = doc.Statement.find((s) => s['Sid'] === 'TerminateOwn')!;
     expect(terminate['Condition']).toEqual({
       StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
@@ -752,7 +742,7 @@ describe('awsRunnerPolicyDocument', () => {
     expect(any).not.toHaveProperty('Condition');
     // Nothing else widens: the same actions as a runner account.
     expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
-    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
+    expect(iamActionsOf(doc)).toEqual([]);
   });
 });
 
@@ -783,7 +773,7 @@ describe('awsAgentHosterPolicyDocument', () => {
       'arn:aws:ec2:us-east-1:*:volume/*',
     );
     expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
-    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
+    expect(iamActionsOf(doc)).toEqual([]);
   });
 });
 
