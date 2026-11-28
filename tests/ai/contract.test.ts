@@ -5,6 +5,7 @@ import {
   errorFromProblem,
   MotirAiUnauthorizedError,
   MotirAiBadRequestError,
+  MotirAiCodeGraphRefusedError,
   MotirAiJobNotFoundError,
   MotirAiUnavailableError,
   MotirAiOutOfCreditsError,
@@ -49,6 +50,12 @@ const CANONICAL_ERROR_CODES = [
   // MOTIR-12055): 503, motir-ai could not reach motir-codegraph. The code-graph
   // forward's one retryable answer; named in `errorFromProblem`.
   'codegraph_unavailable',
+  // `codegraph_repository_not_registered` and `upload_credential_limit_reached`
+  // (Story MOTIR-12262 — motir-ai MOTIR-12337, this side MOTIR-12339): the
+  // upload-credential routes' two 409 refusals, named in `errorFromProblem` so the
+  // repository's credential section shows their own copy.
+  'codegraph_repository_not_registered',
+  'upload_credential_limit_reached',
 ] as const;
 
 // contract.md §2.3 — the jobKind enum. KEEP IN SYNC with motir-ai.
@@ -127,6 +134,8 @@ const EXPECTED_MAPPING: Record<string, new (...args: never[]) => MotirAiError> =
   ai_job_abandoned: MotirAiUnavailableError, // 500 — same class as ai_job_failed; the DISCRIMINATION is the code, not the type
   internal_error: MotirAiUnavailableError,
   codegraph_unavailable: MotirAiUnavailableError, // 503 — the code-graph forward retries it
+  codegraph_repository_not_registered: MotirAiCodeGraphRefusedError, // 409 — never a retry
+  upload_credential_limit_reached: MotirAiCodeGraphRefusedError, // 409 — revoke one first
 };
 
 function problemFor(code: string, status = 400): Problem {
@@ -137,7 +146,9 @@ describe('contract: error taxonomy (§5)', () => {
   it('maps EVERY canonical code to its motir-core typed error', () => {
     for (const code of CANONICAL_ERROR_CODES) {
       const status =
-        code === 'conflict'
+        code === 'conflict' ||
+        code === 'codegraph_repository_not_registered' ||
+        code === 'upload_credential_limit_reached'
           ? 409
           : code === 'not_found'
             ? 404
